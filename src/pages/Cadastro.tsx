@@ -73,7 +73,7 @@ export default function Cadastro() {
                                     <TrendingUp size={24} />
                                 </div>
                                 <div>
-                                    <p className="text-xs text-slate-400 uppercase font-bold">Programa CAM</p>
+                                    <p className="text-xs text-slate-400 uppercase font-bold">Programa de Cashback</p>
                                     <p className="font-bold text-white">Cashback em cada serviço</p>
                                 </div>
                             </div>
@@ -181,7 +181,7 @@ export default function Cadastro() {
                                     className="mt-1 size-5 rounded-md border-slate-200 text-emerald-500 focus:ring-emerald-500/20 cursor-pointer"
                                 />
                                 <label htmlFor="terms" className="text-sm text-slate-500 leading-tight cursor-pointer">
-                                    Concordo com os <span className="text-emerald-600 font-bold hover:underline">Termos de Uso</span> e regras do programa CAM.
+                                    Concordo com os <span className="text-emerald-600 font-bold hover:underline">Termos de Uso</span> e regras do programa de Cashback.
                                 </label>
                             </div>
 

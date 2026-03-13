@@ -96,7 +96,7 @@ export default function Ecossistema() {
                                     <motion.div whileHover={{ scale: 1.1 }} className="size-16 lg:size-20 bg-white shadow-xl rounded-3xl flex items-center justify-center text-orange-500 border border-slate-100">
                                         <DollarSign size={32} />
                                     </motion.div>
-                                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Ganhos CAM</span>
+                                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Cashback Direto</span>
                                 </div>
                             </div>
                         </div>
@@ -227,7 +227,7 @@ export default function Ecossistema() {
                                 </div>
                                 <div className="text-xs font-black text-emerald-500 uppercase tracking-widest mb-4">Passo 02</div>
                                 <h4 className="text-xl font-black mb-4">Divisão de Lucros</h4>
-                                <p className="text-slate-500 text-sm font-medium leading-relaxed">O sistema automático divide os lucros e gera o Bônus CAM entre os níveis.</p>
+                                <p className="text-slate-500 text-sm font-medium leading-relaxed">O sistema automático divide os lucros e gera o Cashback entre os níveis.</p>
                             </div>
 
                             <div className="flex flex-col items-center text-center group">

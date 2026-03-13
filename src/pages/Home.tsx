@@ -14,7 +14,10 @@ import {
   Globe,
   Twitter,
   Linkedin,
-  Instagram
+  Instagram,
+  Smartphone,
+  Calendar,
+  ChevronRight
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { Link } from 'react-router-dom';
@@ -48,10 +51,13 @@ export default function Home() {
                 <p className="text-lg md:text-xl text-slate-400 max-w-lg leading-relaxed">
                   Mobilidade, Delivery e Compras. Use, indique amigos e ganhe Cashback todos os meses no app mais completo do Brasil.
                 </p>
-                <div>
-                  <button className="bg-accent hover:bg-emerald-500 text-midnight px-10 py-4 rounded-xl text-lg font-bold transition-transform active:scale-95 shadow-xl shadow-accent/30">
-                    Explore os Aplicativos
-                  </button>
+                <div className="flex flex-wrap gap-4">
+                  <Link to="/loja" className="bg-accent hover:bg-emerald-500 text-midnight px-10 py-4 rounded-xl text-lg font-bold transition-transform active:scale-95 shadow-xl shadow-accent/30 flex items-center gap-2">
+                    Explorar Ofertas <ExternalLink size={20} />
+                  </Link>
+                  <Link to="/ecossistema" className="bg-white/10 hover:bg-white/20 text-white px-10 py-4 rounded-xl text-lg font-bold transition-all border border-white/10">
+                    Saber Mais
+                  </Link>
                 </div>
                 <div className="flex items-center gap-4 text-slate-500">
                   <div className="flex -space-x-2">
@@ -110,22 +116,93 @@ export default function Home() {
                   </div>
                 </div>
 
-                {/* Floating Cashback Card */}
-                <motion.div
-                  initial={{ y: 20, opacity: 0 }}
-                  animate={{ y: 0, opacity: 1 }}
-                  transition={{ delay: 1, duration: 0.5 }}
-                  className="absolute -top-6 -left-6 bg-slate-800 border border-white/10 p-4 rounded-2xl shadow-2xl flex items-center gap-3 backdrop-blur-xl"
-                >
-                  <div className="size-10 rounded-full bg-accent/20 flex items-center justify-center text-accent">
-                    <TrendingUp size={20} />
-                  </div>
-                  <div>
-                    <p className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Cashback Acumulado</p>
-                    <p className="text-sm font-bold text-white">R$ 1.240,50</p>
-                  </div>
-                </motion.div>
+                {/* Floating Cashback Cards */}
+                <div className="absolute top-0 -left-12 flex flex-col gap-4">
+                  <motion.div
+                    initial={{ x: -20, opacity: 0 }}
+                    animate={{ x: 0, opacity: 1 }}
+                    transition={{ delay: 1, duration: 0.5 }}
+                    className="bg-slate-800/80 border border-white/10 p-4 rounded-2xl shadow-2xl flex items-center gap-3 backdrop-blur-xl w-48"
+                  >
+                    <div className="size-10 rounded-full bg-emerald-500/20 flex items-center justify-center text-emerald-500">
+                      <TrendingUp size={20} />
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Cashback Mensal</p>
+                      <p className="text-sm font-bold text-white">R$ 450,00</p>
+                    </div>
+                  </motion.div>
+
+                  <motion.div
+                    initial={{ x: -20, opacity: 0 }}
+                    animate={{ x: 0, opacity: 1 }}
+                    transition={{ delay: 1.2, duration: 0.5 }}
+                    className="bg-slate-800/80 border border-white/10 p-4 rounded-2xl shadow-2xl flex items-center gap-3 backdrop-blur-xl w-48 ml-8"
+                  >
+                    <div className="size-10 rounded-full bg-primary-blue/20 flex items-center justify-center text-primary-blue">
+                      <Calendar size={20} />
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Cashback Anual</p>
+                      <p className="text-sm font-bold text-white">R$ 2.800,00</p>
+                    </div>
+                  </motion.div>
+
+                  <motion.div
+                    initial={{ x: -20, opacity: 0 }}
+                    animate={{ x: 0, opacity: 1 }}
+                    transition={{ delay: 1.4, duration: 0.5 }}
+                    className="bg-slate-800/80 border border-white/10 p-4 rounded-2xl shadow-2xl flex items-center gap-3 backdrop-blur-xl w-48"
+                  >
+                    <div className="size-10 rounded-full bg-accent/20 flex items-center justify-center text-accent">
+                      <Smartphone size={20} />
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Cashback Digital</p>
+                      <p className="text-sm font-bold text-white">R$ 120,50</p>
+                    </div>
+                  </motion.div>
+                </div>
               </motion.div>
+            </div>
+          </div>
+        </section>
+
+        {/* Featured Products Section (Marketplace Preview) */}
+        <section className="py-20 bg-white">
+          <div className="max-w-7xl mx-auto px-6 lg:px-20">
+            <div className="flex flex-col md:flex-row justify-between items-end mb-12 gap-6">
+              <div>
+                <h2 className="text-3xl font-black text-midnight mb-2 tracking-tighter uppercase italic border-l-8 border-primary-blue pl-6">
+                  Ofertas em <span className="text-primary-blue">Destaque</span>
+                </h2>
+                <p className="text-slate-500 max-w-lg font-medium">Os produtos mais desejados com o maior cashback da sua região.</p>
+              </div>
+              <Link to="/loja" className="bg-slate-50 hover:bg-slate-100 text-primary-blue px-6 py-3 rounded-xl font-black text-xs uppercase tracking-widest flex items-center gap-2 transition-all group">
+                Ver tudo <ChevronRight size={16} className="group-hover:translate-x-1 transition-transform" />
+              </Link>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
+              {[
+                { name: "Smartwatch Urban G2", price: "349,00", cashback: "R$ 45,00", icon: "⌚" },
+                { name: "Fone Noise Pro", price: "199,90", cashback: "R$ 25,00", icon: "🎧" },
+                { name: "Tênis Street Walker", price: "279,50", cashback: "R$ 35,00", icon: "👟" },
+                { name: "Mochila Tech Pro", price: "159,00", cashback: "R$ 20,00", icon: "🎒" }
+              ].map((product, i) => (
+                <div key={i} className="bg-[#f8fafc] p-8 rounded-[2rem] border border-slate-100 hover:shadow-2xl transition-all group cursor-pointer relative overflow-hidden">
+                  <div className="size-16 bg-white rounded-2xl flex items-center justify-center text-4xl mb-6 shadow-sm group-hover:scale-110 transition-transform">
+                    {product.icon}
+                  </div>
+                  <h3 className="text-sm font-black text-midnight mb-1 group-hover:text-primary-blue transition-colors uppercase tracking-tight">{product.name}</h3>
+                  <div className="flex items-end justify-between mt-4">
+                    <div>
+                      <p className="text-xl font-black text-midnight tracking-tighter">R$ {product.price}</p>
+                      <p className="text-[10px] font-bold text-emerald-500 uppercase tracking-widest">+{product.cashback} cashback</p>
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
         </section>
@@ -180,10 +257,15 @@ export default function Home() {
                 <p className="text-slate-400 mb-8 leading-relaxed text-sm">
                   Compre e venda produtos com garantia total. O maior ecossistema de varejo local da sua cidade.
                 </p>
-                <button className="w-full bg-accent hover:bg-emerald-500 text-midnight font-bold py-3.5 rounded-xl transition-colors flex items-center justify-center gap-2">
+                <a
+                  href="/marketplace"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-full bg-accent hover:bg-emerald-500 text-midnight font-bold py-3.5 rounded-xl transition-colors flex items-center justify-center gap-2"
+                >
                   <ExternalLink size={18} />
-                  Acessar Loja Web
-                </button>
+                  Visitar Loja UrbaShop
+                </a>
               </div>
             </div>
           </div>
@@ -215,9 +297,9 @@ export default function Home() {
               <h4 className="text-white font-bold mb-6">Plataforma</h4>
               <ul className="flex flex-col gap-4 text-sm">
                 <li><a href="#" className="hover:text-white transition-colors">Como funciona</a></li>
-                <li><a href="#" className="hover:text-white transition-colors">Ecossistema</a></li>
-                <li><a href="#" className="hover:text-white transition-colors">Marketplace</a></li>
-                <li><a href="#" className="hover:text-white transition-colors">Seja um parceiro</a></li>
+                <li><Link to="/ecossistema" className="hover:text-white transition-colors">Ecossistema</Link></li>
+                <li><Link to="/marketplace" className="hover:text-white transition-colors">Marketplace</Link></li>
+                <li><Link to="/cadastro" className="hover:text-white transition-colors">Seja um parceiro</Link></li>
               </ul>
             </div>
 

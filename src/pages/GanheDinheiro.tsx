@@ -66,7 +66,7 @@ export default function GanheDinheiro() {
                                 Indique passageiros ou motoristas e ganhe bônus diários, mensais e anuais direto no seu PIX.
                             </p>
                             <button className="bg-emerald-500 hover:bg-emerald-600 text-midnight px-12 py-5 rounded-2xl text-xl font-black transition-transform active:scale-95 shadow-2xl shadow-emerald-500/30 flex items-center gap-3 mx-auto uppercase tracking-tighter">
-                                Quero ser um Titular CAM
+                                Quero ser um Titular do Cashback
                                 <ChevronRight size={24} />
                             </button>
                         </motion.div>
@@ -107,7 +107,7 @@ export default function GanheDinheiro() {
                                     <span className="text-emerald-500">Ganhos em Rede</span>
                                 </h2>
                                 <p className="text-slate-400 text-lg mb-8">
-                                    O CAM (Cashback Anual e Mensal) recompensa seu empenho em expandir nossa rede. Quanto maior seu grupo, maiores seus bônus diretos no PIX.
+                                    O nosso programa de Cashback recompensa seu empenho em expandir nossa rede. Quanto maior seu grupo, maiores seus bônus diretos no PIX.
                                 </p>
                                 <div className="space-y-4">
                                     {simulationData.map((item, idx) => (
@@ -136,7 +136,7 @@ export default function GanheDinheiro() {
                                             <div className="h-full w-3/4 bg-emerald-500 rounded-full"></div>
                                         </div>
                                         <p className="text-sm text-slate-400 font-medium">
-                                            Com 1.000 pessoas consumindo em sua rede, você atinge o topo do programa CAM com rendimentos crescentes e vitalícios.
+                                            Com 1.000 pessoas consumindo em sua rede, você atinge o topo do programa de Cashback com rendimentos crescentes e vitalícios.
                                         </p>
                                     </div>
                                 </div>
@@ -174,10 +174,14 @@ export default function GanheDinheiro() {
                             <span className="text-lg font-bold">Serviços Urbanos</span>
                         </div>
 
-                        <div className="flex gap-6">
-                            <a href="#" className="hover:text-emerald-500 transition-colors"><Instagram size={24} /></a>
-                            <a href="#" className="hover:text-emerald-500 transition-colors"><Twitter size={24} /></a>
-                            <a href="#" className="hover:text-emerald-500 transition-colors"><Linkedin size={24} /></a>
+                        <div className="flex gap-8 items-center">
+                            <Link to="/marketplace" className="text-xs font-bold hover:text-white transition-colors">Marketplace</Link>
+                            <Link to="/ecossistema" className="text-xs font-bold hover:text-white transition-colors">Ecossistema</Link>
+                            <div className="flex gap-6 border-l border-slate-800 pl-6">
+                                <a href="#" className="hover:text-emerald-500 transition-colors"><Instagram size={20} /></a>
+                                <a href="#" className="hover:text-emerald-500 transition-colors"><Twitter size={20} /></a>
+                                <a href="#" className="hover:text-emerald-500 transition-colors"><Linkedin size={20} /></a>
+                            </div>
                         </div>
                     </div>
 

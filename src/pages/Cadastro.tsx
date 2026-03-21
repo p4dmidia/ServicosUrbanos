@@ -97,27 +97,15 @@ export default function Cadastro() {
                             <p className="text-slate-500">Preencha os dados abaixo para começar.</p>
                         </div>
 
-                        <form className="space-y-8" onSubmit={(e) => e.preventDefault()}>
-                            {/* Seletor de Perfil */}
-                            <div>
-                                <p className="text-sm font-bold text-slate-700 mb-4">Como deseja participar?</p>
-                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                    {types.map((type) => (
-                                        <button
-                                            key={type.id}
-                                            type="button"
-                                            onClick={() => setUserType(type.id)}
-                                            className={`flex flex-col items-center justify-center p-4 rounded-2xl border-2 transition-all gap-2 ${userType === type.id
-                                                ? 'border-emerald-500 bg-emerald-50 text-emerald-600'
-                                                : 'border-slate-100 bg-slate-50 text-slate-400 hover:border-slate-200'
-                                                }`}
-                                        >
-                                            <div className={`p-2 rounded-xl ${userType === type.id ? 'bg-emerald-500 text-white' : 'bg-white text-slate-300'}`}>
-                                                {type.icon}
-                                            </div>
-                                            <span className="text-[10px] font-black uppercase text-center leading-tight">{type.label}</span>
-                                        </button>
-                                    ))}
+                        <form className="space-y-8" onSubmit={(e) => { e.preventDefault(); window.location.href = '/login'; }}>
+                            {/* Informativo de Cadastro Único */}
+                            <div className="bg-emerald-50 border border-emerald-100 p-6 rounded-3xl flex items-center gap-4">
+                                <div className="size-12 rounded-2xl bg-emerald-500 text-white flex items-center justify-center shrink-0 shadow-lg shadow-emerald-500/20">
+                                    <LayoutGrid size={24} />
+                                </div>
+                                <div>
+                                    <p className="text-[10px] font-black text-emerald-600 uppercase tracking-widest leading-none mb-1">Passaporte Unificado</p>
+                                    <p className="text-xs text-emerald-800 font-bold leading-tight">Sua conta dará acesso a todos os serviços Urba: Moby, Food, Pay e Marketplace.</p>
                                 </div>
                             </div>
 
@@ -126,9 +114,10 @@ export default function Cadastro() {
                                 <div className="flex flex-col gap-2">
                                     <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Nome Completo</label>
                                     <input
+                                        required
                                         type="text"
                                         placeholder="Ex: João Silva"
-                                        className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all font-medium text-midnight appearance-none"
+                                        className="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all font-medium text-midnight appearance-none"
                                     />
                                 </div>
                                 <div className="flex flex-col gap-2">
@@ -136,38 +125,39 @@ export default function Cadastro() {
                                     <div className="relative">
                                         <Smartphone className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300" size={18} />
                                         <input
+                                            required
                                             type="tel"
                                             placeholder="(00) 00000-0000"
-                                            className="w-full pl-12 pr-5 py-4 bg-slate-50 border border-slate-100 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all font-medium text-midnight"
+                                            className="w-full pl-12 pr-5 py-4 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all font-medium text-midnight"
                                         />
                                     </div>
                                 </div>
                                 <div className="flex flex-col gap-2">
                                     <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">E-mail</label>
                                     <input
+                                        required
                                         type="email"
                                         placeholder="seu@email.com"
-                                        className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all font-medium text-midnight border-none outline-none ring-0 focus:ring-0 active:ring-0"
-                                        style={{ WebkitAppearance: 'none' }}
+                                        className="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all font-medium text-midnight"
                                     />
-                                    {/* Note: I added a bit of extra style to ensure a super clean look as requested */}
                                 </div>
                                 <div className="flex flex-col gap-2">
-                                    <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">CPF</label>
+                                    <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">CPF / ID Único</label>
                                     <input
+                                        required
                                         type="text"
                                         placeholder="000.000.000-00"
-                                        className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all font-medium text-midnight"
+                                        className="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all font-medium text-midnight"
                                     />
                                 </div>
                                 <div className="flex flex-col gap-2 md:col-span-2">
-                                    <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Chave PIX (Para receber seus ganhos)</label>
+                                    <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Código de Indicação (Opcional)</label>
                                     <div className="relative">
-                                        <Wallet className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300" size={18} />
+                                        <Globe className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300" size={18} />
                                         <input
                                             type="text"
-                                            placeholder="E-mail, CPF ou Aleatória"
-                                            className="w-full pl-12 pr-5 py-4 bg-slate-50 border border-slate-100 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all font-medium text-midnight"
+                                            placeholder="Ex: AFIL123"
+                                            className="w-full pl-12 pr-5 py-4 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all font-medium text-midnight"
                                         />
                                     </div>
                                 </div>
@@ -176,12 +166,13 @@ export default function Cadastro() {
                             {/* Termos */}
                             <div className="flex items-start gap-3">
                                 <input
+                                    required
                                     type="checkbox"
                                     id="terms"
                                     className="mt-1 size-5 rounded-md border-slate-200 text-emerald-500 focus:ring-emerald-500/20 cursor-pointer"
                                 />
                                 <label htmlFor="terms" className="text-sm text-slate-500 leading-tight cursor-pointer">
-                                    Concordo com os <span className="text-emerald-600 font-bold hover:underline">Termos de Uso</span> e regras do programa de Cashback.
+                                    Concordo com os <span className="text-emerald-600 font-bold hover:underline">Termos de Uso</span> e regras do ecossistema Services Urbanos.
                                 </label>
                             </div>
 

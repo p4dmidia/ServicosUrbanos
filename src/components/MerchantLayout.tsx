@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Building2, 
   LayoutGrid, 
@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
+import { businessRules, MerchantUser } from '../lib/businessRules';
 
 interface MerchantLayoutProps {
   children: React.ReactNode;
@@ -27,6 +28,11 @@ export default function MerchantLayout({ children, title, subtitle }: MerchantLa
   const location = useLocation();
   const navigate = useNavigate();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [user, setUser] = useState<MerchantUser | null>(null);
+
+  useEffect(() => {
+    setUser(businessRules.getCurrentUser());
+  }, []);
 
   const menuItems = [
     { name: 'Dashboard', icon: LayoutGrid, path: '/lojista/dashboard' },
@@ -38,6 +44,9 @@ export default function MerchantLayout({ children, title, subtitle }: MerchantLa
   ];
 
   const isActive = (path: string) => location.pathname === path;
+
+  // Gerentes não podem ver configurações gerais
+  const canSeeSettings = user?.role === 'owner';
 
   return (
     <div className="min-h-screen bg-[#f8fafc] flex font-sans">
@@ -73,15 +82,20 @@ export default function MerchantLayout({ children, title, subtitle }: MerchantLa
         </nav>
 
         <div className="p-6 border-t border-white/5 space-y-4">
+          {canSeeSettings && (
+            <button 
+              onClick={() => navigate('/lojista/configuracoes')}
+              className="w-full flex items-center gap-4 px-6 py-4 rounded-2xl text-xs font-black uppercase tracking-widest text-slate-500 hover:text-white hover:bg-white/5 transition-all"
+            >
+              <Settings size={18} />
+              Configurações
+            </button>
+          )}
           <button 
-            onClick={() => navigate('/lojista/configuracoes')}
-            className="w-full flex items-center gap-4 px-6 py-4 rounded-2xl text-xs font-black uppercase tracking-widest text-slate-500 hover:text-white hover:bg-white/5 transition-all"
-          >
-            <Settings size={18} />
-            Configurações
-          </button>
-          <button 
-            onClick={() => navigate('/lojista/login')}
+            onClick={() => {
+              // Limpar usuário ao sair (opcional para o protótipo)
+              navigate('/lojista/login');
+            }}
             className="w-full flex items-center gap-4 px-6 py-4 rounded-2xl text-xs font-black uppercase tracking-widest text-red-400 hover:bg-red-500/10 transition-all border border-red-500/10"
           >
             <LogOut size={18} />
@@ -126,11 +140,13 @@ export default function MerchantLayout({ children, title, subtitle }: MerchantLa
 
             <div className="flex items-center gap-3 lg:gap-4">
               <div className="text-right hidden sm:block">
-                <p className="text-xs lg:text-sm font-black text-midnight">Urban Pro</p>
-                <p className="text-[8px] lg:text-[9px] font-black text-emerald-500 uppercase tracking-widest">Parceiro Verificado</p>
+                <p className="text-xs lg:text-sm font-black text-midnight">{user?.name || 'Carregando...'}</p>
+                <p className="text-[8px] lg:text-[9px] font-black text-emerald-500 uppercase tracking-widest">
+                  {user?.role === 'owner' ? 'Dono da Loja' : 'Gerente de Filial'}
+                </p>
               </div>
               <div className="size-8 lg:size-10 bg-slate-100 rounded-full border-2 border-primary-blue/20 overflow-hidden">
-                <img src="https://picsum.photos/seed/merchant/100/100" alt="Avatar" className="w-full h-full object-cover" />
+                <img src={`https://ui-avatars.com/api/?name=${user?.name || 'Merchant'}&background=random`} alt="Avatar" className="w-full h-full object-cover" />
               </div>
             </div>
           </div>
@@ -193,16 +209,18 @@ export default function MerchantLayout({ children, title, subtitle }: MerchantLa
               </nav>
 
               <div className="p-6 border-t border-white/5 space-y-4">
-                <button 
-                  onClick={() => {
-                    navigate('/lojista/configuracoes');
-                    setIsMobileMenuOpen(false);
-                  }}
-                  className="w-full flex items-center gap-4 px-6 py-4 rounded-2xl text-xs font-black uppercase tracking-widest text-slate-500 hover:text-white hover:bg-white/5 transition-all"
-                >
-                  <Settings size={18} />
-                  Configurações
-                </button>
+                {canSeeSettings && (
+                  <button 
+                    onClick={() => {
+                      navigate('/lojista/configuracoes');
+                      setIsMobileMenuOpen(false);
+                    }}
+                    className="w-full flex items-center gap-4 px-6 py-4 rounded-2xl text-xs font-black uppercase tracking-widest text-slate-500 hover:text-white hover:bg-white/5 transition-all"
+                  >
+                    <Settings size={18} />
+                    Configurações
+                  </button>
+                )}
                 <button 
                   onClick={() => {
                     navigate('/lojista/login');

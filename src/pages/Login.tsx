@@ -20,7 +20,10 @@ export default function Login() {
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         setLoading(true);
-        setTimeout(() => setLoading(false), 2000); // Simulate login
+        setTimeout(() => {
+            setLoading(false);
+            window.location.href = '/afiliado/dashboard';
+        }, 1500); 
     };
 
     return (

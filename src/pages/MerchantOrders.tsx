@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   ShoppingBag, 
   Search, 
@@ -12,10 +12,13 @@ import {
   Clock,
   CheckCircle,
   XCircle,
-  Truck
+  Truck,
+  Key,
+  Check
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import MerchantLayout from '../components/MerchantLayout';
+import { businessRules, MerchantUser, OrderWithCode } from '../lib/businessRules';
 
 interface Order {
   id: string;
@@ -25,26 +28,63 @@ interface Order {
   amount: number;
   status: 'Pendente' | 'Processando' | 'Enviado' | 'Concluído' | 'Cancelado';
   items: number;
+  branchId: string;
 }
 
 export default function MerchantOrders() {
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState('Todos');
+  const [currentUser, setCurrentUser] = useState<MerchantUser | null>(null);
+  const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
+  const [withdrawalInput, setWithdrawalInput] = useState('');
+  const [error, setError] = useState('');
+  const [showWithdrawalModal, setShowWithdrawalModal] = useState(false);
 
-  const [orders] = useState<Order[]>([
-    { id: '#8492', customerName: 'João Silva', customerInitial: 'J', date: 'Hoje, 14:20', amount: 199.90, status: 'Processando', items: 2 },
-    { id: '#8491', customerName: 'Maria Santos', customerInitial: 'M', date: 'Hoje, 12:45', amount: 349.00, status: 'Enviado', items: 1 },
-    { id: '#8490', customerName: 'Pedro Costa', customerInitial: 'P', date: 'Ontem, 21:10', amount: 89.90, status: 'Cancelado', items: 3 },
-    { id: '#8489', customerName: 'Ana Oliveira', customerInitial: 'A', date: 'Ontem, 18:30', amount: 1250.00, status: 'Concluído', items: 1 },
-    { id: '#8488', customerName: 'Carlos Mendes', customerInitial: 'C', date: '12 Nov, 09:15', amount: 450.50, status: 'Pendente', items: 4 },
-    { id: '#8487', customerName: 'Fernanda Lima', customerInitial: 'F', date: '11 Nov, 16:40', amount: 210.00, status: 'Concluído', items: 2 },
-  ]);
+  // Pedidos vindos do businessRules
+  const [orders, setOrders] = useState<Order[]>([]);
+
+  useEffect(() => {
+    const user = businessRules.getCurrentUser();
+    setCurrentUser(user);
+    
+    // Buscar pedidos centralizados
+    const allOrders = businessRules.getOrders();
+    setOrders(allOrders);
+    
+    // Garantir que todos os pedidos tenham um código de retirada no localStorage
+    allOrders.forEach(o => {
+      if (!businessRules.getOrderExtra(o.id)) {
+        businessRules.saveOrderExtra(o.id, { status: o.status as any });
+      }
+    });
+  }, []);
 
   const filteredOrders = orders.filter(o => {
     const matchesSearch = o.id.includes(search) || o.customerName.toLowerCase().includes(search.toLowerCase());
     const matchesStatus = filterStatus === 'Todos' || o.status === filterStatus;
-    return matchesSearch && matchesStatus;
+    const matchesBranch = currentUser?.role === 'owner' || o.branchId === currentUser?.branchId;
+    return matchesSearch && matchesStatus && matchesBranch;
   });
+
+  const handleConfirmWithdrawal = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedOrder) return;
+
+    const extra = businessRules.getOrderExtra(selectedOrder.id);
+    if (extra && extra.withdrawalCode === withdrawalInput.toUpperCase()) {
+      // Sucesso
+      const updatedOrders = orders.map(o => 
+        o.id === selectedOrder.id ? { ...o, status: 'Concluído' as const } : o
+      );
+      setOrders(updatedOrders);
+      businessRules.saveOrderExtra(selectedOrder.id, { status: 'Concluído' });
+      setShowWithdrawalModal(false);
+      setWithdrawalInput('');
+      setError('');
+    } else {
+      setError('Código de retirada inválido. Verifique com o cliente.');
+    }
+  };
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -109,93 +149,122 @@ export default function MerchantOrders() {
                   <th className="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">ID Pedido</th>
                   <th className="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Cliente</th>
                   <th className="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Data</th>
-                  <th className="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Itens</th>
                   <th className="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Valor Total</th>
+                  <th className="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Cód. Retirada</th>
                   <th className="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Status</th>
                   <th className="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Ações</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
                 <AnimatePresence mode='popLayout'>
-                  {filteredOrders.map((o) => (
-                    <motion.tr 
-                      key={o.id}
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      exit={{ opacity: 0 }}
-                      className="hover:bg-slate-50/50 transition-colors group"
-                    >
-                      <td className="px-8 py-6 font-black text-sm text-midnight">{o.id}</td>
-                      <td className="px-8 py-6">
-                        <div className="flex items-center gap-3">
-                          <div className="size-8 rounded-full bg-slate-100 flex items-center justify-center text-[10px] font-black text-slate-500 shadow-sm">
-                            {o.customerInitial}
+                  {filteredOrders.map((o) => {
+                    const extra = businessRules.getOrderExtra(o.id);
+                    return (
+                      <motion.tr 
+                        key={o.id}
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="hover:bg-slate-50/50 transition-colors group"
+                      >
+                        <td className="px-8 py-6 font-black text-sm text-midnight">{o.id}</td>
+                        <td className="px-8 py-6">
+                          <div className="flex items-center gap-3">
+                            <div className="size-8 rounded-full bg-slate-100 flex items-center justify-center text-[10px] font-black text-slate-500 shadow-sm">
+                              {o.customerInitial}
+                            </div>
+                            <span className="text-sm font-bold text-midnight tracking-tight">{o.customerName}</span>
                           </div>
-                          <span className="text-sm font-bold text-midnight tracking-tight">{o.customerName}</span>
-                        </div>
-                      </td>
-                      <td className="px-8 py-6 text-xs font-bold text-slate-400">{o.date}</td>
-                      <td className="px-8 py-6 text-xs font-bold text-slate-500">{o.items} un.</td>
-                      <td className="px-8 py-6">
-                        <span className="font-black text-midnight tracking-tighter text-sm">R$ {o.amount.toFixed(2).replace('.', ',')}</span>
-                      </td>
-                      <td className="px-8 py-6">
-                        <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest border transition-all ${getStatusColor(o.status)}`}>
-                          {getStatusIcon(o.status)}
-                          {o.status}
-                        </span>
-                      </td>
-                      <td className="px-8 py-6 text-right">
-                        <div className="flex items-center justify-end gap-2">
-                          <button className="size-9 bg-slate-50 hover:bg-primary-blue hover:text-white rounded-xl flex items-center justify-center text-slate-400 transition-all shadow-sm">
-                            <Eye size={16} />
-                          </button>
-                          <button className="size-9 bg-slate-50 hover:bg-midnight hover:text-white rounded-xl flex items-center justify-center text-slate-400 transition-all shadow-sm">
-                            <MoreVertical size={16} />
-                          </button>
-                        </div>
-                      </td>
-                    </motion.tr>
-                  ))}
+                        </td>
+                        <td className="px-8 py-6 text-xs font-bold text-slate-400">{o.date}</td>
+                        <td className="px-8 py-6">
+                          <span className="font-black text-midnight tracking-tighter text-sm">R$ {o.amount.toFixed(2).replace('.', ',')}</span>
+                        </td>
+                        <td className="px-8 py-6">
+                           <span className="bg-slate-50 px-3 py-1.5 rounded-xl font-mono font-black text-xs text-primary-blue border border-slate-100">
+                             {extra?.withdrawalCode || '---'}
+                           </span>
+                        </td>
+                        <td className="px-8 py-6">
+                          <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest border transition-all ${getStatusColor(o.status)}`}>
+                            {getStatusIcon(o.status)}
+                            {o.status}
+                          </span>
+                        </td>
+                        <td className="px-8 py-6 text-right">
+                          <div className="flex items-center justify-end gap-2 text-[10px]">
+                            {o.status !== 'Concluído' && o.status !== 'Cancelado' && (
+                              <button 
+                                onClick={() => {
+                                  setSelectedOrder(o);
+                                  setShowWithdrawalModal(true);
+                                }}
+                                className="bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-2 rounded-xl font-black uppercase tracking-widest flex items-center gap-2 shadow-lg shadow-emerald-500/20"
+                              >
+                                <Check size={14} /> Retirada
+                              </button>
+                            )}
+                            <button className="size-9 bg-slate-50 hover:bg-primary-blue hover:text-white rounded-xl flex items-center justify-center text-slate-400 transition-all shadow-sm">
+                              <Eye size={16} />
+                            </button>
+                          </div>
+                        </td>
+                      </motion.tr>
+                    );
+                  })}
                 </AnimatePresence>
               </tbody>
             </table>
           </div>
-
-          {filteredOrders.length === 0 && (
-            <div className="p-24 text-center">
-              <div className="size-20 bg-slate-50 rounded-full flex items-center justify-center text-slate-200 mx-auto mb-6">
-                <ShoppingBag size={40} />
-              </div>
-              <h3 className="text-xl font-black text-midnight mb-2 uppercase tracking-tighter">Nenhum pedido encontrado</h3>
-              <p className="text-slate-400 text-sm font-medium">Tente ajustar seus filtros de busca ou status.</p>
-              <button 
-                onClick={() => {setSearch(''); setFilterStatus('Todos');}}
-                className="mt-8 text-primary-blue font-black text-[10px] uppercase tracking-widest hover:underline"
-              >
-                Limpar todos os filtros
-              </button>
-            </div>
-          )}
-
-          {/* Pagination Footer */}
-          <div className="p-8 bg-slate-50/50 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-6">
-            <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Exibindo {filteredOrders.length} de {orders.length} pedidos</p>
-            <div className="flex items-center gap-3">
-              <button disabled className="size-10 rounded-xl bg-white border border-slate-100 flex items-center justify-center text-slate-300 cursor-not-allowed transition-all">
-                <ChevronLeft size={20} />
-              </button>
-              <div className="flex items-center gap-1">
-                <button className="size-10 rounded-xl bg-primary-blue text-white font-black text-xs shadow-lg shadow-primary-blue/20">1</button>
-                <button className="size-10 rounded-xl bg-white text-midnight font-bold text-xs hover:bg-slate-100 transition-all">2</button>
-              </div>
-              <button className="size-10 rounded-xl bg-white border border-slate-100 flex items-center justify-center text-midnight hover:bg-slate-100 transition-all shadow-sm">
-                <ChevronRight size={20} />
-              </button>
-            </div>
-          </div>
         </div>
       </div>
+
+      {/* MODAL DE RETIRADA */}
+      <AnimatePresence>
+        {showWithdrawalModal && selectedOrder && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 text-[12px]">
+            <motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}} onClick={() => setShowWithdrawalModal(false)} className="absolute inset-0 bg-midnight/80 backdrop-blur-sm" />
+            <motion.div initial={{opacity:0, scale:0.9}} animate={{opacity:1, scale:1}} exit={{opacity:0, scale:0.9}} className="relative bg-white w-full max-w-md rounded-[2.5rem] p-10 overflow-hidden shadow-2xl">
+              <div className="flex items-center gap-4 mb-6">
+                <div className="size-12 bg-emerald-50 text-emerald-500 rounded-2xl flex items-center justify-center">
+                  <Key size={24} />
+                </div>
+                <div>
+                  <h3 className="text-xl font-black text-midnight uppercase italic tracking-tighter">Confirmar Retirada</h3>
+                  <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Pedido {selectedOrder.id} - {selectedOrder.customerName}</p>
+                </div>
+              </div>
+
+              <form onSubmit={handleConfirmWithdrawal} className="space-y-6">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Código de Retirada (pelo cliente)</label>
+                  <input 
+                    required 
+                    autoFocus
+                    placeholder="Ex: AB12XY" 
+                    value={withdrawalInput} 
+                    onChange={e => {
+                      setWithdrawalInput(e.target.value.toUpperCase());
+                      setError('');
+                    }} 
+                    className={`w-full bg-slate-50 border ${error ? 'border-red-500 animate-pulse' : 'border-slate-100'} px-6 py-4 rounded-2xl font-mono text-xl font-black text-center tracking-[0.5em] focus:outline-none focus:ring-2 focus:ring-primary-blue/20 transition-all`} 
+                  />
+                  {error && <p className="text-red-500 text-[9px] font-black uppercase text-center mt-2">{error}</p>}
+                </div>
+
+                <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 italic text-slate-500 text-[10px]">
+                  O cliente deve apresentar o código disponível no aplicativo para confirmar a retirada física do produto.
+                </div>
+
+                <div className="flex gap-4">
+                   <button type="button" onClick={() => setShowWithdrawalModal(false)} className="flex-1 bg-slate-100 text-slate-400 py-4 rounded-2xl font-black uppercase tracking-widest">Cancelar</button>
+                   <button type="submit" className="flex-1 bg-primary-blue text-white py-4 rounded-2xl font-black uppercase tracking-widest shadow-xl shadow-primary-blue/20">Validar Código</button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </MerchantLayout>
   );
 }

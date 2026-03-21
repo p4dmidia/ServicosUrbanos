@@ -14,6 +14,19 @@ import MerchantFinancials from './pages/MerchantFinancials';
 import MerchantCustomers from './pages/MerchantCustomers';
 import MerchantReports from './pages/MerchantReports';
 import MerchantSettings from './pages/MerchantSettings';
+import AdminLogin from './pages/AdminLogin';
+import AdminDashboard from './pages/AdminDashboard';
+import AdminMMN from './pages/AdminMMN';
+import AdminPlatforms from './pages/AdminPlatforms';
+import AdminUsers from './pages/AdminUsers';
+import AdminMarketplace from './pages/AdminMarketplace';
+import AdminSettings from './pages/AdminSettings';
+import AdminReports from './pages/AdminReports';
+import AffiliateDashboard from './pages/AffiliateDashboard';
+import AffiliateNetwork from './pages/AffiliateNetwork';
+import AffiliateWallet from './pages/AffiliateWallet';
+import AffiliateEcosystem from './pages/AffiliateEcosystem';
+import AffiliateProfile from './pages/AffiliateProfile';
 
 export default function App() {
   return (
@@ -34,6 +47,25 @@ export default function App() {
         <Route path="/lojista/clientes" element={<MerchantCustomers />} />
         <Route path="/lojista/relatorios" element={<MerchantReports />} />
         <Route path="/lojista/configuracoes" element={<MerchantSettings />} />
+        
+        {/* Admin Routes */}
+        <Route path="/admin" element={<AdminLogin />} />
+        <Route path="/admin/login" element={<AdminLogin />} />
+        <Route path="/admin/dashboard" element={<AdminDashboard />} />
+        <Route path="/admin/mmn" element={<AdminMMN />} />
+        <Route path="/admin/plataformas" element={<AdminPlatforms />} />
+        <Route path="/admin/usuarios" element={<AdminUsers />} />
+        <Route path="/admin/marketplace" element={<AdminMarketplace />} />
+        <Route path="/admin/configuracoes" element={<AdminSettings />} />
+        <Route path="/admin/relatorios" element={<AdminReports />} />
+
+        {/* Affiliate / Virtual Office Routes */}
+        <Route path="/afiliado" element={<AffiliateDashboard />} />
+        <Route path="/afiliado/dashboard" element={<AffiliateDashboard />} />
+        <Route path="/afiliado/rede" element={<AffiliateNetwork />} />
+        <Route path="/afiliado/financeiro" element={<AffiliateWallet />} />
+        <Route path="/afiliado/ecossistema" element={<AffiliateEcosystem />} />
+        <Route path="/afiliado/perfil" element={<AffiliateProfile />} />
       </Routes>
     </BrowserRouter>
   );

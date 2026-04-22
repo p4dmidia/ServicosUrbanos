@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { 
   Search, 
   ShoppingCart, 
@@ -20,18 +20,27 @@ import {
   Trash2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
+import { supabase } from '../lib/supabase';
+import { useAuth } from '../contexts/AuthContext';
+import { User } from 'lucide-react';
 
 interface Product {
-  id: number;
+  id: string;
   name: string;
   price: number;
   image: string;
   rating: number;
-  sales: string;
+  sales: number;
   category: string;
   cashback: number;
-  condition: 'Novo' | 'Usado';
+  condition: string;
+  stock: number;
+}
+
+interface Category {
+  id: string;
+  name: string;
 }
 
 interface CartItem extends Product {
@@ -39,33 +48,104 @@ interface CartItem extends Product {
 }
 
 export default function Loja() {
+  const navigate = useNavigate();
   const [search, setSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('Todos');
-  const [priceRange, setPriceRange] = useState(1000);
+  const [priceRange, setPriceRange] = useState(5000);
   const [isCartOpen, setIsCartOpen] = useState(false);
-  const [cartItems, setCartItems] = useState<CartItem[]>([]);
+  const [cartItems, setCartItems] = useState<CartItem[]>(() => {
+    try {
+      const saved = localStorage.getItem('urbashop_cart');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
 
-  const products: Product[] = [
-    { id: 1, name: "Fone de Ouvido Noise Cancelling Pro", price: 199.90, image: "🎧", rating: 4.8, sales: "1.2k", category: "Eletrônicos", cashback: 15, condition: 'Novo' },
-    { id: 2, name: "Smartwatch Urban Fit G2", price: 349.00, image: "⌚", rating: 4.9, sales: "800", category: "Wearables", cashback: 25, condition: 'Novo' },
-    { id: 3, name: "Tênis Street Walker Original", price: 279.50, image: "👟", rating: 4.7, sales: "2.5k", category: "Calçados", cashback: 20, condition: 'Novo' },
-    { id: 4, name: "Mochila Tech Pro Impermeável", price: 159.00, image: "🎒", rating: 4.6, sales: "500", category: "Acessórios", cashback: 12, condition: 'Novo' },
-    { id: 5, name: "Kindle Paperwhite 11ª Ger", price: 699.00, image: "📖", rating: 4.9, sales: "3k", category: "Eletrônicos", cashback: 50, condition: 'Novo' },
-    { id: 6, name: "Câmera Mirrorless UrbanShot", price: 2450.00, image: "📷", rating: 4.7, sales: "150", category: "Eletrônicos", cashback: 150, condition: 'Novo' },
-    { id: 7, name: "Jaqueta Corta-Vento Elite", price: 189.90, image: "🧥", rating: 4.5, sales: "1.1k", category: "Moda", cashback: 18, condition: 'Novo' },
-    { id: 8, name: "Garrafa Térmica 1L Titanium", price: 89.00, image: "🫙", rating: 4.8, sales: "4k", category: "Casa", cashback: 8, condition: 'Novo' },
-  ];
+  useEffect(() => {
+    localStorage.setItem('urbashop_cart', JSON.stringify(cartItems));
+  }, [cartItems]);
+  const [loading, setLoading] = useState(true);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
 
-  const categories = ['Todos', 'Eletrônicos', 'Wearables', 'Calçados', 'Acessórios', 'Moda', 'Casa'];
+  const { user: authUser, profile, signOut } = useAuth();
+  const [showUserMenu, setShowUserMenu] = useState(false);
+
+  useEffect(() => {
+    async function loadData() {
+      try {
+        setLoading(true);
+        
+        // Fetch Categories
+        const { data: catData, error: catError } = await supabase
+          .from('categories')
+          .select('id, name')
+          .order('name');
+        
+        if (catError) throw catError;
+        const baseCategories = catData || [];
+
+        // Fetch Products
+        const { data: prodData, error: prodError } = await supabase
+          .from('products')
+          .select('id, name, price, image, main_image, category, sales, cashback, stock')
+          .eq('status', 'Ativo');
+
+        if (prodError) throw prodError;
+
+        // Map database products to UI interface
+        const formattedProducts: Product[] = (prodData || []).map(p => ({
+          id: p.id,
+          name: p.name || 'Produto sem nome',
+          price: Number(p.price) || 0,
+          image: p.main_image || p.image || '📦',
+          rating: 4.5 + (Math.random() * 0.5),
+          sales: Number(p.sales) || 0,
+          category: p.category || 'Geral',
+          cashback: Number(p.cashback) || 5,
+          condition: 'Novo',
+          stock: Number(p.stock) || 0
+        }));
+
+        // Merge categories from products and the categories table
+        const productCategories = Array.from(new Set(formattedProducts.map(p => p.category)))
+          .map(cat => ({ id: cat, name: cat }));
+        
+        // Use a map to ensure unique category names
+        const uniqueCategoriesMap = new Map();
+        baseCategories.forEach(c => uniqueCategoriesMap.set(c.name, c));
+        productCategories.forEach(c => {
+          if (!uniqueCategoriesMap.has(c.name)) {
+            uniqueCategoriesMap.set(c.name, c);
+          }
+        });
+
+        setCategories(Array.from(uniqueCategoriesMap.values()).sort((a, b) => a.name.localeCompare(b.name)));
+        setProducts(formattedProducts);
+      } catch (error) {
+        console.error('Error loading store data:', error);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    loadData();
+  }, []);
 
   const filteredProducts = useMemo(() => {
     return products.filter(p => {
-      const matchesSearch = p.name.toLowerCase().includes(search.toLowerCase());
+      const productName = p.name?.toLowerCase() || '';
+      const productCategory = p.category?.toLowerCase() || '';
+      const searchLower = search.toLowerCase();
+      
+      const matchesSearch = productName.includes(searchLower) ||
+                          productCategory.includes(searchLower);
       const matchesCategory = selectedCategory === 'Todos' || p.category === selectedCategory;
       const matchesPrice = p.price <= priceRange;
       return matchesSearch && matchesCategory && matchesPrice;
     });
-  }, [search, selectedCategory, priceRange]);
+  }, [search, selectedCategory, priceRange, products]);
 
   const addToCart = (product: Product) => {
     setCartItems(prev => {
@@ -78,7 +158,7 @@ export default function Loja() {
     setIsCartOpen(true);
   };
 
-  const updateQuantity = (id: number, delta: number) => {
+  const updateQuantity = (id: string, delta: number) => {
     setCartItems(prev => prev.map(item => {
       if (item.id === id) {
         const newQty = Math.max(1, item.quantity + delta);
@@ -88,13 +168,15 @@ export default function Loja() {
     }));
   };
 
-  const removeFromCart = (id: number) => {
+  const removeFromCart = (id: string) => {
     setCartItems(prev => prev.filter(item => item.id !== id));
   };
 
   const cartCount = cartItems.reduce((acc, item) => acc + item.quantity, 0);
   const subtotal = cartItems.reduce((acc, item) => acc + (item.price * item.quantity), 0);
-  const totalCashback = cartItems.reduce((acc, item) => acc + (item.cashback * item.quantity), 0);
+  const totalCashback = cartItems.reduce((acc, item) => {
+    return acc + (item.price * (item.cashback / 100) * item.quantity);
+  }, 0);
 
   return (
     <div className="min-h-screen bg-[#f8fafc] font-sans flex flex-col">
@@ -126,12 +208,86 @@ export default function Loja() {
                 </span>
               )}
             </button>
-            <Link to="/login" className="hidden md:flex items-center gap-2 text-white/80 hover:text-white transition-colors font-bold text-sm">
-              <div className="size-8 rounded-full bg-white/10 flex items-center justify-center">
-                <LayoutGrid size={16} />
+            {authUser ? (
+              <div className="relative">
+                <button 
+                  onClick={() => setShowUserMenu(!showUserMenu)}
+                  className="flex items-center gap-3 hover:text-white transition-colors group px-2 py-1 rounded-xl hover:bg-white/5"
+                >
+                  <div className="text-right hidden sm:block">
+                    <p className="text-xs font-black tracking-tight text-white">{profile?.full_name?.split(' ')[0] || 'Meu Perfil'}</p>
+                    <p className="text-[10px] text-slate-400 font-bold">{authUser.email}</p>
+                  </div>
+                  <div className="size-9 rounded-full bg-white/10 flex items-center justify-center overflow-hidden border border-white/10 group-hover:border-accent/50 transition-all">
+                    {profile?.avatar_url ? (
+                      <img src={profile.avatar_url} alt="Profile" className="w-full h-full object-cover" />
+                    ) : (
+                      <User size={18} />
+                    )}
+                  </div>
+                </button>
+
+                <AnimatePresence>
+                  {showUserMenu && (
+                    <>
+                      <div className="fixed inset-0 z-40" onClick={() => setShowUserMenu(false)}></div>
+                      <motion.div 
+                        initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                        className="absolute right-0 mt-4 w-64 bg-white rounded-2xl shadow-2xl overflow-hidden z-50 border border-slate-100 p-2 text-midnight"
+                      >
+                        <div className="p-4 border-b border-slate-100 flex items-center gap-3 bg-slate-50">
+                          <div className="size-10 rounded-full bg-slate-200 flex items-center justify-center overflow-hidden shrink-0">
+                            {profile?.avatar_url ? (
+                              <img src={profile.avatar_url} alt="Profile" className="w-full h-full object-cover" />
+                            ) : (
+                              <User size={20} className="text-slate-400" />
+                            )}
+                          </div>
+                          <div className="overflow-hidden">
+                            <p className="text-sm font-black truncate text-midnight">{profile?.full_name || 'Usuário'}</p>
+                            <p className="text-[10px] font-bold text-slate-400 truncate">{authUser.email}</p>
+                          </div>
+                        </div>
+                        <div className="p-2 space-y-1">
+                          <Link 
+                            to="/afiliado/perfil" 
+                            className="flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-slate-50 transition-colors text-xs font-bold text-slate-600 hover:text-primary-blue"
+                          >
+                            <User size={16} /> Meu Perfil
+                          </Link>
+                          <Link 
+                            to="/afiliado/pedidos" 
+                            className="flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-slate-50 transition-colors text-xs font-bold text-slate-600 hover:text-primary-blue"
+                          >
+                            <ShoppingBag size={16} /> Meus Pedidos
+                          </Link>
+                        </div>
+                        <div className="p-2 border-t border-slate-100">
+                          <button 
+                            onClick={async () => {
+                              await signOut();
+                              setShowUserMenu(false);
+                            }}
+                            className="w-full flex items-center justify-between px-3 py-2 rounded-xl hover:bg-red-50 text-red-500 transition-colors text-xs font-black uppercase tracking-wider group"
+                          >
+                            Sair da conta
+                          </button>
+                        </div>
+                      </motion.div>
+                    </>
+                  )}
+                </AnimatePresence>
               </div>
-              Minha Conta
-            </Link>
+            ) : (
+              <Link to="/login" className="hidden md:flex items-center gap-2 text-white/80 hover:text-white transition-colors font-bold text-sm">
+                <div className="size-8 rounded-full bg-white/10 flex items-center justify-center">
+                  <User size={16} />
+                </div>
+                Minha Conta
+              </Link>
+            )}
           </div>
         </div>
       </header>
@@ -150,13 +306,19 @@ export default function Loja() {
               <div>
                 <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Categorias</h4>
                 <div className="flex flex-col gap-2">
+                  <button 
+                    onClick={() => setSelectedCategory('Todos')}
+                    className={`text-left px-4 py-2 rounded-xl text-sm font-bold transition-all ${selectedCategory === 'Todos' ? 'bg-primary-blue text-white shadow-lg shadow-primary-blue/20' : 'text-slate-500 hover:bg-slate-100'}`}
+                  >
+                    Todos
+                  </button>
                   {categories.map(cat => (
                     <button 
-                      key={cat} 
-                      onClick={() => setSelectedCategory(cat)}
-                      className={`text-left px-4 py-2 rounded-xl text-sm font-bold transition-all ${selectedCategory === cat ? 'bg-primary-blue text-white shadow-lg shadow-primary-blue/20' : 'text-slate-500 hover:bg-slate-100'}`}
+                      key={cat.id} 
+                      onClick={() => setSelectedCategory(cat.name)}
+                      className={`text-left px-4 py-2 rounded-xl text-sm font-bold transition-all ${selectedCategory === cat.name ? 'bg-primary-blue text-white shadow-lg shadow-primary-blue/20' : 'text-slate-500 hover:bg-slate-100'}`}
                     >
-                      {cat}
+                      {cat.name}
                     </button>
                   ))}
                 </div>
@@ -211,7 +373,18 @@ export default function Loja() {
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
             <AnimatePresence mode='popLayout'>
-              {filteredProducts.map((p) => (
+              {loading ? (
+                [1, 2, 3, 4, 5, 6].map(i => (
+                  <div key={i} className="bg-white rounded-[2rem] border border-slate-100 h-[400px] animate-pulse">
+                    <div className="aspect-square bg-slate-50"></div>
+                    <div className="p-6 space-y-4">
+                      <div className="h-4 bg-slate-50 w-1/2"></div>
+                      <div className="h-8 bg-slate-50 w-full"></div>
+                      <div className="h-10 bg-slate-50 w-full mt-auto"></div>
+                    </div>
+                  </div>
+                ))
+              ) : filteredProducts.map((p) => (
                 <motion.div 
                   key={p.id}
                   layout
@@ -220,23 +393,42 @@ export default function Loja() {
                   exit={{ opacity: 0, scale: 0.9 }}
                   className="bg-white rounded-[2rem] border border-slate-100 overflow-hidden hover:shadow-2xl transition-all group flex flex-col"
                 >
-                  <div className="relative aspect-square bg-slate-50 flex items-center justify-center text-7xl group-hover:scale-105 transition-transform duration-500">
-                    <div className="absolute top-4 left-4 bg-white/80 backdrop-blur-md px-3 py-1 rounded-full text-[10px] font-black text-midnight border border-white/50">
-                      {p.condition}
+                  <div className="relative aspect-square bg-slate-50 flex items-center justify-center relative overflow-hidden group-hover:scale-105 transition-transform duration-500">
+                    <div className="absolute top-4 left-4 flex flex-col gap-2 z-10">
+                      <div className="bg-white/80 backdrop-blur-md px-3 py-1 rounded-full text-[10px] font-black text-midnight border border-white/50">
+                        {p.condition}
+                      </div>
+                      {p.stock === 0 && (
+                        <div className="bg-red-500 text-white px-3 py-1 rounded-full text-[10px] font-black uppercase shadow-lg">
+                          Esgotado
+                        </div>
+                      )}
                     </div>
-                    {p.image}
+                    {p.image.length > 4 ? (
+                      <img src={p.image} alt={p.name} className={`w-full h-full object-cover ${p.stock === 0 ? 'grayscale opacity-70' : ''}`} />
+                    ) : (
+                      <span className="text-7xl">{p.image}</span>
+                    )}
                     <button 
-                      onClick={() => addToCart(p)}
-                      className="absolute bottom-4 right-4 size-12 bg-midnight text-white rounded-2xl flex items-center justify-center opacity-0 group-hover:opacity-100 group-hover:translate-y-0 translate-y-2 transition-all shadow-xl hover:bg-primary-blue"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        if (p.stock > 0) addToCart(p);
+                      }}
+                      disabled={p.stock === 0}
+                      title={p.stock > 0 ? "Adicionar ao carrinho" : "Esgotado"}
+                      className={`absolute bottom-4 right-4 size-12 text-white rounded-2xl flex items-center justify-center opacity-0 group-hover:opacity-100 group-hover:translate-y-0 translate-y-2 transition-all shadow-xl z-10 ${
+                        p.stock > 0 ? 'bg-midnight hover:bg-primary-blue' : 'bg-slate-400 cursor-not-allowed shadow-none'
+                      }`}
                     >
-                      <Plus size={24} />
+                      {p.stock > 0 ? <Plus size={24} /> : <X size={24} />}
                     </button>
                   </div>
 
                   <div className="p-6 flex flex-col flex-1">
                     <div className="flex items-center gap-1 mb-2">
                       <Star size={12} className="text-orange-500 fill-orange-500" />
-                      <span className="text-xs font-black text-midnight">{p.rating}</span>
+                      <span className="text-xs font-black text-midnight">{p.rating.toFixed(1)}</span>
                       <span className="text-slate-300 mx-1">•</span>
                       <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{p.sales} vendidos</span>
                     </div>
@@ -246,8 +438,8 @@ export default function Loja() {
 
                     <div className="mt-auto pt-4 border-t border-slate-50 flex items-end justify-between">
                       <div>
-                        <p className="text-2xl font-black text-midnight tracking-tighter">R$ {p.price.toFixed(2).replace('.', ',')}</p>
-                        <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest">+ R$ {p.cashback.toFixed(2).replace('.', ',')} de cashback</p>
+                        <p className="text-2xl font-black text-midnight tracking-tighter">R$ {p.price.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                        <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest">+ R$ {(p.price * (p.cashback / 100)).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} de cashback</p>
                       </div>
                       <Link to={`/produto/${p.id}`} className="size-8 bg-slate-50 rounded-xl flex items-center justify-center text-slate-300 hover:text-primary-blue transition-colors">
                         <ChevronRight size={20} />
@@ -323,15 +515,19 @@ export default function Loja() {
                       animate={{ opacity: 1, y: 0 }}
                       className="flex gap-4 p-4 bg-slate-50 rounded-2xl border border-slate-100"
                     >
-                      <div className="size-20 bg-white rounded-xl flex items-center justify-center text-3xl shrink-0 shadow-sm">
-                        {item.image}
+                      <div className="size-20 bg-white rounded-xl flex items-center justify-center relative overflow-hidden shrink-0 shadow-sm">
+                        {item.image.length > 4 ? (
+                          <img src={item.image} alt={item.name} className="w-full h-full object-cover" />
+                        ) : (
+                          <span className="text-3xl">{item.image}</span>
+                        )}
                       </div>
                       <div className="flex-1 min-w-0">
                         <h4 className="text-sm font-black text-midnight mb-1 truncate">{item.name}</h4>
                         <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-3">{item.category}</p>
                         
                         <div className="flex items-center justify-between mt-auto">
-                          <p className="text-sm font-black text-midnight">R$ {item.price.toFixed(2).replace('.', ',')}</p>
+                          <p className="text-sm font-black text-midnight">R$ {item.price.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
                           <div className="flex items-center bg-white border border-slate-200 rounded-xl px-2 py-1 gap-3">
                             <button onClick={() => updateQuantity(item.id, -1)} className="size-6 text-slate-400"><Minus size={14} /></button>
                             <span className="text-xs font-black">{item.quantity}</span>
@@ -358,21 +554,21 @@ export default function Loja() {
                   <div className="space-y-3 mb-6">
                     <div className="flex justify-between items-center text-slate-500 font-medium font-bold uppercase tracking-widest text-[10px]">
                       <span>Subtotal</span>
-                      <span>R$ {subtotal.toFixed(2).replace('.', ',')}</span>
+                      <span>R$ {subtotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
                     </div>
                     <div className="flex justify-between items-center bg-emerald-500/10 p-4 rounded-2xl border border-emerald-200">
                       <div className="flex items-center gap-2">
                         <TrendingUp size={16} className="text-emerald-600" />
                         <span className="text-[10px] font-black text-emerald-600 uppercase tracking-widest">Cashback Ganho</span>
                       </div>
-                      <span className="text-sm font-black text-emerald-600">+ R$ {totalCashback.toFixed(2).replace('.', ',')}</span>
+                      <span className="text-sm font-black text-emerald-600">+ R$ {totalCashback.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
                     </div>
                     <div className="flex justify-between items-center pt-4 border-t border-slate-200">
                       <span className="text-xl font-black text-midnight uppercase tracking-tighter">Total</span>
-                      <span className="text-2xl font-black text-midnight tracking-tighter">R$ {subtotal.toFixed(2).replace('.', ',')}</span>
+                      <span className="text-2xl font-black text-midnight tracking-tighter">R$ {subtotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
                     </div>
                   </div>
-                  <button className="w-full bg-midnight text-white py-5 rounded-2xl font-black text-lg transition-all shadow-xl hover:bg-slate-800 uppercase tracking-tighter">
+                  <button onClick={() => navigate('/checkout')} className="w-full bg-midnight text-white py-5 rounded-2xl font-black text-lg transition-all shadow-xl hover:bg-slate-800 uppercase tracking-tighter">
                     Finalizar Pedido
                   </button>
                 </div>

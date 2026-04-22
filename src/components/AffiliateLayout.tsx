@@ -11,11 +11,14 @@ import {
   Bell,
   Search,
   ChevronRight,
-  TrendingUp
+  TrendingUp,
+  ShoppingBag
 } from 'lucide-react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { businessRules } from '../lib/businessRules';
+import { useAuth } from '../contexts/AuthContext';
+import { toast } from 'react-hot-toast';
 
 interface AffiliateLayoutProps {
   children: React.ReactNode;
@@ -25,25 +28,64 @@ interface AffiliateLayoutProps {
 export default function AffiliateLayout({ children, title }: AffiliateLayoutProps) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [stats, setStats] = useState<any>(null);
   const location = useLocation();
   const navigate = useNavigate();
-  const [user, setUser] = useState<any>(null);
+  const { user, profile, signOut } = useAuth();
 
   useEffect(() => {
-    setUser(businessRules.getCurrentUser());
-  }, []);
+    async function loadStats() {
+      if (user) {
+        const data = await businessRules.getAffiliateStats(user.id);
+        setStats(data);
+      }
+    }
+    loadStats();
+    
+    // Atualizar a cada 30 segundos para manter o saldo real
+    const interval = setInterval(loadStats, 30000);
+    return () => clearInterval(interval);
+  }, [user]);
+
+  const handleLogout = async () => {
+    await signOut();
+    navigate('/login');
+  };
+
+  const handlePushNotification = async () => {
+    if (!("Notification" in window)) {
+      toast.error("Este navegador não suporta notificações.");
+      return;
+    }
+
+    if (Notification.permission === "granted") {
+      toast.success("Notificações push já estão ativas!");
+      new Notification("Urba Office", {
+        body: "As notificações push estão configuradas corretamentes!",
+        icon: "/vite.svg"
+      });
+    } else if (Notification.permission !== "denied") {
+      const permission = await Notification.requestPermission();
+      if (permission === "granted") {
+        toast.success("Notificações ativadas com sucesso!");
+        new Notification("Urba Office", {
+          body: "Parabéns! Você receberá alertas de novas comissões.",
+          icon: "/vite.svg"
+        });
+      }
+    } else {
+      toast.error("Notificações bloqueadas no navegador.");
+    }
+  };
 
   const menuItems = [
     { path: '/afiliado/dashboard', icon: LayoutGrid, label: 'Dashboard' },
     { path: '/afiliado/rede', icon: Users, label: 'Minha Rede' },
     { path: '/afiliado/financeiro', icon: Wallet, label: 'Financeiro' },
+    { path: '/afiliado/pedidos', icon: ShoppingBag, label: 'Meus Pedidos' },
     { path: '/afiliado/ecossistema', icon: Globe, label: 'Ecossistema' },
     { path: '/afiliado/perfil', icon: User, label: 'Dados Pessoais' },
   ];
-
-  const handleLogout = () => {
-    navigate('/login');
-  };
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] flex font-sans text-midnight">
@@ -119,11 +161,13 @@ export default function AffiliateLayout({ children, title }: AffiliateLayoutProp
           </div>
 
           <div className="flex items-center gap-6">
-            {/* Saldo Rápido */}
+            {/* Saldo Rápido Real do Banco de Dados */}
             <div className="hidden md:flex flex-col items-end">
               <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Saldo Disponível</p>
               <div className="flex items-center gap-2">
-                 <span className="text-lg font-black text-emerald-600 tracking-tighter">R$ 870,30</span>
+                 <span className="text-lg font-black text-emerald-600 tracking-tighter">
+                   {stats ? `R$ ${stats.availableBalance.toFixed(2)}` : 'R$ 0,00'}
+                 </span>
                  <div className="size-6 bg-emerald-50 rounded-full flex items-center justify-center text-emerald-600">
                     <TrendingUp size={12} />
                  </div>
@@ -133,17 +177,27 @@ export default function AffiliateLayout({ children, title }: AffiliateLayoutProp
             <div className="h-8 w-px bg-slate-200 hidden md:block"></div>
 
             <div className="flex items-center gap-4">
-               <button className="size-10 flex items-center justify-center text-slate-400 hover:text-midnight transition-colors relative bg-slate-50 rounded-xl">
-                 <Bell size={20} />
+               {/* Botão de Notificação Push Funcional */}
+               <button 
+                 onClick={handlePushNotification}
+                 title="Ativar Notificações Push"
+                 className="size-10 flex items-center justify-center text-slate-400 hover:text-primary-blue hover:bg-primary-blue/5 transition-all relative bg-slate-50 rounded-xl group"
+               >
+                 <Bell size={20} className="group-hover:animate-swing" />
                  <span className="absolute top-2 right-2 size-2 bg-red-500 rounded-full border-2 border-white"></span>
                </button>
+               
                <div className="flex items-center gap-3 pl-2 border-l border-slate-100">
                  <div className="text-right hidden sm:block">
-                   <p className="text-xs font-black text-midnight leading-none mb-1">{user?.name || 'Carregando...'}</p>
+                   <p className="text-xs font-black text-midnight leading-none mb-1">{profile?.full_name || 'Carregando...'}</p>
                    <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Afiliado Premium</p>
                  </div>
-                 <div className="size-10 rounded-xl bg-slate-100 flex items-center justify-center font-black text-slate-400 border border-slate-200 uppercase">
-                   {user?.name?.charAt(0) || 'U'}
+                 <div className="size-10 rounded-xl bg-slate-100 flex items-center justify-center font-black text-slate-400 border border-slate-200 uppercase overflow-hidden relative">
+                   {profile?.avatar_url ? (
+                     <img src={profile.avatar_url} alt="Profile" className="w-full h-full object-cover" />
+                   ) : (
+                     profile?.full_name?.charAt(0) || 'U'
+                   )}
                  </div>
                </div>
             </div>

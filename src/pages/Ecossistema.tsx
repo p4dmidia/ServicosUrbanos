@@ -111,70 +111,71 @@ export default function Ecossistema() {
                             <p className="text-slate-500 font-medium">Uma infraestrutura robusta para todas as suas necessidades.</p>
                         </div>
 
-                        <div className="grid grid-cols-1 md:grid-cols-4 lg:grid-cols-6 gap-6 h-auto md:h-[700px]">
-                            {/* Card 1: UrbaMoby */}
+                        <div className="grid grid-cols-1 md:grid-cols-4 lg:grid-cols-6 gap-6 h-auto">
+                            {/* Card 1: UrbaShop - Marketplace (Agora em primeiro e destaque) */}
                             <motion.div
                                 whileHover={{ y: -5 }}
                                 className="md:col-span-3 lg:col-span-4 bg-white border border-slate-100 rounded-[2.5rem] p-10 shadow-sm flex flex-col justify-between group overflow-hidden relative"
                             >
                                 <div className="absolute top-0 right-0 p-8 text-slate-100 group-hover:text-primary-blue transition-colors pointer-events-none">
-                                    <Car size={180} />
+                                    <ShoppingBag size={180} />
                                 </div>
                                 <div className="relative z-10">
-                                    <Car className="text-primary-blue mb-6" size={48} />
-                                    <h3 className="text-3xl font-black mb-4">Mobilidade UrbaMoby</h3>
-                                    <p className="text-slate-500 font-medium max-w-xs text-lg">Motoristas valorizados (80% de ganho) e viagens seguras para passageiros exigentes.</p>
+                                    <ShoppingBag className="text-primary-blue mb-6" size={48} />
+                                    <h3 className="text-3xl font-black mb-4">UrbaShop - Marketplace</h3>
+                                    <p className="text-slate-500 font-medium max-w-xs text-lg">Compre de tudo, venda para todos dentro da nossa rede. O maior ecossistema de varejo local.</p>
                                 </div>
-                                <Link to="/cadastro" className="flex items-center gap-2 font-black text-xs uppercase tracking-widest text-midnight hover:text-primary-blue transition-colors">
-                                    Saber mais <ArrowRight size={18} />
+                                <Link to="/marketplace" className="inline-flex items-center gap-2 bg-primary-blue text-white px-6 py-3 rounded-2xl font-black text-xs uppercase tracking-widest hover:scale-105 transition-all w-fit">
+                                    Acessar Loja <ArrowRight size={18} />
                                 </Link>
                             </motion.div>
 
-                            {/* Card 2: UrbaFood */}
+                            {/* Card 2: UrbaFood & Delivery */}
                             <motion.div
                                 whileHover={{ y: -5 }}
-                                className="md:col-span-1 lg:col-span-2 bg-white border border-slate-100 rounded-[2.5rem] p-10 shadow-sm flex flex-col justify-between"
+                                className="md:col-span-1 lg:col-span-2 bg-white border border-slate-100 rounded-[2.5rem] p-10 shadow-sm flex flex-col justify-between opacity-80"
                             >
                                 <div>
                                     <Utensils className="text-orange-500 mb-6" size={32} />
                                     <h3 className="text-xl font-black mb-2">UrbaFood & Delivery</h3>
                                     <p className="text-slate-500 text-sm font-medium">Seus restaurantes favoritos com entrega sustentável.</p>
                                 </div>
-                                <div className="size-12 bg-orange-50 rounded-2xl flex items-center justify-center text-orange-500">
-                                    <CheckCircle2 size={24} />
+                                <div className="bg-orange-50 text-orange-600 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest w-fit">
+                                    EM BREVE !
                                 </div>
                             </motion.div>
 
-                            {/* Card 3: UrbaShop */}
+                            {/* Card 3: Mobilidade UrbaMoby */}
                             <motion.div
                                 whileHover={{ y: -5 }}
-                                className="md:col-span-2 lg:col-span-2 bg-white border border-slate-100 rounded-[2.5rem] p-10 shadow-sm flex flex-col justify-between"
+                                className="md:col-span-2 lg:col-span-2 bg-white border border-slate-100 rounded-[2.5rem] p-10 shadow-sm flex flex-col justify-between opacity-80"
                             >
                                 <div>
-                                    <ShoppingBag className="text-primary-blue mb-6" size={32} />
-                                    <h3 className="text-xl font-black mb-2">UrbaShop - Marketplace</h3>
-                                    <p className="text-slate-500 text-sm font-medium">Compre de tudo, venda para todos dentro da nossa rede.</p>
+                                    <Car className="text-emerald-500 mb-6" size={32} />
+                                    <h3 className="text-xl font-black mb-2">Mobilidade UrbaMoby</h3>
+                                    <p className="text-slate-500 text-sm font-medium">Motoristas valorizados e viagens seguras para passageiros exigentes.</p>
                                 </div>
-                                <Link to="/marketplace" className="text-primary-blue font-black text-xs uppercase tracking-widest">Acessar Loja</Link>
+                                <div className="bg-emerald-50 text-emerald-600 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest w-fit">
+                                    EM BREVE !
+                                </div>
                             </motion.div>
 
                             {/* Card 4: Saúde & Seguros */}
                             <motion.div
                                 whileHover={{ y: -5 }}
-                                className="md:col-span-2 lg:col-span-2 bg-white border border-slate-100 rounded-[2.5rem] p-10 shadow-sm flex flex-col justify-between"
+                                className="md:col-span-2 lg:col-span-2 bg-white border border-slate-100 rounded-[2.5rem] p-10 shadow-sm flex flex-col justify-between opacity-80"
                             >
                                 <div>
-                                    <ShieldCheck className="text-emerald-500 mb-6" size={32} />
+                                    <ShieldCheck className="text-indigo-500 mb-6" size={32} />
                                     <h3 className="text-xl font-black mb-2">Saúde & Seguros</h3>
                                     <p className="text-slate-500 text-sm font-medium">Proteção e assistência de qualidade para a família toda.</p>
                                 </div>
-                                <div className="flex gap-2">
-                                    <div className="size-8 bg-emerald-50 rounded-xl flex items-center justify-center text-emerald-500"><Globe size={16} /></div>
-                                    <div className="size-8 bg-emerald-50 rounded-xl flex items-center justify-center text-emerald-500"><ShieldCheck size={16} /></div>
+                                <div className="bg-indigo-50 text-indigo-600 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest w-fit">
+                                    EM BREVE !
                                 </div>
                             </motion.div>
 
-                            {/* Card 5: Carteira Digital (Fintech Style) */}
+                            {/* Card 5: Carteira Digital */}
                             <motion.div
                                 whileHover={{ y: -5 }}
                                 className="md:col-span-4 lg:col-span-2 bg-emerald-500 rounded-[2.5rem] p-10 shadow-xl flex flex-col justify-between text-midnight relative overflow-hidden"
@@ -187,7 +188,7 @@ export default function Ecossistema() {
                                         <Wallet size={28} />
                                     </div>
                                     <h3 className="text-2xl font-black mb-4">Carteira Digital & Pix</h3>
-                                    <p className="font-bold opacity-80 text-lg">Onde a mágica acontece. Receba e gaste seus bônus instantaneamente.</p>
+                                    <p className="font-bold opacity-80 text-sm">Onde a mágica acontece. Receba e gaste seus bônus instantaneamente.</p>
                                 </div>
                                 <div className="flex items-center gap-3 relative z-10">
                                     <div className="bg-midnight px-4 py-2 rounded-full text-white text-[10px] font-black uppercase tracking-widest flex items-center gap-2">
@@ -272,7 +273,7 @@ export default function Ecossistema() {
 
             {/* Footer minimalista */}
             <footer className="p-12 text-center text-slate-400 border-t border-slate-100">
-                <p className="text-[10px] font-black uppercase tracking-widest">© 2024 Serviços Urbanos S.A. • Tecnologia a favor da sua economia.</p>
+                <p className="text-[10px] font-black uppercase tracking-widest">© 2026 Serviços Urbanos S.A. • Tecnologia a favor da sua economia.</p>
             </footer>
         </div>
     );

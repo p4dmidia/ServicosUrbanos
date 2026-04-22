@@ -14,3 +14,18 @@
     @apply bg-midnight text-slate-100 antialiased;
   }
 }
+
+@layer utilities {
+  @keyframes swing {
+    0% { transform: rotate(0deg); }
+    20% { transform: rotate(15deg); }
+    40% { transform: rotate(-10deg); }
+    60% { transform: rotate(5deg); }
+    80% { transform: rotate(-5deg); }
+    100% { transform: rotate(0deg); }
+  }
+  .animate-swing {
+    transform-origin: top center;
+    animation: swing 1s ease-in-out;
+  }
+}

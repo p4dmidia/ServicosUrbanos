@@ -19,8 +19,8 @@ export default function GanheDinheiro() {
     const steps = [
         {
             icon: <CheckCircle className="text-emerald-500" size={32} />,
-            title: "Use os Serviços",
-            description: "Faça no mínimo 4 corridas/mês para se manter ativo e qualificado."
+            title: "Consuma no Ecossistema",
+            description: "Consuma pelo menos 1 serviço/compra por mês para se manter ativo e qualificado."
         },
         {
             icon: <Users className="text-primary-blue" size={32} />,
@@ -63,12 +63,12 @@ export default function GanheDinheiro() {
                                 Transforme suas indicações em uma <span className="text-emerald-500">renda recorrente vitalícia.</span>
                             </h1>
                             <p className="text-lg md:text-2xl text-slate-400 mb-10 max-w-3xl mx-auto">
-                                Indique passageiros ou motoristas e ganhe bônus diários, mensais e anuais direto no seu PIX.
+                                Indique pessoas, amigos e familiares e ganhe bônus diários, mensais e anuais direto no seu PIX.
                             </p>
-                            <button className="bg-emerald-500 hover:bg-emerald-600 text-midnight px-12 py-5 rounded-2xl text-xl font-black transition-transform active:scale-95 shadow-2xl shadow-emerald-500/30 flex items-center gap-3 mx-auto uppercase tracking-tighter">
+                            <Link to="/cadastro" className="bg-emerald-500 hover:bg-emerald-600 text-midnight px-12 py-5 rounded-2xl text-xl font-black transition-transform active:scale-95 shadow-2xl shadow-emerald-500/30 flex items-center gap-3 mx-auto uppercase tracking-tighter w-fit">
                                 Quero ser um Titular do Cashback
                                 <ChevronRight size={24} />
-                            </button>
+                            </Link>
                         </motion.div>
                     </div>
                 </section>
@@ -156,9 +156,9 @@ export default function GanheDinheiro() {
                             Ganhos baseados em consumo real de serviços. Sem taxas ocultas, sem promessas vazias. Economia compartilhada de verdade.
                         </p>
 
-                        <button className="bg-emerald-500 hover:bg-emerald-600 text-midnight px-16 py-6 rounded-2xl text-2xl font-black transition-transform hover:scale-105 shadow-2xl shadow-emerald-500/40 uppercase tracking-tighter">
+                        <Link to="/cadastro" className="bg-emerald-500 hover:bg-emerald-600 text-midnight px-16 py-6 rounded-2xl text-2xl font-black transition-transform hover:scale-105 shadow-2xl shadow-emerald-500/40 uppercase tracking-tighter inline-block">
                             Cadastre-se e Pegue seu Link
-                        </button>
+                        </Link>
                     </div>
                 </section>
             </main>
@@ -186,7 +186,7 @@ export default function GanheDinheiro() {
                     </div>
 
                     <div className="pt-8 border-t border-slate-900 flex flex-col md:flex-row justify-between items-center gap-4 text-[10px] uppercase tracking-widest font-bold">
-                        <p>© 2024 Serviços Urbanos Tecnologia S.A. Todos os direitos reservados.</p>
+                        <p>© 2026 Serviços Urbanos Tecnologia S.A. Todos os direitos reservados.</p>
                         <div className="flex gap-8">
                             <span className="flex items-center gap-1">
                                 <Globe size={12} />

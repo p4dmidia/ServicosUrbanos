@@ -19,11 +19,60 @@ import {
   Calendar,
   ChevronRight
 } from 'lucide-react';
+import { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { Link } from 'react-router-dom';
+import { supabase } from '../lib/supabase';
 import Header from '../components/Header';
 
+interface Product {
+  id: string;
+  name: string;
+  price: number;
+  image: string;
+  main_image?: string;
+  cashback: number;
+}
+
 export default function Home() {
+  const [products, setProducts] = useState<Product[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function loadFeaturedProducts() {
+      try {
+        setLoading(true);
+        console.log('Fetching products from Supabase...');
+        const { data, error } = await supabase
+          .from('products')
+          .select('id, name, price, image, main_image, cashback, status')
+          .or('status.ilike.Ativo,status.ilike.ativo')
+          .limit(4);
+
+        if (error) {
+          console.error('Supabase error:', error);
+          throw error;
+        }
+        
+        console.log('Products found:', data?.length || 0);
+        
+        if (data) {
+          setProducts(data.map(p => ({
+            ...p,
+            price: Number(p.price) || 0,
+            cashback: Number(p.cashback) || 5
+          })));
+        }
+      } catch (err) {
+        console.error('Error loading featured products:', err);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    loadFeaturedProducts();
+  }, []);
+
   return (
     <div className="min-h-screen flex flex-col font-sans">
       <Header />
@@ -184,25 +233,53 @@ export default function Home() {
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
-              {[
-                { name: "Smartwatch Urban G2", price: "349,00", cashback: "R$ 45,00", icon: "⌚" },
-                { name: "Fone Noise Pro", price: "199,90", cashback: "R$ 25,00", icon: "🎧" },
-                { name: "Tênis Street Walker", price: "279,50", cashback: "R$ 35,00", icon: "👟" },
-                { name: "Mochila Tech Pro", price: "159,00", cashback: "R$ 20,00", icon: "🎒" }
-              ].map((product, i) => (
-                <div key={i} className="bg-[#f8fafc] p-8 rounded-[2rem] border border-slate-100 hover:shadow-2xl transition-all group cursor-pointer relative overflow-hidden">
-                  <div className="size-16 bg-white rounded-2xl flex items-center justify-center text-4xl mb-6 shadow-sm group-hover:scale-110 transition-transform">
-                    {product.icon}
+              {loading ? (
+                // Skeleton Loading
+                Array.from({ length: 4 }).map((_, i) => (
+                  <div key={i} className="bg-slate-50 p-8 rounded-[2rem] border border-slate-100 animate-pulse">
+                    <div className="size-16 bg-slate-200 rounded-2xl mb-6"></div>
+                    <div className="h-4 bg-slate-200 rounded w-3/4 mb-4"></div>
+                    <div className="h-6 bg-slate-200 rounded w-1/2"></div>
                   </div>
-                  <h3 className="text-sm font-black text-midnight mb-1 group-hover:text-primary-blue transition-colors uppercase tracking-tight">{product.name}</h3>
-                  <div className="flex items-end justify-between mt-4">
-                    <div>
-                      <p className="text-xl font-black text-midnight tracking-tighter">R$ {product.price}</p>
-                      <p className="text-[10px] font-bold text-emerald-500 uppercase tracking-widest">+{product.cashback} cashback</p>
+                ))
+              ) : products.length > 0 ? (
+                products.map((product) => (
+                  <Link 
+                    to={`/produto/${product.id}`}
+                    key={product.id} 
+                    className="bg-[#f8fafc] p-8 rounded-[2rem] border border-slate-100 hover:shadow-2xl transition-all group cursor-pointer relative overflow-hidden flex flex-col h-full"
+                  >
+                    <div className="size-20 bg-white rounded-2xl flex items-center justify-center text-4xl mb-6 shadow-sm group-hover:scale-110 transition-transform overflow-hidden">
+                      {(product.main_image || product.image) ? (
+                        <img 
+                          src={product.main_image || product.image} 
+                          alt={product.name} 
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        "📦"
+                      )}
                     </div>
-                  </div>
+                    <h3 className="text-sm font-black text-midnight mb-1 group-hover:text-primary-blue transition-colors uppercase tracking-tight line-clamp-2">
+                      {product.name}
+                    </h3>
+                    <div className="flex items-end justify-between mt-auto pt-4">
+                      <div>
+                        <p className="text-xl font-black text-midnight tracking-tighter">
+                          R$ {product.price.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </p>
+                        <p className="text-[10px] font-bold text-emerald-500 uppercase tracking-widest">
+                          +R$ {(product.price * (product.cashback / 100)).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} cashback
+                        </p>
+                      </div>
+                    </div>
+                  </Link>
+                ))
+              ) : (
+                <div className="col-span-full py-10 text-center text-slate-400 font-medium">
+                  Nenhum produto em destaque no momento.
                 </div>
-              ))}
+              )}
             </div>
           </div>
         </section>
@@ -218,37 +295,7 @@ export default function Home() {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-              {/* Card 1: Moby */}
-              <div className="bg-slate-800/40 p-8 rounded-3xl border border-white/5 hover:border-accent/30 hover:bg-slate-800/60 transition-all group">
-                <div className="size-14 rounded-2xl bg-accent/10 flex items-center justify-center text-accent mb-6 group-hover:scale-110 transition-transform">
-                  <Car size={32} />
-                </div>
-                <h3 className="text-xl font-bold mb-3 text-white">UrbaMoby - Mobilidade</h3>
-                <p className="text-slate-400 mb-8 leading-relaxed text-sm">
-                  Corridas mais justas para passageiros e motoristas. Tecnologia de ponta com segurança 24h.
-                </p>
-                <button className="w-full bg-accent hover:bg-emerald-500 text-midnight font-bold py-3.5 rounded-xl transition-colors flex items-center justify-center gap-2">
-                  <Download size={18} />
-                  Baixar App
-                </button>
-              </div>
-
-              {/* Card 2: Food */}
-              <div className="bg-slate-800/40 p-8 rounded-3xl border border-white/5 hover:border-orange-500/30 hover:bg-slate-800/60 transition-all group">
-                <div className="size-14 rounded-2xl bg-orange-500/10 flex items-center justify-center text-orange-500 mb-6 group-hover:scale-110 transition-transform">
-                  <UtensilsCrossed size={32} />
-                </div>
-                <h3 className="text-xl font-bold mb-3 text-white">UrbaFood - Delivery</h3>
-                <p className="text-slate-400 mb-8 leading-relaxed text-sm">
-                  Peça comida rápida na sua região. Milhares de restaurantes com entrega grátis e cashback exclusivo.
-                </p>
-                <button className="w-full bg-accent hover:bg-emerald-500 text-midnight font-bold py-3.5 rounded-xl transition-colors flex items-center justify-center gap-2">
-                  <Download size={18} />
-                  Baixar App
-                </button>
-              </div>
-
-              {/* Card 3: Shop */}
+              {/* Card 1: Shop */}
               <div className="bg-slate-800/40 p-8 rounded-3xl border border-white/5 hover:border-primary-blue/30 hover:bg-slate-800/60 transition-all group">
                 <div className="size-14 rounded-2xl bg-primary-blue/10 flex items-center justify-center text-primary-blue mb-6 group-hover:scale-110 transition-transform">
                   <ShoppingBag size={32} />
@@ -266,6 +313,34 @@ export default function Home() {
                   <ExternalLink size={18} />
                   Visitar Loja UrbaShop
                 </a>
+              </div>
+
+              {/* Card 2: Moby */}
+              <div className="bg-slate-800/40 p-8 rounded-3xl border border-white/5 hover:border-accent/30 hover:bg-slate-800/60 transition-all group opacity-75">
+                <div className="size-14 rounded-2xl bg-accent/10 flex items-center justify-center text-accent mb-6 group-hover:scale-110 transition-transform">
+                  <Car size={32} />
+                </div>
+                <h3 className="text-xl font-bold mb-3 text-white">UrbaMoby - Mobilidade</h3>
+                <p className="text-slate-400 mb-8 leading-relaxed text-sm">
+                  Corridas mais justas para passageiros e motoristas. Tecnologia de ponta com segurança 24h.
+                </p>
+                <button disabled className="w-full bg-slate-700 text-slate-400 font-black py-3.5 rounded-xl transition-colors flex items-center justify-center gap-2 cursor-not-allowed uppercase tracking-widest text-[10px]">
+                  EM BREVE!
+                </button>
+              </div>
+
+              {/* Card 3: Food */}
+              <div className="bg-slate-800/40 p-8 rounded-3xl border border-white/5 hover:border-orange-500/30 hover:bg-slate-800/60 transition-all group opacity-75">
+                <div className="size-14 rounded-2xl bg-orange-500/10 flex items-center justify-center text-orange-500 mb-6 group-hover:scale-110 transition-transform">
+                  <UtensilsCrossed size={32} />
+                </div>
+                <h3 className="text-xl font-bold mb-3 text-white">UrbaFood - Delivery</h3>
+                <p className="text-slate-400 mb-8 leading-relaxed text-sm">
+                  Peça comida rápida na sua região. Milhares de restaurantes com entrega grátis e cashback exclusivo.
+                </p>
+                <button disabled className="w-full bg-slate-700 text-slate-400 font-black py-3.5 rounded-xl transition-colors flex items-center justify-center gap-2 cursor-not-allowed uppercase tracking-widest text-[10px]">
+                  EM BREVE!
+                </button>
               </div>
             </div>
           </div>
@@ -324,7 +399,7 @@ export default function Home() {
           </div>
 
           <div className="pt-8 border-t border-slate-900 flex flex-col md:flex-row justify-between items-center gap-4 text-[10px] uppercase tracking-widest font-bold">
-            <p>© 2024 Serviços Urbanos Tecnologia S.A. Todos os direitos reservados.</p>
+            <p>© 2026 Serviços Urbanos Tecnologia S.A. Todos os direitos reservados.</p>
             <div className="flex gap-8">
               <span>Brasil</span>
               <span className="flex items-center gap-1">

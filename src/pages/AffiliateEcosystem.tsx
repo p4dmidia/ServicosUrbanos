@@ -6,26 +6,36 @@ import {
   Truck, 
   CreditCard, 
   Activity, 
-  CheckCircle2, 
   ArrowRight,
   ShieldCheck,
   TrendingUp,
-  LayoutGrid
+  ShoppingBag,
 } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { Link } from 'react-router-dom';
 import AffiliateLayout from '../components/AffiliateLayout';
 
 export default function AffiliateEcosystem() {
   const platforms = [
+    { 
+      id: 'market', 
+      name: 'Marketplace', 
+      role: 'Lojista / Seller', 
+      icon: Store, 
+      color: 'bg-primary-blue/10 text-primary-blue', 
+      status: 'Ativo', 
+      description: 'Abra sua loja online e venda para milhares de usuários dentro do nosso ecossistema.',
+      link: '/lojista/login'
+    },
     { 
       id: 'moby', 
       name: 'Urba Moby', 
       role: 'Condutor / Motorista', 
       icon: Car, 
       color: 'bg-emerald-50 text-emerald-600', 
-      status: 'Ativo', 
-      description: 'Transforme seu veículo em fonte de renda transportando passageiros.',
-      link: '/login' // Simulação de login
+      status: 'Coming Soon', 
+      description: 'Transforme seu veículo em fonte de renda transportando passageiros (Em Breve).',
+      link: '#' 
     },
     { 
       id: 'food', 
@@ -33,19 +43,9 @@ export default function AffiliateEcosystem() {
       role: 'Entregador Parceiro', 
       icon: Truck, 
       color: 'bg-amber-50 text-amber-600', 
-      status: 'Inativo', 
-      description: 'Entregue refeições dos melhores restaurantes da cidade.',
-      link: '/login'
-    },
-    { 
-      id: 'market', 
-      name: 'Marketplace', 
-      role: 'Lojista / Seller', 
-      icon: Store, 
-      color: 'bg-primary-blue/10 text-primary-blue', 
-      status: 'Inativo', 
-      description: 'Abra sua loja online e venda para milhares de usuários.',
-      link: '/lojista/login'
+      status: 'Coming Soon', 
+      description: 'Entregue refeições dos melhores restaurantes da cidade (Em Breve).',
+      link: '#'
     },
     { 
       id: 'pay', 
@@ -54,7 +54,7 @@ export default function AffiliateEcosystem() {
       icon: CreditCard, 
       color: 'bg-purple-50 text-purple-600', 
       status: 'Coming Soon', 
-      description: 'Ofereça soluções de pagamento e ganhe por cada transação.',
+      description: 'Ofereça soluções de pagamento e ganhe por cada transação (Em Breve).',
       link: '#'
     },
   ];
@@ -70,9 +70,18 @@ export default function AffiliateEcosystem() {
            </div>
            <h2 className="text-4xl font-black text-midnight tracking-tighter italic uppercase">Expanda suas possibilidades</h2>
            <p className="text-lg text-slate-500 font-medium leading-relaxed">
-             Como afiliado **Services Urbanos**, você tem acesso privilegiado a todas as verticais do nosso ecossistema. 
+             Como afiliado **Serviços Urbanos**, você tem acesso privilegiado a todas as verticais do nosso ecossistema. 
              Seus dados estão interligados: escolha onde quer atuar e comece a gerar receita imediatamente.
            </p>
+           <div className="pt-4">
+             <Link 
+               to="/marketplace" 
+               className="inline-flex items-center gap-3 bg-primary-blue text-white px-8 py-4 rounded-2xl font-black text-sm uppercase tracking-widest shadow-xl shadow-primary-blue/20 hover:scale-105 transition-all group"
+             >
+               <ShoppingBag size={20} className="group-hover:rotate-12 transition-transform" />
+               Ir para o Marketplace
+             </Link>
+           </div>
         </div>
 
         {/* Platforms Grid */}
@@ -92,10 +101,9 @@ export default function AffiliateEcosystem() {
                       </div>
                       <div className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest ${
                         platform.status === 'Ativo' ? 'bg-emerald-50 text-emerald-600' : 
-                        platform.status === 'Inativo' ? 'bg-slate-50 text-slate-400' : 
-                        'bg-amber-50 text-amber-600'
+                        'bg-slate-50 text-slate-400'
                       }`}>
-                         {platform.status}
+                         {platform.status === 'Ativo' ? 'Disponível' : 'Em Breve'}
                       </div>
                    </div>
 
@@ -119,13 +127,13 @@ export default function AffiliateEcosystem() {
                       </div>
                       <a 
                         href={platform.link}
+                        onClick={(e) => platform.status !== 'Ativo' && e.preventDefault()}
                         className={`flex items-center gap-3 px-8 py-4 rounded-2xl font-black text-sm transition-all ${
-                          platform.status === 'Ativo' ? 'bg-emerald-500 text-midnight shadow-lg shadow-emerald-500/20' : 
-                          platform.status === 'Inativo' ? 'bg-midnight text-white shadow-xl shadow-midnight/20' :
-                          'bg-slate-100 text-slate-300 cursor-not-allowed'
+                          platform.status === 'Ativo' ? 'bg-midnight text-white shadow-xl shadow-midnight/20 hover:scale-[1.02]' : 
+                          'bg-slate-100 text-slate-300 cursor-not-allowed opacity-50'
                         }`}
                       >
-                        {platform.status === 'Ativo' ? 'Acessar Painel' : platform.status === 'Inativo' ? 'Ativar Cadastro' : 'Em Breve'}
+                        {platform.status === 'Ativo' ? 'Acessar Painel' : 'Em Breve'}
                         <ArrowRight size={18} />
                       </a>
                    </div>

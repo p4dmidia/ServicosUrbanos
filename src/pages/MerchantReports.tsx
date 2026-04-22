@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   BarChart3, 
   TrendingUp, 
@@ -8,20 +8,73 @@ import {
   LineChart,
   Activity,
   ArrowUpRight,
-  ArrowDownRight
+  ArrowDownRight,
+  Loader2
 } from 'lucide-react';
-import { motion } from 'motion/react';
+import { motion, AnimatePresence } from 'motion/react';
 import MerchantLayout from '../components/MerchantLayout';
+import { businessRules } from '../lib/businessRules';
+import { useAuth } from '../contexts/AuthContext';
+import toast from 'react-hot-toast';
 
 export default function MerchantReports() {
+  const { profile } = useAuth();
   const [period, setPeriod] = useState('30d');
+  const [loading, setLoading] = useState(true);
+  const [reportsData, setReportsData] = useState<any>(null);
 
-  const kpis = [
-    { title: 'Receita Bruta', value: 'R$ 45.890,00', trend: '+12.5%', isPositive: true },
-    { title: 'Ticket Médio', value: 'R$ 185,50', trend: '+5.2%', isPositive: true },
-    { title: 'Taxa de Conversão', value: '3.8%', trend: '-1.1%', isPositive: false },
-    { title: 'CAC', value: 'R$ 45,00', trend: '-8.4%', isPositive: true },
-  ];
+  useEffect(() => {
+    async function loadReports() {
+      try {
+        setLoading(true);
+        if (profile?.role === 'manager' && !profile?.branch_id) {
+           setLoading(false);
+           return;
+        }
+        
+        const mId = await businessRules.getMerchantId(profile!.id);
+        if (!mId) return;
+
+        const data = await businessRules.getMerchantDetailedReports(mId, period, profile?.branch_id);
+        setReportsData(data);
+      } catch (error) {
+        console.error('Erro ao carregar relatórios:', error);
+        toast.error('Erro ao carregar dados analíticos');
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    if (profile) {
+      loadReports();
+    }
+  }, [profile, period]);
+
+  if (loading) {
+    return (
+      <MerchantLayout title="Relatórios" subtitle="Analisando desempenho...">
+        <div className="flex items-center justify-center p-20">
+          <Loader2 size={42} className="text-midnight animate-spin opacity-20" />
+        </div>
+      </MerchantLayout>
+    );
+  }
+
+  if (profile?.role === 'manager' && !profile?.branch_id) {
+    return (
+      <MerchantLayout title="Relatórios" subtitle="Acesso Restrito">
+        <div className="flex-1 flex flex-col items-center justify-center min-h-[60vh] p-8 text-center">
+          <div className="size-20 bg-amber-50 text-amber-600 rounded-[2rem] flex items-center justify-center mb-6">
+            <BarChart3 size={40} />
+          </div>
+          <h2 className="text-2xl font-black text-midnight italic uppercase tracking-tighter mb-2">Nenhuma Loja Vinculada</h2>
+          <p className="text-slate-500 max-w-md font-medium">Seu perfil ainda não possui uma filial associada. Entre em contato com a administração para visualizar relatórios.</p>
+        </div>
+      </MerchantLayout>
+    );
+  }
+
+  const kpis = reportsData?.kpis || [];
 
   return (
     <MerchantLayout title="Relatórios e Análises" subtitle="Métricas de desempenho da sua loja">
@@ -67,10 +120,14 @@ export default function MerchantReports() {
                 <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">{kpi.title}</p>
                 <span className={`flex items-center gap-1 text-[10px] font-black px-2 py-1 rounded-lg ${kpi.isPositive ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600'}`}>
                   {kpi.isPositive ? <ArrowUpRight size={12} /> : <ArrowDownRight size={12} />}
-                  {kpi.trend}
+                  {Math.abs(kpi.trend).toFixed(1)}%
                 </span>
               </div>
-              <h3 className="text-3xl font-black text-midnight tracking-tighter">{kpi.value}</h3>
+              <h3 className="text-3xl font-black text-midnight tracking-tighter">
+                {kpi.title.includes('Receita') || kpi.title.includes('Ticket') || kpi.title.includes('CAC')
+                  ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(kpi.value)
+                  : kpi.value}
+              </h3>
             </motion.div>
           ))}
         </div>
@@ -90,27 +147,34 @@ export default function MerchantReports() {
               </div>
             </div>
 
-            <div className="flex-1 relative min-h-[300px] flex items-end justify-between gap-2">
-              {/* Simulated Chart Bars */}
-              {[40, 60, 45, 80, 55, 90, 75, 100, 65, 85, 70, 95].map((height, i) => (
-                <div key={i} className="relative w-full flex flex-col justify-end group h-full">
-                  <div className="absolute top-0 opacity-0 group-hover:opacity-100 transition-opacity bg-midnight text-white text-[10px] font-black px-3 py-2 rounded-xl -translate-y-full left-1/2 -translate-x-1/2 pointer-events-none mb-2 whitespace-nowrap z-10 shadow-xl">
-                    R$ {((height / 100) * 5000).toFixed(2)}
+            <div className="flex-1 relative min-h-[300px] flex items-end justify-between gap-1 sm:gap-2">
+              {reportsData?.chart.values.map((val: number, i: number) => {
+                const maxVal = Math.max(...reportsData.chart.values, 1);
+                const height = (val / maxVal) * 100;
+                return (
+                  <div key={i} className="relative w-full flex flex-col justify-end group h-full">
+                    <div className="absolute top-0 opacity-0 group-hover:opacity-100 transition-opacity bg-midnight text-white text-[10px] font-black px-3 py-2 rounded-xl -translate-y-full left-1/2 -translate-x-1/2 pointer-events-none mb-2 whitespace-nowrap z-10 shadow-xl">
+                      R$ {val.toFixed(2).replace('.', ',')}
+                    </div>
+                    <motion.div 
+                      initial={{ height: 0 }}
+                      animate={{ height: `${Math.max(height, 5)}%` }}
+                      transition={{ delay: i * 0.02, duration: 1, type: "spring" }}
+                      className="w-full bg-slate-100 group-hover:bg-primary-blue rounded-t-lg transition-colors cursor-pointer"
+                    />
                   </div>
-                  <motion.div 
-                    initial={{ height: 0 }}
-                    animate={{ height: `${height}%` }}
-                    transition={{ delay: i * 0.05, duration: 1, type: "spring" }}
-                    className="w-full bg-slate-100 group-hover:bg-primary-blue rounded-t-lg transition-colors cursor-pointer"
-                  />
-                </div>
-              ))}
+                );
+              })}
             </div>
             
             <div className="flex justify-between mt-6 text-[10px] font-bold text-slate-400 uppercase tracking-widest border-t border-slate-50 pt-6">
-              <span>01 Nov</span>
-              <span>15 Nov</span>
-              <span>30 Nov</span>
+              {reportsData?.chart.labels.length > 0 && (
+                <>
+                  <span>{reportsData.chart.labels[0]}</span>
+                  <span>{reportsData.chart.labels[Math.floor(reportsData.chart.labels.length / 2)]}</span>
+                  <span>{reportsData.chart.labels[reportsData.chart.labels.length - 1]}</span>
+                </>
+              )}
             </div>
           </div>
 
@@ -126,12 +190,7 @@ export default function MerchantReports() {
               </div>
 
               <div className="space-y-6 relative z-10">
-                {[
-                  { name: 'Eletrônicos', percent: 45, color: 'bg-primary-blue' },
-                  { name: 'Vestuário', percent: 30, color: 'bg-emerald-500' },
-                  { name: 'Acessórios', percent: 15, color: 'bg-purple-500' },
-                  { name: 'Outros', percent: 10, color: 'bg-slate-600' }
-                ].map((cat, i) => (
+                {reportsData?.categories.length > 0 ? reportsData.categories.map((cat: any, i: number) => (
                   <div key={i}>
                     <div className="flex justify-between text-[10px] font-bold text-slate-300 uppercase tracking-widest mb-2">
                       <span>{cat.name}</span>
@@ -146,7 +205,9 @@ export default function MerchantReports() {
                       />
                     </div>
                   </div>
-                ))}
+                )) : (
+                  <p className="text-slate-500 text-[10px] uppercase font-bold text-center py-4 italic">Nenhuma categoria processada</p>
+                )}
               </div>
             </div>
 

@@ -17,12 +17,13 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import AdminLayout from '../components/AdminLayout';
+import { businessRules } from '../lib/businessRules';
 
 interface Platform {
   id: string;
   name: string;
   slug: string;
-  status: 'online' | 'maintenance' | 'offline';
+  status: 'online' | 'maintenance' | 'offline' | 'coming_soon';
   users: string;
   revenue: string;
   uptime: string;
@@ -31,56 +32,28 @@ interface Platform {
 }
 
 export default function AdminPlatforms() {
-  const [platforms, setPlatforms] = useState<Platform[]>([
-    { 
-      id: '1', 
-      name: 'UrbaShop', 
-      slug: 'marketplace', 
-      status: 'online', 
-      users: '32,450', 
-      revenue: 'R$ 840.200', 
-      uptime: '99.9%', 
-      lastUpdate: 'há 5 min',
-      iconColor: 'bg-indigo-500'
-    },
-    { 
-      id: '2', 
-      name: 'UrbaFood', 
-      slug: 'delivery', 
-      status: 'maintenance', 
-      users: '12,100', 
-      revenue: 'R$ 125.400', 
-      uptime: '98.5%', 
-      lastUpdate: 'há 1 dia',
-      iconColor: 'bg-orange-500'
-    },
-    { 
-      id: '3', 
-      name: 'UrbaService', 
-      slug: 'services', 
-      status: 'offline', 
-      users: '--', 
-      revenue: '--', 
-      uptime: '0%', 
-      lastUpdate: 'há 12 dias',
-      iconColor: 'bg-red-500'
-    },
-    { 
-      id: '4', 
-      name: 'UrbaPay', 
-      slug: 'fintech', 
-      status: 'online', 
-      users: '45,000', 
-      revenue: 'R$ 2.400.000', 
-      uptime: '100%', 
-      lastUpdate: 'há 2 min',
-      iconColor: 'bg-emerald-500'
-    },
-  ]);
+  const [platforms, setPlatforms] = useState<Platform[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  React.useEffect(() => {
+    const loadPlatforms = async () => {
+      setLoading(true);
+      try {
+        const data = await businessRules.getAdminPlatformsData();
+        setPlatforms(data as Platform[]);
+      } catch (error) {
+        console.error('Erro ao carregar plataformas:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadPlatforms();
+  }, []);
 
   const toggleStatus = (id: string) => {
     setPlatforms(platforms.map(p => {
       if (p.id === id) {
+        if (p.status === 'coming_soon') return p;
         const nextStatus: Platform['status'] = p.status === 'online' ? 'maintenance' : p.status === 'maintenance' ? 'offline' : 'online';
         return { ...p, status: nextStatus };
       }
@@ -130,11 +103,12 @@ export default function AdminPlatforms() {
                 {/* Status Indicator Bar */}
                 <div className={`absolute top-0 left-0 w-full h-1 ${
                   platform.status === 'online' ? 'bg-emerald-500' : 
-                  platform.status === 'maintenance' ? 'bg-orange-500' : 'bg-red-500'
+                  platform.status === 'maintenance' ? 'bg-orange-500' : 
+                  platform.status === 'coming_soon' ? 'bg-indigo-500' : 'bg-red-500'
                 }`} />
 
                 <div className="flex items-start justify-between mb-8">
-                  <div className={`size-14 rounded-2xl ${platform.iconColor} flex items-center justify-center shadow-lg transform group-hover:-rotate-6 transition-transform`}>
+                  <div className={`size-14 rounded-2xl ${platform.iconColor} flex items-center justify-center shadow-lg transform group-hover:-rotate-6 transition-transform ${platform.status === 'coming_soon' ? 'opacity-50 grayscale pt-1' : ''}`}>
                     <Globe className="text-white" size={28} />
                   </div>
                   <button className="text-slate-600 hover:text-white transition-colors">
@@ -147,9 +121,12 @@ export default function AdminPlatforms() {
                   <div className="flex items-center gap-2">
                     <div className={`size-2 rounded-full ${
                       platform.status === 'online' ? 'bg-emerald-500 animate-pulse' : 
-                      platform.status === 'maintenance' ? 'bg-orange-500' : 'bg-red-500'
+                      platform.status === 'maintenance' ? 'bg-orange-500' : 
+                      platform.status === 'coming_soon' ? 'bg-indigo-500' : 'bg-red-500'
                     }`} />
-                    <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{platform.status}</span>
+                    <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
+                      {platform.status === 'coming_soon' ? 'Em Breve' : platform.status}
+                    </span>
                   </div>
                 </div>
 
@@ -176,12 +153,16 @@ export default function AdminPlatforms() {
                   <div className="flex items-center gap-2">
                     <button 
                       onClick={() => toggleStatus(platform.id)}
-                      className="p-2 bg-white/5 hover:bg-white/10 rounded-xl text-slate-400 hover:text-white transition-all shadow-lg"
-                      title="Alternar Status"
+                      disabled={platform.status === 'coming_soon'}
+                      className="p-2 bg-white/5 hover:bg-white/10 disabled:opacity-30 rounded-xl text-slate-400 hover:text-white transition-all shadow-lg"
+                      title={platform.status === 'coming_soon' ? "Plataforma não lançada" : "Alternar Status"}
                     >
                       <Power size={16} />
                     </button>
-                    <button className="p-2 bg-indigo-500/10 hover:bg-indigo-500/20 rounded-xl text-indigo-400 hover:text-indigo-300 transition-all shadow-lg">
+                    <button 
+                      disabled={platform.status === 'coming_soon'}
+                      className="p-2 bg-indigo-500/10 hover:bg-indigo-500/20 disabled:opacity-30 rounded-xl text-indigo-400 hover:text-indigo-300 transition-all shadow-lg"
+                    >
                       <Settings2 size={16} />
                     </button>
                   </div>

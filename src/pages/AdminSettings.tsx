@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import AdminLayout from '../components/AdminLayout';
+import { businessRules } from '../lib/businessRules';
 
 export default function AdminSettings() {
   const [activeTab, setActiveTab] = useState<'mmn' | 'financeiro' | 'plataforma' | 'seguranca'>('mmn');
@@ -26,21 +27,80 @@ export default function AdminSettings() {
   // MMN State
   const [mmnDepth, setMmnDepth] = useState(5);
   const [mmnType, setMmnType] = useState<'percent' | 'fixed'>('percent');
-  const [mmnLevels, setMmnLevels] = useState([
-    { level: 1, value: 10 },
-    { level: 2, value: 5 },
-    { level: 3, value: 3 },
-    { level: 4, value: 2 },
-    { level: 5, value: 1 },
-  ]);
+  const [mmnLevels, setMmnLevels] = useState<any[]>([]);
 
-  const handleSave = () => {
+  // Financeiro State
+  const [minWithdrawal, setMinWithdrawal] = useState(50);
+  const [withdrawalFee, setWithdrawalFee] = useState(4.90);
+  const [payoutSchedule, setPayoutSchedule] = useState('Padrão (D+15)');
+
+  // Plataforma State
+  const [marketplaceCommission, setMarketplaceCommission] = useState(12);
+
+  // Carregar dados iniciais
+  React.useEffect(() => {
+    const loadConfig = async () => {
+      setLoading(true);
+      try {
+        const [mmnConfig, levelsData, finConfig, marketConfig] = await Promise.all([
+          businessRules.getMMNConfig(),
+          businessRules.getMMNLevels(),
+          businessRules.getFinancialConfig(),
+          businessRules.getMarketplaceConfig()
+        ]);
+        
+        // MMN
+        setMmnDepth(mmnConfig.depth);
+        setMmnType(mmnConfig.paymentType);
+        setMmnLevels(levelsData.length > 0 ? levelsData : [
+          { level: 1, value: 10 },
+          { level: 2, value: 5 },
+          { level: 3, value: 3 },
+          { level: 4, value: 2 },
+          { level: 5, value: 1 },
+        ]);
+
+        // Financeiro
+        setMinWithdrawal(finConfig.minWithdrawalAmount);
+        setWithdrawalFee(finConfig.withdrawalFee);
+        setPayoutSchedule(finConfig.payoutSchedule);
+
+        // Plataforma
+        setMarketplaceCommission(marketConfig.commissionRate);
+
+      } catch (error) {
+        console.error('Erro ao carregar configurações:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadConfig();
+  }, []);
+
+  const handleSave = async () => {
     setLoading(true);
-    setTimeout(() => {
-      setLoading(false);
+    try {
+      if (activeTab === 'mmn') {
+        await businessRules.saveMMNConfig({ depth: mmnDepth, paymentType: mmnType });
+        await businessRules.saveMMNLevels(mmnLevels.slice(0, mmnDepth));
+      } else if (activeTab === 'financeiro') {
+        await businessRules.saveFinancialConfig({
+          minWithdrawalAmount: minWithdrawal,
+          withdrawalFee: withdrawalFee,
+          payoutSchedule: payoutSchedule
+        });
+      } else if (activeTab === 'plataforma') {
+        await businessRules.updateMarketplaceConfig({ commissionRate: marketplaceCommission });
+      }
+      
       setShowSuccess(true);
       setTimeout(() => setShowSuccess(false), 3000);
-    }, 1500);
+    } catch (error) {
+      console.error('Erro ao salvar:', error);
+      alert('Erro ao salvar as configurações.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const tabs = [
@@ -111,7 +171,17 @@ export default function AdminSettings() {
                               min="1" 
                               max="10" 
                               value={mmnDepth}
-                              onChange={(e) => setMmnDepth(parseInt(e.target.value))}
+                              onChange={(e) => {
+                                const newDepth = parseInt(e.target.value);
+                                setMmnDepth(newDepth);
+                                if (newDepth > mmnLevels.length) {
+                                  const extended = [...mmnLevels];
+                                  for (let i = mmnLevels.length + 1; i <= newDepth; i++) {
+                                    extended.push({ level: i, value: 0 });
+                                  }
+                                  setMmnLevels(extended);
+                                }
+                              }}
                               className="flex-1 accent-indigo-500"
                             />
                             <div className="size-12 bg-indigo-600 rounded-2xl flex items-center justify-center text-white font-black text-lg shadow-lg shadow-indigo-600/30">
@@ -154,13 +224,18 @@ export default function AdminSettings() {
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6">
-                    {mmnLevels.slice(0, mmnDepth).map((level) => (
+                    {mmnLevels.slice(0, mmnDepth).map((level, index) => (
                       <div key={level.level} className="bg-white/5 p-6 rounded-[2rem] border border-white/5 hover:border-indigo-500/30 transition-colors group">
                         <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-4">{level.level}º Nível</p>
                         <div className="relative">
                           <input 
                             type="number" 
-                            defaultValue={level.value}
+                            value={level.value}
+                            onChange={(e) => {
+                              const newLevels = [...mmnLevels];
+                              newLevels[index] = { ...newLevels[index], value: Number(e.target.value) };
+                              setMmnLevels(newLevels);
+                            }}
                             className="w-full bg-[#05070a] border border-white/5 px-4 py-4 rounded-2xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-white font-black text-xl"
                           />
                           <span className="absolute right-4 top-1/2 -translate-y-1/2 font-black text-indigo-500/50 text-base">
@@ -189,11 +264,28 @@ export default function AdminSettings() {
                     <div className="space-y-6">
                       <div className="space-y-2">
                         <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Valor Mínimo para Saque (PIX)</label>
-                        <input type="text" defaultValue="R$ 50,00" className="w-full bg-white/5 border border-white/5 px-6 py-4 rounded-2xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-white font-bold" />
+                        <div className="relative">
+                          <span className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-500 font-bold">R$</span>
+                          <input 
+                            type="number" 
+                            value={minWithdrawal} 
+                            onChange={(e) => setMinWithdrawal(Number(e.target.value))}
+                            className="w-full bg-white/5 border border-white/5 pl-14 pr-6 py-4 rounded-2xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-white font-bold" 
+                          />
+                        </div>
                       </div>
                       <div className="space-y-2">
                         <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Taxa de Saque Operacional</label>
-                        <input type="text" defaultValue="R$ 4,90" className="w-full bg-white/5 border border-white/5 px-6 py-4 rounded-2xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-white font-bold" />
+                        <div className="relative">
+                          <span className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-500 font-bold">R$</span>
+                          <input 
+                            type="number" 
+                            step="0.10"
+                            value={withdrawalFee} 
+                            onChange={(e) => setWithdrawalFee(Number(e.target.value))}
+                            className="w-full bg-white/5 border border-white/5 pl-14 pr-6 py-4 rounded-2xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-white font-bold" 
+                          />
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -206,11 +298,66 @@ export default function AdminSettings() {
 
                     <div className="grid grid-cols-1 gap-4">
                       {['Padrão (D+15)', 'Acelerado (D+7)', 'Flash (D+2)'].map((p) => (
-                        <div key={p} className="flex items-center justify-between p-6 bg-white/5 rounded-3xl border border-white/5 hover:border-white/10 transition-all cursor-pointer group">
-                          <span className="text-xs font-black text-white uppercase tracking-widest">{p}</span>
-                          <div className={`size-6 rounded-full border-2 ${p.includes('Padrão') ? 'bg-indigo-600 border-indigo-500' : 'border-white/10 group-hover:border-white/20'}`} />
+                        <div 
+                          key={p} 
+                          onClick={() => setPayoutSchedule(p)}
+                          className={`flex items-center justify-between p-6 rounded-3xl border transition-all cursor-pointer group ${payoutSchedule === p ? 'bg-indigo-600/10 border-indigo-500/50' : 'bg-white/5 border-white/5 hover:border-white/10'}`}
+                        >
+                          <span className={`text-xs font-black uppercase tracking-widest ${payoutSchedule === p ? 'text-white' : 'text-slate-400'}`}>{p}</span>
+                          <div className={`size-6 rounded-full border-2 transition-all ${payoutSchedule === p ? 'bg-indigo-600 border-indigo-500 border-4' : 'border-white/10'}`} />
                         </div>
                       ))}
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+
+              {activeTab === 'plataforma' && (
+                <motion.div 
+                  key="plataforma"
+                  initial={{ opacity: 0, x: 20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  className="grid grid-cols-1 md:grid-cols-2 gap-12"
+                >
+                  <div className="space-y-8">
+                    <div>
+                      <h3 className="text-xl font-black text-white tracking-tighter uppercase italic leading-none mb-2">Marketplace</h3>
+                      <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Configurações globais de vendas</p>
+                    </div>
+
+                    <div className="space-y-6">
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Taxa de Comissão da Plataforma</label>
+                        <div className="flex items-center gap-6 p-6 bg-white/5 rounded-3xl border border-white/5">
+                          <input 
+                            type="range" 
+                            min="1" 
+                            max="30" 
+                            value={marketplaceCommission}
+                            onChange={(e) => setMarketplaceCommission(parseInt(e.target.value))}
+                            className="flex-1 accent-indigo-500"
+                          />
+                          <div className="size-16 bg-indigo-600 rounded-2xl flex items-center justify-center text-white font-black text-lg shadow-lg shadow-indigo-600/30">
+                            {marketplaceCommission}%
+                          </div>
+                        </div>
+                        <p className="text-[9px] text-slate-600 font-bold uppercase mt-2">
+                          Esta taxa é aplicada sobre o valor bruto de cada venda realizada no marketplace.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="bg-indigo-600/5 border border-indigo-500/10 rounded-[2.5rem] p-10 flex flex-col justify-center">
+                    <Globe className="text-indigo-500 mb-6" size={40} />
+                    <h4 className="text-lg font-black text-white tracking-tighter uppercase italic mb-4 text-left">Visibilidade e Escopo</h4>
+                    <p className="text-sm text-slate-400 font-medium leading-relaxed mb-8">
+                      As alterações nesta aba afetam todos os lojistas ativos no ecossistema Urbano. 
+                      Novas filiais herdarão automaticamente estas configurações de comissionamento.
+                    </p>
+                    <div className="flex items-center gap-3 p-4 bg-white/5 rounded-2xl border border-white/10">
+                      <Layers size={18} className="text-indigo-400" />
+                      <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Marketplace Multi-Vendedor Ativo</span>
                     </div>
                   </div>
                 </motion.div>

@@ -10,16 +10,60 @@ import {
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { Link, useNavigate } from 'react-router-dom';
+import { supabase } from '../lib/supabase';
+import { useAuth } from '../contexts/AuthContext';
+import { toast } from 'react-hot-toast';
+import WaitlistModal from '../components/WaitlistModal';
 
 export default function MerchantLogin() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
+  const { refreshProfile } = useAuth();
+  const [showWaitlist, setShowWaitlist] = useState(false);
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    // Simulate login
-    navigate('/lojista/dashboard');
+    setLoading(true);
+    setError(null);
+
+    try {
+      const { data, error: authError } = await supabase.auth.signInWithPassword({
+        email: email.trim(),
+        password: password.trim(),
+      });
+
+      if (authError) throw authError;
+
+      // Buscar perfil para verificar permissões e redirecionar corretamente
+      const { data: profile, error: profileError } = await supabase
+        .from('profiles')
+        .select('role, status')
+        .eq('id', data.user.id)
+        .single();
+
+      if (profileError || !profile) {
+        throw new Error('Perfil não encontrado para este usuário.');
+      }
+
+      if (profile.status === 'blocked') {
+        await supabase.auth.signOut();
+        throw new Error('Sua conta está bloqueada. Entre em contato com o suporte.');
+      }
+
+      await refreshProfile();
+
+      // Redirecionamento simplificado: No contexto de login de lojista, 
+      // sempre enviamos para o dashboard do lojista (desde que o papel seja permitido no App.tsx)
+      toast.success('Bem-vindo ao Merchant Center!');
+      navigate('/lojista/dashboard');
+    } catch (err: any) {
+      setError(err.message || 'Erro ao realizar login');
+      toast.error(err.message || 'Erro ao realizar login');
+      setLoading(false);
+    }
   };
 
   return (
@@ -113,27 +157,50 @@ export default function MerchantLogin() {
               </div>
             </div>
 
+            {error && (
+              <motion.div 
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="p-4 bg-red-50 border border-red-100 rounded-2xl text-red-500 text-[10px] font-black uppercase text-center flex items-center justify-center gap-2"
+              >
+                <div className="size-1.5 rounded-full bg-red-500 animate-pulse" />
+                {error}
+              </motion.div>
+            )}
+
             <button 
               type="submit"
-              className="w-full bg-midnight hover:bg-slate-800 text-white py-5 rounded-2xl font-black text-sm uppercase tracking-widest transition-all shadow-xl shadow-midnight/20 active:scale-[0.98] flex items-center justify-center gap-3 group"
+              disabled={loading}
+              className={`w-full bg-midnight hover:bg-slate-800 text-white py-5 rounded-2xl font-black text-sm uppercase tracking-widest transition-all shadow-xl shadow-midnight/20 active:scale-[0.98] flex items-center justify-center gap-3 group ${loading ? 'opacity-70 cursor-not-allowed' : ''}`}
             >
-              Entrar no Painel <ArrowRight size={18} className="group-hover:translate-x-1 transition-transform" />
+              {loading ? (
+                <div className="size-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+              ) : (
+                <>
+                  Entrar no Painel <ArrowRight size={18} className="group-hover:translate-x-1 transition-transform" />
+                </>
+              )}
             </button>
           </form>
 
           <div className="mt-12 pt-10 border-t border-slate-100 text-center">
             <p className="text-xs text-slate-400 font-bold uppercase tracking-widest mb-6">Ainda não é um parceiro?</p>
-            <Link 
-              to="/marketplace" 
+            <button 
+              onClick={() => setShowWaitlist(true)}
               className="inline-flex bg-slate-100 hover:bg-slate-200 text-midnight px-8 py-4 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all"
             >
               Candidatar minha Loja
-            </Link>
+            </button>
           </div>
         </div>
 
+        <WaitlistModal 
+          isOpen={showWaitlist} 
+          onClose={() => setShowWaitlist(false)} 
+        />
+
         <p className="absolute bottom-8 text-[9px] text-slate-300 font-bold uppercase tracking-widest">
-          © 2024 Serviços Urbanos S.A. • merchant center v2.0
+          © 2026 Serviços Urbanos S.A. • merchant center v2.0
         </p>
       </div>
     </div>

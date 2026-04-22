@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   TrendingUp, 
   ShoppingBag, 
@@ -9,56 +9,125 @@ import {
   ArrowDownRight,
   Plus,
   ChevronRight,
-  MoreVertical
+  Loader2,
+  Store
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import MerchantLayout from '../components/MerchantLayout';
+import { useAuth } from '../contexts/AuthContext';
+import { businessRules } from '../lib/businessRules';
+import toast from 'react-hot-toast';
+
+const ICON_MAP = {
+  'TrendingUp': TrendingUp,
+  'ShoppingBag': ShoppingBag,
+  'Package': Package,
+  'DollarSign': DollarSign,
+};
 
 export default function MerchantDashboard() {
-  const stats = [
-    { title: 'Vendas Totais', value: 'R$ 12.450,00', change: '+12.5%', isPositive: true, icon: TrendingUp },
-    { title: 'Novos Pedidos', value: '28', change: '+5', isPositive: true, icon: ShoppingBag },
-    { title: 'Produtos Ativos', value: '142', change: '-2', isPositive: false, icon: Package },
-    { title: 'Cashback Distribuído', value: 'R$ 1.240,00', change: '+8.2%', isPositive: true, icon: DollarSign },
-  ];
+  const { profile } = useAuth();
+  const [loading, setLoading] = useState(true);
+  const [stats, setStats] = useState<any[]>([]);
+  const [recentOrders, setRecentOrders] = useState<any[]>([]);
+  const [topProducts, setTopProducts] = useState<any[]>([]);
+  const [performance, setPerformance] = useState<{ labels: string[], values: number[] }>({ labels: [], values: [] });
 
-  const recentOrders = [
-    { id: '#8492', customer: 'João Silva', date: 'Hoje, 14:20', amount: 'R$ 199,90', status: 'Processando', color: 'blue' },
-    { id: '#8491', customer: 'Maria Santos', date: 'Hoje, 12:45', amount: 'R$ 349,00', status: 'Enviado', color: 'green' },
-    { id: '#8490', customer: 'Pedro Costa', date: 'Ontem, 21:10', amount: 'R$ 89,90', status: 'Cancelado', color: 'red' },
-    { id: '#8489', customer: 'Ana Oliveira', date: 'Ontem, 18:30', amount: 'R$ 1.250,00', status: 'Concluído', color: 'gray' },
-  ];
+  useEffect(() => {
+    if (profile) {
+      if (profile.role === 'owner' || profile.branch_id) {
+        fetchDashboardData(profile.branch_id);
+      } else {
+        setLoading(false);
+      }
+    }
+  }, [profile]);
+
+  const fetchDashboardData = async (branchId?: string) => {
+    try {
+      setLoading(true);
+      const mId = await businessRules.getMerchantId(profile!.id);
+      
+      const [statsData, ordersData, productsData, perfData] = await Promise.all([
+        businessRules.getMerchantDashboardStats(mId, branchId),
+        businessRules.getMerchantRecentOrders(mId, branchId),
+        businessRules.getMerchantTopProducts(mId, branchId),
+        businessRules.getMerchantSalesPerformance(mId, branchId)
+      ]);
+
+      setStats(statsData);
+      setRecentOrders(ordersData);
+      setTopProducts(productsData);
+      setPerformance(perfData);
+    } catch (error) {
+      console.error('Error fetching dashboard data:', error);
+      toast.error('Erro ao carregar dados do dashboard');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <MerchantLayout title="Dashboard" subtitle="Carregando dados...">
+        <div className="flex-1 flex items-center justify-center min-h-[60vh]">
+          <Loader2 size={48} className="text-midnight animate-spin opacity-20" />
+        </div>
+      </MerchantLayout>
+    );
+  }
+
+  // Somente gerentes são bloqueados se não tiverem filial. 
+  // O dono sempre acessa para ver a visão global ou criar lojas.
+  if (profile?.role === 'manager' && !profile?.branch_id) {
+    return (
+      <MerchantLayout title="Dashboard" subtitle="Visão Geral">
+        <div className="flex flex-col items-center justify-center min-h-[60vh] text-center px-4">
+          <div className="w-20 h-20 bg-primary-blue/10 rounded-full flex items-center justify-center mb-6">
+            <Store className="text-primary-blue" size={40} />
+          </div>
+          <h2 className="text-2xl font-bold text-slate-800 mb-2">Nenhuma Loja Vinculada</h2>
+          <p className="text-slate-500 max-w-md">
+            Seu perfil ainda não possui uma filial associada. Entre em contato com a administração para ativar seu acesso como lojista.
+          </p>
+        </div>
+      </MerchantLayout>
+    );
+  }
 
   return (
-    <MerchantLayout title="Dashboard" subtitle="Bem-vindo de volta, Urban Pro Store">
+    <MerchantLayout title="Dashboard" subtitle={`Bem-vindo de volta, ${profile?.full_name || 'Lojista'}`}>
       <div className="p-8 lg:p-12 space-y-12">
         {/* Stats Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-8">
-          {stats.map((stat, i) => (
-            <motion.div 
-              key={i}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: i * 0.1 }}
-              className="bg-white p-8 rounded-[2rem] border border-slate-100 shadow-sm hover:shadow-xl transition-all group"
-            >
-              <div className="flex items-center justify-between mb-6">
-                <div className="size-12 bg-slate-50 rounded-2xl flex items-center justify-center text-midnight group-hover:bg-midnight group-hover:text-white transition-colors">
-                  <stat.icon size={24} />
+          {stats.map((stat, i) => {
+            const Icon = ICON_MAP[stat.icon as keyof typeof ICON_MAP] || TrendingUp;
+            return (
+              <motion.div 
+                key={i}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: i * 0.1 }}
+                className="bg-white p-8 rounded-[2rem] border border-slate-100 shadow-sm hover:shadow-xl transition-all group"
+              >
+                <div className="flex items-center justify-between mb-6">
+                  <div className="size-12 bg-slate-50 rounded-2xl flex items-center justify-center text-midnight group-hover:bg-midnight group-hover:text-white transition-colors">
+                    <Icon size={24} />
+                  </div>
+                  <div className={`flex items-center gap-1 px-3 py-1 rounded-full text-[10px] font-black uppercase ${stat.isPositive ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600'}`}>
+                    {stat.isPositive ? <ArrowUpRight size={12} /> : <ArrowDownRight size={12} />}
+                    {stat.change}
+                  </div>
                 </div>
-                <div className={`flex items-center gap-1 px-3 py-1 rounded-full text-[10px] font-black uppercase ${stat.isPositive ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600'}`}>
-                  {stat.isPositive ? <ArrowUpRight size={12} /> : <ArrowDownRight size={12} />}
-                  {stat.change}
-                </div>
-              </div>
-              <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-1">{stat.title}</p>
-              <h3 className="text-2xl font-black text-midnight tracking-tighter">{stat.value}</h3>
-            </motion.div>
-          ))}
+                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-1">{stat.title}</p>
+                <h3 className="text-2xl font-black text-midnight tracking-tighter">{stat.value}</h3>
+              </motion.div>
+            );
+          })}
         </div>
 
         <div className="grid grid-cols-1 xl:grid-cols-3 gap-12">
-          {/* Sales Chart Placeholder */}
+          {/* Sales Chart Placeholder - Real Logic can be added with a library like Chart.js or Recharts */}
           <div className="xl:col-span-2 bg-white rounded-[2.5rem] border border-slate-100 p-10 flex flex-col h-[500px]">
             <div className="flex items-center justify-between mb-10">
               <div>
@@ -73,10 +142,29 @@ export default function MerchantDashboard() {
                 ))}
               </div>
             </div>
-            <div className="flex-1 flex flex-col items-center justify-center border-t border-dashed border-slate-100">
-              <div className="text-center">
-                <PieChart size={64} className="text-slate-100 mx-auto mb-6" />
-                <p className="text-slate-300 font-bold italic">Gráfico de desempenho será exibido aqui...</p>
+            <div className="flex-1 flex flex-col items-end justify-end border-t border-dashed border-slate-100 relative">
+              {/* Visual Representação do Gráfico */}
+              <div className="absolute inset-0 flex items-end justify-between px-4 pb-4 gap-2">
+                {performance.values.length > 0 ? (
+                  performance.values.slice(-15).map((val, idx) => (
+                    <motion.div 
+                      key={idx}
+                      initial={{ height: 0 }}
+                      animate={{ height: `${Math.max((val / Math.max(...performance.values)) * 100, 5)}%` }}
+                      className="flex-1 bg-midnight rounded-t-lg min-w-[10px]"
+                      title={`R$ ${val.toFixed(2)}`}
+                    />
+                  ))
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center">
+                    <p className="text-slate-300 font-bold italic">Sem dados de vendas nos últimos 30 dias</p>
+                  </div>
+                )}
+              </div>
+              <div className="w-full flex justify-between pt-4 mt-auto">
+                {performance.labels.slice(-7).map((label, i) => (
+                  <span key={i} className="text-[9px] font-black text-slate-300 uppercase">{label}</span>
+                ))}
               </div>
             </div>
           </div>
@@ -85,12 +173,7 @@ export default function MerchantDashboard() {
           <div className="bg-white rounded-[2.5rem] border border-slate-100 p-10 flex flex-col">
             <h3 className="text-xl font-black text-midnight tracking-tighter uppercase italic mb-8">Mais Vendidos</h3>
             <div className="space-y-6">
-              {[ 
-                { name: 'Fone Pro Noise', sales: '842', revenue: 'R$ 168k', color: 'blue' },
-                { name: 'Smartwatch G2', sales: '512', revenue: 'R$ 178k', color: 'emerald' },
-                { name: 'Tênis Street', sales: '298', revenue: 'R$ 83k', color: 'orange' },
-                { name: 'Mochila Tech', sales: '142', revenue: 'R$ 22k', color: 'purple' },
-              ].map((item, i) => (
+              {topProducts.length > 0 ? topProducts.map((item, i) => (
                 <div key={i} className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl group hover:bg-slate-100 transition-colors">
                   <div className="flex items-center gap-4">
                     <div className={`size-10 rounded-xl bg-white shadow-sm flex items-center justify-center font-black text-sm text-midnight`}>
@@ -103,9 +186,16 @@ export default function MerchantDashboard() {
                   </div>
                   <p className="text-xs font-black text-midnight tracking-tighter">{item.revenue}</p>
                 </div>
-              ))}
+              )) : (
+                <div className="p-8 text-center bg-slate-50 rounded-2xl">
+                   <p className="text-xs font-bold text-slate-400 italic">Nenhum produto vendido ainda</p>
+                </div>
+              )}
             </div>
-            <button className="mt-8 w-full py-4 border-2 border-dashed border-slate-200 rounded-2xl text-[10px] font-black uppercase text-slate-400 hover:border-primary-blue hover:text-primary-blue transition-all flex items-center justify-center gap-2">
+            <button 
+              onClick={() => window.location.href = '/lojista/produtos'}
+              className="mt-8 w-full py-4 border-2 border-dashed border-slate-200 rounded-2xl text-[10px] font-black uppercase text-slate-400 hover:border-midnight hover:text-midnight transition-all flex items-center justify-center gap-2"
+            >
               <Plus size={14} /> Adicionar Novo Produto
             </button>
           </div>
@@ -118,7 +208,10 @@ export default function MerchantDashboard() {
               <h3 className="text-xl font-black text-midnight tracking-tighter uppercase italic">Pedidos Recentes</h3>
               <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Acompanhe o status das últimas transações</p>
             </div>
-            <button className="bg-slate-50 hover:bg-slate-100 text-midnight px-6 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest flex items-center gap-2 transition-all">
+            <button 
+              onClick={() => window.location.href = '/lojista/pedidos'}
+              className="bg-slate-50 hover:bg-slate-100 text-midnight px-6 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest flex items-center gap-2 transition-all"
+            >
               Ver todos os pedidos <ChevronRight size={16} />
             </button>
           </div>
@@ -134,7 +227,7 @@ export default function MerchantDashboard() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
-                {recentOrders.map((order, i) => (
+                {recentOrders.length > 0 ? recentOrders.map((order, i) => (
                   <tr key={i} className="hover:bg-slate-50/30 transition-colors group">
                     <td className="px-10 py-6 font-black text-sm text-midnight">{order.id}</td>
                     <td className="px-10 py-6">
@@ -158,7 +251,13 @@ export default function MerchantDashboard() {
                       </span>
                     </td>
                   </tr>
-                ))}
+                )) : (
+                  <tr>
+                    <td colSpan={5} className="px-10 py-12 text-center text-slate-400 font-bold italic">
+                      Nenhum pedido encontrado
+                    </td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>

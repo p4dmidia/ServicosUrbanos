@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { 
   LayoutGrid, 
   Search, 
@@ -22,17 +22,27 @@ import {
   ShoppingBag
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
+import { supabase } from '../lib/supabase';
+import { useAuth } from '../contexts/AuthContext';
 
 interface Product {
-  id: number;
+  id: string;
   name: string;
-  price: string;
-  installments: string;
+  price: number;
+  installments?: string;
   image: string;
   rating: number;
-  sales: string;
+  sales: number;
   category: string;
+  cashback: number;
+  main_image?: string;
+  stock: number;
+}
+
+interface Category {
+  id: string;
+  name: string;
 }
 
 interface CartItem extends Product {
@@ -40,69 +50,118 @@ interface CartItem extends Product {
 }
 
 export default function Marketplace() {
+  const navigate = useNavigate();
   const [search, setSearch] = useState('');
   const [showNotifications, setShowNotifications] = useState(false);
   const [isCartOpen, setIsCartOpen] = useState(false);
-  const [cartItems, setCartItems] = useState<CartItem[]>([]);
+  const [cartItems, setCartItems] = useState<CartItem[]>(() => {
+    try {
+      const saved = localStorage.getItem('urbashop_cart');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  useEffect(() => {
+    localStorage.setItem('urbashop_cart', JSON.stringify(cartItems));
+  }, [cartItems]);
   const [selectedCategory, setSelectedCategory] = useState('Todos');
   const [showWaitlist, setShowWaitlist] = useState(false);
+  const [waitlistForm, setWaitlistForm] = useState({ fullName: '', email: '', phone: '', businessName: '' });
+  const [isSubmittingWaitlist, setIsSubmittingWaitlist] = useState(false);
+  const [waitlistSuccess, setWaitlistSuccess] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const { user: authUser, profile, signOut } = useAuth();
+  const [showUserMenu, setShowUserMenu] = useState(false);
   const [notifications, setNotifications] = useState([
     { id: 1, title: "Oferta Relâmpago!", message: "Fones de ouvido com 30% de cashback hoje.", time: "5 min ago", read: false },
     { id: 2, title: "Sua compra chegou", message: "O pedido #1234 foi entregue com sucesso.", time: "2 horas ago", read: true },
     { id: 3, title: "Novo Lojista", message: "A loja 'Urban Sports' agora faz parte da rede.", time: "1 dia ago", read: true },
   ]);
 
-  const products: Product[] = [
-    {
-      id: 1,
-      name: "Fone de Ouvido Noise Cancelling Pro",
-      price: "199,90",
-      installments: "12x R$ 16,65 sem juros",
-      image: "🎧",
-      rating: 4.8,
-      sales: "1.2k vendidos",
-      category: "Eletrônicos"
-    },
-    {
-      id: 2,
-      name: "Smartwatch Urban Fit G2",
-      price: "349,00",
-      installments: "10x R$ 34,90 sem juros",
-      image: "⌚",
-      rating: 4.9,
-      sales: "800 vendidos",
-      category: "Wearables"
-    },
-    {
-      id: 3,
-      name: "Tênis Street Walker Original",
-      price: "279,50",
-      installments: "12x R$ 23,29 sem juros",
-      image: "👟",
-      rating: 4.7,
-      sales: "2.5k vendidos",
-      category: "Calçados"
-    },
-    {
-      id: 4,
-      name: "Mochila Tech Pro Impermeável",
-      price: "159,00",
-      installments: "6x R$ 26,50 sem juros",
-      image: "🎒",
-      rating: 4.6,
-      sales: "500 vendidos",
-      category: "Acessórios"
+  useEffect(() => {
+    async function loadData() {
+      try {
+        setLoading(true);
+        
+        // Fetch Categories
+        const { data: catData, error: catError } = await supabase
+          .from('categories')
+          .select('id, name')
+          .order('name');
+        
+        if (catError) throw catError;
+        const baseCategories = catData || [];
+
+        // Fetch Products
+        const { data: prodData, error: prodError } = await supabase
+          .from('products')
+          .select(`
+            id, 
+            name, 
+            price, 
+            image, 
+            main_image,
+            category,
+            sales,
+            cashback,
+            category_id,
+            stock
+          `)
+          .eq('status', 'Ativo');
+
+        if (prodError) throw prodError;
+
+        // Map database products to UI interface
+        const formattedProducts: Product[] = (prodData || []).map(p => {
+          const price = Number(p.price) || 0;
+          // Map category name from the categories table using category_id
+          const categoryFromTable = baseCategories.find(c => c.id === p.category_id);
+          const categoryName = categoryFromTable?.name || p.category || 'Geral';
+          
+          return {
+            id: p.id,
+            name: p.name || 'Produto sem nome',
+            price: price,
+            image: p.main_image || p.image || '📦',
+            rating: 4.5 + (Math.random() * 0.5),
+            sales: p.sales || 0,
+            category: categoryName,
+            cashback: Number(p.cashback) || 5,
+            installments: `12x R$ ${(price / 12).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} sem juros`,
+            stock: Number(p.stock) || 0
+          };
+        });
+
+        // Use ONLY categories from the categories table for the filter bar
+        // This avoids duplicates from old text fields in products
+        setCategories(baseCategories.filter(c => !(c as any).parent_id)); // Only show top-level categories
+        setProducts(formattedProducts);
+      } catch (error) {
+        console.error('Error loading marketplace data:', error);
+      } finally {
+        setLoading(false);
+      }
     }
-  ];
+
+    loadData();
+  }, []);
 
   const filteredProducts = useMemo(() => {
     return products.filter(product => {
-      const matchesSearch = product.name.toLowerCase().includes(search.toLowerCase()) ||
-                          product.category.toLowerCase().includes(search.toLowerCase());
+      const productName = product.name?.toLowerCase() || '';
+      const productCategory = product.category?.toLowerCase() || '';
+      const searchLower = search.toLowerCase();
+      
+      const matchesSearch = productName.includes(searchLower) ||
+                          productCategory.includes(searchLower);
       const matchesCategory = selectedCategory === 'Todos' || product.category === selectedCategory;
       return matchesSearch && matchesCategory;
     });
-  }, [search, selectedCategory]);
+  }, [search, selectedCategory, products]);
 
   // Cart Logic
   const addToCart = (product: Product) => {
@@ -116,7 +175,7 @@ export default function Marketplace() {
     setIsCartOpen(true);
   };
 
-  const updateQuantity = (id: number, delta: number) => {
+  const updateQuantity = (id: string, delta: number) => {
     setCartItems(prev => prev.map(item => {
       if (item.id === id) {
         const newQty = Math.max(1, item.quantity + delta);
@@ -126,18 +185,42 @@ export default function Marketplace() {
     }));
   };
 
-  const removeFromCart = (id: number) => {
+  const removeFromCart = (id: string) => {
     setCartItems(prev => prev.filter(item => item.id !== id));
   };
 
   const cartCount = cartItems.reduce((acc, item) => acc + item.quantity, 0);
   
   const subtotal = cartItems.reduce((acc, item) => {
-    const price = parseFloat(item.price.replace(',', '.'));
-    return acc + (price * item.quantity);
+    return acc + (item.price * item.quantity);
   }, 0);
 
-  const totalCashback = subtotal * 0.05; // Mock 5% cashback
+  const handleWaitlistSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!waitlistForm.fullName || !waitlistForm.email || !waitlistForm.phone) return;
+
+    setIsSubmittingWaitlist(true);
+    try {
+      const { error } = await supabase.from('merchant_waitlist').insert({
+        full_name: waitlistForm.fullName,
+        email: waitlistForm.email,
+        phone: waitlistForm.phone,
+        business_name: waitlistForm.businessName
+      });
+
+      if (error) throw error;
+      setWaitlistSuccess(true);
+    } catch (err) {
+      console.error(err);
+      alert('Erro ao entrar na lista de espera. Tente novamente.');
+    } finally {
+      setIsSubmittingWaitlist(false);
+    }
+  };
+
+  const totalCashback = cartItems.reduce((acc, item) => {
+    return acc + (item.price * (item.cashback / 100) * item.quantity);
+  }, 0);
 
   const markAllAsRead = () => {
     setNotifications(notifications.map(n => ({ ...n, read: true })));
@@ -247,12 +330,86 @@ export default function Marketplace() {
               <span className="text-[10px] font-black uppercase tracking-widest text-white">Área do Lojista</span>
             </Link>
 
-            <Link to="/login" className="flex items-center gap-2 hover:text-primary-blue transition-colors group">
-              <div className="size-8 rounded-full bg-white/10 flex items-center justify-center overflow-hidden border border-white/5 transition-all group-hover:bg-white/20">
-                <User size={18} />
+            {authUser ? (
+              <div className="relative">
+                <button 
+                  onClick={() => setShowUserMenu(!showUserMenu)}
+                  className="flex items-center gap-3 hover:text-primary-blue transition-colors group px-2 py-1 rounded-xl hover:bg-white/5"
+                >
+                  <div className="text-right hidden sm:block">
+                    <p className="text-xs font-black tracking-tight text-white">{profile?.full_name?.split(' ')[0] || 'Meu Perfil'}</p>
+                    <p className="text-[10px] text-slate-400 font-bold">{authUser.email}</p>
+                  </div>
+                  <div className="size-9 rounded-full bg-white/10 flex items-center justify-center overflow-hidden border border-white/10 group-hover:border-accent/50 transition-all">
+                    {profile?.avatar_url ? (
+                      <img src={profile.avatar_url} alt="Profile" className="w-full h-full object-cover" />
+                    ) : (
+                      <User size={18} />
+                    )}
+                  </div>
+                </button>
+
+                <AnimatePresence>
+                  {showUserMenu && (
+                    <>
+                      <div className="fixed inset-0 z-40" onClick={() => setShowUserMenu(false)}></div>
+                      <motion.div 
+                        initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                        className="absolute right-0 mt-4 w-64 bg-white rounded-2xl shadow-2xl overflow-hidden z-50 border border-slate-100 p-2 text-midnight"
+                      >
+                        <div className="p-4 border-b border-slate-100 flex items-center gap-3 bg-slate-50">
+                          <div className="size-10 rounded-full bg-slate-200 flex items-center justify-center overflow-hidden shrink-0">
+                            {profile?.avatar_url ? (
+                              <img src={profile.avatar_url} alt="Profile" className="w-full h-full object-cover" />
+                            ) : (
+                              <User size={20} className="text-slate-400" />
+                            )}
+                          </div>
+                          <div className="overflow-hidden">
+                            <p className="text-sm font-black truncate text-midnight">{profile?.full_name || 'Usuário'}</p>
+                            <p className="text-[10px] font-bold text-slate-400 truncate">{authUser.email}</p>
+                          </div>
+                        </div>
+                        <div className="p-2 space-y-1">
+                          <Link 
+                            to="/afiliado/perfil" 
+                            className="flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-slate-50 transition-colors text-xs font-bold text-slate-600 hover:text-primary-blue"
+                          >
+                            <User size={16} /> Meu Perfil
+                          </Link>
+                          <Link 
+                            to="/afiliado/pedidos" 
+                            className="flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-slate-50 transition-colors text-xs font-bold text-slate-600 hover:text-primary-blue"
+                          >
+                            <ShoppingBag size={16} /> Meus Pedidos
+                          </Link>
+                        </div>
+                        <div className="p-2 border-t border-slate-100">
+                          <button 
+                            onClick={async () => {
+                              await signOut();
+                              setShowUserMenu(false);
+                            }}
+                            className="w-full flex items-center justify-between px-3 py-2 rounded-xl hover:bg-red-50 text-red-500 transition-colors text-xs font-black uppercase tracking-wider group"
+                          >
+                            Sair da conta
+                          </button>
+                        </div>
+                      </motion.div>
+                    </>
+                  )}
+                </AnimatePresence>
               </div>
-              <span className="text-sm font-bold hidden md:inline tracking-tight">Meu Perfil</span>
-            </Link>
+            ) : (
+              <Link to="/login" className="flex items-center gap-2 hover:text-primary-blue transition-colors group">
+                <div className="size-8 rounded-full bg-white/10 flex items-center justify-center overflow-hidden border border-white/5 transition-all group-hover:bg-white/20">
+                  <User size={18} />
+                </div>
+                <span className="text-sm font-bold hidden md:inline tracking-tight text-white">Fazer Login</span>
+              </Link>
+            )}
           </div>
         </div>
       </header>
@@ -303,15 +460,23 @@ export default function Marketplace() {
                       animate={{ opacity: 1, y: 0 }}
                       className="flex gap-4 p-4 bg-slate-50 rounded-2xl border border-slate-100"
                     >
-                      <div className="size-20 bg-white rounded-xl flex items-center justify-center text-3xl shrink-0 shadow-sm">
-                        {item.image}
+                      <div className="size-20 bg-white rounded-xl flex items-center justify-center relative overflow-hidden shrink-0 shadow-sm">
+                        {item.image.length > 4 ? (
+                          <img 
+                            src={item.image} 
+                            alt={item.name}
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <span className="text-3xl">{item.image}</span>
+                        )}
                       </div>
                       <div className="flex-1 min-w-0">
                         <h4 className="text-sm font-black text-midnight mb-1 truncate">{item.name}</h4>
                         <p className="text-xs text-slate-400 font-bold uppercase tracking-widest mb-3">{item.category}</p>
                         
                         <div className="flex items-center justify-between mt-auto">
-                          <p className="text-sm font-black text-midnight">R$ {item.price}</p>
+                          <p className="text-sm font-black text-midnight">R$ {item.price.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
                           <div className="flex items-center bg-white border border-slate-200 rounded-xl px-2 py-1 gap-3">
                             <button 
                               onClick={() => updateQuantity(item.id, -1)}
@@ -359,22 +524,22 @@ export default function Marketplace() {
                   <div className="space-y-3 mb-6">
                     <div className="flex justify-between items-center text-slate-500 font-medium">
                       <span className="text-sm tracking-tight">Subtotal</span>
-                      <span className="text-sm font-bold text-midnight">R$ {subtotal.toFixed(2).replace('.', ',')}</span>
+                      <span className="text-sm font-bold text-midnight">R$ {subtotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
                     </div>
                     <div className="flex justify-between items-center bg-emerald-500/10 p-3 rounded-xl border border-emerald-500/20">
                       <div className="flex items-center gap-2">
                         <TrendingUp size={16} className="text-emerald-600" />
                         <span className="text-xs font-black text-emerald-600 uppercase tracking-widest">Cashback Acumulado</span>
                       </div>
-                      <span className="text-sm font-black text-emerald-600">+ R$ {totalCashback.toFixed(2).replace('.', ',')}</span>
+                      <span className="text-sm font-black text-emerald-600">+ R$ {totalCashback.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
                     </div>
                     <div className="flex justify-between items-center pt-3 mt-3 border-t border-slate-200">
                       <span className="text-lg font-black text-midnight tracking-tighter uppercase">Total</span>
-                      <span className="text-2xl font-black text-midnight tracking-tighter">R$ {subtotal.toFixed(2).replace('.', ',')}</span>
+                      <span className="text-2xl font-black text-midnight tracking-tighter">R$ {subtotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
                     </div>
                   </div>
-                  <button className="w-full bg-midnight hover:bg-slate-800 text-white py-5 rounded-2xl font-black text-lg transition-all shadow-xl shadow-midnight/20 active:scale-[0.98] uppercase tracking-tighter">
-                    Finalizar Compra
+                  <button onClick={() => navigate('/checkout')} className="w-full bg-midnight hover:bg-slate-800 text-white py-5 rounded-2xl font-black text-lg transition-all shadow-xl shadow-midnight/20 active:scale-[0.98] uppercase tracking-tighter">
+                    Finalizar Pedido
                   </button>
                   <p className="text-center text-[10px] text-slate-400 font-bold uppercase mt-4 tracking-widest flex items-center justify-center gap-2">
                     <ShieldCheck size={12} /> Compra 100% segura e garantida
@@ -478,15 +643,20 @@ export default function Marketplace() {
           </motion.div>
         </section>
 
-        {/* Categories Bar */}
         <div className="flex gap-4 overflow-x-auto pb-8 no-scrollbar scroll-smooth">
-          {['Todos', 'Eletrônicos', 'Wearables', 'Calçados', 'Acessórios', 'Saúde', 'Ferramentas'].map((cat) => (
+          <button 
+            onClick={() => setSelectedCategory('Todos')}
+            className={`px-6 py-2.5 rounded-full text-xs font-black uppercase tracking-widest whitespace-nowrap transition-all border ${selectedCategory === 'Todos' ? 'bg-midnight text-white border-midnight' : 'bg-white text-slate-500 border-slate-100 hover:border-slate-300'}`}
+          >
+            Todos
+          </button>
+          {categories.map((cat) => (
             <button 
-              key={cat} 
-              onClick={() => setSelectedCategory(cat)}
-              className={`px-6 py-2.5 rounded-full text-xs font-black uppercase tracking-widest whitespace-nowrap transition-all border ${selectedCategory === cat ? 'bg-midnight text-white border-midnight' : 'bg-white text-slate-500 border-slate-100 hover:border-slate-300'}`}
+              key={cat.id} 
+              onClick={() => setSelectedCategory(cat.name)}
+              className={`px-6 py-2.5 rounded-full text-xs font-black uppercase tracking-widest whitespace-nowrap transition-all border ${selectedCategory === cat.name ? 'bg-midnight text-white border-midnight' : 'bg-white text-slate-500 border-slate-100 hover:border-slate-300'}`}
             >
-              {cat}
+              {cat.name}
             </button>
           ))}
         </div>
@@ -528,17 +698,41 @@ export default function Marketplace() {
             </Link>
           </div>
 
-          {filteredProducts.length > 0 ? (
+          {loading ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+              {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
+                <div key={i} className="bg-white rounded-[2.5rem] p-6 shadow-sm border border-slate-100 h-[450px] animate-pulse">
+                  <div className="aspect-square bg-slate-100 rounded-[2rem] mb-6"></div>
+                  <div className="h-4 bg-slate-100 rounded w-1/2 mb-4"></div>
+                  <div className="h-8 bg-slate-100 rounded w-full mb-4"></div>
+                  <div className="mt-auto h-12 bg-slate-100 rounded w-full"></div>
+                </div>
+              ))}
+            </div>
+          ) : filteredProducts.length > 0 ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
               {filteredProducts.map((product) => (
-                <motion.div 
+                <Link 
+                  to={`/produto/${product.id}`}
                   key={product.id}
-                  whileHover={{ y: -8 }}
-                  className="bg-white rounded-[2.5rem] p-6 shadow-sm border border-slate-100 flex flex-col group cursor-pointer transition-shadow hover:shadow-2xl"
+                  className="bg-white rounded-[2.5rem] p-6 shadow-sm border border-slate-100 flex flex-col group cursor-pointer transition-all hover:shadow-2xl hover:-translate-y-2 block"
                 >
-                  <div className="aspect-square bg-slate-50 rounded-[2rem] mb-6 flex items-center justify-center text-6xl group-hover:scale-110 transition-transform relative overflow-hidden shadow-inner">
+                  <div className="aspect-square bg-slate-50 rounded-[2rem] mb-6 flex items-center justify-center relative overflow-hidden shadow-inner">
                     <div className="absolute inset-0 bg-gradient-to-br from-white/40 to-transparent"></div>
-                    <span className="relative z-10 drop-shadow-2xl">{product.image}</span>
+                    {product.stock === 0 && (
+                      <div className="absolute top-4 right-4 bg-red-500 text-white px-3 py-1 rounded-full text-[10px] font-black uppercase z-10 shadow-lg">
+                        Esgotado
+                      </div>
+                    )}
+                    {product.image.length > 4 ? (
+                      <img 
+                        src={product.image} 
+                        alt={product.name}
+                        className={`w-full h-full object-cover transition-transform group-hover:scale-110 ${product.stock === 0 ? 'grayscale opacity-70' : ''}`}
+                      />
+                    ) : (
+                      <span className="text-6xl drop-shadow-2xl transition-transform group-hover:scale-110 relative z-10">{product.image}</span>
+                    )}
                   </div>
                   
                   <div className="flex-1 flex flex-col">
@@ -552,31 +746,44 @@ export default function Marketplace() {
                     <h4 className="text-slate-800 font-black mb-2 line-clamp-2 min-h-[48px] text-lg leading-tight tracking-tight">{product.name}</h4>
                     <div className="flex items-center gap-1 mb-4">
                       <Star className="text-yellow-400 fill-yellow-400" size={14} />
-                      <span className="text-xs font-black text-midnight">{product.rating}</span>
+                      <span className="text-xs font-black text-midnight">{product.rating.toFixed(1)}</span>
                       <span className="text-slate-300 mx-1">|</span>
-                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{product.sales}</span>
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{product.sales} vendidos</span>
                     </div>
                     <div className="mt-auto">
                       <div className="mb-4">
-                        <p className="text-2xl font-black text-midnight leading-none mb-1 tracking-tighter">R$ {product.price}</p>
+                        <p className="text-2xl font-black text-midnight leading-none mb-1 tracking-tighter">
+                          R$ {product.price.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                        </p>
                         <p className="text-[10px] text-emerald-600 font-black uppercase tracking-widest">{product.installments}</p>
                       </div>
                       
                       <button 
-                        onClick={() => addToCart(product)}
-                        className="w-full bg-midnight hover:bg-slate-800 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest flex items-center justify-center gap-3 transition-all active:scale-[0.97] shadow-lg group/btn overflow-hidden relative"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          if (product.stock > 0) addToCart(product);
+                        }}
+                        disabled={product.stock === 0}
+                        className={`w-full text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest flex items-center justify-center gap-3 transition-all active:scale-[0.97] shadow-lg group/btn overflow-hidden relative ${
+                          product.stock > 0 
+                          ? 'bg-midnight hover:bg-slate-800' 
+                          : 'bg-slate-400 cursor-not-allowed shadow-none'
+                        }`}
                       >
-                        <motion.div 
-                          className="absolute inset-0 bg-white/10 -translate-x-full group-hover/btn:translate-x-full transition-transform duration-500 skew-x-12"
-                        />
+                        {product.stock > 0 && (
+                          <motion.div 
+                            className="absolute inset-0 bg-white/10 -translate-x-full group-hover/btn:translate-x-full transition-transform duration-500 skew-x-12"
+                          />
+                        )}
                         <div className="size-6 bg-white/10 rounded-lg flex items-center justify-center transition-all group-hover/btn:scale-110 group-hover/btn:bg-white/20">
-                          <Plus size={16} />
+                          {product.stock > 0 ? <Plus size={16} /> : <X size={16} />}
                         </div>
-                        Adicionar ao Carrinho
+                        {product.stock > 0 ? 'Adicionar ao Carrinho' : 'ESGOTADO'}
                       </button>
                     </div>
                   </div>
-                </motion.div>
+                </Link>
               ))}
             </div>
           ) : (
@@ -657,7 +864,7 @@ export default function Marketplace() {
           </div>
 
           <div className="pt-12 flex flex-col md:flex-row justify-between items-center gap-6 text-[9px] font-black uppercase tracking-[0.2em]">
-            <p className="text-slate-600">© 2024 Ecossistema Serviços Urbanos Tecnologia</p>
+            <p className="text-slate-600">© 2026 Ecossistema Serviços Urbanos Tecnologia</p>
             <div className="flex gap-8">
               <span className="flex items-center gap-1 transition-colors hover:text-white cursor-pointer"><Package size={12} /> Rastreio</span>
               <span className="flex items-center gap-1 transition-colors hover:text-white cursor-pointer"><TrendingUp size={12} /> Investimentos</span>
@@ -665,6 +872,115 @@ export default function Marketplace() {
           </div>
         </div>
       </footer>
+
+      {/* Waitlist Modal */}
+      <AnimatePresence>
+        {showWaitlist && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => { setShowWaitlist(false); setWaitlistSuccess(false); }}
+              className="absolute inset-0 bg-midnight/60 backdrop-blur-sm"
+            />
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="bg-white w-full max-w-lg rounded-[2rem] shadow-2xl relative z-10 overflow-hidden"
+            >
+              <div className="p-8">
+                <button 
+                  onClick={() => { setShowWaitlist(false); setWaitlistSuccess(false); }}
+                  className="absolute top-6 right-6 text-slate-400 hover:text-slate-600 transition-colors bg-slate-50 p-2 rounded-full"
+                >
+                  <X size={20} />
+                </button>
+
+                {waitlistSuccess ? (
+                  <div className="text-center py-12">
+                    <div className="size-20 bg-emerald-50 text-emerald-500 rounded-full flex items-center justify-center mx-auto mb-6">
+                      <Check size={40} />
+                    </div>
+                    <h3 className="text-2xl font-black text-midnight mb-2">Tudo Certo!</h3>
+                    <p className="text-slate-500 mb-8">Você está na nossa lista VIP. Avisaremos via WhatsApp ou E-mail assim que as vagas para novos lojistas abrirem.</p>
+                    <button 
+                      onClick={() => { setShowWaitlist(false); setWaitlistSuccess(false); }}
+                      className="bg-midnight text-white px-8 py-3 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-slate-800 transition-all"
+                    >
+                      Voltar ao Shopping
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    <h3 className="text-2xl font-black text-midnight mb-2 tracking-tighter uppercase italic"><span className="text-primary-blue">Lista de Espera:</span> Venda aqui</h3>
+                    <p className="text-slate-500 text-sm mb-8 font-medium">Cadastre-se para ser um dos primeiros lojistas e vender para milhares de usuários ativos no nosso ecossistema.</p>
+                    
+                    <form onSubmit={handleWaitlistSubmit} className="space-y-4">
+                      <div>
+                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 ml-1">Nome Completo *</label>
+                        <input 
+                          type="text" 
+                          required
+                          value={waitlistForm.fullName}
+                          onChange={e => setWaitlistForm({...waitlistForm, fullName: e.target.value})}
+                          className="w-full bg-slate-50 border border-slate-100 rounded-xl px-4 py-3 text-sm font-bold text-midnight focus:outline-none focus:border-primary-blue focus:ring-1 focus:ring-primary-blue transition-all"
+                          placeholder="Seu nome completo"
+                        />
+                      </div>
+                      
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 ml-1">E-mail *</label>
+                          <input 
+                            type="email" 
+                            required
+                            value={waitlistForm.email}
+                            onChange={e => setWaitlistForm({...waitlistForm, email: e.target.value})}
+                            className="w-full bg-slate-50 border border-slate-100 rounded-xl px-4 py-3 text-sm font-bold text-midnight focus:outline-none focus:border-primary-blue focus:ring-1 focus:ring-primary-blue transition-all"
+                            placeholder="seu@email.com"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 ml-1">WhatsApp *</label>
+                          <input 
+                            type="tel" 
+                            required
+                            value={waitlistForm.phone}
+                            onChange={e => setWaitlistForm({...waitlistForm, phone: e.target.value})}
+                            className="w-full bg-slate-50 border border-slate-100 rounded-xl px-4 py-3 text-sm font-bold text-midnight focus:outline-none focus:border-primary-blue focus:ring-1 focus:ring-primary-blue transition-all"
+                            placeholder="(00) 00000-0000"
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 ml-1">Nome da Loja/Negócio</label>
+                        <input 
+                          type="text" 
+                          value={waitlistForm.businessName}
+                          onChange={e => setWaitlistForm({...waitlistForm, businessName: e.target.value})}
+                          className="w-full bg-slate-50 border border-slate-100 rounded-xl px-4 py-3 text-sm font-bold text-midnight focus:outline-none focus:border-primary-blue focus:ring-1 focus:ring-primary-blue transition-all"
+                          placeholder="Sua loja (opcional)"
+                        />
+                      </div>
+
+                      <button 
+                        type="submit"
+                        disabled={isSubmittingWaitlist}
+                        className="w-full bg-primary-blue hover:bg-blue-600 text-white px-8 py-4 rounded-xl font-black transition-all text-xs uppercase tracking-widest shadow-xl shadow-primary-blue/20 mt-4 disabled:opacity-50"
+                      >
+                        {isSubmittingWaitlist ? 'Enviando...' : 'Entrar na Lista VIP'}
+                      </button>
+                    </form>
+                  </>
+                )}
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

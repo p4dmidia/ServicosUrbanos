@@ -11,19 +11,81 @@ import {
     ShieldCheck
 } from 'lucide-react';
 import { motion } from 'motion/react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import Header from '../components/Header';
 
-export default function Login() {
-    const [loading, setLoading] = useState(false);
+import { supabase } from '../lib/supabase';
 
-    const handleSubmit = (e: React.FormEvent) => {
+export default function Login() {
+    const navigate = useNavigate();
+    const [loading, setLoading] = useState(false);
+    const [email, setEmail] = useState('');
+    const [password, setPassword] = useState('');
+    const [error, setError] = useState<string | null>(null);
+
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setLoading(true);
-        setTimeout(() => {
+        setError(null);
+
+        try {
+            let loginEmail = email;
+
+            // Se o input não parece um e-mail, tentamos buscar por CPF no banco
+            if (!email.includes('@')) {
+                const { data: profile, error: profileError } = await supabase
+                    .from('profiles')
+                    .select('id')
+                    .eq('cpf', email.replace(/\D/g, '')) // Limpa formatação do CPF
+                    .single();
+                
+                if (profileError || !profile) {
+                    throw new Error('CPF não encontrado ou inválido');
+                }
+
+                // Agora buscamos o e-mail associado a esse ID de usuário (precisamos de uma RPC ou acesso ao auth.users se permitido, 
+                // ou simplesmente assumir que o usuário sabe seu e-mail. 
+                // Melhor alternativa: O profile deve ter o email duplicado se quisermos login via CPF simples sem RPC complexa.
+                // Vou assumir que por enquanto o login é via E-mail, mas preparo a lógica para CPF se o campo email existir no profile.
+                
+                const { data: userData, error: userError } = await supabase
+                    .from('profiles')
+                    .select('email_hidden_field') // Supondo um campo auxiliar ou RPC
+                    .eq('id', profile.id)
+                    .single();
+                
+                // Como o Supabase Auth não permite buscar email de outros usuários sem Admin SDK, 
+                // a recomendação é que o login via CPF use o e-mail cadastrado internamente.
+                // Para este exemplo, vou manter o login via Email como principal e dar erro amigável para CPF 
+                // se não houver mapeamento direto acessível.
+                throw new Error('Login via CPF requer configuração adicional no Supabase (Edge Functions). Por favor, use seu E-mail.');
+            }
+
+            const { data, error: authError } = await supabase.auth.signInWithPassword({
+                email: loginEmail,
+                password,
+            });
+
+            if (authError) throw authError;
+
+            // Buscar o perfil para saber para onde redirecionar
+            const { data: profile } = await supabase
+                .from('profiles')
+                .select('role')
+                .eq('id', data.user.id)
+                .single();
+
+            // Redireciona para o dashboard do afiliado
+            // Se for um admin real (role === 'admin'), manda para admin.
+            if (profile?.role === 'admin') {
+                navigate('/admin/dashboard');
+            } else {
+                navigate('/afiliado/dashboard');
+            }
+        } catch (err: any) {
+            setError(err.message || 'Erro ao realizar login');
             setLoading(false);
-            window.location.href = '/afiliado/dashboard';
-        }, 1500); 
+        }
     };
 
     return (
@@ -61,8 +123,10 @@ export default function Login() {
                                 <div className="relative group">
                                     <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-emerald-500 transition-colors" size={20} />
                                     <input
-                                        type="text"
+                                        type="email"
                                         placeholder="exemplo@email.com"
+                                        value={email}
+                                        onChange={e => setEmail(e.target.value)}
                                         className="w-full bg-white/5 border border-white/10 rounded-2xl py-4 pl-12 pr-4 focus:outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 transition-all font-medium text-white placeholder:text-slate-600"
                                         required
                                     />
@@ -80,11 +144,19 @@ export default function Login() {
                                     <input
                                         type="password"
                                         placeholder="••••••••"
+                                        value={password}
+                                        onChange={e => setPassword(e.target.value)}
                                         className="w-full bg-white/5 border border-white/10 rounded-2xl py-4 pl-12 pr-4 focus:outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 transition-all font-medium text-white placeholder:text-slate-600"
                                         required
                                     />
                                 </div>
                             </div>
+
+                            {error && (
+                                <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-2xl text-red-500 text-[10px] font-black uppercase text-center animate-pulse">
+                                    {error}
+                                </div>
+                            )}
 
                             {/* Submit Button */}
                             <button
@@ -125,7 +197,7 @@ export default function Login() {
             {/* Footer minimalista */}
             <footer className="p-8 text-center relative z-10 border-t border-white/5">
                 <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-6">
-                    <p className="text-[10px] text-slate-600 uppercase font-black tracking-widest">© 2024 Serviços Urbanos Tecnologia S.A.</p>
+                    <p className="text-[10px] text-slate-600 uppercase font-black tracking-widest">© 2026 Serviços Urbanos Tecnologia S.A.</p>
                     <div className="flex gap-6 opacity-40 hover:opacity-100 transition-opacity">
                         <a href="#" className="hover:text-emerald-500"><Instagram size={18} /></a>
                         <a href="#" className="hover:text-emerald-500"><Twitter size={18} /></a>

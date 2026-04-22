@@ -10,22 +10,55 @@ import {
 } from 'lucide-react';
 import { useNavigate, Link } from 'react-router-dom';
 import { motion } from 'motion/react';
+import { supabase } from '../lib/supabase';
 
 export default function AdminLogin() {
   const [showPassword, setShowPassword] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    // Simular autenticação
-    setTimeout(() => {
-      setLoading(false);
+    setError(null);
+
+    try {
+      // Shorthand logic for admin login - trimming spaces and converting to lowercase
+      const trimmedInput = email.trim().toLowerCase();
+      const finalEmail = trimmedInput === 'admin' ? 'admin@admin.com' : email.trim();
+      
+      const { data, error: authError } = await supabase.auth.signInWithPassword({
+        email: finalEmail,
+        password: password.trim(),
+      });
+
+      if (authError) throw authError;
+
+      // Verificar se o usuário tem permissão de admin
+      const { data: profile, error: profileError } = await supabase
+        .from('profiles')
+        .select('role, status')
+        .eq('id', data.user.id)
+        .single();
+
+      if (profileError || !profile || profile.role !== 'admin') {
+        await supabase.auth.signOut();
+        throw new Error('Acesso negado: Você não tem permissões administrativas.');
+      }
+
+      if (profile.status === 'blocked') {
+        await supabase.auth.signOut();
+        throw new Error('Acesso negado: Sua conta administrativa está bloqueada.');
+      }
+
       navigate('/admin/dashboard');
-    }, 1500);
+    } catch (err: any) {
+      setError(err.message || 'Erro ao realizar login administrativo');
+      setLoading(false);
+    }
   };
 
   return (
@@ -59,7 +92,7 @@ export default function AdminLogin() {
               <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">E-mail Administrativo</label>
               <div className="relative group">
                 <input 
-                  type="email" 
+                  type="text" 
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
@@ -95,6 +128,17 @@ export default function AdminLogin() {
               </div>
             </div>
 
+            {error && (
+              <motion.div 
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                className="p-4 bg-red-500/10 border border-red-500/20 rounded-2xl text-red-500 text-[10px] font-black uppercase text-center flex items-center justify-center gap-2"
+              >
+                <div className="size-1.5 rounded-full bg-red-500 animate-pulse" />
+                {error}
+              </motion.div>
+            )}
+
             <button 
               type="submit" 
               disabled={loading}
@@ -119,7 +163,7 @@ export default function AdminLogin() {
 
         {/* Footer info */}
         <p className="text-center mt-8 text-[10px] font-bold text-slate-600 uppercase tracking-[0.2em]">
-          © 2024 Serviços Urbanos S.A. <br />
+          © 2026 Serviços Urbanos S.A. <br />
           SISTEMA DE MONITORAMENTO DE ALTA SEGURANÇA
         </p>
       </motion.div>

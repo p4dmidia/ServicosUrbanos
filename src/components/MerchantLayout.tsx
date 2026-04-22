@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
+import { useAuth } from '../contexts/AuthContext';
 import { businessRules, MerchantUser } from '../lib/businessRules';
 
 interface MerchantLayoutProps {
@@ -25,14 +26,10 @@ interface MerchantLayoutProps {
 }
 
 export default function MerchantLayout({ children, title, subtitle }: MerchantLayoutProps) {
+  const { profile, signOut } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [user, setUser] = useState<MerchantUser | null>(null);
-
-  useEffect(() => {
-    setUser(businessRules.getCurrentUser());
-  }, []);
 
   const menuItems = [
     { name: 'Dashboard', icon: LayoutGrid, path: '/lojista/dashboard' },
@@ -46,7 +43,7 @@ export default function MerchantLayout({ children, title, subtitle }: MerchantLa
   const isActive = (path: string) => location.pathname === path;
 
   // Gerentes não podem ver configurações gerais
-  const canSeeSettings = user?.role === 'owner';
+  const canSeeSettings = profile?.role === 'owner';
 
   return (
     <div className="min-h-screen bg-[#f8fafc] flex font-sans">
@@ -65,12 +62,13 @@ export default function MerchantLayout({ children, title, subtitle }: MerchantLa
         </div>
 
         <nav className="flex-1 p-6 space-y-2">
-          {menuItems.map((item) => (
+          {menuItems.map((item: any) => (
             <Link
               key={item.name}
               to={item.path}
+              state={item.tab ? { activeTab: item.tab } : undefined}
               className={`flex items-center gap-4 px-6 py-4 rounded-2xl text-xs font-black uppercase tracking-widest transition-all ${
-                isActive(item.path) 
+                isActive(item.path) && (!item.tab || (location.state as any)?.activeTab === item.tab)
                   ? 'bg-primary-blue text-white shadow-lg shadow-primary-blue/20' 
                   : 'text-slate-500 hover:text-white hover:bg-white/5'
               }`}
@@ -85,16 +83,25 @@ export default function MerchantLayout({ children, title, subtitle }: MerchantLa
           {canSeeSettings && (
             <button 
               onClick={() => navigate('/lojista/configuracoes')}
-              className="w-full flex items-center gap-4 px-6 py-4 rounded-2xl text-xs font-black uppercase tracking-widest text-slate-500 hover:text-white hover:bg-white/5 transition-all"
+              className={`w-full flex items-center gap-4 px-6 py-4 rounded-2xl text-xs font-black uppercase tracking-widest transition-all ${
+                isActive('/lojista/configuracoes') 
+                  ? 'bg-primary-blue text-white shadow-lg shadow-primary-blue/20' 
+                  : 'text-slate-500 hover:text-white hover:bg-white/5'
+              }`}
             >
               <Settings size={18} />
               Configurações
             </button>
           )}
           <button 
-            onClick={() => {
-              // Limpar usuário ao sair (opcional para o protótipo)
-              navigate('/lojista/login');
+            onClick={async () => {
+              try {
+                await signOut();
+                navigate('/lojista/login', { replace: true });
+              } catch (error) {
+                console.error('Erro ao sair:', error);
+                window.location.href = '/lojista/login';
+              }
             }}
             className="w-full flex items-center gap-4 px-6 py-4 rounded-2xl text-xs font-black uppercase tracking-widest text-red-400 hover:bg-red-500/10 transition-all border border-red-500/10"
           >
@@ -140,13 +147,13 @@ export default function MerchantLayout({ children, title, subtitle }: MerchantLa
 
             <div className="flex items-center gap-3 lg:gap-4">
               <div className="text-right hidden sm:block">
-                <p className="text-xs lg:text-sm font-black text-midnight">{user?.name || 'Carregando...'}</p>
+                <p className="text-xs lg:text-sm font-black text-midnight">{profile?.full_name || 'Carregando...'}</p>
                 <p className="text-[8px] lg:text-[9px] font-black text-emerald-500 uppercase tracking-widest">
-                  {user?.role === 'owner' ? 'Dono da Loja' : 'Gerente de Filial'}
+                  {profile?.role === 'owner' ? 'Dono da Loja' : profile?.role === 'manager' ? 'Gerente de Filial' : 'Afiliado Parceiro'}
                 </p>
               </div>
               <div className="size-8 lg:size-10 bg-slate-100 rounded-full border-2 border-primary-blue/20 overflow-hidden">
-                <img src={`https://ui-avatars.com/api/?name=${user?.name || 'Merchant'}&background=random`} alt="Avatar" className="w-full h-full object-cover" />
+                <img src={profile?.avatar_url || `https://ui-avatars.com/api/?name=${profile?.full_name || 'Merchant'}&background=random`} alt="Avatar" className="w-full h-full object-cover" />
               </div>
             </div>
           </div>
@@ -191,13 +198,14 @@ export default function MerchantLayout({ children, title, subtitle }: MerchantLa
                 </button>
               </div>
               <nav className="flex-1 p-6 space-y-2">
-                {menuItems.map((item) => (
+                {menuItems.map((item: any) => (
                   <Link
                     key={item.name}
                     to={item.path}
+                    state={item.tab ? { activeTab: item.tab } : undefined}
                     onClick={() => setIsMobileMenuOpen(false)}
                     className={`flex items-center gap-4 px-6 py-4 rounded-2xl text-xs font-black uppercase tracking-widest transition-all ${
-                      isActive(item.path) 
+                      isActive(item.path) && (!item.tab || (location.state as any)?.activeTab === item.tab)
                         ? 'bg-primary-blue text-white shadow-lg shadow-primary-blue/20' 
                         : 'text-slate-500 hover:text-white'
                     }`}
@@ -222,9 +230,14 @@ export default function MerchantLayout({ children, title, subtitle }: MerchantLa
                   </button>
                 )}
                 <button 
-                  onClick={() => {
-                    navigate('/lojista/login');
-                    setIsMobileMenuOpen(false);
+                  onClick={async () => {
+                    try {
+                      await signOut();
+                      navigate('/lojista/login', { replace: true });
+                      setIsMobileMenuOpen(false);
+                    } catch (error) {
+                      window.location.href = '/lojista/login';
+                    }
                   }}
                   className="w-full flex items-center gap-4 px-6 py-4 rounded-2xl text-xs font-black uppercase tracking-widest text-red-400 hover:bg-red-500/10 transition-all border border-red-500/10"
                 >

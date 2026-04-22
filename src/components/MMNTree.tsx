@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence } from 'motion/react';
 import { 
   User, 
   ChevronDown, 
@@ -27,18 +27,18 @@ const TreeNode = ({ member }: TreeNodeProps) => {
         <motion.div
           whileHover={{ scale: 1.05 }}
           className={`
-            relative cursor-pointer flex flex-col items-center p-4 rounded-[2rem] border-2 transition-all
+            relative cursor-pointer flex flex-col items-center p-6 rounded-full border-2 transition-all aspect-square min-w-[160px] justify-center
             ${showDetails ? 'border-primary-blue bg-primary-blue text-white shadow-2xl shadow-primary-blue/30' : 'bg-white border-slate-100 shadow-sm'}
           `}
           onClick={() => setShowDetails(true)}
         >
-          <div className={`size-16 rounded-[1.5rem] flex items-center justify-center mb-3 ${showDetails ? 'bg-white/20' : 'bg-slate-50 text-slate-400'}`}>
+          <div className={`size-16 rounded-full flex items-center justify-center mb-3 ${showDetails ? 'bg-white/20' : 'bg-slate-50 text-slate-400'}`}>
             <User size={32} />
           </div>
           <span className={`text-[10px] font-black uppercase tracking-widest leading-none mb-1 ${showDetails ? 'text-white/70' : 'text-slate-400'}`}>
-            ID: {member.id}
+            Cód: {member.referralCode || member.id.substring(0, 6)}
           </span>
-          <span className="text-sm font-black italic uppercase tracking-tighter truncate w-32 text-center">
+          <span className="text-xs font-black italic uppercase tracking-tighter truncate w-24 text-center">
             {member.name}
           </span>
           
@@ -131,7 +131,14 @@ const TreeNode = ({ member }: TreeNodeProps) => {
                    </div>
 
                    <div className="flex gap-4 pt-4">
-                      <button className="flex-1 bg-midnight text-white py-5 rounded-2xl font-black text-sm uppercase tracking-widest hover:scale-[1.02] shadow-xl shadow-midnight/20 transition-all">
+                      <button 
+                        onClick={() => {
+                          if (member.whatsapp) {
+                            window.open(`https://wa.me/55${member.whatsapp.replace(/\D/g, '')}`, '_blank');
+                          }
+                        }}
+                        className="flex-1 bg-midnight text-white py-5 rounded-2xl font-black text-sm uppercase tracking-widest hover:scale-[1.02] shadow-xl shadow-midnight/20 transition-all flex items-center justify-center gap-2"
+                      >
                         Enviar Mensagem
                       </button>
                       <button className="flex-1 bg-slate-50 text-slate-400 py-5 rounded-2xl font-black text-sm uppercase tracking-widest hover:bg-slate-100 transition-all">

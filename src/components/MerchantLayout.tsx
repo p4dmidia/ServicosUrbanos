@@ -51,7 +51,68 @@ export default function MerchantLayout({ children, title, subtitle }: MerchantLa
 
   return (
     <div className="min-h-screen bg-[#f8fafc] flex font-sans">
-      {/* ... (aside remains the same) */}
+      {/* Sidebar Desktop */}
+      <aside className="hidden lg:flex w-72 bg-midnight border-r border-white/5 flex-col sticky top-0 h-screen z-40">
+        <div className="p-8 border-b border-white/5">
+          <Link to="/lojista/dashboard" className="flex items-center gap-3 text-white mb-2">
+            <div className="size-10 bg-primary-blue rounded-xl flex items-center justify-center shadow-lg shadow-primary-blue/20">
+              <LayoutGrid size={22} />
+            </div>
+            <div>
+              <span className="text-xl font-black tracking-tighter uppercase italic leading-none block">URBA<span className="text-primary-blue">SHOP</span></span>
+              <span className="text-[9px] font-black text-primary-blue uppercase tracking-[0.2em] opacity-80">Lojista</span>
+            </div>
+          </Link>
+        </div>
+
+        <nav className="flex-1 p-6 space-y-2 overflow-y-auto custom-scrollbar">
+          <p className="px-6 mb-4 text-[10px] font-black text-slate-500 uppercase tracking-widest">Menu Principal</p>
+          {menuItems.map((item: any) => (
+            <Link
+              key={item.name}
+              to={item.path}
+              className={`flex items-center gap-4 px-6 py-4 rounded-2xl text-xs font-black uppercase tracking-widest transition-all ${
+                isActive(item.path) 
+                  ? 'bg-primary-blue text-white shadow-lg shadow-primary-blue/20' 
+                  : 'text-slate-500 hover:text-white hover:bg-white/5'
+              }`}
+            >
+              <item.icon size={18} />
+              {item.name}
+            </Link>
+          ))}
+        </nav>
+
+        <div className="p-6 border-t border-white/5 space-y-4">
+          {canSeeSettings && (
+            <Link 
+              to="/lojista/configuracoes"
+              className={`w-full flex items-center gap-4 px-6 py-4 rounded-2xl text-xs font-black uppercase tracking-widest transition-all ${
+                isActive('/lojista/configuracoes')
+                  ? 'bg-primary-blue text-white shadow-lg shadow-primary-blue/20'
+                  : 'text-slate-500 hover:text-white hover:bg-white/5'
+              }`}
+            >
+              <Settings size={18} />
+              Configurações
+            </Link>
+          )}
+          <button 
+            onClick={async () => {
+              try {
+                await signOut();
+                navigate('/lojista/login', { replace: true });
+              } catch (error) {
+                window.location.href = '/lojista/login';
+              }
+            }}
+            className="w-full flex items-center gap-4 px-6 py-4 rounded-2xl text-xs font-black uppercase tracking-widest text-red-400 hover:bg-red-500/10 transition-all border border-red-500/10"
+          >
+            <LogOut size={18} />
+            Sair
+          </button>
+        </div>
+      </aside>
 
       {/* Main Content */}
       <div className="flex-1 flex flex-col min-w-0">

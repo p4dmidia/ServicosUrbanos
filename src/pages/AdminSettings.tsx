@@ -40,6 +40,21 @@ export default function AdminSettings() {
   // Plataforma State
   const [marketplaceCommission, setMarketplaceCommission] = useState(12);
 
+  // Automação de Níveis baseada na Regra Geral (Total / Profundidade)
+  React.useEffect(() => {
+    const totalRepasse = (Number(cashbackMensal) || 0) + (Number(cashbackDigital) || 0) + (Number(cashbackAnual) || 0);
+    const perLevel = Number((totalRepasse / (mmnDepth || 1)).toFixed(6));
+    
+    setMmnLevels(prev => {
+      const baseLevels = prev.length > 0 ? [...prev] : Array.from({ length: 10 }, (_, i) => ({ level: i + 1, value: 0 }));
+      
+      return baseLevels.map(lvl => ({
+        ...lvl,
+        value: lvl.level <= mmnDepth ? perLevel : 0
+      }));
+    });
+  }, [cashbackMensal, cashbackDigital, cashbackAnual, mmnDepth]);
+
   // Carregar dados iniciais
   React.useEffect(() => {
     const loadConfig = async () => {

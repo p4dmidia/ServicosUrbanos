@@ -188,15 +188,14 @@ export default function Checkout() {
   const subtotal = cartItems.reduce((acc, item) => acc + (item.price * item.quantity), 0);
   const total = subtotal; // Sem frete
 
-  // MMN Calculations for the whole order
-  const totalCashbackAmount = cartItems.reduce((acc, item) => {
-    return acc + (item.price * (item.cashback / 100) * item.quantity);
-  }, 0);
+  // MMN Calculations for the whole order - Using the sum of Admin Rules (2.75% + 1% + 0.75% = 4.5%)
+  const adminCashbackRate = (mmnConfig?.cashbackMensal || 2.75) + (mmnConfig?.cashbackDigital || 1.0) + (mmnConfig?.cashbackAnual || 0.75);
+  const totalCashbackAmount = total * (adminCashbackRate / 100);
 
-  const totalRatios = (mmnConfig?.cashbackMensal || 2.75) + (mmnConfig?.cashbackDigital || 1.0) + (mmnConfig?.cashbackAnual || 0.75);
-  const totalMensal = totalCashbackAmount * ((mmnConfig?.cashbackMensal || 2.75) / totalRatios);
-  const totalDigital = totalCashbackAmount * ((mmnConfig?.cashbackDigital || 1.0) / totalRatios);
-  const totalAnual = totalCashbackAmount * ((mmnConfig?.cashbackAnual || 0.75) / totalRatios);
+  const totalRatios = adminCashbackRate;
+  const totalMensal = total * ((mmnConfig?.cashbackMensal || 2.75) / 100);
+  const totalDigital = total * ((mmnConfig?.cashbackDigital || 1.0) / 100);
+  const totalAnual = total * ((mmnConfig?.cashbackAnual || 0.75) / 100);
 
   useEffect(() => {
     setShippingCost(0);
@@ -245,7 +244,7 @@ export default function Checkout() {
             status: 'Aguardando Pagamento',
             items: cartItems,
             branch_id: cartItems[0].branchId || cartItems[0].merchant_id || null, 
-            cashback_amount: cartItems.reduce((acc, item) => acc + (item.cashback || 0) * item.quantity, 0),
+            cashback_amount: totalCashbackAmount,
             shipping_address: shippingMethod === 'pickup' ? 'Retirada na Loja' : `${address.logradouro}, ${address.numero} - ${address.cidade}/${address.estado}`,
             payment_method: 'Carteira Digital'
           }])
@@ -303,7 +302,7 @@ export default function Checkout() {
           status: 'Aguardando Pagamento',
           items: cartItems,
           branch_id: cartItems[0].branchId || cartItems[0].merchant_id || null, 
-          cashback_amount: cartItems.reduce((acc, item) => acc + (item.cashback || 0) * item.quantity, 0),
+          cashback_amount: totalCashbackAmount,
           shipping_address: `RETIRADA NA LOJA: ${pickupAddress}`,
           payment_method: paymentMethod === 'wallet' ? 'Carteira Digital' : 'Mercado Pago'
         }]);

@@ -828,18 +828,21 @@ export const businessRules = {
       const consumptionCount = oResult.data?.length || 0;
 
       // Cálculo Real baseado no PRD (Divisão Tripla)
-      // Buscamos por palavras-chave na descrição ou tipo
+      // Buscamos por palavras-chave na descrição ou tipo de forma mais flexível
       const monthlyBonus = transactions
-        .filter(t => t.description?.includes('(Mensal)') && t.status === 'completed')
-        .reduce((acc, t) => acc + Number(t.amount), 0);
+        .filter(t => (t.description?.includes('(Mensal)') || t.description?.includes('Mensal')) && 
+                (t.status === 'completed' || t.status === 'pago'))
+        .reduce((acc, t) => acc + Number(t.amount || 0), 0);
 
       const annualBonus = transactions
-        .filter(t => t.description?.includes('(Anual)') && t.status === 'completed')
-        .reduce((acc, t) => acc + Number(t.amount), 0);
+        .filter(t => (t.description?.includes('(Anual)') || t.description?.includes('Anual')) && 
+                (t.status === 'completed' || t.status === 'pago'))
+        .reduce((acc, t) => acc + Number(t.amount || 0), 0);
 
       const walletBonus = transactions
-        .filter(t => (t.description?.includes('(CD)') || t.description?.includes('(Carteira Digital)')) && t.status === 'completed')
-        .reduce((acc, t) => acc + Number(t.amount), 0);
+        .filter(t => (t.description?.includes('(CD)') || t.description?.includes('Digital')) && 
+                (t.status === 'completed' || t.status === 'pago'))
+        .reduce((acc, t) => acc + Number(t.amount || 0), 0);
 
       const totalEarnings = monthlyBonus + annualBonus + walletBonus;
       

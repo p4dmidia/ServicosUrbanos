@@ -884,10 +884,10 @@ export default function ProductDetail() {
               {/* Trust Badges */}
               <div className="grid grid-cols-2 gap-4">
                 <div className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl border border-slate-100">
-                  <Truck className="text-midnight" size={20} />
+                  <Store className="text-midnight" size={20} />
                   <div>
-                    <p className="text-[10px] font-black uppercase text-midnight">Frete Grátis</p>
-                    <p className="text-[9px] font-bold text-slate-400">Em compras acima de R$ 250</p>
+                    <p className="text-[10px] font-black uppercase text-midnight">Retirada Grátis!</p>
+                    <p className="text-[9px] font-bold text-slate-400">Compre pelo site -> retire na loja Grátis</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl border border-slate-100">

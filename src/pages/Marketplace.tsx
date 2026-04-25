@@ -769,7 +769,7 @@ export default function Marketplace() {
                   Exclusivo UrbaShop
                 </span>
                 <span className="bg-emerald-500 text-white text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full shadow-lg shadow-emerald-500/20">
-                  Entrega Grátis
+                  Retirada Grátis
                 </span>
               </div>
               <h2 className="text-3xl lg:text-5xl font-black text-white leading-tight mb-6 tracking-tighter italic">

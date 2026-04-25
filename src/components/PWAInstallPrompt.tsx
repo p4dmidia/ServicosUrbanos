@@ -82,7 +82,7 @@ export default function PWAInstallPrompt() {
             <div className="flex-1 pr-6">
               <h3 className="text-white font-black text-lg leading-tight mb-1">Instalar App</h3>
               <p className="text-slate-400 text-sm leading-relaxed">
-                Acesse o <span className="text-white font-bold">Serviços Urbanos</span> direto da sua tela inicial para uma experiência mais rápida.
+                Acesse o <span className="text-white font-bold">Serv Urbano!</span> direto da sua tela inicial para uma experiência mais rápida.
               </p>
             </div>
           </div>

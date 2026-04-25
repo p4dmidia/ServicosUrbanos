@@ -34,131 +34,140 @@ import AffiliateWallet from './pages/AffiliateWallet';
 import AffiliateEcosystem from './pages/AffiliateEcosystem';
 import AffiliateProfile from './pages/AffiliateProfile';
 import AffiliateOrders from './pages/AffiliateOrders';
+import ForgotPassword from './pages/ForgotPassword';
+import ResetPassword from './pages/ResetPassword';
 
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { ReferralTracker } from './components/ReferralTracker';
 
+import { NotificationProvider } from './contexts/NotificationContext';
+
 export default function App() {
   return (
     <AuthProvider>
-      <Toaster position="top-right" reverseOrder={false} />
-      <BrowserRouter>
-        <ReferralTracker />
-        <Routes>
-          <Route path="/" element={<Home />} />
-          <Route path="/invite/:referrerId" element={<ReferralTracker />} />
-          <Route path="/ganhe-dinheiro" element={<GanheDinheiro />} />
-          <Route path="/cadastro" element={<Cadastro />} />
-          <Route path="/login" element={<Login />} />
-          <Route path="/marketplace" element={<Marketplace />} />
-          <Route path="/ecossistema" element={<Ecossistema />} />
-          <Route path="/loja" element={<Loja />} />
-          <Route path="/produto/:id" element={<ProductDetail />} />
-          <Route path="/checkout" element={<Checkout />} />
-          <Route path="/lojista/login" element={<MerchantLogin />} />
-          
-          {/* Admin Routes */}
-          <Route path="/admin" element={<AdminLogin />} />
-          <Route path="/admin/login" element={<AdminLogin />} />
-          <Route 
-            path="/admin/dashboard" 
-            element={<ProtectedRoute allowedRoles={['admin']}><AdminDashboard /></ProtectedRoute>} 
-          />
+      <NotificationProvider>
+        <Toaster position="top-right" reverseOrder={false} />
+        <BrowserRouter>
+          <ReferralTracker />
+          <Routes>
+            <Route path="/" element={<Home />} />
+            <Route path="/invite/:referrerId" element={<ReferralTracker />} />
+            <Route path="/ganhe-dinheiro" element={<GanheDinheiro />} />
+            <Route path="/cadastro" element={<Cadastro />} />
+            <Route path="/login" element={<Login />} />
+            <Route path="/esqueci-senha" element={<ForgotPassword />} />
+            <Route path="/redefinir-senha" element={<ResetPassword />} />
+            <Route path="/marketplace" element={<Marketplace />} />
+            <Route path="/ecossistema" element={<Ecossistema />} />
+            <Route path="/loja" element={<Loja />} />
+            <Route path="/produto/:id" element={<ProductDetail />} />
+            <Route path="/checkout" element={<Checkout />} />
+            <Route path="/lojista/login" element={<MerchantLogin />} />
+            
+            {/* Admin Routes */}
+            <Route path="/admin" element={<AdminLogin />} />
+            <Route path="/admin/login" element={<AdminLogin />} />
+            <Route 
+              path="/admin/dashboard" 
+              element={<ProtectedRoute allowedRoles={['admin']}><AdminDashboard /></ProtectedRoute>} 
+            />
 
-          <Route 
-            path="/admin/plataformas" 
-            element={<ProtectedRoute allowedRoles={['admin']}><AdminPlatforms /></ProtectedRoute>} 
-          />
-          <Route 
-            path="/admin/usuarios" 
-            element={<ProtectedRoute allowedRoles={['admin']}><AdminUsers /></ProtectedRoute>} 
-          />
-          <Route 
-            path="/admin/marketplace" 
-            element={<ProtectedRoute allowedRoles={['admin']}><AdminMarketplace /></ProtectedRoute>} 
-          />
-          <Route 
-            path="/admin/lista-espera" 
-            element={<ProtectedRoute allowedRoles={['admin']}><AdminWaitlist /></ProtectedRoute>} 
-          />
-          <Route 
-            path="/admin/configuracoes" 
-            element={<ProtectedRoute allowedRoles={['admin']}><AdminSettings /></ProtectedRoute>} 
-          />
-          <Route 
-            path="/admin/relatorios" 
-            element={<ProtectedRoute allowedRoles={['admin']}><AdminReports /></ProtectedRoute>} 
-          />
-          <Route 
-            path="/admin/saques" 
-            element={<ProtectedRoute allowedRoles={['admin']}><AdminWithdrawals /></ProtectedRoute>} 
-          />
-          <Route 
-            path="/admin/categorias" 
-            element={<ProtectedRoute allowedRoles={['admin']}><AdminCategories /></ProtectedRoute>} 
-          />
+            <Route 
+              path="/admin/plataformas" 
+              element={<ProtectedRoute allowedRoles={['admin']}><AdminPlatforms /></ProtectedRoute>} 
+            />
+            <Route 
+              path="/admin/usuarios" 
+              element={<ProtectedRoute allowedRoles={['admin']}><AdminUsers /></ProtectedRoute>} 
+            />
+            <Route 
+              path="/admin/marketplace" 
+              element={<ProtectedRoute allowedRoles={['admin']}><AdminMarketplace /></ProtectedRoute>} 
+            />
+            <Route 
+              path="/admin/lista-espera" 
+              element={<ProtectedRoute allowedRoles={['admin']}><AdminWaitlist /></ProtectedRoute>} 
+            />
+            <Route 
+              path="/admin/configuracoes" 
+              element={<ProtectedRoute allowedRoles={['admin']}><AdminSettings /></ProtectedRoute>} 
+            />
+            <Route 
+              path="/admin/relatorios" 
+              element={<ProtectedRoute allowedRoles={['admin']}><AdminReports /></ProtectedRoute>} 
+            />
+            <Route 
+              path="/admin/saques" 
+              element={<ProtectedRoute allowedRoles={['admin']}><AdminWithdrawals /></ProtectedRoute>} 
+            />
+            <Route 
+              path="/admin/categorias" 
+              element={<ProtectedRoute allowedRoles={['admin']}><AdminCategories /></ProtectedRoute>} 
+            />
 
-          {/* Affiliate / Virtual Office Routes */}
-          <Route 
-            path="/afiliado" 
-            element={<ProtectedRoute allowedRoles={['affiliate', 'owner', 'manager', 'admin']}><AffiliateDashboard /></ProtectedRoute>} 
-          />
-          <Route 
-            path="/afiliado/dashboard" 
-            element={<ProtectedRoute allowedRoles={['affiliate', 'owner', 'manager', 'admin']}><AffiliateDashboard /></ProtectedRoute>} 
-          />
-          <Route 
-            path="/afiliado/rede" 
-            element={<ProtectedRoute allowedRoles={['affiliate', 'owner', 'manager', 'admin']}><AffiliateNetwork /></ProtectedRoute>} 
-          />
-          <Route 
-            path="/afiliado/financeiro" 
-            element={<ProtectedRoute allowedRoles={['affiliate', 'owner', 'manager', 'admin']}><AffiliateWallet /></ProtectedRoute>} 
-          />
-          <Route 
-            path="/afiliado/ecossistema" 
-            element={<ProtectedRoute allowedRoles={['affiliate', 'owner', 'manager', 'admin']}><AffiliateEcosystem /></ProtectedRoute>} 
-          />
-          <Route 
-            path="/afiliado/perfil" 
-            element={<ProtectedRoute allowedRoles={['affiliate', 'owner', 'manager', 'admin']}><AffiliateProfile /></ProtectedRoute>} 
-          />
-          <Route 
-            path="/afiliado/pedidos" 
-            element={<ProtectedRoute allowedRoles={['affiliate', 'owner', 'manager', 'admin']}><AffiliateOrders /></ProtectedRoute>} 
-          />
+            {/* Affiliate / Virtual Office Routes */}
+            <Route 
+              path="/afiliado" 
+              element={<ProtectedRoute allowedRoles={['affiliate', 'owner', 'manager', 'admin']}><AffiliateDashboard /></ProtectedRoute>} 
+            />
+            <Route 
+              path="/afiliado/dashboard" 
+              element={<ProtectedRoute allowedRoles={['affiliate', 'owner', 'manager', 'admin']}><AffiliateDashboard /></ProtectedRoute>} 
+            />
+            <Route 
+              path="/afiliado/rede" 
+              element={<ProtectedRoute allowedRoles={['affiliate', 'owner', 'manager', 'admin']}><AffiliateNetwork /></ProtectedRoute>} 
+            />
+            <Route 
+              path="/afiliado/financeiro" 
+              element={<ProtectedRoute allowedRoles={['affiliate', 'owner', 'manager', 'admin']}><AffiliateWallet /></ProtectedRoute>} 
+            />
+            <Route 
+              path="/afiliado/ecossistema" 
+              element={<ProtectedRoute allowedRoles={['affiliate', 'owner', 'manager', 'admin']}><AffiliateEcosystem /></ProtectedRoute>} 
+            />
+            <Route 
+              path="/afiliado/perfil" 
+              element={<ProtectedRoute allowedRoles={['affiliate', 'owner', 'manager', 'admin']}><AffiliateProfile /></ProtectedRoute>} 
+            />
+            <Route 
+              path="/afiliado/pedidos" 
+              element={<ProtectedRoute allowedRoles={['affiliate', 'owner', 'manager', 'admin']}><AffiliateOrders /></ProtectedRoute>} 
+            />
 
-          {/* Merchant Routes */}
-          <Route 
-            path="/lojista/dashboard" 
-            element={<ProtectedRoute allowedRoles={['manager', 'owner', 'affiliate']}><MerchantDashboard /></ProtectedRoute>} 
-          />
-          <Route 
-            path="/lojista/produtos" 
-            element={<ProtectedRoute allowedRoles={['manager', 'owner', 'affiliate']}><MerchantProducts /></ProtectedRoute>} 
-          />
-          <Route 
-            path="/lojista/pedidos" 
-            element={<ProtectedRoute allowedRoles={['manager', 'owner', 'affiliate']}><MerchantOrders /></ProtectedRoute>} 
-          />
-          <Route 
-            path="/lojista/financeiro" 
-            element={<ProtectedRoute allowedRoles={['manager', 'owner', 'affiliate']}><MerchantFinancials /></ProtectedRoute>} 
-          />
-          <Route 
-            path="/lojista/clientes" 
-            element={<ProtectedRoute allowedRoles={['manager', 'owner', 'affiliate']}><MerchantCustomers /></ProtectedRoute>} 
-          />
-          <Route 
-            path="/lojista/relatorios" 
-            element={<ProtectedRoute allowedRoles={['manager', 'owner', 'affiliate']}><MerchantReports /></ProtectedRoute>} 
-          />
-          <Route 
-            path="/lojista/configuracoes" 
-            element={<ProtectedRoute allowedRoles={['manager', 'owner', 'affiliate']}><MerchantSettings /></ProtectedRoute>} 
-          />
-        </Routes>
-      </BrowserRouter>
+            {/* Merchant Routes */}
+            <Route 
+              path="/lojista/dashboard" 
+              element={<ProtectedRoute allowedRoles={['manager', 'owner', 'affiliate']}><MerchantDashboard /></ProtectedRoute>} 
+            />
+            <Route 
+              path="/lojista/produtos" 
+              element={<ProtectedRoute allowedRoles={['manager', 'owner', 'affiliate']}><MerchantProducts /></ProtectedRoute>} 
+            />
+            <Route 
+              path="/lojista/pedidos" 
+              element={<ProtectedRoute allowedRoles={['manager', 'owner', 'affiliate']}><MerchantOrders /></ProtectedRoute>} 
+            />
+            <Route 
+              path="/lojista/financeiro" 
+              element={<ProtectedRoute allowedRoles={['manager', 'owner', 'affiliate']}><MerchantFinancials /></ProtectedRoute>} 
+            />
+            <Route 
+              path="/lojista/clientes" 
+              element={<ProtectedRoute allowedRoles={['manager', 'owner', 'affiliate']}><MerchantCustomers /></ProtectedRoute>} 
+            />
+            <Route 
+              path="/lojista/relatorios" 
+              element={<ProtectedRoute allowedRoles={['manager', 'owner', 'affiliate']}><MerchantReports /></ProtectedRoute>} 
+            />
+            <Route 
+              path="/lojista/configuracoes" 
+              element={<ProtectedRoute allowedRoles={['manager', 'owner', 'affiliate']}><MerchantSettings /></ProtectedRoute>} 
+            />
+          </Routes>
+        </BrowserRouter>
+      </NotificationProvider>
     </AuthProvider>
   );
 }
+

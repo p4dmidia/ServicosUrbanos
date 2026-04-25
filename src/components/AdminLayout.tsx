@@ -22,12 +22,16 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { useAuth } from '../contexts/AuthContext';
 import { businessRules } from '../lib/businessRules';
+import { useNotifications } from '../contexts/NotificationContext';
+import { formatDistanceToNow } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 
 interface AdminLayoutProps {
   children: React.ReactNode;
   title: string;
   subtitle: string;
 }
+
 
 export default function AdminLayout({ children, title, subtitle }: AdminLayoutProps) {
   const location = useLocation();
@@ -36,9 +40,9 @@ export default function AdminLayout({ children, title, subtitle }: AdminLayoutPr
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
-  const [notifications, setNotifications] = useState<any[]>([]);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const { user, profile, loading } = useAuth();
+  const { notifications, unreadCount, markAsRead, markAllAsRead } = useNotifications();
   const searchRef = React.useRef<HTMLDivElement>(null);
   const notificationRef = React.useRef<HTMLDivElement>(null);
 
@@ -66,20 +70,6 @@ export default function AdminLayout({ children, title, subtitle }: AdminLayoutPr
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
-
-  useEffect(() => {
-    const fetchNotifications = async () => {
-      try {
-        const logs = await businessRules.getAdminSystemLogs(5);
-        setNotifications(logs);
-      } catch (error) {
-        console.error('Erro ao buscar notificações:', error);
-      }
-    };
-    fetchNotifications();
-    const interval = setInterval(fetchNotifications, 60000); // 1 min sync
-    return () => clearInterval(interval);
   }, []);
 
   const handleSearch = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -238,11 +228,10 @@ export default function AdminLayout({ children, title, subtitle }: AdminLayoutPr
                 className="relative size-10 bg-white/5 border border-white/5 rounded-xl flex items-center justify-center text-white hover:bg-white/10 transition-colors"
               >
                 <Bell size={18} />
-                {notifications.some(n => n.type === 'Warning' || n.type === 'Error') && (
-                  <span className="absolute top-[-2px] right-[-2px] size-3 bg-red-500 border-2 border-[#0a0e17] rounded-full animate-pulse"></span>
-                )}
-                {!notifications.some(n => n.type === 'Warning' || n.type === 'Error') && notifications.length > 0 && (
-                  <span className="absolute top-[-2px] right-[-2px] size-3 bg-indigo-500 border-2 border-[#0a0e17] rounded-full"></span>
+                {unreadCount > 0 && (
+                  <span className="absolute top-[-2px] right-[-2px] size-5 bg-indigo-500 border-2 border-[#0a0e17] rounded-full text-[10px] text-white font-black flex items-center justify-center animate-pulse">
+                    {unreadCount}
+                  </span>
                 )}
               </button>
 
@@ -252,43 +241,66 @@ export default function AdminLayout({ children, title, subtitle }: AdminLayoutPr
                     initial={{ opacity: 0, scale: 0.95, y: 10 }}
                     animate={{ opacity: 1, scale: 1, y: 0 }}
                     exit={{ opacity: 0, scale: 0.95, y: 10 }}
-                    className="absolute top-full right-0 w-80 mt-2 bg-[#0a0e17] border border-white/5 rounded-[2rem] shadow-2xl overflow-hidden z-50"
+                    className="absolute top-full right-0 w-80 sm:w-96 mt-2 bg-[#0a0e17] border border-white/5 rounded-[2rem] shadow-2xl overflow-hidden z-50"
                   >
-                    <div className="p-6 border-b border-white/5">
+                    <div className="p-6 border-b border-white/5 flex items-center justify-between">
                       <p className="text-xs font-black text-white uppercase tracking-tighter italic">Notificações</p>
+                      {unreadCount > 0 && (
+                        <button 
+                          onClick={() => markAllAsRead()}
+                          className="text-[10px] font-black text-indigo-400 uppercase hover:underline"
+                        >
+                          Ler tudo
+                        </button>
+                      )}
                     </div>
                     <div className="max-h-96 overflow-y-auto custom-scrollbar">
                       {notifications.length > 0 ? (
-                        notifications.map((n, i) => (
-                          <div key={i} className="p-4 border-b border-white/5 last:border-0 hover:bg-white/5 transition-colors">
-                            <div className="flex gap-3">
-                              <div className={`size-1.5 mt-1.5 rounded-full shrink-0 ${n.type === 'Success' ? 'bg-emerald-500' : n.type === 'Warning' ? 'bg-amber-500' : 'bg-indigo-500'}`} />
-                              <div>
-                                <p className="text-[11px] text-white/90 font-medium leading-relaxed">{n.text}</p>
-                                <p className="text-[9px] font-black text-slate-600 uppercase tracking-widest mt-1">{n.time}</p>
+                        notifications.map((n) => (
+                          <div 
+                            key={n.id} 
+                            onClick={() => {
+                              if (!n.is_read) markAsRead(n.id);
+                            }}
+                            className={`p-4 border-b border-white/5 last:border-0 hover:bg-white/5 transition-colors cursor-pointer ${!n.is_read ? 'bg-indigo-500/5' : ''}`}
+                          >
+                            <div className="flex gap-4">
+                              <div className={`size-10 rounded-xl flex items-center justify-center shrink-0 ${
+                                n.type === 'sale' ? 'bg-emerald-500/10 text-emerald-500' :
+                                n.type === 'order' ? 'bg-indigo-500/10 text-indigo-500' :
+                                n.type === 'stock' ? 'bg-amber-500/10 text-amber-500' :
+                                'bg-slate-500/10 text-slate-500'
+                              }`}>
+                                {n.type === 'sale' ? <DollarSign size={18} /> :
+                                 n.type === 'order' ? <ShoppingBag size={18} /> :
+                                 n.type === 'stock' ? <Package size={18} /> :
+                                 <Bell size={18} />}
                               </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-xs font-bold text-white truncate">{n.title}</p>
+                                <p className="text-[11px] text-slate-400 line-clamp-2 mt-0.5">{n.message}</p>
+                                <p className="text-[9px] font-black text-slate-600 uppercase tracking-widest mt-2">
+                                  {formatDistanceToNow(new Date(n.created_at), { addSuffix: true, locale: ptBR })}
+                                </p>
+                              </div>
+                              {!n.is_read && (
+                                <div className="size-1.5 bg-indigo-500 rounded-full self-center" />
+                              )}
                             </div>
                           </div>
                         ))
                       ) : (
-                        <div className="p-8 text-center opacity-30">
+                        <div className="p-12 text-center opacity-30">
+                          <Bell size={32} className="mx-auto mb-4" />
                           <p className="text-xs font-bold uppercase tracking-widest">Sem novas notificações</p>
                         </div>
                       )}
                     </div>
-                    <button 
-                      onClick={() => {
-                        navigate('/admin/dashboard');
-                        setIsNotificationsOpen(false);
-                      }}
-                      className="w-full py-4 text-[10px] font-black text-indigo-400 uppercase tracking-widest hover:bg-indigo-500/5 transition-colors"
-                    >
-                      Ver Tudo
-                    </button>
                   </motion.div>
                 )}
               </AnimatePresence>
             </div>
+
 
             <div className="hidden sm:block h-10 w-[1px] bg-white/5 mx-2"></div>
 

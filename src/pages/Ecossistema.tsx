@@ -11,7 +11,13 @@ import {
     TrendingUp,
     Zap,
     Globe,
-    CheckCircle2
+    CheckCircle2,
+    Instagram,
+    Twitter,
+    Linkedin,
+    LayoutGrid,
+    Smartphone,
+    Calendar
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import Header from '../components/Header';
@@ -19,7 +25,7 @@ import { Link } from 'react-router-dom';
 
 export default function Ecossistema() {
     return (
-        <div className="min-h-screen bg-[#F8FAFC] font-sans text-midnight overflow-x-hidden">
+        <div className="min-h-screen flex flex-col font-sans bg-[#F8FAFC] text-midnight">
             <Header />
 
             <main>
@@ -271,11 +277,70 @@ export default function Ecossistema() {
                 </section>
             </main>
 
-            {/* Footer minimalista */}
-            <footer className="p-12 text-center text-slate-400 border-t border-slate-100">
-                <div className="flex flex-col items-center gap-1">
-                    <p className="text-[10px] font-black uppercase tracking-widest">© 2026 Serviços Urbanos S.A. • Tecnologia a favor da sua economia.</p>
-                    <p className="opacity-50 text-[9px] lowercase font-medium tracking-normal">Desenvolvido por <a href="https://p4dmidia.com.br" target="_blank" rel="noopener noreferrer" className="hover:text-primary-blue transition-colors">P4D Mídia</a></p>
+            {/* Footer */}
+            <footer className="bg-black text-slate-500 py-16 px-6 lg:px-20 border-t border-slate-900 mt-auto">
+                <div className="max-w-7xl mx-auto">
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-12 mb-16">
+                        <div className="col-span-1 md:col-span-1 text-left">
+                            <div className="flex items-center gap-2 text-white mb-6">
+                                <div className="size-6 bg-primary-blue rounded flex items-center justify-center">
+                                    <LayoutGrid size={14} />
+                                </div>
+                                <span className="text-lg font-bold">Serviços Urbanos</span>
+                            </div>
+                            <p className="text-sm leading-relaxed mb-6">
+                                Transformando a vida nas cidades através de tecnologia e economia compartilhada.
+                            </p>
+                            <div className="flex gap-4">
+                                <a href="#" className="hover:text-accent transition-colors"><Instagram size={20} /></a>
+                                <a href="#" className="hover:text-accent transition-colors"><Twitter size={20} /></a>
+                                <a href="#" className="hover:text-accent transition-colors"><Linkedin size={20} /></a>
+                            </div>
+                        </div>
+
+                        <div className="text-left">
+                            <h4 className="text-white font-bold mb-6">Plataforma</h4>
+                            <ul className="flex flex-col gap-4 text-sm">
+                                <li><a href="#" className="hover:text-white transition-colors">Como funciona</a></li>
+                                <li><Link to="/ecossistema" className="hover:text-white transition-colors">Ecossistema</Link></li>
+                                <li><Link to="/marketplace" className="hover:text-white transition-colors">Marketplace</Link></li>
+                                <li><Link to="/cadastro" className="hover:text-white transition-colors">Seja um parceiro</Link></li>
+                            </ul>
+                        </div>
+
+                        <div className="text-left">
+                            <h4 className="text-white font-bold mb-6">Suporte</h4>
+                            <ul className="flex flex-col gap-4 text-sm">
+                                <li><a href="#" className="hover:text-white transition-colors">Central de Ajuda</a></li>
+                                <li><a href="#" className="hover:text-white transition-colors">Segurança</a></li>
+                                <li><a href="#" className="hover:text-white transition-colors">Contato</a></li>
+                                <li><a href="#" className="hover:text-white transition-colors">Ouvidoria</a></li>
+                            </ul>
+                        </div>
+
+                        <div className="text-left">
+                            <h4 className="text-white font-bold mb-6">Legal</h4>
+                            <ul className="flex flex-col gap-4 text-sm">
+                                <li><a href="#" className="hover:text-white transition-colors">Termos de Uso</a></li>
+                                <li><a href="#" className="hover:text-white transition-colors">Privacidade</a></li>
+                                <li><a href="#" className="hover:text-white transition-colors">Cookies</a></li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <div className="pt-8 border-t border-slate-900 flex flex-col md:flex-row justify-between items-center gap-4 text-[10px] uppercase tracking-widest font-bold">
+                        <div className="flex flex-col items-center md:items-start gap-1">
+                            <p>© 2026 Serviços Urbanos Tecnologia S.A. Todos os direitos reservados.</p>
+                            <p className="opacity-50 lowercase font-medium">Desenvolvido por <a href="https://p4dmidia.com.br" target="_blank" rel="noopener noreferrer" className="hover:text-primary-blue transition-colors">P4D Mídia</a></p>
+                        </div>
+                        <div className="flex gap-8">
+                            <span>Brasil</span>
+                            <span className="flex items-center gap-1">
+                                <Globe size={12} />
+                                Português
+                            </span>
+                        </div>
+                    </div>
                 </div>
             </footer>
         </div>

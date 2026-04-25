@@ -15,23 +15,29 @@ import {
   ShoppingBag
 } from 'lucide-react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence } from 'motion/react';
 import { businessRules } from '../lib/businessRules';
 import { useAuth } from '../contexts/AuthContext';
 import { toast } from 'react-hot-toast';
+import { useNotifications } from '../contexts/NotificationContext';
+import { formatDistanceToNow } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 
 interface AffiliateLayoutProps {
   children: React.ReactNode;
   title: string;
 }
 
+
 export default function AffiliateLayout({ children, title }: AffiliateLayoutProps) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [showNotifications, setShowNotifications] = useState(false);
   const [stats, setStats] = useState<any>(null);
   const location = useLocation();
   const navigate = useNavigate();
   const { user, profile, signOut } = useAuth();
+  const { notifications, unreadCount, markAsRead, markAllAsRead } = useNotifications();
 
   useEffect(() => {
     async function loadStats() {
@@ -177,15 +183,99 @@ export default function AffiliateLayout({ children, title }: AffiliateLayoutProp
             <div className="h-8 w-px bg-slate-200 hidden md:block"></div>
 
             <div className="flex items-center gap-4">
-               {/* Botão de Notificação Push Funcional */}
-               <button 
-                 onClick={handlePushNotification}
-                 title="Ativar Notificações Push"
-                 className="size-10 flex items-center justify-center text-slate-400 hover:text-primary-blue hover:bg-primary-blue/5 transition-all relative bg-slate-50 rounded-xl group"
-               >
-                 <Bell size={20} className="group-hover:animate-swing" />
-                 <span className="absolute top-2 right-2 size-2 bg-red-500 rounded-full border-2 border-white"></span>
-               </button>
+                {/* Botão de Notificação Push Funcional */}
+                <div className="relative">
+                  <button 
+                    onClick={() => setShowNotifications(!showNotifications)}
+                    className="size-10 flex items-center justify-center text-slate-400 hover:text-primary-blue hover:bg-primary-blue/5 transition-all relative bg-slate-50 rounded-xl group"
+                  >
+                    <Bell size={20} className="group-hover:animate-swing" />
+                    {unreadCount > 0 && (
+                      <span className="absolute top-[-2px] right-[-2px] size-5 bg-primary-red border-2 border-white rounded-full text-[10px] text-white font-black flex items-center justify-center animate-pulse">
+                        {unreadCount}
+                      </span>
+                    )}
+                  </button>
+
+                  <AnimatePresence>
+                    {showNotifications && (
+                      <>
+                        <div className="fixed inset-0 z-40" onClick={() => setShowNotifications(false)} />
+                        <motion.div
+                          initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                          animate={{ opacity: 1, y: 0, scale: 1 }}
+                          exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                          className="absolute right-0 mt-4 w-80 sm:w-96 bg-white rounded-2xl shadow-2xl overflow-hidden z-50 border border-slate-100 text-midnight"
+                        >
+                          <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+                            <h3 className="text-sm font-black text-midnight uppercase tracking-wider">Notificações</h3>
+                            <div className="flex gap-4">
+                              <button 
+                                onClick={() => {
+                                  handlePushNotification();
+                                  setShowNotifications(false);
+                                }}
+                                className="text-[10px] font-black text-slate-400 uppercase hover:text-primary-blue"
+                              >
+                                Ativar Push
+                              </button>
+                              {unreadCount > 0 && (
+                                <button 
+                                  onClick={() => markAllAsRead()}
+                                  className="text-[10px] font-black text-primary-blue uppercase hover:underline"
+                                >
+                                  Ler tudo
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                          <div className="max-h-[400px] overflow-y-auto">
+                            {notifications.length > 0 ? (
+                              notifications.map((notification) => (
+                                <div 
+                                  key={notification.id}
+                                  onClick={() => {
+                                    if (!notification.is_read) markAsRead(notification.id);
+                                  }}
+                                  className={`p-4 border-b border-slate-50 flex gap-4 hover:bg-slate-50 transition-colors cursor-pointer ${!notification.is_read ? 'bg-primary-blue/5' : ''}`}
+                                >
+                                  <div className={`size-10 rounded-xl flex items-center justify-center shrink-0 ${
+                                    notification.type === 'sale' ? 'bg-emerald-100 text-emerald-600' :
+                                    notification.type === 'order' ? 'bg-blue-100 text-blue-600' :
+                                    notification.type === 'stock' ? 'bg-amber-100 text-amber-600' :
+                                    'bg-slate-100 text-slate-600'
+                                  }`}>
+                                    {notification.type === 'sale' ? <TrendingUp size={20} /> :
+                                     notification.type === 'order' ? <ShoppingBag size={20} /> :
+                                     notification.type === 'stock' ? <Package size={20} /> :
+                                     <Bell size={20} />}
+                                  </div>
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-sm font-bold text-midnight truncate">{notification.title}</p>
+                                    <p className="text-xs text-slate-500 line-clamp-2 mt-0.5">{notification.message}</p>
+                                    <p className="text-[10px] text-slate-400 font-bold uppercase mt-2 tracking-widest">
+                                      {formatDistanceToNow(new Date(notification.created_at), { addSuffix: true, locale: ptBR })}
+                                    </p>
+                                  </div>
+                                  {!notification.is_read && (
+                                    <div className="size-2 bg-primary-blue rounded-full self-center" />
+                                  )}
+                                </div>
+                              ))
+                            ) : (
+                              <div className="p-12 text-center">
+                                <div className="size-16 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-4 text-slate-200">
+                                  <Bell size={32} />
+                                </div>
+                                <p className="text-sm font-bold text-slate-400">Nenhuma notificação por enquanto</p>
+                              </div>
+                            )}
+                          </div>
+                        </motion.div>
+                      </>
+                    )}
+                  </AnimatePresence>
+                </div>
                
                <div className="flex items-center gap-3 pl-2 border-l border-slate-100">
                  <div className="text-right hidden sm:block">

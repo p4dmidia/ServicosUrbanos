@@ -151,7 +151,7 @@ export default function MerchantLogin() {
             <div className="space-y-2">
               <div className="flex justify-between items-center ml-1">
                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Senha de Acesso</label>
-                <a href="#" className="text-[10px] font-black text-primary-blue hover:underline uppercase tracking-widest">Esqueci a senha</a>
+                <Link to="/esqueci-senha" className="text-[10px] font-black text-primary-blue hover:underline uppercase tracking-widest">Esqueci a senha</Link>
               </div>
                <div className="relative group">
                 <input 

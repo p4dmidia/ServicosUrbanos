@@ -107,7 +107,7 @@ export default function AdminLogin() {
             <div className="space-y-2">
               <div className="flex justify-between items-center px-1">
                 <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Senha de Segurança</label>
-                <button type="button" className="text-[9px] font-black text-indigo-400 uppercase tracking-widest hover:underline">Esqueci a senha</button>
+                <Link to="/esqueci-senha" className="text-[9px] font-black text-indigo-400 uppercase tracking-widest hover:underline">Esqueci a senha</Link>
               </div>
               <div className="relative group">
                 <input 

@@ -648,12 +648,11 @@ export const businessRules = {
     const { data, error } = await supabase
       .from('mmn_config')
       .select('*')
-      .eq('id', 1)
-      .single();
+      .limit(1)
+      .maybeSingle();
     
-    if (error) {
-      // PGRST116 means no rows found, which is expected if config isn't set yet
-      if (error.code !== 'PGRST116') {
+    if (error || !data) {
+      if (error && error.code !== 'PGRST116') {
         console.error('Error fetching MMN config:', error);
       }
       return { 

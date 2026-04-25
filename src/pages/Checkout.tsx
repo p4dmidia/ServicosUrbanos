@@ -18,6 +18,10 @@ import {
   LogOut,
   LayoutDashboard,
   User,
+  Plus,
+  Minus,
+  Trash2,
+  ShieldCheck,
   ShoppingBag,
   Package
 } from 'lucide-react';
@@ -159,14 +163,40 @@ export default function Checkout() {
     fetchMMN();
   }, [authUser]);
 
+  const updateQuantity = (id: string, delta: number) => {
+    setCartItems(prev => {
+      const newItems = prev.map(item => {
+        if (item.id === id) {
+          const newQty = Math.max(1, item.quantity + delta);
+          return { ...item, quantity: newQty };
+        }
+        return item;
+      });
+      localStorage.setItem('urbashop_cart', JSON.stringify(newItems));
+      return newItems;
+    });
+  };
+
+  const removeFromCart = (id: string) => {
+    setCartItems(prev => {
+      const newItems = prev.filter(item => item.id !== id);
+      localStorage.setItem('urbashop_cart', JSON.stringify(newItems));
+      return newItems;
+    });
+  };
+
   const subtotal = cartItems.reduce((acc, item) => acc + (item.price * item.quantity), 0);
   const total = subtotal; // Sem frete
 
   // MMN Calculations for the whole order
-  const g1TotalOrder = (subtotal * (g1Value / 100));
+  const totalCashbackAmount = cartItems.reduce((acc, item) => {
+    return acc + (item.price * (item.cashback / 100) * item.quantity);
+  }, 0);
+
   const totalRatios = (mmnConfig?.cashbackMensal || 2.75) + (mmnConfig?.cashbackDigital || 1.0) + (mmnConfig?.cashbackAnual || 0.75);
-  const totalMensal = g1TotalOrder * ((mmnConfig?.cashbackMensal || 2.75) / totalRatios);
-  const totalAnual = g1TotalOrder * ((mmnConfig?.cashbackAnual || 0.75) / totalRatios);
+  const totalMensal = totalCashbackAmount * ((mmnConfig?.cashbackMensal || 2.75) / totalRatios);
+  const totalDigital = totalCashbackAmount * ((mmnConfig?.cashbackDigital || 1.0) / totalRatios);
+  const totalAnual = totalCashbackAmount * ((mmnConfig?.cashbackAnual || 0.75) / totalRatios);
 
   useEffect(() => {
     setShippingCost(0);
@@ -391,6 +421,75 @@ export default function Checkout() {
 
           {/* User Actions */}
           <div className="flex items-center gap-6 text-white/80 shrink-0 relative">
+            {/* Notifications */}
+            <div className="relative">
+              <button 
+                onClick={() => setShowNotifications(!showNotifications)}
+                className="hover:text-primary-blue transition-colors p-1 relative"
+              >
+                <Bell size={22} />
+                {notifications.filter(n => !n.read).length > 0 && (
+                  <span className="absolute -top-0.5 -right-0.5 size-4 bg-orange-500 rounded-full border-2 border-midnight text-[8px] font-black flex items-center justify-center text-white">
+                    {notifications.filter(n => !n.read).length}
+                  </span>
+                )}
+              </button>
+
+              <AnimatePresence>
+                {showNotifications && (
+                  <>
+                    <div className="fixed inset-0 z-40" onClick={() => setShowNotifications(false)}></div>
+                    <motion.div 
+                      key="notifications-panel"
+                      initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                      className="absolute right-0 mt-4 w-80 bg-white rounded-2xl shadow-2xl overflow-hidden z-50 border border-slate-100"
+                    >
+                      <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+                        <h3 className="text-midnight font-black text-xs uppercase tracking-wider">Notificações</h3>
+                        <button onClick={markAllAsRead} className="text-[10px] font-black text-primary-blue hover:underline uppercase">Marcar lidas</button>
+                      </div>
+                      <div className="max-h-96 overflow-y-auto text-midnight">
+                        {notifications.length > 0 ? (
+                          notifications.map((n) => (
+                            <div key={n.id} className={`p-4 border-b border-slate-50 hover:bg-slate-50 transition-colors flex gap-3 ${!n.read ? 'bg-blue-50/30' : ''}`}>
+                              <div className={`shrink-0 size-10 rounded-xl flex items-center justify-center ${!n.read ? 'bg-primary-blue/10 text-primary-blue' : 'bg-slate-100 text-slate-400'}`}>
+                                <Bell size={18} />
+                              </div>
+                              <div className="flex-1">
+                                <p className="text-xs font-bold text-midnight mb-0.5">{n.title}</p>
+                                <p className="text-[11px] text-slate-500 leading-tight mb-2">{n.message}</p>
+                                <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">{n.time}</span>
+                              </div>
+                              {!n.read && <div className="size-2 bg-orange-500 rounded-full mt-1"></div>}
+                            </div>
+                          ))
+                        ) : (
+                          <div className="p-10 text-center text-slate-400">Nenhuma notificação por enquanto.</div>
+                        )}
+                      </div>
+                    </motion.div>
+                  </>
+                )}
+              </AnimatePresence>
+            </div>
+
+            {/* Cart Icon */}
+            <div className="relative">
+              <button 
+                onClick={() => setIsCartOpen(true)}
+                className="hover:text-primary-blue transition-colors p-1 relative"
+              >
+                <ShoppingCart size={22} />
+                {cartCount > 0 && (
+                  <span className="absolute -top-0.5 -right-0.5 size-4 bg-emerald-500 rounded-full border-2 border-midnight text-[8px] font-black flex items-center justify-center text-white">
+                    {cartCount}
+                  </span>
+                )}
+              </button>
+            </div>
+
             <Link to="/lojista/login" className="hidden sm:flex items-center gap-2 bg-white/10 hover:bg-white/20 px-4 py-2 rounded-xl transition-all border border-white/5">
               <span className="text-[10px] font-black uppercase tracking-widest text-white">Área do Lojista</span>
             </Link>
@@ -743,6 +842,10 @@ export default function Checkout() {
                     <span className="text-sm font-black text-emerald-600">+ R$ {totalMensal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
                   </div>
                   <div className="flex justify-between items-center">
+                    <span className="text-xs font-bold text-blue-600">Cashback Digital</span>
+                    <span className="text-sm font-black text-blue-600">+ R$ {totalDigital.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
                     <span className="text-xs font-bold text-indigo-600">Cashback Anual</span>
                     <span className="text-sm font-black text-indigo-600">+ R$ {totalAnual.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
                   </div>
@@ -812,6 +915,154 @@ export default function Checkout() {
           </div>
         </div>
       </footer>
+
+      {/* Cart Drawer Overlay */}
+      <AnimatePresence>
+        {isCartOpen && (
+          <>
+            <motion.div 
+              className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[60]"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsCartOpen(false)}
+            />
+            <motion.div 
+              className="fixed top-0 right-0 h-full w-full max-w-md bg-white z-[70] shadow-2xl flex flex-col"
+              initial={{ x: '100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '100%' }}
+              transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+            >
+              <div className="p-6 border-b border-slate-100 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="size-10 bg-midnight text-white rounded-2xl flex items-center justify-center">
+                    <ShoppingBag size={20} />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-black text-midnight uppercase tracking-tighter">Meu Carrinho</h3>
+                    <p className="text-xs text-slate-400 font-bold tracking-widest uppercase">{cartCount} items selecionados</p>
+                  </div>
+                </div>
+                <button 
+                  onClick={() => setIsCartOpen(false)}
+                  className="size-10 bg-slate-50 hover:bg-slate-100 rounded-full flex items-center justify-center text-slate-400 transition-colors"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto p-6 space-y-6">
+                {cartItems.length > 0 ? (
+                  cartItems.map(item => (
+                    <motion.div 
+                      key={item.id} 
+                      layout
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="flex gap-4 p-4 bg-slate-50 rounded-2xl border border-slate-100"
+                    >
+                      <div className="size-20 bg-white rounded-xl flex items-center justify-center relative overflow-hidden shrink-0 shadow-sm">
+                        {item.image.length > 4 ? (
+                          <img 
+                            src={item.image} 
+                            alt={item.name}
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <span className="text-3xl">{item.image}</span>
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <h4 className="text-sm font-black text-midnight mb-1 truncate">{item.name}</h4>
+                        <p className="text-xs text-slate-400 font-bold uppercase tracking-widest mb-3">{item.category}</p>
+                        
+                        <div className="flex items-center justify-between mt-auto">
+                          <p className="text-sm font-black text-midnight">R$ {item.price.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                          <div className="flex items-center bg-white border border-slate-200 rounded-xl px-2 py-1 gap-3">
+                            <button 
+                              onClick={() => updateQuantity(item.id, -1)}
+                              className="size-6 rounded-lg hover:bg-slate-50 flex items-center justify-center lg:transition-colors text-slate-400"
+                            >
+                              <Minus size={14} />
+                            </button>
+                            <span className="text-xs font-black w-4 text-center text-midnight">{item.quantity}</span>
+                            <button 
+                              onClick={() => updateQuantity(item.id, 1)}
+                              className="size-6 rounded-lg hover:bg-slate-50 flex items-center justify-center lg:transition-colors text-midnight"
+                            >
+                              <Plus size={14} />
+                            </button>
+                          </div>
+                          <button 
+                            onClick={() => removeFromCart(item.id)}
+                            className="text-slate-300 hover:text-red-500 transition-colors flex items-center justify-center"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
+                      </div>
+                    </motion.div>
+                  ))
+                ) : (
+                  <div className="h-full flex flex-col items-center justify-center text-center">
+                    <div className="size-24 bg-slate-50 rounded-full flex items-center justify-center text-slate-200 mb-6">
+                      <ShoppingBag size={48} />
+                    </div>
+                    <h4 className="text-lg font-black text-midnight mb-2">Seu carrinho está vazio</h4>
+                    <p className="text-slate-400 text-sm font-medium px-10">Explore nossa loja e encontre os melhores produtos com cashback real.</p>
+                    <button 
+                      onClick={() => setIsCartOpen(false)}
+                      className="mt-8 text-primary-blue font-black text-xs uppercase tracking-widest hover:underline"
+                    >
+                      Começar a comprar
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {cartItems.length > 0 && (
+                <div className="p-6 border-t border-slate-100 bg-slate-50">
+                  <div className="space-y-3 mb-6">
+                    <div className="flex justify-between items-center text-slate-500 font-medium">
+                      <span className="text-sm tracking-tight">Subtotal</span>
+                      <span className="text-sm font-bold text-midnight">R$ {subtotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                    </div>
+                    <div className="bg-emerald-50 rounded-2xl p-4 border border-emerald-100 space-y-2">
+                      <div className="flex items-center gap-2 mb-1">
+                        <TrendingUp size={14} className="text-emerald-600" />
+                        <span className="text-[10px] font-black text-emerald-600 uppercase tracking-widest">Seu Retorno:</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-[10px] font-bold text-emerald-600">Mensal</span>
+                        <span className="text-xs font-black text-emerald-600">+ R$ {totalMensal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-[10px] font-bold text-blue-600">Digital</span>
+                        <span className="text-xs font-black text-blue-600">+ R$ {totalDigital.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-[10px] font-bold text-indigo-600">Anual</span>
+                        <span className="text-xs font-black text-indigo-600">+ R$ {totalAnual.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                      </div>
+                    </div>
+                    <div className="flex justify-between items-center pt-3 mt-3 border-t border-slate-200">
+                      <span className="text-lg font-black text-midnight tracking-tighter uppercase">Total</span>
+                      <span className="text-2xl font-black text-midnight tracking-tighter">R$ {subtotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                    </div>
+                  </div>
+                  <button onClick={() => setIsCartOpen(false)} className="w-full bg-midnight hover:bg-slate-800 text-white py-5 rounded-2xl font-black text-lg transition-all shadow-xl shadow-midnight/20 active:scale-[0.98] uppercase tracking-tighter">
+                    Continuar Comprando
+                  </button>
+                  <p className="text-center text-[10px] text-slate-400 font-bold uppercase mt-4 tracking-widest flex items-center justify-center gap-2">
+                    <ShieldCheck size={12} /> Compra 100% segura e garantida
+                  </p>
+                </div>
+              )}
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

@@ -23,7 +23,9 @@ import {
   Menu,
   LogOut,
   LayoutDashboard,
-  Store
+  Store,
+  Smartphone,
+  Calendar
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Link, useNavigate } from 'react-router-dom';
@@ -35,13 +37,12 @@ interface Product {
   id: string;
   name: string;
   price: number;
-  installments?: string;
   image: string;
   rating: number;
+  reviews_count?: number;
   sales: number;
   category: string;
   cashback: number;
-  main_image?: string;
   stock: number;
 }
 
@@ -113,11 +114,11 @@ export default function Marketplace() {
             price, 
             image, 
             main_image,
-            category,
-            sales,
             cashback,
             category_id,
-            stock
+            stock,
+            sales,
+            product_reviews(rating)
           `)
           .eq('status', 'Ativo');
 
@@ -135,11 +136,13 @@ export default function Marketplace() {
             name: p.name || 'Produto sem nome',
             price: price,
             image: p.main_image || p.image || '📦',
-            rating: 4.5 + (Math.random() * 0.5),
-            sales: p.sales || 0,
+            rating: p.product_reviews?.length > 0 
+              ? p.product_reviews.reduce((acc: number, rev: any) => acc + (rev.rating || 0), 0) / p.product_reviews.length 
+              : 5.0,
+            reviews_count: p.product_reviews?.length || 0,
+            sales: Number(p.sales) || 0,
             category: categoryName,
             cashback: Number(p.cashback) || 5,
-            installments: `12x R$ ${(price / 12).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} sem juros`,
             stock: Number(p.stock) || 0
           };
         });
@@ -236,6 +239,11 @@ export default function Marketplace() {
   const totalCashback = cartItems.reduce((acc, item) => {
     return acc + (item.price * (item.cashback / 100) * item.quantity);
   }, 0);
+
+  const totalRatios = (mmnConfig?.cashbackMensal || 2.75) + (mmnConfig?.cashbackDigital || 1.0) + (mmnConfig?.cashbackAnual || 0.75);
+  const totalMensal = totalCashback * ((mmnConfig?.cashbackMensal || 2.75) / totalRatios);
+  const totalDigital = totalCashback * ((mmnConfig?.cashbackDigital || 1.0) / totalRatios);
+  const totalAnual = totalCashback * ((mmnConfig?.cashbackAnual || 0.75) / totalRatios);
 
   const markAllAsRead = () => {
     setNotifications(notifications.map(n => ({ ...n, read: true })));
@@ -668,12 +676,23 @@ export default function Marketplace() {
                       <span className="text-sm tracking-tight">Subtotal</span>
                       <span className="text-sm font-bold text-midnight">R$ {subtotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
                     </div>
-                    <div className="flex justify-between items-center bg-emerald-500/10 p-3 rounded-xl border border-emerald-500/20">
-                      <div className="flex items-center gap-2">
-                        <TrendingUp size={16} className="text-emerald-600" />
-                        <span className="text-xs font-black text-emerald-600 uppercase tracking-widest">Cashback Acumulado</span>
+                    <div className="bg-emerald-50 rounded-2xl p-4 border border-emerald-100 space-y-2">
+                      <div className="flex items-center gap-2 mb-1">
+                        <TrendingUp size={14} className="text-emerald-600" />
+                        <span className="text-[10px] font-black text-emerald-600 uppercase tracking-widest">Seu Retorno:</span>
                       </div>
-                      <span className="text-sm font-black text-emerald-600">+ R$ {totalCashback.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                      <div className="flex justify-between items-center">
+                        <span className="text-[10px] font-bold text-emerald-600">Mensal</span>
+                        <span className="text-xs font-black text-emerald-600">+ R$ {totalMensal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-[10px] font-bold text-blue-600">Digital</span>
+                        <span className="text-xs font-black text-blue-600">+ R$ {totalDigital.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-[10px] font-bold text-indigo-600">Anual</span>
+                        <span className="text-xs font-black text-indigo-600">+ R$ {totalAnual.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                      </div>
                     </div>
                     <div className="flex justify-between items-center pt-3 mt-3 border-t border-slate-200">
                       <span className="text-lg font-black text-midnight tracking-tighter uppercase">Total</span>
@@ -879,21 +898,32 @@ export default function Marketplace() {
                   
                   <div className="flex-1 flex flex-col">
                     <div className="flex items-center justify-between mb-3">
-                      <div className="flex flex-wrap gap-2 mb-3">
+                      <div className="flex flex-wrap gap-1 mb-3">
                         {(() => {
-                          const g1Total = (product.price * (g1Value / 100));
-                          const totalRatios = (mmnConfig?.cashbackMensal || 2.75) + (mmnConfig?.cashbackDigital || 1.0) + (mmnConfig?.cashbackAnual || 0.75);
-                          const mensal = g1Total * ((mmnConfig?.cashbackMensal || 2.75) / totalRatios);
-                          const anual = g1Total * ((mmnConfig?.cashbackAnual || 0.75) / totalRatios);
+                          const totalCashbackPercent = product.cashback || 5;
+                          const totalCashbackAmount = product.price * (totalCashbackPercent / 100);
+                          
+                          const mensalRatio = mmnConfig?.cashbackMensal || 2.75;
+                          const digitalRatio = mmnConfig?.cashbackDigital || 1.0;
+                          const anualRatio = mmnConfig?.cashbackAnual || 0.75;
+                          const totalRatio = mensalRatio + digitalRatio + anualRatio;
+                          
+                          const mensal = totalCashbackAmount * (mensalRatio / totalRatio);
+                          const digital = totalCashbackAmount * (digitalRatio / totalRatio);
+                          const anual = totalCashbackAmount * (anualRatio / totalRatio);
                           
                           return (
                             <>
-                              <span className="text-[9px] font-black text-emerald-600 bg-emerald-50 px-2 py-1 rounded-lg uppercase tracking-tight border border-emerald-100 flex items-center gap-1 shadow-sm">
-                                <TrendingUp size={10} />
+                              <span className="text-[8px] font-black text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-lg uppercase tracking-tight border border-emerald-100 flex items-center gap-1 shadow-sm">
+                                <TrendingUp size={8} />
                                 Mensal: R$ {mensal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                               </span>
-                              <span className="text-[9px] font-black text-indigo-600 bg-indigo-50 px-2 py-1 rounded-lg uppercase tracking-tight border border-indigo-100 flex items-center gap-1 shadow-sm">
-                                <Check size={10} />
+                              <span className="text-[8px] font-black text-blue-600 bg-blue-50 px-2 py-0.5 rounded-lg uppercase tracking-tight border border-blue-100 flex items-center gap-1 shadow-sm">
+                                <Smartphone size={8} />
+                                Digital: R$ {digital.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                              </span>
+                              <span className="text-[8px] font-black text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-lg uppercase tracking-tight border border-indigo-100 flex items-center gap-1 shadow-sm">
+                                <Calendar size={8} />
                                 Anual: R$ {anual.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                               </span>
                             </>
@@ -906,6 +936,7 @@ export default function Marketplace() {
                     <div className="flex items-center gap-1 mb-4">
                       <Star className="text-yellow-400 fill-yellow-400" size={14} />
                       <span className="text-xs font-black text-midnight">{product.rating.toFixed(1)}</span>
+                      <span className="text-[10px] font-bold text-slate-400 ml-1">({product.reviews_count || 0})</span>
                       <span className="text-slate-300 mx-1">|</span>
                       <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{product.sales} vendidos</span>
                     </div>
@@ -914,7 +945,6 @@ export default function Marketplace() {
                         <p className="text-2xl font-black text-midnight leading-none mb-1 tracking-tighter">
                           R$ {product.price.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                         </p>
-                        <p className="text-[10px] text-emerald-600 font-black uppercase tracking-widest">{product.installments}</p>
                       </div>
                       
                       <button 

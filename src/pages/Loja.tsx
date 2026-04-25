@@ -21,7 +21,9 @@ import {
   User,
   Menu,
   LogOut,
-  LayoutDashboard
+  LayoutDashboard,
+  Smartphone,
+  Calendar
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Link, useNavigate } from 'react-router-dom';
@@ -36,6 +38,7 @@ interface Product {
   price: number;
   image: string;
   rating: number;
+  reviews_count?: number;
   sales: number;
   category: string;
   cashback: number;
@@ -98,7 +101,7 @@ export default function Loja() {
         // Fetch Products
         const { data: prodData, error: prodError } = await supabase
           .from('products')
-          .select('id, name, price, image, main_image, category, sales, cashback, stock')
+          .select('id, name, price, image, main_image, category, sales, cashback, stock, product_reviews(rating)')
           .eq('status', 'Ativo');
 
         if (prodError) throw prodError;
@@ -109,7 +112,10 @@ export default function Loja() {
           name: p.name || 'Produto sem nome',
           price: Number(p.price) || 0,
           image: p.main_image || p.image || '📦',
-          rating: 4.5 + (Math.random() * 0.5),
+          rating: p.product_reviews?.length > 0 
+            ? p.product_reviews.reduce((acc: number, rev: any) => acc + (rev.rating || 0), 0) / p.product_reviews.length 
+            : 5.0,
+          reviews_count: p.product_reviews?.length || 0,
           sales: Number(p.sales) || 0,
           category: p.category || 'Geral',
           cashback: Number(p.cashback) || 5,
@@ -193,6 +199,11 @@ export default function Loja() {
   const totalCashback = cartItems.reduce((acc, item) => {
     return acc + (item.price * (item.cashback / 100) * item.quantity);
   }, 0);
+
+  const totalRatios = (mmnConfig?.cashbackMensal || 2.75) + (mmnConfig?.cashbackDigital || 1.0) + (mmnConfig?.cashbackAnual || 0.75);
+  const totalMensal = totalCashback * ((mmnConfig?.cashbackMensal || 2.75) / totalRatios);
+  const totalDigital = totalCashback * ((mmnConfig?.cashbackDigital || 1.0) / totalRatios);
+  const totalAnual = totalCashback * ((mmnConfig?.cashbackAnual || 0.75) / totalRatios);
 
   return (
     <div className="min-h-screen bg-[#f8fafc] font-sans flex flex-col">
@@ -579,6 +590,7 @@ export default function Loja() {
                     <div className="flex items-center gap-1 mb-2">
                       <Star size={12} className="text-orange-500 fill-orange-500" />
                       <span className="text-xs font-black text-midnight">{p.rating.toFixed(1)}</span>
+                      <span className="text-[10px] font-bold text-slate-400 ml-1">({p.reviews_count || 0})</span>
                       <span className="text-slate-300 mx-1">•</span>
                       <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{p.sales} vendidos</span>
                     </div>
@@ -590,18 +602,28 @@ export default function Loja() {
                       <div>
                         <p className="text-2xl font-black text-midnight tracking-tighter">R$ {p.price.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
                         {(() => {
-                          const g1Total = (p.price * (g1Value / 100));
-                          const totalRatios = (mmnConfig?.cashbackMensal || 2.75) + (mmnConfig?.cashbackDigital || 1.0) + (mmnConfig?.cashbackAnual || 0.75);
-                          const mensal = g1Total * ((mmnConfig?.cashbackMensal || 2.75) / totalRatios);
-                          const anual = g1Total * ((mmnConfig?.cashbackAnual || 0.75) / totalRatios);
+                          const totalCashbackPercent = p.cashback || 5;
+                          const totalCashbackAmount = p.price * (totalCashbackPercent / 100);
+                          
+                          const mensalRatio = mmnConfig?.cashbackMensal || 2.75;
+                          const digitalRatio = mmnConfig?.cashbackDigital || 1.0;
+                          const anualRatio = mmnConfig?.cashbackAnual || 0.75;
+                          const totalRatio = mensalRatio + digitalRatio + anualRatio;
+                          
+                          const mensal = totalCashbackAmount * (mensalRatio / totalRatio);
+                          const digital = totalCashbackAmount * (digitalRatio / totalRatio);
+                          const anual = totalCashbackAmount * (anualRatio / totalRatio);
                           
                           return (
                             <div className="flex flex-col gap-0.5 mt-1">
                               <p className="text-[9px] font-black text-emerald-600 uppercase tracking-widest flex items-center gap-1">
                                 <TrendingUp size={10} /> Bônus Mensal: R$ {mensal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                               </p>
+                              <p className="text-[9px] font-black text-blue-600 uppercase tracking-widest flex items-center gap-1">
+                                <Smartphone size={10} /> Bônus Digital: R$ {digital.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                              </p>
                               <p className="text-[9px] font-black text-indigo-600 uppercase tracking-widest flex items-center gap-1">
-                                <ShoppingBag size={10} /> Bônus Anual: R$ {anual.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                <Calendar size={10} /> Bônus Anual: R$ {anual.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                               </p>
                             </div>
                           );
@@ -722,12 +744,23 @@ export default function Loja() {
                       <span>Subtotal</span>
                       <span>R$ {subtotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
                     </div>
-                    <div className="flex justify-between items-center bg-emerald-500/10 p-4 rounded-2xl border border-emerald-200">
-                      <div className="flex items-center gap-2">
-                        <TrendingUp size={16} className="text-emerald-600" />
-                        <span className="text-[10px] font-black text-emerald-600 uppercase tracking-widest">Cashback Ganho</span>
+                    <div className="bg-emerald-50 rounded-2xl p-4 border border-emerald-100 space-y-2">
+                      <div className="flex items-center gap-2 mb-1">
+                        <TrendingUp size={14} className="text-emerald-600" />
+                        <span className="text-[10px] font-black text-emerald-600 uppercase tracking-widest">Seu Retorno:</span>
                       </div>
-                      <span className="text-sm font-black text-emerald-600">+ R$ {totalCashback.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                      <div className="flex justify-between items-center">
+                        <span className="text-[10px] font-bold text-emerald-600">Mensal</span>
+                        <span className="text-xs font-black text-emerald-600">+ R$ {totalMensal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-[10px] font-bold text-blue-600">Digital</span>
+                        <span className="text-xs font-black text-blue-600">+ R$ {totalDigital.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-[10px] font-bold text-indigo-600">Anual</span>
+                        <span className="text-xs font-black text-indigo-600">+ R$ {totalAnual.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                      </div>
                     </div>
                     <div className="flex justify-between items-center pt-4 border-t border-slate-200">
                       <span className="text-xl font-black text-midnight uppercase tracking-tighter">Total</span>

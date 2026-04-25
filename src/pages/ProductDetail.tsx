@@ -25,7 +25,9 @@ import {
   Menu,
   Store,
   LayoutDashboard,
-  LogOut
+  LogOut,
+  Smartphone,
+  Calendar
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { supabase } from '../lib/supabase';
@@ -121,6 +123,11 @@ export default function ProductDetail() {
   const totalCashback = cartItems.reduce((acc, item) => {
     return acc + (item.price * (item.cashback / 100) * item.quantity);
   }, 0);
+
+  const totalRatios = (mmnConfig?.cashbackMensal || 2.75) + (mmnConfig?.cashbackDigital || 1.0) + (mmnConfig?.cashbackAnual || 0.75);
+  const totalMensal = totalCashback * ((mmnConfig?.cashbackMensal || 2.75) / totalRatios);
+  const totalDigital = totalCashback * ((mmnConfig?.cashbackDigital || 1.0) / totalRatios);
+  const totalAnual = totalCashback * ((mmnConfig?.cashbackAnual || 0.75) / totalRatios);
 
   const markAllAsRead = () => {
     setNotifications(notifications.map(n => ({ ...n, read: true })));
@@ -225,10 +232,17 @@ export default function ProductDetail() {
   const images = [mainImg, ...(product.gallery || [])].filter(Boolean);
   
   // MMN Calculations for G1 (Buyer)
-  const g1TotalCommission = (product.price * (g1Value / 100));
-  const totalRatios = (mmnConfig?.cashbackMensal || 2.75) + (mmnConfig?.cashbackDigital || 1.0) + (mmnConfig?.cashbackAnual || 0.75);
-  const mensalAmount = g1TotalCommission * ((mmnConfig?.cashbackMensal || 2.75) / totalRatios);
-  const anualAmount = g1TotalCommission * ((mmnConfig?.cashbackAnual || 0.75) / totalRatios);
+  const totalCashbackPercent = product.cashback || 5;
+  const totalCashbackAmount = product.price * (totalCashbackPercent / 100);
+  
+  const mensalRatio = mmnConfig?.cashbackMensal || 2.75;
+  const digitalRatio = mmnConfig?.cashbackDigital || 1.0;
+  const anualRatio = mmnConfig?.cashbackAnual || 0.75;
+  const totalRatio = mensalRatio + digitalRatio + anualRatio;
+  
+  const mensalAmount = totalCashbackAmount * (mensalRatio / totalRatio);
+  const digitalAmount = totalCashbackAmount * (digitalRatio / totalRatio);
+  const anualAmount = totalCashbackAmount * (anualRatio / totalRatio);
 
   const handleBuy = () => {
     setCartItems(prev => {
@@ -727,12 +741,23 @@ export default function ProductDetail() {
                       <span className="text-sm tracking-tight">Subtotal</span>
                       <span className="text-sm font-bold text-midnight">R$ {subtotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
                     </div>
-                    <div className="flex justify-between items-center bg-emerald-500/10 p-3 rounded-xl border border-emerald-500/20">
-                      <div className="flex items-center gap-2">
-                        <TrendingUp size={16} className="text-emerald-600" />
-                        <span className="text-xs font-black text-emerald-600 uppercase tracking-widest">Cashback Acumulado</span>
+                    <div className="bg-emerald-50 rounded-2xl p-4 border border-emerald-100 space-y-2">
+                      <div className="flex items-center gap-2 mb-1">
+                        <TrendingUp size={14} className="text-emerald-600" />
+                        <span className="text-[10px] font-black text-emerald-600 uppercase tracking-widest">Seu Retorno:</span>
                       </div>
-                      <span className="text-sm font-black text-emerald-600">+ R$ {totalCashback.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                      <div className="flex justify-between items-center">
+                        <span className="text-[10px] font-bold text-emerald-600">Mensal</span>
+                        <span className="text-xs font-black text-emerald-600">+ R$ {totalMensal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-[10px] font-bold text-blue-600">Digital</span>
+                        <span className="text-xs font-black text-blue-600">+ R$ {totalDigital.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-[10px] font-bold text-indigo-600">Anual</span>
+                        <span className="text-xs font-black text-indigo-600">+ R$ {totalAnual.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                      </div>
                     </div>
                     <div className="flex justify-between items-center pt-3 mt-3 border-t border-slate-200">
                       <span className="text-lg font-black text-midnight tracking-tighter uppercase">Total</span>
@@ -804,7 +829,7 @@ export default function ProductDetail() {
               </span>
               <div className="flex items-center gap-1.5 px-3 py-1.5 bg-orange-50 text-orange-600 rounded-full border border-orange-100">
                 <Star size={12} className="fill-orange-600" />
-                <span className="text-[10px] font-black uppercase tracking-widest">{avgRating} ({reviews.length} reviews)</span>
+                <span className="text-[10px] font-black uppercase tracking-widest">{avgRating} ({reviews.length})</span>
               </div>
             </div>
 
@@ -825,6 +850,15 @@ export default function ProductDetail() {
                   <div className="flex items-center gap-2 text-emerald-600">
                     <TrendingUp size={16} />
                     <span className="text-sm font-black italic">R$ {mensalAmount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                  </div>
+                </div>
+                <div>
+                  <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 flex items-center gap-1">
+                    <div className="size-1.5 bg-blue-500 rounded-full" /> Cashback Digital
+                  </div>
+                  <div className="flex items-center gap-2 text-blue-600">
+                    <Smartphone size={16} />
+                    <span className="text-sm font-black italic">R$ {digitalAmount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
                   </div>
                 </div>
                 <div>

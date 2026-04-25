@@ -17,12 +17,14 @@ import {
   Instagram,
   Smartphone,
   Calendar,
-  ChevronRight
+  ChevronRight,
+  Star
 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
+import { businessRules } from '../lib/businessRules';
 import Header from '../components/Header';
 import PWAInstallPrompt from '../components/PWAInstallPrompt';
 
@@ -33,20 +35,29 @@ interface Product {
   image: string;
   main_image?: string;
   cashback: number;
+  rating?: number;
+  reviews_count?: number;
+  sales?: number;
 }
 
 export default function Home() {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
+  const [mmnConfig, setMmnConfig] = useState<any>(null);
 
   useEffect(() => {
-    async function loadFeaturedProducts() {
+    async function loadData() {
       try {
         setLoading(true);
+        
+        // Fetch MMN Config
+        const configData = await businessRules.getMMNConfig();
+        if (configData) setMmnConfig(configData);
+
         console.log('Fetching products from Supabase...');
         const { data, error } = await supabase
           .from('products')
-          .select('id, name, price, image, main_image, cashback, status')
+          .select('id, name, price, image, main_image, cashback, status, sales, product_reviews(rating)')
           .or('status.ilike.Ativo,status.ilike.ativo')
           .limit(4);
 
@@ -61,7 +72,12 @@ export default function Home() {
           setProducts(data.map(p => ({
             ...p,
             price: Number(p.price) || 0,
-            cashback: Number(p.cashback) || 5
+            cashback: Number(p.cashback) || 5,
+            rating: p.product_reviews?.length > 0 
+              ? p.product_reviews.reduce((acc: number, rev: any) => acc + (rev.rating || 0), 0) / p.product_reviews.length 
+              : 5.0,
+            reviews_count: p.product_reviews?.length || 0,
+            sales: Number(p.sales) || 0
           })));
         }
       } catch (err) {
@@ -71,7 +87,7 @@ export default function Home() {
       }
     }
 
-    loadFeaturedProducts();
+    loadData();
   }, []);
 
   return (
@@ -264,14 +280,49 @@ export default function Home() {
                     <h3 className="text-sm font-black text-midnight mb-1 group-hover:text-primary-blue transition-colors uppercase tracking-tight line-clamp-2">
                       {product.name}
                     </h3>
+                    
+                    <div className="flex items-center gap-1 mt-1 mb-2">
+                      <Star className="text-yellow-400 fill-yellow-400" size={10} />
+                      <span className="text-[10px] font-black text-midnight">{product.rating?.toFixed(1)}</span>
+                      <span className="text-[10px] font-bold text-slate-400 ml-1">({product.reviews_count || 0})</span>
+                      <span className="text-slate-300 mx-1">|</span>
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{product.sales} vendidos</span>
+                    </div>
+
                     <div className="flex items-end justify-between mt-auto pt-4">
                       <div>
                         <p className="text-xl font-black text-midnight tracking-tighter">
                           R$ {product.price.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </p>
-                        <p className="text-[10px] font-bold text-emerald-500 uppercase tracking-widest">
-                          +R$ {(product.price * (product.cashback / 100)).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} cashback
-                        </p>
+                        <div className="flex flex-col gap-0.5 mt-1">
+                          {(() => {
+                            const totalCashbackPercent = product.cashback || 5;
+                            const totalCashbackAmount = product.price * (totalCashbackPercent / 100);
+                            
+                            const mensalRatio = mmnConfig?.cashbackMensal || 2.75;
+                            const digitalRatio = mmnConfig?.cashbackDigital || 1.0;
+                            const anualRatio = mmnConfig?.cashbackAnual || 0.75;
+                            const totalRatio = mensalRatio + digitalRatio + anualRatio;
+                            
+                            const mensal = totalCashbackAmount * (mensalRatio / totalRatio);
+                            const digital = totalCashbackAmount * (digitalRatio / totalRatio);
+                            const anual = totalCashbackAmount * (anualRatio / totalRatio);
+                            
+                            return (
+                              <>
+                                <p className="text-[8px] font-bold text-emerald-500 uppercase tracking-widest flex items-center gap-1">
+                                  <TrendingUp size={8} /> Mensal: R$ {mensal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                </p>
+                                <p className="text-[8px] font-bold text-blue-500 uppercase tracking-widest flex items-center gap-1">
+                                  <Smartphone size={8} /> Digital: R$ {digital.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                </p>
+                                <p className="text-[8px] font-bold text-indigo-500 uppercase tracking-widest flex items-center gap-1">
+                                  <Calendar size={8} /> Anual: R$ {anual.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                </p>
+                              </>
+                            );
+                          })()}
+                        </div>
                       </div>
                     </div>
                   </Link>

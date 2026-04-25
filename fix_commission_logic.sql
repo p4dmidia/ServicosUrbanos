@@ -1,6 +1,7 @@
--- Função principal para distribuir comissões ao pagar pedido com Divisão Tripla (Tri-Split)
--- Conforme PRD: Cada nível de comissão é dividido em 3 partes: Mensal (33.33%), Anual (33.33%) e CD (33.34%)
+-- MIGRATION: CORREÇÃO DA LÓGICA DE COMISSIONAMENTO (EVITAR DUPLICIDADE)
+-- OBJETIVO: Pagar comissão apenas UMA VEZ quando o pedido for marcado como pago.
 
+-- 1. Atualizar a função principal com trava de segurança (Idempotência)
 CREATE OR REPLACE FUNCTION public.handle_order_payment()
 RETURNS TRIGGER AS $$
 DECLARE
@@ -83,3 +84,15 @@ BEGIN
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- 2. Limpar gatilhos antigos para garantir que não haja conflitos
+DROP TRIGGER IF EXISTS on_order_completed ON public.orders;
+DROP TRIGGER IF EXISTS on_order_paid ON public.orders;
+
+-- 3. Criar o novo gatilho único
+CREATE TRIGGER on_order_commission_payment
+    AFTER UPDATE ON public.orders
+    FOR EACH ROW
+    EXECUTE FUNCTION public.handle_order_payment();
+
+-- Comentário: Script finalizado. Execute no SQL Editor do Supabase.

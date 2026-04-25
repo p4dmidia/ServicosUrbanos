@@ -219,7 +219,7 @@ export default function MerchantOrders() {
 
   return (
     <MerchantLayout title="Gestão de Pedidos" subtitle="Acompanhe e gerencie as vendas da sua loja">
-      <div className="p-8 lg:p-12 space-y-8">
+      <div className="p-4 sm:p-6 lg:p-10 space-y-8">
         {/* Header Actions */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
           <div className="flex flex-col sm:flex-row gap-4 flex-1 max-w-2xl">
@@ -251,16 +251,16 @@ export default function MerchantOrders() {
         {/* Orders Table */}
         <div className="bg-white rounded-[2.5rem] border border-slate-100 shadow-sm overflow-hidden min-h-[400px]">
             <div className="overflow-x-auto">
-              <table className="w-full text-left">
+              <table className="w-full text-left table-auto">
                 <thead>
                   <tr className="bg-slate-50 border-b border-slate-100">
-                    <th className="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">ID Pedido</th>
-                    <th className="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Cliente</th>
-                    <th className="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Data</th>
-                    <th className="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Valor Total</th>
-                    <th className="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Cód. Retirada</th>
-                    <th className="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Status</th>
-                    <th className="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Ações</th>
+                    <th className="px-1 py-5 text-[9px] font-black text-slate-400 uppercase tracking-wider whitespace-nowrap">ID</th>
+                    <th className="px-1 py-5 text-[9px] font-black text-slate-400 uppercase tracking-wider whitespace-nowrap">Cliente</th>
+                    <th className="px-1 py-5 text-[9px] font-black text-slate-400 uppercase tracking-wider whitespace-nowrap">Data</th>
+                    <th className="px-1 py-5 text-[9px] font-black text-slate-400 uppercase tracking-wider whitespace-nowrap text-center">Valor</th>
+                    <th className="px-1 py-5 text-[9px] font-black text-slate-400 uppercase tracking-wider whitespace-nowrap text-center">Cód.</th>
+                    <th className="px-1 py-5 text-[9px] font-black text-slate-400 uppercase tracking-wider whitespace-nowrap text-center">Status</th>
+                    <th className="px-1 py-5 text-[9px] font-black text-slate-400 uppercase tracking-wider text-right whitespace-nowrap">Ações</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-50">
@@ -275,41 +275,41 @@ export default function MerchantOrders() {
                           exit={{ opacity: 0 }}
                           className="hover:bg-slate-50/50 transition-colors group"
                         >
-                          <td className="px-8 py-6 font-black text-sm text-midnight">{o.id.substring(0, 8)}...</td>
-                          <td className="px-8 py-6">
-                            <div className="flex items-center gap-3">
-                              <div className="size-8 rounded-full bg-slate-100 flex items-center justify-center text-[10px] font-black text-slate-500 shadow-sm">
+                          <td className="px-1 py-5 font-black text-xs text-midnight">{o.id.substring(0, 6)}...</td>
+                          <td className="px-1 py-5">
+                            <div className="flex items-center gap-1.5">
+                              <div className="size-7 rounded-full bg-slate-100 flex items-center justify-center text-[9px] font-black text-slate-500 shadow-sm shrink-0">
                                 {o.customerInitial || o.customerName.charAt(0)}
                               </div>
-                              <span className="text-sm font-bold text-midnight tracking-tight">{o.customerName}</span>
+                              <span className="text-xs font-bold text-midnight tracking-tight truncate max-w-[100px]">{o.customerName}</span>
                             </div>
                           </td>
-                          <td className="px-8 py-6 text-xs font-bold text-slate-400">{o.date}</td>
-                          <td className="px-8 py-6">
-                            <span className="font-black text-midnight tracking-tighter text-sm">R$ {o.amount.toFixed(2).replace('.', ',')}</span>
+                          <td className="px-1 py-5 text-[10px] font-bold text-slate-400 whitespace-nowrap">{o.date.split(',')[0]}</td>
+                          <td className="px-1 py-5 text-center">
+                            <span className="font-black text-midnight tracking-tighter text-xs whitespace-nowrap">R$ {o.amount.toFixed(2).replace('.', ',')}</span>
                           </td>
-                          <td className="px-8 py-6">
-                             <span className="bg-slate-50 px-3 py-1.5 rounded-xl font-mono font-black text-xs text-primary-blue border border-slate-100">
-                               {extra?.withdrawalCode || o.id.substring(0, 6).toUpperCase()}
+                          <td className="px-1 py-5 text-center">
+                             <span className="bg-slate-50 px-2 py-1 rounded-lg font-mono font-black text-[10px] text-primary-blue border border-slate-100">
+                               {extra?.withdrawalCode || o.id.substring(0, 4).toUpperCase()}
                              </span>
                           </td>
-                          <td className="px-8 py-6">
-                            <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest border transition-all ${getStatusColor(o.status)}`}>
+                          <td className="px-1 py-5 whitespace-nowrap text-center">
+                            <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[8px] font-black uppercase tracking-wider border transition-all whitespace-nowrap ${getStatusColor(o.status)}`}>
                               {getStatusIcon(o.status)}
                               {o.status}
                             </span>
                           </td>
-                          <td className="px-8 py-6 text-right">
-                            <div className="flex items-center justify-end gap-2 text-[10px]">
+                          <td className="px-1 py-5 text-right">
+                            <div className="flex items-center justify-end gap-1.5 text-[10px] whitespace-nowrap">
                               {o.status !== 'Concluído' && o.status !== 'Cancelado' && (
-                                <div className="flex items-center gap-2 mr-2">
+                                <div className="flex items-center gap-1.5 mr-1.5">
                                   <button 
                                     onClick={() => {
                                       if(confirm('Deseja realmente CANCELAR este pedido?')) {
                                         handleUpdateStatus(o.id, 'Cancelado');
                                       }
                                     }}
-                                    className="px-3 py-2 bg-red-50 text-red-500 hover:bg-red-500 hover:text-white rounded-xl font-black uppercase tracking-widest transition-all border border-red-100"
+                                    className="size-9 bg-red-50 text-red-500 hover:bg-red-500 hover:text-white rounded-xl flex items-center justify-center transition-all border border-red-100"
                                     title="Cancelar Pedido"
                                   >
                                     <XCircle size={14} />
@@ -320,7 +320,7 @@ export default function MerchantOrders() {
                                         handleUpdateStatus(o.id, 'Pago, Aguardando Retirada');
                                       }
                                     }}
-                                    className="px-3 py-2 bg-primary-blue/10 text-primary-blue hover:bg-primary-blue hover:text-white rounded-xl font-black uppercase tracking-widest transition-all border border-primary-blue/20"
+                                    className="size-9 bg-primary-blue/10 text-primary-blue hover:bg-primary-blue hover:text-white rounded-xl flex items-center justify-center transition-all border border-primary-blue/20"
                                     title="Marcar como Pago"
                                   >
                                     <DollarSign size={14} />
@@ -331,9 +331,10 @@ export default function MerchantOrders() {
                                       setSelectedOrder(o);
                                       setShowWithdrawalModal(true);
                                     }}
-                                    className="bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-2 rounded-xl font-black uppercase tracking-widest flex items-center gap-2 shadow-lg shadow-emerald-500/20"
+                                    className="size-9 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl flex items-center justify-center shadow-lg shadow-emerald-500/20"
+                                    title="Confirmar Retirada"
                                   >
-                                    <Check size={14} /> Retirada
+                                    <Check size={14} />
                                   </button>
                                 </div>
                               )}

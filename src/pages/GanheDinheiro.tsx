@@ -186,7 +186,10 @@ export default function GanheDinheiro() {
                     </div>
 
                     <div className="pt-8 border-t border-slate-900 flex flex-col md:flex-row justify-between items-center gap-4 text-[10px] uppercase tracking-widest font-bold">
-                        <p>© 2026 Serviços Urbanos Tecnologia S.A. Todos os direitos reservados.</p>
+                        <div className="flex flex-col items-center md:items-start gap-1">
+                            <p>© 2026 Serviços Urbanos Tecnologia S.A. Todos os direitos reservados.</p>
+                            <p className="opacity-50 lowercase font-medium tracking-normal">Desenvolvido por <a href="https://p4dmidia.com.br" target="_blank" rel="noopener noreferrer" className="hover:text-emerald-500 transition-colors">P4D Mídia</a></p>
+                        </div>
                         <div className="flex gap-8">
                             <span className="flex items-center gap-1">
                                 <Globe size={12} />

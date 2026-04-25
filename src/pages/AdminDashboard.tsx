@@ -324,8 +324,11 @@ export default function AdminDashboard() {
                 )}
               </div>
 
-              <div className="p-8 border-t border-white/5 bg-white/5 text-center">
+              <div className="p-8 border-t border-white/5 bg-white/5 flex flex-col items-center gap-1">
                 <p className="text-[9px] text-slate-600 font-extrabold uppercase tracking-[0.2em]">Serviços Urbanos • Auditoria em Tempo Real</p>
+                <p className="text-[8px] text-slate-700 lowercase font-medium tracking-normal opacity-30">
+                  Desenvolvido por <a href="https://p4dmidia.com.br" target="_blank" rel="noopener noreferrer" className="hover:text-indigo-400 transition-colors underline decoration-indigo-400/20">P4D Mídia</a>
+                </p>
               </div>
             </motion.div>
           </div>

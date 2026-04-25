@@ -163,10 +163,15 @@ export default function AdminLogin() {
         </div>
 
         {/* Footer info */}
-        <p className="text-center mt-8 text-[10px] font-bold text-slate-600 uppercase tracking-[0.2em]">
-          © 2026 Serviços Urbanos S.A. <br />
-          SISTEMA DE MONITORAMENTO DE ALTA SEGURANÇA
-        </p>
+        <div className="flex flex-col items-center mt-8 gap-1">
+          <p className="text-center text-[10px] font-bold text-slate-600 uppercase tracking-[0.2em]">
+            © 2026 Serviços Urbanos S.A. <br />
+            SISTEMA DE MONITORAMENTO DE ALTA SEGURANÇA
+          </p>
+          <p className="text-[9px] text-slate-700 lowercase font-medium tracking-normal text-center opacity-40">
+            Desenvolvido por <a href="https://p4dmidia.com.br" target="_blank" rel="noopener noreferrer" className="hover:text-primary-blue transition-colors underline decoration-primary-blue/30">P4D Mídia</a>
+          </p>
+        </div>
       </motion.div>
     </div>
   );

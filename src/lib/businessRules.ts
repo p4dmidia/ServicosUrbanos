@@ -16,6 +16,7 @@ export interface MerchantUser {
   email: string;
   role: 'owner' | 'manager' | 'affiliate' | 'customer';
   branchId?: string;
+  merchantId?: string;
   commissionRate: number;
   referralCode?: string;
   rank?: string;
@@ -160,21 +161,25 @@ export const businessRules = {
   getMerchantId: async (userId: string): Promise<string | null> => {
     const { data: profile } = await supabase
       .from('profiles')
-      .select('id, role, branch_id')
+      .select('id, role, branch_id, merchant_id')
       .eq('id', userId)
       .single();
 
     if (!profile) return null;
     if (profile.role === 'owner') return profile.id;
 
-    if (profile.role === 'manager' && profile.branch_id) {
-      const { data: branch } = await supabase
-        .from('branches')
-        .select('merchant_id')
-        .eq('id', profile.branch_id)
-        .maybeSingle(); // Usar maybeSingle para evitar erro PGRST116
+    if (profile.role === 'manager') {
+      if (profile.merchant_id) return profile.merchant_id;
       
-      return branch?.merchant_id || null;
+      if (profile.branch_id) {
+        const { data: branch } = await supabase
+          .from('branches')
+          .select('merchant_id')
+          .eq('id', profile.branch_id)
+          .maybeSingle();
+        
+        return branch?.merchant_id || null;
+      }
     }
 
     return null;
@@ -411,6 +416,7 @@ export const businessRules = {
     branchId: string, 
     commissionRate: number,
     userId?: string,
+    merchantId: string,
     mode: 'create' | 'link'
   }) => {
     // Chamada para a Edge Function que lida com a criação segura de usuários
@@ -423,7 +429,8 @@ export const businessRules = {
         password: member.password,
         branchId: member.branchId,
         commissionRate: member.commissionRate,
-        userId: member.userId
+        userId: member.userId,
+        merchantId: member.merchantId
       }
     });
 
@@ -432,6 +439,47 @@ export const businessRules = {
       throw new Error(error.message || 'Erro ao processar solicitação de equipe.');
     }
     
+    return data;
+  },
+
+  updateMerchantMember: async (member: {
+    userId: string,
+    name: string,
+    email?: string,
+    password?: string,
+    branchId: string,
+    commissionRate: number,
+    merchantId: string
+  }) => {
+    const { data, error } = await supabase.functions.invoke('manage-merchant-team', {
+      body: {
+        mode: 'update',
+        userId: member.userId,
+        name: member.name,
+        email: member.email,
+        password: member.password,
+        branchId: member.branchId,
+        commissionRate: member.commissionRate,
+        merchantId: member.merchantId
+      }
+    });
+
+    if (error) {
+      console.error('Edge Function Error:', error);
+      throw new Error(error.message || 'Erro ao atualizar gerente.');
+    }
+    return data;
+  },
+
+  removeMerchantMember: async (userId: string) => {
+    const { data, error } = await supabase.functions.invoke('manage-merchant-team', {
+      body: {
+        mode: 'unlink',
+        userId: userId
+      }
+    });
+
+    if (error) throw new Error(error.message || 'Erro ao remover gerente.');
     return data;
   },
 

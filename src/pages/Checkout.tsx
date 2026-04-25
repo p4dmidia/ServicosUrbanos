@@ -17,7 +17,9 @@ import {
   Store,
   LogOut,
   LayoutDashboard,
-  User
+  User,
+  ShoppingBag,
+  Package
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import toast from 'react-hot-toast';
@@ -64,7 +66,7 @@ export default function Checkout() {
   });
 
   const [mmnConfig, setMmnConfig] = useState<any>(null);
-  const [g1Value, setG1Value] = useState(0);
+  const [g1Value, setG1Value] = useState(4.5); // Default 4.5% if not configured
 
   const [shippingMethod, setShippingMethod] = useState('');
   const [shippingCost, setShippingCost] = useState(0);
@@ -574,10 +576,10 @@ export default function Checkout() {
         )}
       </AnimatePresence>
 
-      <main className="max-w-4xl mx-auto px-6 py-8">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+      <main className="max-w-7xl mx-auto px-6 py-12">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-start">
           
-          <div className="md:col-span-2 space-y-8 flex flex-col">
+          <div className="lg:col-span-8 space-y-10 flex flex-col">
             {/* Frete */}
             <motion.section 
               initial={{ opacity: 0, y: 20 }}
@@ -679,7 +681,7 @@ export default function Checkout() {
             </motion.section>
           </div>
 
-          <div className="md:col-span-1">
+          <div className="lg:col-span-4">
             <motion.div 
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
@@ -737,11 +739,11 @@ export default function Checkout() {
                     <TrendingUp size={14} /> Seu Retorno com esta compra:
                   </p>
                   <div className="flex justify-between items-center">
-                    <span className="text-xs font-bold text-emerald-600">Bônus Mensal</span>
+                    <span className="text-xs font-bold text-emerald-600">Cashback Mensal</span>
                     <span className="text-sm font-black text-emerald-600">+ R$ {totalMensal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
                   </div>
                   <div className="flex justify-between items-center">
-                    <span className="text-xs font-bold text-indigo-600">Bônus Anual</span>
+                    <span className="text-xs font-bold text-indigo-600">Cashback Anual</span>
                     <span className="text-sm font-black text-indigo-600">+ R$ {totalAnual.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
                   </div>
                 </div>
@@ -799,7 +801,10 @@ export default function Checkout() {
           </div>
 
           <div className="pt-12 flex flex-col md:flex-row justify-between items-center gap-6 text-[9px] font-black uppercase tracking-[0.2em]">
-            <p className="text-slate-600">© 2026 Ecossistema Serviços Urbanos Tecnologia</p>
+            <div className="flex flex-col items-center md:items-start gap-1">
+              <p className="text-slate-600">© 2026 Ecossistema Serviços Urbanos Tecnologia</p>
+              <p className="text-slate-700 opacity-50 lowercase font-medium tracking-normal">Desenvolvido por <a href="https://p4dmidia.com.br" target="_blank" rel="noopener noreferrer" className="hover:text-primary-blue transition-colors">P4D Mídia</a></p>
+            </div>
             <div className="flex gap-8">
               <span className="flex items-center gap-1 transition-colors hover:text-white cursor-pointer"><Package size={12} /> Rastreio</span>
               <span className="flex items-center gap-1 transition-colors hover:text-white cursor-pointer"><TrendingUp size={12} /> Investimentos</span>

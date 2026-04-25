@@ -712,7 +712,10 @@ export default function Cadastro() {
                         <span className="text-lg font-bold">Serviços Urbanos</span>
                     </div>
 
-                    <p className="text-[10px] uppercase tracking-widest font-bold">© 2026 Serviços Urbanos Tecnologia S.A.</p>
+                    <div className="flex flex-col items-center gap-1">
+                        <p className="text-[10px] uppercase tracking-widest font-bold">© 2026 Serviços Urbanos Tecnologia S.A.</p>
+                        <p className="opacity-50 text-[9px] lowercase font-medium tracking-normal">Desenvolvido por <a href="https://p4dmidia.com.br" target="_blank" rel="noopener noreferrer" className="hover:text-emerald-500 transition-colors">P4D Mídia</a></p>
+                    </div>
 
                     <div className="flex gap-6">
                         <a href="#" className="hover:text-emerald-500 transition-colors"><Instagram size={20} /></a>

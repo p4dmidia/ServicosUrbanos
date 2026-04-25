@@ -1023,7 +1023,10 @@ export default function Marketplace() {
           </div>
 
           <div className="pt-12 flex flex-col md:flex-row justify-between items-center gap-6 text-[9px] font-black uppercase tracking-[0.2em]">
-            <p className="text-slate-600">© 2026 Ecossistema Serviços Urbanos Tecnologia</p>
+            <div className="flex flex-col items-center md:items-start gap-1">
+              <p className="text-slate-600">© 2026 Ecossistema Serviços Urbanos Tecnologia</p>
+              <p className="text-slate-700 opacity-50 lowercase font-medium tracking-normal">Desenvolvido por <a href="https://p4dmidia.com.br" target="_blank" rel="noopener noreferrer" className="hover:text-primary-blue transition-colors">P4D Mídia</a></p>
+            </div>
             <div className="flex gap-8">
               <span className="flex items-center gap-1 transition-colors hover:text-white cursor-pointer"><Package size={12} /> Rastreio</span>
               <span className="flex items-center gap-1 transition-colors hover:text-white cursor-pointer"><TrendingUp size={12} /> Investimentos</span>

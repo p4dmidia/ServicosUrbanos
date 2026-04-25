@@ -447,13 +447,15 @@ export default function MerchantProducts() {
             </select>
           </div>
 
-          <button 
-            onClick={() => setShowAddModal(true)}
-            className="bg-midnight hover:bg-slate-800 text-white px-8 py-4 rounded-2xl font-black text-xs uppercase tracking-widest transition-all shadow-xl shadow-midnight/20 flex items-center justify-center gap-3 group"
-          >
-            <Plus size={18} className="group-hover:rotate-90 transition-transform" />
-            Novo Produto
-          </button>
+          {profile?.role === 'owner' && (
+            <button 
+              onClick={() => setShowAddModal(true)}
+              className="bg-midnight hover:bg-slate-800 text-white px-8 py-4 rounded-2xl font-black text-xs uppercase tracking-widest transition-all shadow-xl shadow-midnight/20 flex items-center justify-center gap-3 group"
+            >
+              <Plus size={18} className="group-hover:rotate-90 transition-transform" />
+              Novo Produto
+            </button>
+          )}
         </div>
 
         {/* Product Table */}
@@ -537,12 +539,14 @@ export default function MerchantProducts() {
                             >
                               <Edit3 size={16} />
                             </button>
-                            <button 
-                              onClick={() => deleteProduct(p.id)}
-                              className="size-10 bg-slate-50 hover:bg-red-500 hover:text-white rounded-xl flex items-center justify-center text-slate-400 transition-all font-black uppercase"
-                            >
-                               <Trash2 size={16} />
-                            </button>
+                            {profile?.role === 'owner' && (
+                              <button 
+                                onClick={() => deleteProduct(p.id)}
+                                className="size-10 bg-slate-50 hover:bg-red-500 hover:text-white rounded-xl flex items-center justify-center text-slate-400 transition-all font-black uppercase"
+                              >
+                                <Trash2 size={16} />
+                              </button>
+                            )}
                           </div>
                         </td>
                       </motion.tr>
@@ -583,9 +587,11 @@ export default function MerchantProducts() {
               <div className="p-8 border-b border-slate-100 flex items-center justify-between bg-white z-10">
                 <div>
                   <h3 className="text-2xl font-black text-midnight tracking-tighter uppercase italic">
-                    {isEditing ? 'Editar Produto' : 'Adicionar Produto'}
+                    {profile?.role === 'manager' ? 'Ajustar Estoque' : (isEditing ? 'Editar Produto' : 'Adicionar Produto')}
                   </h3>
-                  <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Catálogo da {profile?.role === 'manager' ? 'Filial' : 'Matriz/Filiais'}</p>
+                  <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">
+                    {profile?.role === 'manager' ? 'Acesso limitado ao estoque' : `Catálogo da ${profile?.role === 'manager' ? 'Filial' : 'Matriz/Filiais'}`}
+                  </p>
                 </div>
               </div>
 
@@ -595,7 +601,7 @@ export default function MerchantProducts() {
                     {/* Informações Básicas */}
                     <div className="space-y-2 md:col-span-2">
                       <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Nome do Produto</label>
-                      <input type="text" required value={newProduct.name} onChange={e => setNewProduct({...newProduct, name: e.target.value})} className="w-full bg-slate-50 border border-slate-100 px-6 py-4 rounded-2xl font-bold text-midnight" />
+                      <input type="text" required disabled={profile?.role === 'manager'} value={newProduct.name} onChange={e => setNewProduct({...newProduct, name: e.target.value})} className="w-full bg-slate-50 border border-slate-100 px-6 py-4 rounded-2xl font-bold text-midnight disabled:opacity-50" />
                     </div>
 
                     <div className="space-y-2">
@@ -615,16 +621,19 @@ export default function MerchantProducts() {
                     <div className="space-y-2">
                       <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 flex justify-between items-center">
                         Categoria
-                        <button type="button" onClick={() => setShowAddCategory(!showAddCategory)} className="text-primary-blue hover:underline lowercase font-bold tracking-normal">
-                          {showAddCategory ? 'cancelar' : '+ nova'}
-                        </button>
+                        {profile?.role === 'owner' && (
+                          <button type="button" onClick={() => setShowAddCategory(!showAddCategory)} className="text-primary-blue hover:underline lowercase font-bold tracking-normal">
+                            {showAddCategory ? 'cancelar' : '+ nova'}
+                          </button>
+                        )}
                       </label>
                       
                       {!showAddCategory ? (
                         <select 
+                          disabled={profile?.role === 'manager'}
                           value={newProduct.categoryId} 
                           onChange={e => setNewProduct({...newProduct, categoryId: e.target.value})} 
-                          className="w-full bg-slate-50 border border-slate-100 px-6 py-4 rounded-2xl font-bold text-midnight appearance-none cursor-pointer"
+                          className="w-full bg-slate-50 border border-slate-100 px-6 py-4 rounded-2xl font-bold text-midnight appearance-none cursor-pointer disabled:opacity-50"
                         >
                           <option value="">Selecionar Categoria</option>
                           {categoriesList.map(c => (
@@ -665,17 +674,17 @@ export default function MerchantProducts() {
 
                     <div className="space-y-2">
                       <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Preço de Venda (R$)</label>
-                      <input type="number" required step="0.01" min="0" value={newProduct.price || ''} onChange={e => setNewProduct({...newProduct, price: parseFloat(e.target.value)})} className="w-full bg-slate-50 border border-slate-100 px-6 py-4 rounded-2xl font-bold text-midnight" />
+                      <input type="number" required disabled={profile?.role === 'manager'} step="0.01" min="0" value={newProduct.price || ''} onChange={e => setNewProduct({...newProduct, price: parseFloat(e.target.value)})} className="w-full bg-slate-50 border border-slate-100 px-6 py-4 rounded-2xl font-bold text-midnight disabled:opacity-50" />
                     </div>
 
                     <div className="space-y-2">
-                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Estoque Inicial</label>
-                      <input type="number" required min="0" value={newProduct.stock || ''} onChange={e => setNewProduct({...newProduct, stock: parseInt(e.target.value)})} className="w-full bg-slate-50 border border-slate-100 px-6 py-4 rounded-2xl font-bold text-midnight" />
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Estoque</label>
+                      <input type="number" required min="0" value={newProduct.stock || ''} onChange={e => setNewProduct({...newProduct, stock: parseInt(e.target.value)})} className="w-full bg-slate-50 border border-primary-blue/30 px-6 py-4 rounded-2xl font-black text-midnight focus:ring-4 focus:ring-primary-blue/10" />
                     </div>
 
                     <div className="space-y-2">
                       <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Cashback (%)</label>
-                      <input type="number" required min="0" max="100" value={newProduct.cashback || ''} onChange={e => setNewProduct({...newProduct, cashback: parseFloat(e.target.value)})} className="w-full bg-slate-50 border border-slate-100 px-6 py-4 rounded-2xl font-bold text-midnight" />
+                      <input type="number" required disabled={profile?.role === 'manager'} min="0" max="100" value={newProduct.cashback || ''} onChange={e => setNewProduct({...newProduct, cashback: parseFloat(e.target.value)})} className="w-full bg-slate-50 border border-slate-100 px-6 py-4 rounded-2xl font-bold text-midnight disabled:opacity-50" />
                     </div>
 
                     {/* Logística */}
@@ -686,19 +695,19 @@ export default function MerchantProducts() {
                       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                         <div className="space-y-1">
                           <label className="text-[9px] font-black text-slate-400 uppercase">Peso (kg)</label>
-                          <input type="number" step="0.001" value={newProduct.weight || ''} onChange={e => setNewProduct({...newProduct, weight: parseFloat(e.target.value)})} className="w-full bg-slate-50 border border-slate-100 px-4 py-3 rounded-xl font-bold text-xs text-midnight" />
+                          <input type="number" disabled={profile?.role === 'manager'} step="0.001" value={newProduct.weight || ''} onChange={e => setNewProduct({...newProduct, weight: parseFloat(e.target.value)})} className="w-full bg-slate-50 border border-slate-100 px-4 py-3 rounded-xl font-bold text-xs text-midnight disabled:opacity-50" />
                         </div>
                         <div className="space-y-1">
                           <label className="text-[9px] font-black text-slate-400 uppercase">Altura (cm)</label>
-                          <input type="number" value={newProduct.height || ''} onChange={e => setNewProduct({...newProduct, height: parseFloat(e.target.value)})} className="w-full bg-slate-50 border border-slate-100 px-4 py-3 rounded-xl font-bold text-xs text-midnight" />
+                          <input type="number" disabled={profile?.role === 'manager'} value={newProduct.height || ''} onChange={e => setNewProduct({...newProduct, height: parseFloat(e.target.value)})} className="w-full bg-slate-50 border border-slate-100 px-4 py-3 rounded-xl font-bold text-xs text-midnight disabled:opacity-50" />
                         </div>
                         <div className="space-y-1">
                           <label className="text-[9px] font-black text-slate-400 uppercase">Largura (cm)</label>
-                          <input type="number" value={newProduct.width || ''} onChange={e => setNewProduct({...newProduct, width: parseFloat(e.target.value)})} className="w-full bg-slate-50 border border-slate-100 px-4 py-3 rounded-xl font-bold text-xs text-midnight" />
+                          <input type="number" disabled={profile?.role === 'manager'} value={newProduct.width || ''} onChange={e => setNewProduct({...newProduct, width: parseFloat(e.target.value)})} className="w-full bg-slate-50 border border-slate-100 px-4 py-3 rounded-xl font-bold text-xs text-midnight disabled:opacity-50" />
                         </div>
                         <div className="space-y-1">
                           <label className="text-[9px] font-black text-slate-400 uppercase">Comprimento (cm)</label>
-                          <input type="number" value={newProduct.length || ''} onChange={e => setNewProduct({...newProduct, length: parseFloat(e.target.value)})} className="w-full bg-slate-50 border border-slate-100 px-4 py-3 rounded-xl font-bold text-xs text-midnight" />
+                          <input type="number" disabled={profile?.role === 'manager'} value={newProduct.length || ''} onChange={e => setNewProduct({...newProduct, length: parseFloat(e.target.value)})} className="w-full bg-slate-50 border border-slate-100 px-4 py-3 rounded-xl font-bold text-xs text-midnight disabled:opacity-50" />
                         </div>
                       </div>
                     </div>
@@ -708,9 +717,10 @@ export default function MerchantProducts() {
                       <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Descrição do Produto</label>
                       <textarea 
                         rows={4} 
+                        disabled={profile?.role === 'manager'}
                         value={newProduct.description} 
                         onChange={e => setNewProduct({...newProduct, description: e.target.value})}
-                        className="w-full bg-slate-50 border border-slate-100 px-6 py-4 rounded-2xl font-bold text-midnight resize-none"
+                        className="w-full bg-slate-50 border border-slate-100 px-6 py-4 rounded-2xl font-bold text-midnight resize-none disabled:opacity-50"
                         placeholder="Detalhes sobre o produto, materiais, uso, etc..."
                       />
                     </div>
@@ -724,7 +734,8 @@ export default function MerchantProducts() {
                             <button 
                               type="button"
                               onClick={() => setNewProduct({...newProduct, mainImage: ''})}
-                              className="absolute top-2 right-2 size-8 bg-red-500 text-white rounded-lg opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
+                              disabled={profile?.role === 'manager'}
+                              className="absolute top-2 right-2 size-8 bg-red-500 text-white rounded-lg opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center disabled:hidden"
                             >
                               <X size={14} />
                             </button>
@@ -739,7 +750,7 @@ export default function MerchantProducts() {
                             accept="image/*" 
                             className="hidden" 
                             onChange={(e) => handleFileUpload(e, false)} 
-                            disabled={uploading}
+                            disabled={uploading || profile?.role === 'manager'}
                           />
                           {uploading ? (
                             <Loader2 size={24} className="text-primary-blue animate-spin" />

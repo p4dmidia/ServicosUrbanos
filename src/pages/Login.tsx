@@ -8,7 +8,9 @@ import {
     Twitter,
     Linkedin,
     ShieldCheck,
-    LayoutGrid
+    LayoutGrid,
+    Eye,
+    EyeOff
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { Link, useNavigate } from 'react-router-dom';
@@ -22,6 +24,7 @@ export default function Login() {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [error, setError] = useState<string | null>(null);
+    const [showPassword, setShowPassword] = useState(false);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -141,16 +144,23 @@ export default function Login() {
                                     <label className="text-xs font-bold text-slate-400 uppercase tracking-widest">Senha</label>
                                     <a href="#" className="text-xs font-bold text-emerald-500 hover:text-emerald-400 transition-colors">Esqueci a senha?</a>
                                 </div>
-                                <div className="relative group">
+                                 <div className="relative group">
                                     <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-emerald-500 transition-colors" size={20} />
                                     <input
-                                        type="password"
+                                        type={showPassword ? "text" : "password"}
                                         placeholder="••••••••"
                                         value={password}
                                         onChange={e => setPassword(e.target.value)}
-                                        className="w-full bg-white/5 border border-white/10 rounded-2xl py-4 pl-12 pr-4 focus:outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 transition-all font-medium text-white placeholder:text-slate-600"
+                                        className="w-full bg-white/5 border border-white/10 rounded-2xl py-4 pl-12 pr-12 focus:outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 transition-all font-medium text-white placeholder:text-slate-600"
                                         required
                                     />
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowPassword(!showPassword)}
+                                        className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 hover:text-emerald-500 transition-colors"
+                                    >
+                                        {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                                    </button>
                                 </div>
                             </div>
 
@@ -199,7 +209,10 @@ export default function Login() {
             {/* Footer minimalista */}
             <footer className="p-8 text-center relative z-10 border-t border-white/5">
                 <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-6">
-                    <p className="text-[10px] text-slate-600 uppercase font-black tracking-widest">© 2026 Serviços Urbanos Tecnologia S.A.</p>
+                    <div className="flex flex-col items-center md:items-start gap-1">
+                        <p className="text-[10px] text-slate-600 uppercase font-black tracking-widest">© 2026 Serviços Urbanos Tecnologia S.A.</p>
+                        <p className="opacity-40 text-[9px] lowercase font-medium tracking-normal">Desenvolvido por <a href="https://p4dmidia.com.br" target="_blank" rel="noopener noreferrer" className="hover:text-emerald-500 transition-colors">P4D Mídia</a></p>
+                    </div>
                     <div className="flex gap-6 opacity-40 hover:opacity-100 transition-opacity">
                         <a href="#" className="hover:text-emerald-500"><Instagram size={18} /></a>
                         <a href="#" className="hover:text-emerald-500"><Twitter size={18} /></a>

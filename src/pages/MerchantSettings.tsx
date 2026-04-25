@@ -15,13 +15,25 @@ import {
   Trash2,
   Building2,
   DollarSign,
-  Edit2
+  Edit2,
+  User,
+  Mail,
+  Lock,
+  Zap
 } from 'lucide-react';
 import MerchantLayout from '../components/MerchantLayout';
 import { motion, AnimatePresence } from 'motion/react';
 import { businessRules, Branch, MerchantUser } from '../lib/businessRules';
 import { useAuth } from '../contexts/AuthContext';
 import { toast } from 'react-hot-toast';
+
+// E-mails autorizados a ativar conta de lojista durante a fase beta
+const AUTHORIZED_EMAILS = [
+  'contato@p4dmidia.com.br',
+  'vendas@p4dmidia.com.br',
+  'administrativo@p4dmidia.com.br',
+  'servicosurbanos23@gmail.com'
+];
 
 export default function MerchantSettings() {
   const { profile, refreshProfile } = useAuth();
@@ -40,6 +52,8 @@ export default function MerchantSettings() {
   const [showAddShipping, setShowAddShipping] = useState(false);
   const [shippingMethods, setShippingMethods] = useState<any[]>([]);
   const [merchantId, setMerchantId] = useState<string | null>(null);
+  const [editingMember, setEditingMember] = useState<MerchantUser | null>(null);
+  const [originalMember, setOriginalMember] = useState<MerchantUser | null>(null);
   const [isAffiliateOnly, setIsAffiliateOnly] = useState(false);
   const [isActivating, setIsActivating] = useState(false);
   const [upgradeForm, setUpgradeForm] = useState({ storeName: '', cnpj: '' });
@@ -284,6 +298,10 @@ export default function MerchantSettings() {
     try {
       setIsSaving(true);
       
+      const mId = merchantId || profile?.id;
+      if (!mId) throw new Error('ID do lojista não encontrado.');
+      const commission = parseInt(String(newMember.commissionRate)) || 0;
+
       await businessRules.addMerchantMember({
         mode: foundProfile ? 'link' : 'create',
         userId: foundProfile?.id,
@@ -291,12 +309,12 @@ export default function MerchantSettings() {
         email: newMember.email,
         cpf: searchCpf.replace(/\D/g, ''),
         password: newMember.password,
-        branchId: newMember.branchId,
-        commissionRate: newMember.commissionRate
+        branchId: newMember.branchId === 'matriz' ? '' : (newMember.branchId || ''),
+        commissionRate: commission,
+        merchantId: mId
       });
       
       // Refresh team list
-      const mId = merchantId || profile?.id;
       if (mId) {
         const branchIds = branches.map(b => b.id);
         const teamMembers = await businessRules.getMerchantTeam(branchIds);
@@ -311,6 +329,67 @@ export default function MerchantSettings() {
     } catch (error: any) {
       console.error('Erro ao adicionar gerente:', error);
       toast.error(error.message || 'Erro ao processar gerente.', { id: loadingToast });
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleUpdateMember = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingMember) return;
+
+    const loadingToast = toast.loading('Atualizando gerente...');
+    try {
+      setIsSaving(true);
+      const mId = merchantId || profile?.id;
+      if (!mId) throw new Error('ID do lojista não encontrado.');
+      
+      const commission = parseInt(String(editingMember.commissionRate)) || 0;
+      const emailChanged = editingMember.email !== originalMember?.email;
+      const passwordChanged = (editingMember as any).password && (editingMember as any).password.trim() !== '';
+
+      await businessRules.updateMerchantMember({
+        userId: editingMember.id,
+        name: editingMember.name,
+        email: emailChanged ? editingMember.email : undefined,
+        password: passwordChanged ? (editingMember as any).password.trim() : undefined,
+        branchId: editingMember.branchId === 'matriz' ? '' : (editingMember.branchId || ''),
+        commissionRate: commission,
+        merchantId: mId
+      });
+
+      // Refresh team list
+      const branchIds = branches.map(b => b.id);
+      const teamMembers = await businessRules.getMerchantTeam(branchIds);
+      setTeam(teamMembers);
+
+      setEditingMember(null);
+      toast.success('Dados atualizados com sucesso!', { id: loadingToast });
+    } catch (error: any) {
+      console.error('Erro ao atualizar gerente:', error);
+      toast.error(error.message || 'Erro ao atualizar gerente.', { id: loadingToast });
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleRemoveMember = async (userId: string, name: string) => {
+    if (!confirm(`Tem certeza que deseja remover o gerente "${name}" da sua equipe?`)) return;
+
+    const loadingToast = toast.loading('Removendo gerente...');
+    try {
+      setIsSaving(true);
+      await businessRules.removeMerchantMember(userId);
+
+      // Refresh team list
+      const branchIds = branches.map(b => b.id);
+      const teamMembers = await businessRules.getMerchantTeam(branchIds);
+      setTeam(teamMembers);
+
+      toast.success('Gerente removido da equipe!', { id: loadingToast });
+    } catch (error: any) {
+      console.error('Erro ao remover gerente:', error);
+      toast.error(error.message || 'Erro ao remover gerente.', { id: loadingToast });
     } finally {
       setIsSaving(false);
     }
@@ -388,8 +467,10 @@ export default function MerchantSettings() {
   }
 
   if (isAffiliateOnly) {
+    const isAuthorized = profile?.email && AUTHORIZED_EMAILS.includes(profile.email.toLowerCase());
+
     return (
-      <MerchantLayout title="Seja um Parceiro Lojista" subtitle="Expanda seu negócio em nossa plataforma">
+      <MerchantLayout title="Portal do Lojista" subtitle={isAuthorized ? "Ative sua loja" : "Lista de Espera"}>
         <div className="p-8 lg:p-12">
           <motion.div 
             initial={{ opacity: 0, y: 20 }}
@@ -404,59 +485,83 @@ export default function MerchantSettings() {
               <div className="relative z-10 space-y-10">
                 <div className="text-center space-y-4">
                   <div className="inline-flex p-4 rounded-3xl bg-indigo-50 text-indigo-600 mb-4">
-                    <Store size={48} />
+                    {isAuthorized ? <Store size={48} /> : <Zap size={48} />}
                   </div>
-                  <h1 className="text-4xl font-black text-midnight tracking-tight italic uppercase">Expandir para Lojista</h1>
+                  <h1 className="text-4xl font-black text-midnight tracking-tight italic uppercase">
+                    {isAuthorized ? 'Expandir para Lojista' : 'Venda no Marketplace'}
+                  </h1>
                   <p className="text-slate-500 font-medium max-w-xl mx-auto">
-                    Você já é um afiliado de sucesso! Que tal agora vender seus próprios produtos e serviços em nosso ecossistema?
+                    {isAuthorized 
+                      ? "Você tem acesso antecipado! Preencha os dados abaixo para ativar seu painel de vendas e começar a cadastrar seus produtos."
+                      : "Estamos preparando o maior ecossistema de serviços urbanos do Brasil. No momento, o cadastro de novos lojistas está disponível apenas para convidados."
+                    }
                   </p>
                 </div>
 
-                <form onSubmit={handleActivateMerchant} className="grid grid-cols-1 md:grid-cols-2 gap-8 bg-slate-50 p-10 rounded-[2rem] border border-slate-100">
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Nome da Loja</label>
-                    <div className="relative">
-                      <Store className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-                      <input
-                        type="text"
-                        placeholder="Ex: Minha Loja Inc"
-                        className="w-full pl-12 pr-4 py-4 bg-white border border-slate-200 rounded-2xl focus:ring-2 focus:ring-primary-blue focus:border-transparent transition-all font-bold text-midnight"
-                        value={upgradeForm.storeName}
-                        onChange={(e) => setUpgradeForm({ ...upgradeForm, storeName: e.target.value })}
-                        required
-                      />
+                {isAuthorized ? (
+                  <form onSubmit={handleActivateMerchant} className="grid grid-cols-1 md:grid-cols-2 gap-8 bg-slate-50 p-10 rounded-[2rem] border border-slate-100">
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Nome da Loja</label>
+                      <div className="relative">
+                        <Store className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                        <input
+                          type="text"
+                          placeholder="Ex: Minha Loja Inc"
+                          className="w-full pl-12 pr-4 py-4 bg-white border border-slate-200 rounded-2xl focus:ring-2 focus:ring-primary-blue focus:border-transparent transition-all font-bold text-midnight"
+                          value={upgradeForm.storeName}
+                          onChange={(e) => setUpgradeForm({ ...upgradeForm, storeName: e.target.value })}
+                          required
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">CNPJ da Empresa</label>
+                      <div className="relative">
+                        <Building2 className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                        <input
+                          type="text"
+                          placeholder="00.000.000/0000-00"
+                          className="w-full pl-12 pr-4 py-4 bg-white border border-slate-200 rounded-2xl focus:ring-2 focus:ring-primary-blue focus:border-transparent transition-all font-bold text-midnight"
+                          value={upgradeForm.cnpj}
+                          onChange={(e) => setUpgradeForm({ ...upgradeForm, cnpj: e.target.value.replace(/\D/g, '').substring(0, 14) })}
+                          required
+                        />
+                      </div>
+                    </div>
+
+                    <div className="md:col-span-2">
+                      <button
+                        type="submit"
+                        disabled={isActivating}
+                        className="w-full bg-midnight text-white py-5 rounded-2xl font-black italic uppercase tracking-widest hover:bg-primary-blue transition-all shadow-xl shadow-midnight/20 flex items-center justify-center gap-3 disabled:opacity-50"
+                      >
+                        {isActivating ? 'Ativando...' : 'Ativar Minha Conta de Lojista'}
+                        {!isActivating && <CheckCircle size={20} />}
+                      </button>
+                    </div>
+                  </form>
+                ) : (
+                  <div className="bg-amber-50 p-10 rounded-[2rem] border border-amber-100 text-center space-y-6">
+                    <div className="space-y-2">
+                      <h3 className="text-xl font-black text-amber-900 uppercase italic">Você está na Lista de Espera!</h3>
+                      <p className="text-amber-700 text-sm font-medium">
+                        Sua solicitação de interesse foi registrada. Assim que liberarmos novas vagas para lojistas na sua região, você receberá um convite por e-mail.
+                      </p>
+                    </div>
+                    <div className="pt-4 flex flex-col sm:flex-row items-center justify-center gap-4">
+                      <button 
+                        disabled
+                        className="bg-amber-200 text-amber-800 px-8 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest cursor-not-allowed"
+                      >
+                        Aguardando Liberação
+                      </button>
+                      <a href="/" className="text-amber-900 font-black text-[10px] uppercase tracking-widest hover:underline">
+                        Voltar para o Início
+                      </a>
                     </div>
                   </div>
-
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">CNPJ da Empresa</label>
-                    <div className="relative">
-                      <Building2 className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-                      <input
-                        type="text"
-                        placeholder="00.000.000/0000-00"
-                        className="w-full pl-12 pr-4 py-4 bg-white border border-slate-200 rounded-2xl focus:ring-2 focus:ring-primary-blue focus:border-transparent transition-all font-bold text-midnight"
-                        value={upgradeForm.cnpj}
-                        onChange={(e) => setUpgradeForm({ ...upgradeForm, cnpj: e.target.value.replace(/\D/g, '').substring(0, 14) })}
-                        required
-                      />
-                    </div>
-                  </div>
-
-                  <div className="md:col-span-2">
-                    <button
-                      type="submit"
-                      disabled={isActivating}
-                      className="w-full bg-midnight text-white py-5 rounded-2xl font-black italic uppercase tracking-widest hover:bg-primary-blue transition-all shadow-xl shadow-midnight/20 flex items-center justify-center gap-3 disabled:opacity-50"
-                    >
-                      {isActivating ? 'Ativando...' : 'Ativar Minha Conta de Lojista'}
-                      {!isActivating && <CheckCircle size={20} />}
-                    </button>
-                    <p className="text-center mt-6 text-[10px] text-slate-400 font-bold uppercase tracking-tighter">
-                      Você manterá todos os seus bônus e rede de afiliados atual
-                    </p>
-                  </div>
-                </form>
+                )}
               </div>
             </div>
           </motion.div>
@@ -711,15 +816,37 @@ export default function MerchantSettings() {
                     <tr className="border-b border-slate-100">
                       <th className="py-4 text-[10px] text-midnight uppercase">Gerente</th>
                       <th className="py-4 text-[10px] text-midnight uppercase">Filial</th>
-                      <th className="py-4 text-[10px] text-midnight uppercase text-right">Comissão</th>
+                      <th className="py-4 text-[10px] text-midnight uppercase text-center">Comissão</th>
+                      <th className="py-4 text-[10px] text-midnight uppercase text-right">Ações</th>
                     </tr>
                   </thead>
                   <tbody>
                     {team.map(member => (
-                      <tr key={member.id} className="border-b border-slate-50">
+                      <tr key={member.id} className="border-b border-slate-50 group">
                         <td className="py-4 text-midnight">{member.name}</td>
                         <td className="py-4 text-xs text-slate-900">{branches.find(b => b.id === member.branchId)?.name || '-'}</td>
-                        <td className="py-4 text-right"><span className="px-3 py-1 bg-emerald-50 text-emerald-600 rounded-full text-[10px]">{member.commissionRate}%</span></td>
+                        <td className="py-4 text-center"><span className="px-3 py-1 bg-emerald-50 text-emerald-600 rounded-full text-[10px]">{member.commissionRate}%</span></td>
+                        <td className="py-4 text-right">
+                          <div className="flex items-center justify-end gap-2 transition-opacity">
+                            <button 
+                              onClick={() => {
+                                setEditingMember({...member});
+                                setOriginalMember({...member});
+                              }}
+                              className="size-8 bg-slate-50 text-slate-400 hover:text-primary-blue rounded-lg flex items-center justify-center transition-colors shadow-sm"
+                              title="Editar"
+                            >
+                              <Edit2 size={14} />
+                            </button>
+                            <button 
+                              onClick={() => handleRemoveMember(member.id, member.name)}
+                              className="size-8 bg-slate-50 text-slate-400 hover:text-red-500 rounded-lg flex items-center justify-center transition-colors shadow-sm"
+                              title="Remover"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -836,34 +963,49 @@ export default function MerchantSettings() {
                     </div>
                   </div>
                 ) : searchCpf.length >= 11 && !isSearching && (
-                  <div className="space-y-4">
-                    <div className="space-y-1">
-                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Nome Completo</label>
-                      <input required placeholder="Nome do Gerente" value={newMember.name} onChange={e => setNewMember({...newMember, name: e.target.value})} className="w-full bg-slate-50 border border-slate-200 px-6 py-4 rounded-2xl font-bold text-midnight" />
+                    <div className="space-y-4">
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Nome Completo</label>
+                        <div className="relative">
+                          <User className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                          <input required placeholder="Nome do Gerente" value={newMember.name} onChange={e => setNewMember({...newMember, name: e.target.value})} className="w-full pl-12 pr-4 py-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold text-midnight" />
+                        </div>
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">E-mail de Acesso</label>
+                        <div className="relative">
+                          <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                          <input required type="email" placeholder="email@exemplo.com" value={newMember.email} onChange={e => setNewMember({...newMember, email: e.target.value})} className="w-full pl-12 pr-4 py-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold text-midnight" />
+                        </div>
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Senha Inicial</label>
+                        <div className="relative">
+                          <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                          <input required type="password" placeholder="Mínimo 6 caracteres" value={newMember.password} onChange={e => setNewMember({...newMember, password: e.target.value})} className="w-full pl-12 pr-4 py-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold text-midnight" />
+                        </div>
+                      </div>
                     </div>
-                    <div className="space-y-1">
-                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">E-mail de Acesso</label>
-                      <input required type="email" placeholder="email@exemplo.com" value={newMember.email} onChange={e => setNewMember({...newMember, email: e.target.value})} className="w-full bg-slate-50 border border-slate-200 px-6 py-4 rounded-2xl font-bold text-midnight" />
-                    </div>
-                    <div className="space-y-1">
-                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Senha Inicial</label>
-                      <input required type="password" placeholder="Mínimo 6 caracteres" value={newMember.password} onChange={e => setNewMember({...newMember, password: e.target.value})} className="w-full bg-slate-50 border border-slate-200 px-6 py-4 rounded-2xl font-bold text-midnight" />
+                  )}
+
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Atribuir Filial</label>
+                    <div className="relative">
+                      <Building2 className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                      <select required className="w-full pl-12 pr-4 py-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold text-midnight appearance-none" value={newMember.branchId} onChange={e => setNewMember({...newMember, branchId: e.target.value})}>
+                        <option value="">Selecionar Filial</option>
+                        {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+                      </select>
                     </div>
                   </div>
-                )}
 
-                <div className="space-y-1">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Atribuir Filial</label>
-                  <select required className="w-full bg-slate-50 border border-slate-200 px-6 py-4 rounded-2xl font-bold text-midnight" value={newMember.branchId} onChange={e => setNewMember({...newMember, branchId: e.target.value})}>
-                    <option value="">Selecionar Filial</option>
-                    {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
-                  </select>
-                </div>
-
-                <div className="space-y-1">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Comissão Gerencial (%)</label>
-                  <input required type="number" placeholder="Comissão (%)" value={newMember.commissionRate} onChange={e => setNewMember({...newMember, commissionRate: parseInt(e.target.value)})} className="w-full bg-slate-50 border border-slate-200 px-6 py-4 rounded-2xl font-bold text-midnight" />
-                </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Comissão Gerencial (%)</label>
+                    <div className="relative">
+                      <DollarSign className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                      <input required type="number" placeholder="Comissão (%)" value={newMember.commissionRate} onChange={e => setNewMember({...newMember, commissionRate: parseInt(e.target.value)})} className="w-full pl-12 pr-4 py-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold text-midnight" />
+                    </div>
+                  </div>
                 <button type="submit" className="w-full bg-primary-blue text-white py-4 rounded-2xl font-black uppercase tracking-widest mt-4">
                   {foundProfile ? 'Vincular Gerente' : 'Criar Acesso Completo'}
                 </button>
@@ -888,6 +1030,74 @@ export default function MerchantSettings() {
                   <input required placeholder="Prazo (Ex: 24h)" value={newShipping.deadline} onChange={e => setNewShipping({...newShipping, deadline: e.target.value})} className="w-full bg-slate-50 border border-slate-200 px-6 py-4 rounded-2xl font-bold text-midnight" />
                 </div>
                 <button type="submit" className="w-full bg-midnight text-white py-4 rounded-2xl font-black uppercase tracking-widest mt-4">Salvar Método</button>
+              </form>
+            </motion.div>
+          </div>
+        )}
+        {editingMember && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-6">
+            <motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}} onClick={() => setEditingMember(null)} className="absolute inset-0 bg-midnight/80 backdrop-blur-sm" />
+            <motion.div initial={{opacity:0, scale:0.9}} animate={{opacity:1, scale:1}} exit={{opacity:0, scale:0.9}} className="relative bg-white w-full max-w-lg rounded-[2.5rem] p-10 shadow-2xl">
+              <div className="flex items-center gap-3 mb-6">
+                <div className="size-12 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center">
+                  <User size={24} />
+                </div>
+                <div>
+                  <h3 className="text-2xl font-black text-midnight uppercase italic leading-none">Editar Gerente</h3>
+                  <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">Atualize as permissões e dados do membro</p>
+                </div>
+              </div>
+              
+              <form onSubmit={handleUpdateMember} className="space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Nome Completo</label>
+                    <div className="relative">
+                      <User className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                      <input required placeholder="Nome do Gerente" value={editingMember.name} onChange={e => setEditingMember({...editingMember, name: e.target.value})} className="w-full pl-12 pr-4 py-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold text-midnight" />
+                    </div>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">E-mail de Acesso</label>
+                    <div className="relative">
+                      <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                      <input required type="email" placeholder="email@exemplo.com" value={editingMember.email} onChange={e => setEditingMember({...editingMember, email: e.target.value})} className="w-full pl-12 pr-4 py-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold text-midnight" />
+                    </div>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Alterar Senha</label>
+                    <div className="relative">
+                      <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                      <input type="password" placeholder="Deixe em branco para manter" value={(editingMember as any).password || ''} onChange={e => setEditingMember({...editingMember, password: e.target.value} as any)} className="w-full pl-12 pr-4 py-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold text-midnight" />
+                    </div>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Comissão Gerencial (%)</label>
+                    <div className="relative">
+                      <DollarSign className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                      <input required type="number" placeholder="Comissão (%)" value={editingMember.commissionRate} onChange={e => setEditingMember({...editingMember, commissionRate: parseInt(e.target.value)})} className="w-full pl-12 pr-4 py-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold text-midnight" />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Filial Atribuída</label>
+                  <div className="relative">
+                    <Building2 className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                    <select required className="w-full pl-12 pr-4 py-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold text-midnight appearance-none" value={editingMember.branchId} onChange={e => setEditingMember({...editingMember, branchId: e.target.value})}>
+                      <option value="">Selecionar Filial</option>
+                      {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+                    </select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4 mt-8">
+                  <button type="button" onClick={() => setEditingMember(null)} className="w-full bg-slate-100 text-slate-500 py-4 rounded-2xl font-black uppercase tracking-widest hover:bg-slate-200 transition-colors">Cancelar</button>
+                  <button type="submit" className="w-full bg-primary-blue text-white py-4 rounded-2xl font-black uppercase tracking-widest shadow-lg shadow-primary-blue/20">Salvar Dados</button>
+                </div>
               </form>
             </motion.div>
           </div>

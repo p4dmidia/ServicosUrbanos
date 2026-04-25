@@ -6,7 +6,9 @@ import {
   LayoutGrid, 
   Mail, 
   Lock,
-  ArrowLeft
+  ArrowLeft,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { Link, useNavigate } from 'react-router-dom';
@@ -23,6 +25,7 @@ export default function MerchantLogin() {
   const navigate = useNavigate();
   const { refreshProfile } = useAuth();
   const [showWaitlist, setShowWaitlist] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -150,16 +153,22 @@ export default function MerchantLogin() {
                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Senha de Acesso</label>
                 <a href="#" className="text-[10px] font-black text-primary-blue hover:underline uppercase tracking-widest">Esqueci a senha</a>
               </div>
-              <div className="relative group">
+               <div className="relative group">
                 <input 
-                  type="password" 
+                  type={showPassword ? "text" : "password"} 
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-100 px-6 py-4 rounded-2xl focus:outline-none focus:ring-2 focus:ring-primary-blue/20 transition-all font-bold group-hover:border-slate-200 text-midnight"
+                  className="w-full bg-slate-50 border border-slate-100 px-6 py-4 rounded-2xl focus:outline-none focus:ring-2 focus:ring-primary-blue/20 transition-all font-bold group-hover:border-slate-200 text-midnight pr-14"
                   placeholder="••••••••"
                   required
                 />
-                <Lock className="absolute right-6 top-1/2 -translate-y-1/2 text-slate-300" size={20} />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-6 top-1/2 -translate-y-1/2 text-slate-300 hover:text-primary-blue transition-colors"
+                >
+                  {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                </button>
               </div>
             </div>
 
@@ -205,9 +214,14 @@ export default function MerchantLogin() {
           onClose={() => setShowWaitlist(false)} 
         />
 
-        <p className="absolute bottom-8 text-[9px] text-slate-300 font-bold uppercase tracking-widest">
-          © 2026 Serviços Urbanos S.A. • merchant center v2.0
-        </p>
+        <div className="absolute bottom-8 flex flex-col items-center gap-1">
+          <p className="text-[9px] text-slate-300 font-bold uppercase tracking-widest text-center">
+            © 2026 Serviços Urbanos S.A. • merchant center v2.0
+          </p>
+          <p className="text-[8px] text-slate-400 lowercase font-medium tracking-normal text-center">
+            Desenvolvido por <a href="https://p4dmidia.com.br" target="_blank" rel="noopener noreferrer" className="hover:text-primary-blue transition-colors underline decoration-primary-blue/30">P4D Mídia</a>
+          </p>
+        </div>
       </div>
     </div>
   );

@@ -64,7 +64,7 @@ export default function ProductDetail() {
   const [quantity, setQuantity] = useState(1);
   const [activeImage, setActiveImage] = useState(0);
   const [mmnConfig, setMmnConfig] = useState<any>(null);
-  const [g1Value, setG1Value] = useState(0);
+  const [g1Value, setG1Value] = useState(4.5); // Default 4.5% if not configured
 
   const [search, setSearch] = useState('');
   const [showNotifications, setShowNotifications] = useState(false);
@@ -820,7 +820,7 @@ export default function ProductDetail() {
               <div className="flex gap-8">
                 <div>
                   <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 flex items-center gap-1">
-                    <div className="size-1.5 bg-emerald-500 rounded-full" /> Bônus Mensal
+                    <div className="size-1.5 bg-emerald-500 rounded-full" /> Cashback Mensal
                   </div>
                   <div className="flex items-center gap-2 text-emerald-600">
                     <TrendingUp size={16} />
@@ -829,7 +829,7 @@ export default function ProductDetail() {
                 </div>
                 <div>
                   <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 flex items-center gap-1">
-                    <div className="size-1.5 bg-indigo-500 rounded-full" /> Bônus Anual
+                    <div className="size-1.5 bg-indigo-500 rounded-full" /> Cashback Anual
                   </div>
                   <div className="flex items-center gap-2 text-indigo-600">
                     <Award size={16} />
@@ -887,7 +887,7 @@ export default function ProductDetail() {
                   <Store className="text-midnight" size={20} />
                   <div>
                     <p className="text-[10px] font-black uppercase text-midnight">Retirada Grátis!</p>
-                    <p className="text-[9px] font-bold text-slate-400">Compre pelo site -> retire na loja Grátis</p>
+                    <p className="text-[9px] font-bold text-slate-400">Compre pelo site → retire na loja Grátis</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl border border-slate-100">
@@ -1069,7 +1069,10 @@ export default function ProductDetail() {
           </div>
 
           <div className="pt-12 flex flex-col md:flex-row justify-between items-center gap-6 text-[9px] font-black uppercase tracking-[0.2em]">
-            <p className="text-slate-600">© 2026 Ecossistema Serviços Urbanos Tecnologia</p>
+            <div className="flex flex-col items-center md:items-start gap-1">
+              <p className="text-slate-600">© 2026 Ecossistema Serviços Urbanos Tecnologia</p>
+              <p className="text-slate-700 opacity-50 lowercase font-medium tracking-normal">Desenvolvido por <a href="https://p4dmidia.com.br" target="_blank" rel="noopener noreferrer" className="hover:text-primary-blue transition-colors">P4D Mídia</a></p>
+            </div>
             <div className="flex gap-8">
               <span className="flex items-center gap-1 transition-colors hover:text-white cursor-pointer"><Package size={12} /> Rastreio</span>
               <span className="flex items-center gap-1 transition-colors hover:text-white cursor-pointer"><TrendingUp size={12} /> Investimentos</span>

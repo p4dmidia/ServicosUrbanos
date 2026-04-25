@@ -273,7 +273,10 @@ export default function Ecossistema() {
 
             {/* Footer minimalista */}
             <footer className="p-12 text-center text-slate-400 border-t border-slate-100">
-                <p className="text-[10px] font-black uppercase tracking-widest">© 2026 Serviços Urbanos S.A. • Tecnologia a favor da sua economia.</p>
+                <div className="flex flex-col items-center gap-1">
+                    <p className="text-[10px] font-black uppercase tracking-widest">© 2026 Serviços Urbanos S.A. • Tecnologia a favor da sua economia.</p>
+                    <p className="opacity-50 text-[9px] lowercase font-medium tracking-normal">Desenvolvido por <a href="https://p4dmidia.com.br" target="_blank" rel="noopener noreferrer" className="hover:text-primary-blue transition-colors">P4D Mídia</a></p>
+                </div>
             </footer>
         </div>
     );

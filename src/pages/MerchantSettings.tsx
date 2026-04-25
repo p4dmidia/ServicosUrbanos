@@ -32,7 +32,8 @@ const AUTHORIZED_EMAILS = [
   'contato@p4dmidia.com.br',
   'vendas@p4dmidia.com.br',
   'administrativo@p4dmidia.com.br',
-  'servicosurbanos23@gmail.com'
+  'servicosurbanos23@gmail.com',
+  'xipsdapraia23@gmail.com'
 ];
 
 export default function MerchantSettings() {

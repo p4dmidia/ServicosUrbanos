@@ -31,18 +31,16 @@ interface Transaction {
   amount: number;
   date: string;
   status: 'completed' | 'pending' | 'failed';
+  receipt_url?: string;
 }
 
 export default function MerchantFinancials() {
   const { profile, loading: authLoading } = useAuth();
   const [filterType, setFilterType] = useState('all');
-  const [showWithdrawModal, setShowWithdrawModal] = useState(false);
-  const [withdrawAmount, setWithdrawAmount] = useState('');
   const [branches, setBranches] = useState<Branch[]>([]);
   const [financials, setFinancials] = useState<any>(null);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
-  const [requesting, setRequesting] = useState(false);
 
   async function loadAppData() {
     try {
@@ -137,35 +135,6 @@ export default function MerchantFinancials() {
     }
   };
 
-  const handleWithdrawRequest = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const amount = parseFloat(withdrawAmount);
-    
-    if (amount > financials.balance) {
-      toast.error('Saldo insuficiente');
-      return;
-    }
-
-    if (amount < 50) {
-      toast.error('O valor mínimo para saque é R$ 50,00');
-      return;
-    }
-
-    try {
-      setRequesting(true);
-      await businessRules.requestWithdrawal(profile.id, amount);
-      toast.success('Solicitação de saque enviada com sucesso!');
-      setShowWithdrawModal(false);
-      setWithdrawAmount('');
-      // Recarregar os dados para atualizar o saldo e o extrato
-      loadAppData();
-    } catch (err) {
-      console.error('Erro ao solicitar saque:', err);
-      toast.error('Erro ao processar solicitação de saque');
-    } finally {
-      setRequesting(false);
-    }
-  };
 
   return (
     <MerchantLayout title="Financeiro" subtitle={`Gestão financeira da ${isOwner ? 'Matriz' : 'sua Filial'}`}>
@@ -225,33 +194,31 @@ export default function MerchantFinancials() {
             <div className="relative z-10 flex-1 flex flex-col">
               <div className="flex items-center gap-3 mb-8">
                 <div className="size-12 bg-white/10 rounded-2xl flex items-center justify-center text-emerald-400 text-[12px]">
-                  <Wallet size={24} />
+                  <DollarSign size={24} />
                 </div>
                 <div>
-                  <h3 className="text-xl font-black text-white tracking-tighter uppercase italic">Saque Rápido</h3>
-                  <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">Conta Bancária Cadastrada</p>
+                  <h3 className="text-xl font-black text-white tracking-tighter uppercase italic">Pagamentos</h3>
+                  <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">Calendário Automático</p>
                 </div>
               </div>
 
-              <div className="bg-white/5 rounded-3xl p-6 border border-white/10 mb-8 backdrop-blur-sm text-[12px]">
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Destino</p>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-white font-black text-sm">{profile.role === 'owner' ? 'Conta PJ Master' : 'Conta Pessoal'}</p>
-                    <p className="text-slate-400 text-xs mt-1">PIX: {profile.email}</p>
-                  </div>
-                  <CheckCircle className="text-emerald-500" size={20} />
+              <div className="space-y-4 mb-8">
+                <div className="bg-white/5 rounded-2xl p-6 border border-white/10 backdrop-blur-sm">
+                  <p className="text-[10px] font-bold text-emerald-400 uppercase tracking-widest mb-1">Cashback Mensal</p>
+                  <p className="text-white font-black text-sm uppercase">Todo dia 10</p>
+                </div>
+                <div className="bg-white/5 rounded-2xl p-6 border border-white/10 backdrop-blur-sm">
+                  <p className="text-[10px] font-bold text-blue-400 uppercase tracking-widest mb-1">Cashback Anual</p>
+                  <p className="text-white font-black text-sm uppercase">10 de Dezembro</p>
                 </div>
               </div>
 
               <div className="mt-auto">
-                <p className="text-slate-400 text-sm mb-4">Saldo Disponível: <span className="text-white font-black">R$ {financials?.balance.toFixed(2).replace('.', ',')}</span></p>
-                <button 
-                  onClick={() => setShowWithdrawModal(true)}
-                  className="w-full bg-emerald-500 hover:bg-emerald-600 text-midnight py-5 rounded-2xl font-black text-xs uppercase tracking-widest transition-all shadow-xl shadow-emerald-500/20 flex items-center justify-center gap-3 group"
-                >
-                  Solicitar Saque <ArrowRight size={18} className="group-hover:translate-x-1 transition-transform" />
-                </button>
+                <p className="text-slate-400 text-sm mb-4 italic">O pagamento será realizado via PIX na chave cadastrada no seu perfil.</p>
+                <div className="bg-emerald-500/10 text-emerald-500 p-4 rounded-xl border border-emerald-500/20 text-[10px] font-black uppercase tracking-widest flex items-center gap-2">
+                  <CheckCircle size={14} />
+                  Status: Conta Verificada
+                </div>
               </div>
             </div>
           </div>
@@ -340,33 +307,6 @@ export default function MerchantFinancials() {
         </div>
       </div>
 
-      {/* Withdrawal Modal */}
-      <AnimatePresence>
-        {showWithdrawModal && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6 text-[12px]">
-            <motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}} className="absolute inset-0 bg-midnight/80 backdrop-blur-sm" onClick={() => setShowWithdrawModal(false)} />
-            <motion.div initial={{opacity:0, scale:0.95}} animate={{opacity:1, scale:1}} exit={{opacity:0, scale:0.95}} className="relative w-full max-w-md bg-white rounded-[2.5rem] shadow-2xl p-10 overflow-hidden">
-              <h3 className="text-2xl font-black text-midnight tracking-tighter uppercase italic mb-2">Solicitar Saque</h3>
-              <form onSubmit={handleWithdrawRequest} className="space-y-6">
-                <div className="bg-slate-50 p-6 rounded-2xl border border-slate-100 flex justify-between items-center">
-                  <span className="text-xs font-black text-slate-500 uppercase tracking-widest">Saldo Disponível</span>
-                  <span className="text-lg font-black text-emerald-500">R$ {financials?.balance.toFixed(2).replace('.', ',')}</span>
-                </div>
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Valor do Saque (R$)</label>
-                  <input type="number" required min="50" max={financials?.balance} step="0.01" value={withdrawAmount} onChange={e => setWithdrawAmount(e.target.value)} className="w-full bg-slate-50 border border-slate-100 px-6 py-4 rounded-2xl font-black text-2xl text-midnight" placeholder="0,00" />
-                </div>
-                <div className="pt-4 flex gap-4">
-                  <button type="button" disabled={requesting} onClick={() => setShowWithdrawModal(false)} className="flex-1 py-4 rounded-2xl font-black text-xs uppercase tracking-widest text-slate-500 bg-slate-100 transition-all font-black">Cancelar</button>
-                  <button type="submit" disabled={requesting} className="flex-1 bg-emerald-500 text-midnight py-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg shadow-emerald-500/20 font-black flex items-center justify-center gap-2">
-                    {requesting ? <Loader2 size={16} className="animate-spin" /> : 'Confirmar'}
-                  </button>
-                </div>
-              </form>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
     </MerchantLayout>
   );
 }

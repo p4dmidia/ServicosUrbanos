@@ -82,11 +82,11 @@ export default function MerchantLogin() {
           
           <div className="flex items-center gap-3 text-white mb-10">
             <div className="size-12 bg-primary-blue rounded-2xl flex items-center justify-center shadow-lg shadow-primary-blue/30">
-              <Building2 size={24} />
+              <LayoutGrid size={24} />
             </div>
             <div>
-              <span className="text-2xl font-black tracking-tighter uppercase leading-none block">UrbaShop</span>
-              <span className="text-[10px] font-black text-primary-red uppercase tracking-[0.2em] opacity-80">Merchant Center</span>
+              <span className="text-2xl font-black tracking-tighter uppercase italic leading-none block">URBA<span className="text-primary-blue">SHOP</span></span>
+              <span className="text-[10px] font-black text-primary-blue uppercase tracking-[0.2em] opacity-80">Merchant Center</span>
             </div>
           </div>
 
@@ -110,12 +110,18 @@ export default function MerchantLogin() {
 
       {/* Right side: Form */}
       <div className="flex-1 flex flex-col items-center justify-center p-8 lg:p-24 bg-white relative">
+        <div className="md:hidden w-full flex justify-start mb-8">
+          <Link to="/marketplace" className="inline-flex items-center gap-2 text-slate-400 hover:text-midnight transition-colors group uppercase text-[10px] font-black tracking-widest">
+            <ArrowLeft size={14} className="group-hover:-translate-x-1 transition-transform" /> Voltar para o Shopping
+          </Link>
+        </div>
+
         <div className="w-full max-w-md">
           <div className="md:hidden flex items-center gap-3 text-midnight mb-12">
-            <div className="size-10 bg-midnight text-white rounded-xl flex items-center justify-center">
-              <Building2 size={20} />
+            <div className="size-10 bg-primary-blue text-white rounded-xl flex items-center justify-center shadow-lg shadow-primary-blue/20">
+              <LayoutGrid size={20} />
             </div>
-            <span className="text-xl font-black tracking-tighter uppercase">Merchant Hub</span>
+            <span className="text-xl font-black tracking-tighter uppercase italic">URBA<span className="text-primary-blue">SHOP</span></span>
           </div>
 
           <div className="mb-10">

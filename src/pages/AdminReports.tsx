@@ -85,12 +85,12 @@ export default function AdminReports() {
         
         {/* Controls */}
         <div className="flex flex-col md:flex-row gap-6 items-center justify-between">
-          <div className="flex p-1 bg-[#0a0e17] rounded-2xl border border-white/5">
-            {['Hoje', '7 dias', '30 dias', '12 meses'].map((range) => (
+          <div className="flex p-1 bg-[#0a0e17] rounded-2xl border border-white/5 overflow-x-auto max-w-full">
+            {['7 dias', '15 dias', '30 dias', '6 meses', '1 ano'].map((range) => (
               <button
                 key={range}
                 onClick={() => setDateRange(range)}
-                className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
+                className={`px-4 lg:px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${
                   dateRange === range ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-500 hover:text-white'
                 }`}
               >
@@ -199,12 +199,12 @@ export default function AdminReports() {
             <div className="flex items-center justify-between mb-12">
               <div>
                 <h3 className="text-xl font-black text-white tracking-tighter uppercase italic leading-none mb-1">Evolução de Faturamento</h3>
-                <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Comparativo de performance mensal (12 Meses)</p>
+                <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Comparativo de performance ({dateRange})</p>
               </div>
               <Activity className="text-indigo-500" size={24} />
             </div>
 
-            <div className="h-64 flex items-end justify-between gap-4 px-4">
+            <div className="h-64 flex items-end justify-between gap-2 px-2">
               {loading ? (
                 Array.from({ length: 12 }).map((_, i) => (
                   <div key={i} className="flex-1 bg-white/5 rounded-t-xl animate-pulse" style={{ height: '30%' }} />
@@ -213,15 +213,26 @@ export default function AdminReports() {
                 reportData?.chart?.values?.map((val: number, i: number) => {
                   const max = Math.max(...(reportData?.chart?.values || []), 1);
                   const height = (val / max) * 100;
+                  const isLast = i === (reportData?.chart?.values?.length - 1);
+                  
                   return (
-                    <div key={i} className="flex-1 group relative">
+                    <div key={i} className="flex-1 group relative h-full flex flex-col justify-end">
                       <motion.div 
                         initial={{ height: 0 }}
-                        animate={{ height: `${Math.max(height, 5)}%` }}
-                        className={`w-full rounded-t-xl transition-all ${i === (reportData?.chart?.values?.length - 1) ? 'bg-indigo-500 shadow-lg shadow-indigo-500/20' : 'bg-white/5 group-hover:bg-white/10'}`}
-                      />
-                      <div className="absolute -top-8 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity bg-indigo-600 text-white text-[8px] font-black py-1 px-2 rounded-lg pointer-events-none whitespace-nowrap z-20">
-                        R$ {val.toLocaleString('pt-BR')}
+                        animate={{ height: `${Math.max(height, 2)}%` }}
+                        transition={{ type: 'spring', damping: 20, stiffness: 100, delay: i * 0.02 }}
+                        className={`w-full rounded-t-lg transition-all relative overflow-hidden ${
+                          isLast 
+                          ? 'bg-gradient-to-t from-indigo-600 to-indigo-400 shadow-lg shadow-indigo-500/20' 
+                          : 'bg-white/5 group-hover:bg-white/10 group-hover:from-indigo-500/20 group-hover:to-transparent group-hover:bg-gradient-to-t'
+                        }`}
+                      >
+                        {isLast && <div className="absolute inset-0 bg-gradient-to-r from-white/10 to-transparent animate-pulse" />}
+                      </motion.div>
+                      
+                      <div className="absolute -top-10 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-all scale-90 group-hover:scale-100 bg-white text-indigo-900 text-[10px] font-black py-2 px-3 rounded-xl shadow-2xl pointer-events-none whitespace-nowrap z-50 border border-indigo-100">
+                        <p className="text-[8px] text-slate-400 uppercase mb-0.5">{reportData.chart.labels[i]}</p>
+                        R$ {val.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                       </div>
                     </div>
                   );
@@ -229,15 +240,23 @@ export default function AdminReports() {
               )}
             </div>
             
-            <div className="mt-8 flex justify-between px-4">
+            <div className="mt-8 flex justify-between px-2 overflow-hidden">
               {loading ? (
                  Array.from({ length: 12 }).map((_, i) => (
                   <div key={i} className="h-2 w-8 bg-white/5 rounded mx-1 animate-pulse" />
                 ))
               ) : (
-                reportData?.chart?.labels?.map((m: string) => (
-                  <span key={m} className="text-[9px] font-black text-slate-600 uppercase tracking-widest">{m}</span>
-                ))
+                reportData?.chart?.labels?.map((m: string, i: number) => {
+                  // Show fewer labels for long periods
+                  const shouldShow = reportData.chart.labels.length <= 15 || i % Math.floor(reportData.chart.labels.length / 8) === 0 || i === reportData.chart.labels.length - 1;
+                  if (!shouldShow) return <div key={i} className="flex-1" />;
+                  
+                  return (
+                    <span key={i} className="flex-1 text-center text-[8px] font-black text-slate-600 uppercase tracking-widest truncate px-1">
+                      {m}
+                    </span>
+                  );
+                })
               )}
             </div>
           </div>

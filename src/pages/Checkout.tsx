@@ -11,10 +11,13 @@ import {
   LayoutGrid,
   Search,
   Bell,
-  User,
-  ShoppingBag,
-  Package,
-  TrendingUp
+  TrendingUp,
+  Menu,
+  X,
+  Store,
+  LogOut,
+  LayoutDashboard,
+  User
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import toast from 'react-hot-toast';
@@ -42,6 +45,7 @@ export default function Checkout() {
   ]);
   const [search, setSearch] = useState('');
   const [isCartOpen, setIsCartOpen] = useState(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   
   const cartCount = cartItems.reduce((acc, item) => acc + item.quantity, 0);
 
@@ -59,6 +63,9 @@ export default function Checkout() {
     estado: ''
   });
 
+  const [mmnConfig, setMmnConfig] = useState<any>(null);
+  const [g1Value, setG1Value] = useState(0);
+
   const [shippingMethod, setShippingMethod] = useState('');
   const [shippingCost, setShippingCost] = useState(0);
   const [pickupAddress, setPickupAddress] = useState('Buscando endereço da loja...');
@@ -66,6 +73,7 @@ export default function Checkout() {
   const [paymentMethod, setPaymentMethod] = useState<'mercadopago' | 'wallet'>('mercadopago');
   const [walletBalance, setWalletBalance] = useState(0);
   const [walletLoading, setWalletLoading] = useState(false);
+  const [isEligibleForWallet, setIsEligibleForWallet] = useState(false);
 
   useEffect(() => {
     async function fetchPickupAddress() {
@@ -126,6 +134,7 @@ export default function Checkout() {
         setWalletLoading(true);
         const stats = await businessRules.getAffiliateStats(authUser.id);
         setWalletBalance(stats.availableBalance);
+        setIsEligibleForWallet(stats.consumptionCount >= 1);
       } catch (err) {
         console.error('Error fetching wallet balance:', err);
       } finally {
@@ -133,19 +142,34 @@ export default function Checkout() {
       }
     }
     fetchWalletBalance();
+
+    async function fetchMMN() {
+      try {
+        const config = await businessRules.getMMNConfig();
+        const levels = await businessRules.getMMNLevels();
+        setMmnConfig(config);
+        const g1 = levels.find(l => l.level === 1);
+        if (g1) setG1Value(g1.value);
+      } catch (e) {
+        console.error('Error fetching MMN for checkout:', e);
+      }
+    }
+    fetchMMN();
   }, [authUser]);
 
   const subtotal = cartItems.reduce((acc, item) => acc + (item.price * item.quantity), 0);
-  const total = subtotal + shippingCost;
+  const total = subtotal; // Sem frete
+
+  // MMN Calculations for the whole order
+  const g1TotalOrder = (subtotal * (g1Value / 100));
+  const totalRatios = (mmnConfig?.cashbackMensal || 2.75) + (mmnConfig?.cashbackDigital || 1.0) + (mmnConfig?.cashbackAnual || 0.75);
+  const totalMensal = g1TotalOrder * ((mmnConfig?.cashbackMensal || 2.75) / totalRatios);
+  const totalAnual = g1TotalOrder * ((mmnConfig?.cashbackAnual || 0.75) / totalRatios);
 
   useEffect(() => {
-    if (address.cep.replace(/\D/g, '').length === 8) {
-      // Mock shipping calculation
-      setShippingCost(15.90);
-    } else {
-      setShippingCost(0);
-    }
-  }, [address.cep]);
+    setShippingCost(0);
+    setShippingMethod('pickup');
+  }, []);
 
   const handleCheckout = async () => {
     if (!shippingMethod) {
@@ -186,7 +210,7 @@ export default function Checkout() {
             customer_name: profile.full_name,
             customer_initial: profile.full_name?.[0] || 'U',
             amount: total,
-            status: 'Processando',
+            status: 'Aguardando Pagamento',
             items: cartItems,
             branch_id: cartItems[0].branchId || cartItems[0].merchant_id || null, 
             cashback_amount: cartItems.reduce((acc, item) => acc + (item.cashback || 0) * item.quantity, 0),
@@ -233,12 +257,46 @@ export default function Checkout() {
 
       const loadingToast = toast.loading('Gerando pagamento...');
 
+      const orderId = `ORD-${Math.random().toString(36).substring(2, 9).toUpperCase()}`;
+
+      // 1. Criar o pedido como 'Pendente' para visibilidade do lojista
+      const { error: orderError } = await supabase
+        .from('orders')
+        .insert([{
+          id: orderId,
+          customer_id: authUser.id,
+          customer_name: profile.full_name,
+          customer_initial: profile.full_name?.[0] || 'U',
+          amount: total,
+          status: 'Aguardando Pagamento',
+          items: cartItems,
+          branch_id: cartItems[0].branchId || cartItems[0].merchant_id || null, 
+          cashback_amount: cartItems.reduce((acc, item) => acc + (item.cashback || 0) * item.quantity, 0),
+          shipping_address: `RETIRADA NA LOJA: ${pickupAddress}`,
+          payment_method: paymentMethod === 'wallet' ? 'Carteira Digital' : 'Mercado Pago'
+        }]);
+
+      if (orderError) throw orderError;
+
+      // 2. Se for retirada, criar o registro de código de retirada antecipadamente
+      if (shippingMethod === 'pickup') {
+        const withdrawalCode = Math.random().toString(36).substring(2, 8).toUpperCase();
+        await supabase
+          .from('order_extras')
+          .insert([{
+            id: orderId,
+            withdrawal_code: withdrawalCode,
+            status: 'Pendente'
+          }]);
+      }
+
       const payer = {
         email: authUser.email,
         name: profile.full_name || 'Usuário UrbaShop'
       };
 
       const payload = {
+        orderId, // Passamos o ID gerado
         items: cartItems.map(item => ({
           id: item.id,
           title: item.name || item.title || 'Produto UrbaShop',
@@ -297,17 +355,25 @@ export default function Checkout() {
   return (
     <div className="min-h-screen bg-[#f5f5f5] font-sans flex flex-col overflow-x-hidden">
       {/* Marketplace Custom Header */}
-      <header className="bg-midnight py-4 px-6 lg:px-20 sticky top-0 z-50 shadow-xl">
-        <div className="max-w-7xl mx-auto flex items-center gap-8">
-          {/* Logo */}
-          <Link to="/marketplace" className="flex items-center gap-2 text-white shrink-0">
-            <div className="size-8 bg-primary-blue rounded flex items-center justify-center">
-              <LayoutGrid size={18} />
-            </div>
-            <span className="text-xl font-black tracking-tighter uppercase">UrbaShop</span>
-          </Link>
+      <header className="bg-midnight py-4 md:py-6 px-6 lg:px-20 sticky top-0 z-50 shadow-xl">
+        <div className="max-w-7xl mx-auto flex items-center justify-between gap-4 md:gap-8">
+          <div className="flex items-center gap-4">
+            <button 
+              onClick={() => setIsMobileMenuOpen(true)}
+              className="md:hidden size-10 flex items-center justify-center bg-white/5 rounded-xl text-white"
+            >
+              <Menu size={20} />
+            </button>
+            {/* Logo */}
+            <Link to="/marketplace" className="flex items-center gap-2 text-white shrink-0">
+              <div className="size-8 bg-primary-blue rounded flex items-center justify-center">
+                <LayoutGrid size={18} />
+              </div>
+              <span className="text-xl font-black tracking-tighter uppercase italic">URBA<span className="text-primary-blue">SHOP</span></span>
+            </Link>
+          </div>
 
-          {/* Search Bar */}
+          {/* Search Bar - Hidden on mobile, visible on md+ */}
           <div className="flex-1 relative group max-w-2xl hidden md:block">
             <input 
               type="text" 
@@ -408,7 +474,105 @@ export default function Checkout() {
             )}
           </div>
         </div>
+
+        {/* Mobile Search - Only visible on small screens */}
+        <div className="mt-4 md:hidden">
+          <div className="relative group px-6">
+            <input 
+              type="text" 
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Buscar produtos..." 
+              className="w-full bg-white/10 text-white placeholder-white/50 py-2.5 pl-5 pr-12 rounded-lg focus:outline-none transition-all focus:bg-white focus:text-midnight focus:placeholder-slate-400 border border-white/5"
+            />
+            <button className="absolute right-6 top-0 bottom-0 px-4 text-white/50">
+              <Search size={18} />
+            </button>
+          </div>
+        </div>
       </header>
+
+      {/* Mobile Menu Overlay */}
+      <AnimatePresence>
+        {isMobileMenuOpen && (
+          <>
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsMobileMenuOpen(false)}
+              className="fixed inset-0 bg-midnight/80 backdrop-blur-md z-[100] md:hidden"
+            />
+            <motion.div 
+              initial={{ x: '-100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '-100%' }}
+              transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+              className="fixed inset-y-0 left-0 w-80 bg-midnight z-[101] md:hidden p-8 flex flex-col shadow-2xl border-r border-white/5"
+            >
+              <div className="flex items-center justify-between mb-12">
+                <Link to="/marketplace" onClick={() => setIsMobileMenuOpen(false)} className="flex items-center gap-2">
+                  <div className="size-8 bg-primary-blue rounded flex items-center justify-center">
+                    <LayoutGrid size={18} />
+                  </div>
+                  <span className="text-xl font-black tracking-tighter uppercase italic text-white">URBA<span className="text-primary-blue">SHOP</span></span>
+                </Link>
+                <button onClick={() => setIsMobileMenuOpen(false)} className="text-slate-400 hover:text-white transition-colors">
+                  <X size={24} />
+                </button>
+              </div>
+
+              <nav className="flex flex-col gap-2">
+                <Link to="/marketplace" onClick={() => setIsMobileMenuOpen(false)} className="px-4 py-4 rounded-2xl font-black uppercase tracking-widest text-xs text-slate-400 hover:text-white transition-all">Marketplace</Link>
+                <Link to="/lojista/login" onClick={() => setIsMobileMenuOpen(false)} className="px-4 py-4 rounded-2xl font-black uppercase tracking-widest text-xs text-slate-400 hover:text-white transition-all flex items-center gap-3">
+                  <Store size={18} /> Área do Lojista
+                </Link>
+                <Link to="/afiliado/dashboard" onClick={() => setIsMobileMenuOpen(false)} className="px-4 py-4 rounded-2xl font-black uppercase tracking-widest text-xs text-slate-400 hover:text-white transition-all flex items-center gap-3">
+                  <LayoutDashboard size={18} /> Escritório Virtual
+                </Link>
+              </nav>
+
+              <div className="mt-auto pt-8 border-t border-white/5">
+                {authUser ? (
+                  <>
+                    <div className="flex items-center gap-4 px-4 mb-6">
+                      <div className="size-12 rounded-full bg-white/10 border border-white/10 overflow-hidden shrink-0">
+                        {profile?.avatar_url ? <img src={profile.avatar_url} alt="Profile" className="w-full h-full object-cover" /> : <User size={24} className="text-slate-500 m-auto h-full" />}
+                      </div>
+                      <div className="overflow-hidden">
+                        <p className="font-black text-sm text-white truncate">{profile?.full_name || 'Usuário'}</p>
+                        <p className="text-[10px] font-bold text-slate-500 truncate">{authUser.email}</p>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-1 gap-2">
+                      <Link to="/afiliado/pedidos" onClick={() => setIsMobileMenuOpen(false)} className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-white/5 text-xs font-bold text-slate-300">
+                        <ShoppingBag size={16} /> Meus Pedidos
+                      </Link>
+                      <Link to="/afiliado/perfil" onClick={() => setIsMobileMenuOpen(false)} className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-white/5 text-xs font-bold text-slate-300">
+                        <User size={16} /> Meu Perfil
+                      </Link>
+                      <button 
+                        onClick={async () => {
+                          await signOut();
+                          setIsMobileMenuOpen(false);
+                        }} 
+                        className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-red-500/10 text-xs font-black uppercase tracking-widest text-red-400 transition-all mt-4"
+                      >
+                        <LogOut size={16} /> Sair da Conta
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <div className="grid grid-cols-2 gap-4">
+                    <Link to="/login" onClick={() => setIsMobileMenuOpen(false)} className="flex items-center justify-center px-4 py-4 rounded-2xl border border-white/10 text-white font-black uppercase tracking-widest text-xs">Entrar</Link>
+                    <Link to="/cadastro" onClick={() => setIsMobileMenuOpen(false)} className="flex items-center justify-center px-4 py-4 rounded-2xl bg-primary-blue text-white font-black uppercase tracking-widest text-xs shadow-lg shadow-primary-blue/20">Cadastrar</Link>
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
 
       <main className="max-w-4xl mx-auto px-6 py-8">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
@@ -423,151 +587,28 @@ export default function Checkout() {
             >
               <div className="flex items-center gap-3 mb-6">
                 <div className="size-10 bg-emerald-50 rounded-xl flex items-center justify-center text-emerald-500">
-                  <Truck size={20} />
+                  <ShoppingBag size={20} />
                 </div>
-                <h2 className="text-lg font-black text-midnight uppercase tracking-tighter">Opções de Entrega</h2>
+                <h2 className="text-lg font-black text-midnight uppercase tracking-tighter">Forma de Entrega</h2>
               </div>
 
-              <div className="space-y-4">
-                <label className={`flex items-start p-4 rounded-xl border-2 cursor-pointer transition-all ${shippingMethod === 'pickup' ? 'border-primary-blue bg-blue-50/50' : 'border-slate-100 hover:border-slate-200'}`}>
-                  <div className="flex items-start gap-4 flex-1">
-                    <div className={`mt-1 size-5 rounded-full border-2 flex items-center justify-center ${shippingMethod === 'pickup' ? 'border-primary-blue' : 'border-slate-300'}`}>
-                      {shippingMethod === 'pickup' && <div className="size-2.5 bg-primary-blue rounded-full" />}
+              <div className="p-6 bg-blue-50/50 rounded-2xl border-2 border-primary-blue">
+                  <div className="flex items-start gap-4">
+                    <div className="mt-1 size-5 rounded-full border-2 border-primary-blue flex items-center justify-center">
+                      <div className="size-2.5 bg-primary-blue rounded-full" />
                     </div>
                     <div>
-                      <p className="font-black text-midnight">Retirada na Loja</p>
-                      <p className="text-xs text-slate-500 font-medium mt-1">{pickupAddress}</p>
-                      <div className="mt-2 inline-flex items-center gap-1.5 text-[10px] bg-emerald-100 text-emerald-700 font-bold px-2 py-1 rounded uppercase tracking-widest border border-emerald-200">
-                        <AlertCircle size={10} /> Regra: Você receberá um código de 6 dígitos para retirada
+                      <p className="font-black text-midnight uppercase italic tracking-tighter">Retirada na Loja</p>
+                      <p className="text-sm text-slate-600 font-bold mt-1">{pickupAddress}</p>
+                      <div className="mt-4 inline-flex items-center gap-2 text-[10px] bg-white text-primary-blue font-black px-3 py-1.5 rounded-lg uppercase tracking-widest border border-primary-blue/10 shadow-sm">
+                        <AlertCircle size={12} /> Você receberá um código de retirada após o pagamento
                       </div>
                     </div>
                   </div>
-                  <span className="font-black text-emerald-600">Grátis</span>
-                  <input type="radio" name="shipping" className="hidden" onChange={() => setShippingMethod('pickup')} />
-                </label>
-
-                {shippingCost === 0 ? (
-                  <div className="flex items-center gap-2 text-slate-500 bg-slate-50 p-4 rounded-xl border border-slate-100">
-                    <AlertCircle size={18} />
-                    <span className="text-sm font-bold">Preencha o CEP de entrega para ver as opções dos Correios.</span>
-                  </div>
-                ) : (
-                  <>
-                    <label className={`flex items-center justify-between p-4 rounded-xl border-2 cursor-pointer transition-all ${shippingMethod === 'pac' ? 'border-primary-blue bg-blue-50/50' : 'border-slate-100 hover:border-slate-200'}`}>
-                      <div className="flex items-center gap-4">
-                        <div className={`size-5 rounded-full border-2 flex items-center justify-center ${shippingMethod === 'pac' ? 'border-primary-blue' : 'border-slate-300'}`}>
-                          {shippingMethod === 'pac' && <div className="size-2.5 bg-primary-blue rounded-full" />}
-                        </div>
-                        <div>
-                          <p className="font-black text-midnight">Econômica</p>
-                          <p className="text-xs text-slate-500 font-medium">Entrega em até 7 dias úteis</p>
-                        </div>
-                      </div>
-                      <span className="font-black text-emerald-600">R$ {shippingCost.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
-                      <input type="radio" name="shipping" className="hidden" onChange={() => setShippingMethod('pac')} />
-                    </label>
-                    <label className={`flex items-center justify-between p-4 rounded-xl border-2 cursor-pointer transition-all ${shippingMethod === 'sedex' ? 'border-primary-blue bg-blue-50/50' : 'border-slate-100 hover:border-slate-200'}`}>
-                      <div className="flex items-center gap-4">
-                        <div className={`size-5 rounded-full border-2 flex items-center justify-center ${shippingMethod === 'sedex' ? 'border-primary-blue' : 'border-slate-300'}`}>
-                          {shippingMethod === 'sedex' && <div className="size-2.5 bg-primary-blue rounded-full" />}
-                        </div>
-                        <div>
-                          <p className="font-black text-midnight">Expressa</p>
-                          <p className="text-xs text-slate-500 font-medium">Entrega em até 3 dias úteis</p>
-                        </div>
-                      </div>
-                      <span className="font-black text-emerald-600">R$ {(shippingCost * 1.8).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
-                      <input type="radio" name="shipping" className="hidden" onChange={() => setShippingMethod('sedex')} />
-                    </label>
-                  </>
-                )}
               </div>
             </motion.section>
 
-            {/* Endereço */}
-            {shippingMethod !== 'pickup' && (
-              <motion.section 
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="bg-white rounded-[2rem] p-8 shadow-sm border border-slate-100 order-2"
-              >
-                <div className="flex items-center gap-3 mb-6">
-                  <div className="size-10 bg-blue-50 rounded-xl flex items-center justify-center text-primary-blue">
-                    <MapPin size={20} />
-                  </div>
-                  <h2 className="text-lg font-black text-midnight uppercase tracking-tighter">Endereço de Entrega</h2>
-                </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="sm:col-span-2">
-                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1">CEP</label>
-                    <input 
-                      type="text" 
-                      maxLength={9}
-                      value={address.cep}
-                      onChange={(e) => setAddress({...address, cep: e.target.value})}
-                      placeholder="00000-000"
-                      className="w-full bg-slate-50 border border-slate-200 px-4 py-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-blue/20 font-bold text-midnight"
-                    />
-                  </div>
-                  <div className="sm:col-span-2">
-                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1">Rua / Logradouro</label>
-                    <input 
-                      type="text"
-                      value={address.logradouro}
-                      onChange={(e) => setAddress({...address, logradouro: e.target.value})}
-                      className="w-full bg-slate-50 border border-slate-200 px-4 py-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-blue/20 font-bold text-midnight"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1">Número</label>
-                    <input 
-                      type="text"
-                      value={address.numero}
-                      onChange={(e) => setAddress({...address, numero: e.target.value})}
-                      className="w-full bg-slate-50 border border-slate-200 px-4 py-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-blue/20 font-bold text-midnight"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1">Complemento</label>
-                    <input 
-                      type="text"
-                      value={address.complemento}
-                      onChange={(e) => setAddress({...address, complemento: e.target.value})}
-                      placeholder="Opcional"
-                      className="w-full bg-slate-50 border border-slate-200 px-4 py-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-blue/20 font-bold text-midnight"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1">Bairro</label>
-                    <input 
-                      type="text"
-                      value={address.bairro}
-                      onChange={(e) => setAddress({...address, bairro: e.target.value})}
-                      className="w-full bg-slate-50 border border-slate-200 px-4 py-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-blue/20 font-bold text-midnight"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1">Cidade</label>
-                    <input 
-                      type="text"
-                      value={address.cidade}
-                      onChange={(e) => setAddress({...address, cidade: e.target.value})}
-                      className="w-full bg-slate-50 border border-slate-200 px-4 py-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-blue/20 font-bold text-midnight"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1">Estado</label>
-                    <input 
-                      type="text"
-                      value={address.estado}
-                      onChange={(e) => setAddress({...address, estado: e.target.value})}
-                      className="w-full bg-slate-50 border border-slate-200 px-4 py-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-blue/20 font-bold text-midnight"
-                    />
-                  </div>
-                </div>
-              </motion.section>
-            )}
 
             {/* Forma de Pagamento */}
             <motion.section 
@@ -610,11 +651,16 @@ export default function Checkout() {
                       <div>
                         <p className="font-black text-midnight">Saldo Carteira Digital</p>
                         <p className="text-[10px] text-emerald-600 font-black uppercase">Saldo: R$ {walletBalance.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                        {authUser && !isEligibleForWallet && (
+                          <p className="text-[9px] text-red-500 font-bold uppercase mt-1 italic">Liberação após o 1º consumo na plataforma</p>
+                        )}
                       </div>
                     </div>
                   </div>
                   {!authUser ? (
                     <span className="text-[10px] font-bold text-amber-500 uppercase">Faça login</span>
+                  ) : !isEligibleForWallet ? (
+                    <span className="text-[10px] font-bold text-red-500 uppercase">Conta Inativa</span>
                   ) : walletBalance < total ? (
                     <span className="text-[10px] font-bold text-red-500 uppercase">Saldo Insuficiente</span>
                   ) : (
@@ -624,7 +670,7 @@ export default function Checkout() {
                     type="radio" 
                     name="payment" 
                     className="hidden" 
-                    disabled={!authUser || walletBalance < total}
+                    disabled={!authUser || walletBalance < total || !isEligibleForWallet}
                     checked={paymentMethod === 'wallet'} 
                     onChange={() => setPaymentMethod('wallet')} 
                   />
@@ -683,6 +729,21 @@ export default function Checkout() {
                   <span className="text-2xl font-black text-primary-blue">
                     R$ {(subtotal + (shippingMethod === 'sedex' ? shippingCost * 1.8 : shippingMethod === 'pac' ? shippingCost : 0)).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                   </span>
+                </div>
+
+                {/* Cashback Detailed Summary */}
+                <div className="bg-emerald-50 rounded-2xl p-5 border border-emerald-100 space-y-3">
+                  <p className="text-[10px] font-black text-emerald-800 uppercase tracking-widest flex items-center gap-2">
+                    <TrendingUp size={14} /> Seu Retorno com esta compra:
+                  </p>
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs font-bold text-emerald-600">Bônus Mensal</span>
+                    <span className="text-sm font-black text-emerald-600">+ R$ {totalMensal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs font-bold text-indigo-600">Bônus Anual</span>
+                    <span className="text-sm font-black text-indigo-600">+ R$ {totalAnual.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                  </div>
                 </div>
               </div>
 

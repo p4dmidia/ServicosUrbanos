@@ -604,13 +604,25 @@ export const businessRules = {
       .single();
     
     if (error) {
-      console.error('Error fetching MMN config:', error);
-      return { depth: 4, paymentType: 'percent' };
+      // PGRST116 means no rows found, which is expected if config isn't set yet
+      if (error.code !== 'PGRST116') {
+        console.error('Error fetching MMN config:', error);
+      }
+      return { 
+        depth: 6, 
+        paymentType: 'percent' as const,
+        cashbackMensal: 2.75,
+        cashbackDigital: 1.00,
+        cashbackAnual: 0.75
+      };
     }
     
     return {
       depth: data.depth,
-      paymentType: data.payment_type as 'percent' | 'fixed'
+      paymentType: data.payment_type as 'percent' | 'fixed',
+      cashbackMensal: data.cashback_mensal || 2.75,
+      cashbackDigital: data.cashback_digital || 1.00,
+      cashbackAnual: data.cashback_anual || 0.75
     };
   },
 
@@ -628,13 +640,22 @@ export const businessRules = {
     return data.map(l => ({ level: l.level, value: l.value }));
   },
 
-  saveMMNConfig: async (config: { depth: number; paymentType: 'percent' | 'fixed' }) => {
+  saveMMNConfig: async (config: { 
+    depth: number; 
+    paymentType: 'percent' | 'fixed';
+    cashbackMensal: number;
+    cashbackDigital: number;
+    cashbackAnual: number;
+  }) => {
     const { error } = await supabase
       .from('mmn_config')
       .upsert({ 
         id: 1, 
         depth: config.depth, 
         payment_type: config.paymentType,
+        cashback_mensal: config.cashbackMensal,
+        cashback_digital: config.cashbackDigital,
+        cashback_anual: config.cashbackAnual,
         updated_at: new Date().toISOString()
       });
     
@@ -1239,32 +1260,47 @@ export const businessRules = {
 
   getAdminReportsData: async (range: string) => {
     const now = new Date();
+    let days = 30;
+    let groupBy: 'day' | 'month' = 'day';
     let startDate = new Date();
     let previousStartDate = new Date();
-    let isYearly = false;
 
     switch (range) {
-      case 'Hoje':
-        startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-        previousStartDate = new Date(startDate);
-        previousStartDate.setDate(previousStartDate.getDate() - 1);
-        break;
       case '7 dias':
+        days = 7;
         startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
         previousStartDate = new Date(startDate.getTime() - 7 * 24 * 60 * 60 * 1000);
+        groupBy = 'day';
+        break;
+      case '15 dias':
+        days = 15;
+        startDate = new Date(now.getTime() - 15 * 24 * 60 * 60 * 1000);
+        previousStartDate = new Date(startDate.getTime() - 15 * 24 * 60 * 60 * 1000);
+        groupBy = 'day';
         break;
       case '30 dias':
+        days = 30;
         startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
         previousStartDate = new Date(startDate.getTime() - 30 * 24 * 60 * 60 * 1000);
+        groupBy = 'day';
         break;
-      case '12 meses':
-        startDate = new Date(now.getFullYear() - 1, now.getMonth(), 1);
-        previousStartDate = new Date(startDate.getFullYear() - 1, startDate.getMonth(), 1);
-        isYearly = true;
+      case '6 meses':
+        days = 180;
+        startDate = new Date(now.getFullYear(), now.getMonth() - 5, 1);
+        previousStartDate = new Date(now.getFullYear(), now.getMonth() - 11, 1);
+        groupBy = 'month';
+        break;
+      case '1 ano':
+        days = 365;
+        startDate = new Date(now.getFullYear() - 1, now.getMonth() + 1, 1);
+        previousStartDate = new Date(now.getFullYear() - 2, now.getMonth() + 1, 1);
+        groupBy = 'month';
         break;
       default:
+        days = 30;
         startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
         previousStartDate = new Date(startDate.getTime() - 30 * 24 * 60 * 60 * 1000);
+        groupBy = 'day';
     }
 
     const [
@@ -1275,31 +1311,21 @@ export const businessRules = {
       { data: currentCommissions },
       { data: lastCommissions },
       { data: config },
-      { data: monthlyData }
+      { data: chartRawData }
     ] = await Promise.all([
-      // Current GMV
-      supabase.from('orders').select('amount, cashback_amount').eq('status', 'Concluído').gte('order_date', startDate.toISOString()),
-      // Previous GMV
-      supabase.from('orders').select('amount, cashback_amount').eq('status', 'Concluído').gte('order_date', previousStartDate.toISOString()).lt('order_date', startDate.toISOString()),
-      // Current User Growth
+      supabase.from('orders').select('amount, order_date').eq('status', 'Concluído').gte('order_date', startDate.toISOString()),
+      supabase.from('orders').select('amount').eq('status', 'Concluído').gte('order_date', previousStartDate.toISOString()).lt('order_date', startDate.toISOString()),
       supabase.from('profiles').select('*', { count: 'exact', head: true }).gte('created_at', startDate.toISOString()),
-      // Previous User Growth
       supabase.from('profiles').select('*', { count: 'exact', head: true }).gte('created_at', previousStartDate.toISOString()).lt('created_at', startDate.toISOString()),
-      // Current commissions (Payout MMN)
       supabase.from('transactions').select('amount').eq('type', 'commission').gte('created_at', startDate.toISOString()),
-      // Previous commissions
       supabase.from('transactions').select('amount').eq('type', 'commission').gte('created_at', previousStartDate.toISOString()).lt('created_at', startDate.toISOString()),
-      // Marketplace Config
       supabase.from('marketplace_config').select('commission_rate').eq('id', 1).single(),
-      // Chart Data (last 12 months always)
-      supabase.from('orders').select('amount, order_date, cashback_amount').eq('status', 'Concluído').gte('order_date', new Date(now.getFullYear(), now.getMonth() - 11, 1).toISOString())
+      supabase.from('orders').select('amount, order_date').eq('status', 'Concluído').gte('order_date', startDate.toISOString())
     ]);
 
     const platformRate = config?.commission_rate || 12;
-
     const currentGMVTotal = currentRevenue?.reduce((acc, o) => acc + Number(o.amount), 0) || 0;
     const lastGMVTotal = lastRevenue?.reduce((acc, o) => acc + Number(o.amount), 0) || 0;
-    
     const currentPayout = currentCommissions?.reduce((acc, t) => acc + Number(t.amount), 0) || 0;
     const lastPayout = lastCommissions?.reduce((acc, t) => acc + Number(t.amount), 0) || 0;
 
@@ -1308,22 +1334,37 @@ export const businessRules = {
       return ((current - last) / last) * 100;
     };
 
-    // Chart grouping
-    const months = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
-    const revenueByMonth = new Array(12).fill(0);
-    
-    monthlyData?.forEach(o => {
-      const d = new Date(o.order_date);
-      const monthDiff = (now.getFullYear() - d.getFullYear()) * 12 + (now.getMonth() - d.getMonth());
-      if (monthDiff >= 0 && monthDiff < 12) {
-        revenueByMonth[11 - monthDiff] += Number(o.amount);
-      }
-    });
+    // Advanced Chart Logic
+    const labels: string[] = [];
+    const values: number[] = [];
+    const monthsNames = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
 
-    const labels = [];
-    for (let i = 11; i >= 0; i--) {
-      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-      labels.push(months[d.getMonth()]);
+    if (groupBy === 'day') {
+      for (let i = days - 1; i >= 0; i--) {
+        const d = new Date(now.getTime() - i * 24 * 60 * 60 * 1000);
+        const label = `${d.getDate()}/${d.getMonth() + 1}`;
+        labels.push(label);
+        
+        const dayTotal = chartRawData?.filter(o => {
+          const od = new Date(o.order_date);
+          return od.getDate() === d.getDate() && od.getMonth() === d.getMonth() && od.getFullYear() === d.getFullYear();
+        }).reduce((acc, o) => acc + Number(o.amount), 0) || 0;
+        
+        values.push(dayTotal);
+      }
+    } else {
+      const numMonths = range === '6 meses' ? 6 : 12;
+      for (let i = numMonths - 1; i >= 0; i--) {
+        const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+        labels.push(monthsNames[d.getMonth()]);
+
+        const monthTotal = chartRawData?.filter(o => {
+          const od = new Date(o.order_date);
+          return od.getMonth() === d.getMonth() && od.getFullYear() === d.getFullYear();
+        }).reduce((acc, o) => acc + Number(o.amount), 0) || 0;
+
+        values.push(monthTotal);
+      }
     }
 
     return {
@@ -1332,12 +1373,12 @@ export const businessRules = {
       userGrowth: { value: currentUserGrowth || 0, trend: calculateTrend(currentUserGrowth || 0, lastUserGrowth || 0) },
       payoutMMN: { value: currentPayout, trend: calculateTrend(currentPayout, lastPayout) },
       cashback: {
-        monthly: currentRevenue?.reduce((acc, o) => acc + Number(o.cashback_amount || 0), 0) || 0,
-        yearly: monthlyData?.reduce((acc, o) => acc + Number(o.cashback_amount || 0), 0) || 0,
-        digitalTotal: currentRevenue?.reduce((acc, o) => acc + Number(o.cashback_amount || 0), 0) || 0 // Usando mensal como base inicial, mas idealmente seria de toda a base
+        monthly: currentGMVTotal * 0.0275,
+        yearly: currentGMVTotal * 0.0075, // Yearly contribution for this period
+        digitalTotal: currentGMVTotal * 0.01
       },
       chart: {
-        values: revenueByMonth,
+        values: values,
         labels: labels
       },
       distribution: [
@@ -1740,10 +1781,99 @@ export const businessRules = {
     }));
   },
 
-  approveWithdrawal: async (transactionId: string) => {
+  getPayableBalances: async () => {
+    // 1. Buscar todos os perfis
+    const { data: profiles, error: pError } = await supabase
+      .from('profiles')
+      .select('id, full_name, email, pix_key, bank_name, bank_branch, bank_account');
+    
+    if (pError) throw pError;
+
+    // 2. Buscar todas as transações para calcular saldos de cashback
+    const { data: transactions, error: tError } = await supabase
+      .from('transactions')
+      .select('*')
+      .eq('status', 'completed');
+    
+    if (tError) throw tError;
+
+    // 3. Processar saldos por usuário
+    const payableList = profiles.map(profile => {
+      const userTransactions = transactions.filter(t => t.profile_id === profile.id);
+      
+      const monthlyBonus = userTransactions
+        .filter(t => t.description?.includes('(Mensal)'))
+        .reduce((acc, t) => acc + Number(t.amount), 0);
+
+      const annualBonus = userTransactions
+        .filter(t => t.description?.includes('(Anual)'))
+        .reduce((acc, t) => acc + Number(t.amount), 0);
+
+      // Subtrair pagamentos já realizados (withdrawals com descrição de pagamento)
+      const monthlyPaid = userTransactions
+        .filter(t => t.type === 'withdrawal' && t.description?.includes('Pagamento Cashback Mensal'))
+        .reduce((acc, t) => acc + Math.abs(Number(t.amount)), 0);
+
+      const annualPaid = userTransactions
+        .filter(t => t.type === 'withdrawal' && t.description?.includes('Pagamento Cashback Anual'))
+        .reduce((acc, t) => acc + Math.abs(Number(t.amount)), 0);
+
+      return {
+        profileId: profile.id,
+        userName: profile.full_name || 'N/A',
+        userEmail: profile.email || 'N/A',
+        pixKey: profile.pix_key || 'Não informado',
+        bankDetails: profile.bank_name ? `${profile.bank_name} / Ag: ${profile.bank_branch} / CC: ${profile.bank_account}` : 'Apenas PIX',
+        monthlyPending: monthlyBonus - monthlyPaid,
+        annualPending: annualBonus - annualPaid,
+      };
+    }).filter(p => p.monthlyPending > 0 || p.annualPending > 0);
+
+    return payableList;
+  },
+
+  uploadReceipt: async (file: File) => {
+    const fileExt = file.name.split('.').pop();
+    const fileName = `${Math.random()}-${Date.now()}.${fileExt}`;
+    const filePath = `receipts/${fileName}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from('payouts')
+      .upload(filePath, file);
+
+    if (uploadError) throw uploadError;
+
+    const { data } = supabase.storage
+      .from('payouts')
+      .getPublicUrl(filePath);
+
+    return data.publicUrl;
+  },
+
+  processPayout: async (profileId: string, amount: number, type: 'mensal' | 'anual', receiptUrl: string) => {
+    const description = `Pagamento Cashback ${type === 'mensal' ? 'Mensal' : 'Anual'} - ${new Date().toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}`;
+    
     const { error } = await supabase
       .from('transactions')
-      .update({ status: 'completed' })
+      .insert([{
+        profile_id: profileId,
+        type: 'withdrawal',
+        amount: -Math.abs(amount),
+        description,
+        status: 'completed',
+        receipt_url: receiptUrl
+      }]);
+
+    if (error) throw error;
+  },
+
+  approveWithdrawal: async (transactionId: string, receiptUrl?: string) => {
+    const { error } = await supabase
+      .from('transactions')
+      .update({ 
+        status: 'completed',
+        receipt_url: receiptUrl 
+      })
       .eq('id', transactionId);
 
     if (error) throw error;

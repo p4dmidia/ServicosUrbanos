@@ -12,7 +12,7 @@ serve(async (req) => {
   }
 
   try {
-    const { items, payer, shippingCost, origin } = await req.json()
+    const { items, payer, shippingCost, origin, orderId } = await req.json()
     const baseUrl = origin || 'http://localhost:5173'
 
     // O Token foi passado pelo usuário
@@ -29,7 +29,8 @@ serve(async (req) => {
         email: payer.email,
         name: payer.name ? payer.name.split(' ')[0] : 'Usuário',
         surname: payer.name && payer.name.split(' ').length > 1 ? payer.name.split(' ').slice(1).join(' ') : 'UrbaShop'
-      }
+      },
+      external_reference: orderId
     }
 
     if (shippingCost && Number(shippingCost) > 0) {

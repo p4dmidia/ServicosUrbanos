@@ -24,6 +24,7 @@ import { motion } from 'motion/react';
 import { Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import Header from '../components/Header';
+import PWAInstallPrompt from '../components/PWAInstallPrompt';
 
 interface Product {
   id: string;
@@ -76,6 +77,7 @@ export default function Home() {
   return (
     <div className="min-h-screen flex flex-col font-sans">
       <Header />
+      <PWAInstallPrompt />
 
       <main>
         {/* Hero Section */}
@@ -164,9 +166,8 @@ export default function Home() {
                     </div>
                   </div>
                 </div>
-
-                {/* Floating Cashback Cards */}
-                <div className="absolute top-0 -left-12 flex flex-col gap-4">
+                {/* Floating Cashback Cards - Hidden on small mobile for better layout */}
+                <div className="absolute top-0 -left-12 hidden sm:flex flex-col gap-4">
                   <motion.div
                     initial={{ x: -20, opacity: 0 }}
                     animate={{ x: 0, opacity: 1 }}

@@ -35,7 +35,7 @@ export default function GanheDinheiro() {
     ];
 
     const simulationData = [
-        { level: "G1 (Pessoal)", bonus: "0,75% de Cashback Corrente" },
+        { level: "G1 (Pessoal)", bonus: "Percentual de Cashback Corrente" },
         { level: "G2 (10 pessoas)", bonus: "Bônus de Grupo Nível 2" },
         { level: "G3 (100 pessoas)", bonus: "Bônus de Grupo Nível 3" },
         { level: "G4 (1.000 pessoas)", bonus: "Renda Recorrente Vitalícia" }

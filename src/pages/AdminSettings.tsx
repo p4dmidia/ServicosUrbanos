@@ -25,9 +25,12 @@ export default function AdminSettings() {
   const [showSuccess, setShowSuccess] = useState(false);
 
   // MMN State
-  const [mmnDepth, setMmnDepth] = useState(5);
+  const [mmnDepth, setMmnDepth] = useState(6);
   const [mmnType, setMmnType] = useState<'percent' | 'fixed'>('percent');
   const [mmnLevels, setMmnLevels] = useState<any[]>([]);
+  const [cashbackMensal, setCashbackMensal] = useState(2.75);
+  const [cashbackDigital, setCashbackDigital] = useState(1.00);
+  const [cashbackAnual, setCashbackAnual] = useState(0.75);
 
   // Financeiro State
   const [minWithdrawal, setMinWithdrawal] = useState(50);
@@ -52,12 +55,17 @@ export default function AdminSettings() {
         // MMN
         setMmnDepth(mmnConfig.depth);
         setMmnType(mmnConfig.paymentType);
+        setCashbackMensal(mmnConfig.cashbackMensal);
+        setCashbackDigital(mmnConfig.cashbackDigital);
+        setCashbackAnual(mmnConfig.cashbackAnual);
+        
         setMmnLevels(levelsData.length > 0 ? levelsData : [
-          { level: 1, value: 10 },
-          { level: 2, value: 5 },
-          { level: 3, value: 3 },
-          { level: 4, value: 2 },
-          { level: 5, value: 1 },
+          { level: 1, value: 0.25 },
+          { level: 2, value: 1.5 },
+          { level: 3, value: 1.5 },
+          { level: 4, value: 1.5 },
+          { level: 5, value: 0 },
+          { level: 6, value: 0 },
         ]);
 
         // Financeiro
@@ -81,8 +89,14 @@ export default function AdminSettings() {
     setLoading(true);
     try {
       if (activeTab === 'mmn') {
-        await businessRules.saveMMNConfig({ depth: mmnDepth, paymentType: mmnType });
-        await businessRules.saveMMNLevels(mmnLevels.slice(0, mmnDepth));
+        await businessRules.saveMMNConfig({ 
+          depth: mmnDepth, 
+          paymentType: mmnType,
+          cashbackMensal,
+          cashbackDigital,
+          cashbackAnual
+        });
+        await businessRules.saveMMNLevels(mmnLevels.slice(0, Math.max(mmnDepth, 6)));
       } else if (activeTab === 'financeiro') {
         await businessRules.saveFinancialConfig({
           minWithdrawalAmount: minWithdrawal,
@@ -169,7 +183,7 @@ export default function AdminSettings() {
                             <input 
                               type="range" 
                               min="1" 
-                              max="10" 
+                              max="6" 
                               value={mmnDepth}
                               onChange={(e) => {
                                 const newDepth = parseInt(e.target.value);
@@ -188,6 +202,48 @@ export default function AdminSettings() {
                               {mmnDepth}
                             </div>
                           </div>
+                        </div>
+
+                        <div className="grid grid-cols-3 gap-4">
+                           <div className="space-y-2">
+                              <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1">Cashback Mensal</label>
+                              <div className="relative">
+                                <input 
+                                  type="number" 
+                                  step="0.01"
+                                  value={cashbackMensal}
+                                  onChange={e => setCashbackMensal(Number(e.target.value))}
+                                  className="w-full bg-white/5 border border-white/5 px-4 py-4 rounded-2xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-white font-black text-center"
+                                />
+                                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-indigo-500/50 text-[10px] font-black">%</span>
+                              </div>
+                           </div>
+                           <div className="space-y-2">
+                              <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1">Cashback Digital</label>
+                              <div className="relative">
+                                <input 
+                                  type="number" 
+                                  step="0.01"
+                                  value={cashbackDigital}
+                                  onChange={e => setCashbackDigital(Number(e.target.value))}
+                                  className="w-full bg-white/5 border border-white/5 px-4 py-4 rounded-2xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-white font-black text-center"
+                                />
+                                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-indigo-500/50 text-[10px] font-black">%</span>
+                              </div>
+                           </div>
+                           <div className="space-y-2">
+                              <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1">Cashback Anual</label>
+                              <div className="relative">
+                                <input 
+                                  type="number" 
+                                  step="0.01"
+                                  value={cashbackAnual}
+                                  onChange={e => setCashbackAnual(Number(e.target.value))}
+                                  className="w-full bg-white/5 border border-white/5 px-4 py-4 rounded-2xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-white font-black text-center"
+                                />
+                                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-indigo-500/50 text-[10px] font-black">%</span>
+                              </div>
+                           </div>
                         </div>
 
                         <div className="space-y-2">
@@ -223,13 +279,17 @@ export default function AdminSettings() {
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6">
-                    {mmnLevels.slice(0, mmnDepth).map((level, index) => (
-                      <div key={level.level} className="bg-white/5 p-6 rounded-[2rem] border border-white/5 hover:border-indigo-500/30 transition-colors group">
-                        <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-4">{level.level}º Nível</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-6">
+                    {mmnLevels.slice(0, Math.max(mmnDepth, 6)).map((level, index) => (
+                      <div key={level.level} className={`bg-white/5 p-6 rounded-[2rem] border border-white/5 hover:border-indigo-500/30 transition-colors group ${level.level > mmnDepth ? 'opacity-20 pointer-events-none' : ''}`}>
+                        <div className="flex items-center justify-between mb-4">
+                           <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">{level.level === 1 ? 'G1 - Você' : `G${level.level} - Nível ${level.level - 1}`}</p>
+                           {level.level === 1 && <div className="size-2 bg-emerald-500 rounded-full shadow-lg shadow-emerald-500/20 animate-pulse" />}
+                        </div>
                         <div className="relative">
                           <input 
                             type="number" 
+                            step="0.01"
                             value={level.value}
                             onChange={(e) => {
                               const newLevels = [...mmnLevels];

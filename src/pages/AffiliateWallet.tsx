@@ -23,8 +23,6 @@ export default function AffiliateWallet() {
   const [submitting, setSubmitting] = useState(false);
   const [stats, setStats] = useState<any>(null);
   const [transactions, setTransactions] = useState<any[]>([]);
-  const [showWithdrawModal, setShowWithdrawModal] = useState(false);
-  const [withdrawAmount, setWithdrawAmount] = useState<string>('');
 
   const loadWalletData = async () => {
     if (!user) return;
@@ -38,7 +36,6 @@ export default function AffiliateWallet() {
       
       setStats(statsData);
       setTransactions(activityData);
-      setWithdrawAmount(statsData.availableBalance.toFixed(2));
     } catch (error) {
       console.error("Error loading wallet:", error);
     } finally {
@@ -50,39 +47,6 @@ export default function AffiliateWallet() {
     loadWalletData();
   }, [user]);
 
-  const handleWithdraw = async () => {
-    if (!user || !stats) return;
-    
-    const val = parseFloat(withdrawAmount);
-    if (isNaN(val) || val <= 0) {
-      toast.error('Insira um valor válido para resgate.');
-      return;
-    }
-
-    if (val > stats.availableBalance) {
-      toast.error('Saldo insuficiente para este valor.');
-      return;
-    }
-
-    try {
-      setSubmitting(true);
-      await businessRules.requestWithdrawal(user.id, val);
-      
-      toast.success('Solicitação de resgate enviada! Aguarde o processamento.', {
-        duration: 5000,
-        icon: '💰'
-      });
-      
-      setShowWithdrawModal(false);
-      // Reload data to show pending transaction and updated balance
-      loadWalletData();
-    } catch (error) {
-      console.error("Withdrawal error:", error);
-      toast.error('Erro ao processar resgate. Tente novamente.');
-    } finally {
-      setSubmitting(false);
-    }
-  };
 
   if (loading || !stats) {
     return (
@@ -117,18 +81,10 @@ export default function AffiliateWallet() {
                     )}
                  </div>
                  <div className="flex gap-4">
-                    <button 
-                      disabled={!stats.isEligible || stats.availableBalance <= 0}
-                      onClick={() => setShowWithdrawModal(true)}
-                      className={`px-10 py-5 rounded-2xl font-black text-lg shadow-xl transition-all flex items-center gap-3 ${
-                        stats.isEligible && stats.availableBalance > 0
-                        ? 'bg-emerald-500 text-midnight shadow-emerald-500/20 hover:scale-105 active:scale-95' 
-                        : 'bg-slate-800 text-slate-500 cursor-not-allowed opacity-50 shadow-none'
-                      }`}
-                    >
-                      Resgatar Saldo
-                      <QrCode size={22} />
-                    </button>
+                    <div className="px-6 py-3 bg-white/5 rounded-xl border border-white/5 flex items-center gap-3">
+                       <div className="size-2 bg-emerald-500 rounded-full animate-pulse"></div>
+                       <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Pagamentos Automáticos (Dia 10)</p>
+                    </div>
                  </div>
               </div>
 
@@ -252,66 +208,6 @@ export default function AffiliateWallet() {
         </div>
       </div>
 
-      {/* Withdrawal Modal */}
-      {showWithdrawModal && (
-        <div className="fixed inset-0 bg-midnight/80 backdrop-blur-md z-[60] flex items-center justify-center p-6">
-           <motion.div 
-             initial={{ opacity: 0, scale: 0.9 }}
-             animate={{ opacity: 1, scale: 1 }}
-             className="bg-white w-full max-w-lg rounded-[2.5rem] p-12 relative overflow-hidden"
-           >
-              <div className="relative z-10 space-y-8">
-                <div className="text-center">
-                  <div className="size-20 bg-emerald-50 text-emerald-600 rounded-[2rem] flex items-center justify-center mx-auto mb-6 shadow-lg shadow-emerald-100">
-                    <DollarSign size={40} />
-                  </div>
-                  <h2 className="text-3xl font-black tracking-tighter text-midnight italic uppercase">Efetuar Resgate</h2>
-                  <p className="text-slate-500 font-medium whitespace-pre-wrap">Confirme seu PIX: {profile?.pix_key || 'Não cadastrado'}</p>
-                </div>
-
-                <div className="space-y-6">
-                   <div className="space-y-2">
-                       <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Valor do Saque</label>
-                       <div className="relative">
-                          <span className="absolute left-6 top-1/2 -translate-y-1/2 font-black text-slate-400">R$</span>
-                          <input 
-                            type="number" 
-                            value={withdrawAmount}
-                            onChange={(e) => setWithdrawAmount(e.target.value)}
-                            className="w-full bg-slate-50 border border-slate-200 px-12 py-5 rounded-3xl font-black text-2xl text-midnight focus:outline-none focus:ring-4 focus:ring-emerald-500/10 appearance-none transition-all"
-                          />
-                       </div>
-                       <p className="text-[10px] text-slate-400 font-bold ml-1">Máximo disponível: R$ {Number(stats.availableBalance).toFixed(2)}</p>
-                   </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <button 
-                    disabled={submitting}
-                    onClick={() => setShowWithdrawModal(false)}
-                    className="py-5 rounded-2xl font-black text-slate-400 hover:bg-slate-50 uppercase tracking-widest text-xs disabled:opacity-50"
-                  >
-                    Voltar
-                  </button>
-                  <button 
-                    disabled={submitting}
-                    onClick={handleWithdraw}
-                    className="bg-primary-blue text-white py-5 rounded-2xl font-black hover:scale-[1.02] shadow-xl shadow-primary-blue/20 transition-all uppercase tracking-widest text-xs flex items-center justify-center gap-2 disabled:opacity-50"
-                  >
-                    {submitting ? (
-                      <>
-                        <Loader2 size={16} className="animate-spin" />
-                        Processando...
-                      </>
-                    ) : (
-                      'Confirmar'
-                    )}
-                  </button>
-                </div>
-              </div>
-           </motion.div>
-        </div>
-      )}
     </AffiliateLayout>
   );
 }

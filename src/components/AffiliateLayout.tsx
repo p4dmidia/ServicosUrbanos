@@ -60,7 +60,7 @@ export default function AffiliateLayout({ children, title }: AffiliateLayoutProp
 
     if (Notification.permission === "granted") {
       toast.success("Notificações push já estão ativas!");
-      new Notification("Urba Office", {
+      new Notification("Serviços Urbanos", {
         body: "As notificações push estão configuradas corretamentes!",
         icon: "/vite.svg"
       });
@@ -68,7 +68,7 @@ export default function AffiliateLayout({ children, title }: AffiliateLayoutProp
       const permission = await Notification.requestPermission();
       if (permission === "granted") {
         toast.success("Notificações ativadas com sucesso!");
-        new Notification("Urba Office", {
+        new Notification("Serviços Urbanos", {
           body: "Parabéns! Você receberá alertas de novas comissões.",
           icon: "/vite.svg"
         });
@@ -105,7 +105,7 @@ export default function AffiliateLayout({ children, title }: AffiliateLayoutProp
               animate={{ opacity: 1 }}
               className="font-black text-xl tracking-tighter uppercase italic"
             >
-              Urba<span className="text-primary-blue">Affiliate</span>
+              SERVIÇOS <span className="text-primary-blue">URBANOS</span>
             </motion.span>
           )}
         </div>
@@ -231,7 +231,7 @@ export default function AffiliateLayout({ children, title }: AffiliateLayoutProp
                     <div className="size-10 bg-primary-blue rounded-xl flex items-center justify-center text-white">
                       <LayoutGrid size={24} />
                     </div>
-                    <span className="font-black text-xl tracking-tighter">URBA OFFICE</span>
+                    <span className="font-black text-xl tracking-tighter uppercase italic">SERVIÇOS <span className="text-primary-blue">URBANOS</span></span>
                   </div>
                   <button onClick={() => setIsMobileMenuOpen(false)} className="text-slate-400"><X size={24} /></button>
                </div>

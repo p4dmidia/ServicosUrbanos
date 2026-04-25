@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { 
   DollarSign, 
   Search, 
@@ -9,62 +9,69 @@ import {
   Loader2,
   Copy,
   User,
-  Smartphone
+  Smartphone,
+  Upload,
+  FileText,
+  Calendar
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import AdminLayout from '../components/AdminLayout';
+import { businessRules } from '../lib/businessRules';
+import { toast } from 'react-hot-toast';
 
 export default function AdminWithdrawals() {
   const [loading, setLoading] = useState(true);
-  const [pendingWithdrawals, setPendingWithdrawals] = useState<any[]>([]);
+  const [payableBalances, setPayableBalances] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [processingId, setProcessingId] = useState<string | null>(null);
+  const [selectedPayout, setSelectedPayout] = useState<any>(null);
+  const [receiptFile, setReceiptFile] = useState<File | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const loadWithdrawals = async () => {
+  const loadBalances = async () => {
     try {
       setLoading(true);
-      const data = await businessRules.getPendingWithdrawals();
-      setPendingWithdrawals(data);
+      const data = await businessRules.getPayableBalances();
+      setPayableBalances(data);
     } catch (error) {
-      console.error('Error loading withdrawals:', error);
-      toast.error('Erro ao carregar solicitações de saque');
+      console.error('Error loading balances:', error);
+      toast.error('Erro ao carregar saldos para pagamento');
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    loadWithdrawals();
+    loadBalances();
   }, []);
 
-  const handleApprove = async (id: string) => {
-    if (!window.confirm('Confirmar a aprovação deste saque? Certifique-se de que o pagamento via PIX foi realizado.')) return;
-    
-    try {
-      setProcessingId(id);
-      await businessRules.approveWithdrawal(id);
-      toast.success('Saque aprovado com sucesso!');
-      loadWithdrawals();
-    } catch (error) {
-      console.error('Error approving withdrawal:', error);
-      toast.error('Erro ao aprovar saque');
-    } finally {
-      setProcessingId(null);
+  const handleProcessPayout = async (type: 'mensal' | 'anual') => {
+    if (!selectedPayout || !receiptFile) {
+      toast.error('Selecione o comprovante de pagamento.');
+      return;
     }
-  };
-
-  const handleReject = async (id: string) => {
-    if (!window.confirm('Deseja realmente rejeitar este saque? O saldo retornará para o usuário.')) return;
     
     try {
-      setProcessingId(id);
-      await businessRules.rejectWithdrawal(id);
-      toast.error('Saque rejeitado.');
-      loadWithdrawals();
+      setUploading(true);
+      setProcessingId(selectedPayout.profileId);
+      
+      // 1. Upload do comprovante
+      const receiptUrl = await businessRules.uploadReceipt(receiptFile);
+      
+      // 2. Registrar o pagamento
+      const amount = type === 'mensal' ? selectedPayout.monthlyPending : selectedPayout.annualPending;
+      await businessRules.processPayout(selectedPayout.profileId, amount, type, receiptUrl);
+      
+      toast.success(`Pagamento ${type === 'mensal' ? 'Mensal' : 'Anual'} processado com sucesso!`);
+      setSelectedPayout(null);
+      setReceiptFile(null);
+      loadBalances();
     } catch (error) {
-      console.error('Error rejecting withdrawal:', error);
-      toast.error('Erro ao rejeitar saque');
+      console.error('Error processing payout:', error);
+      toast.error('Erro ao processar pagamento');
     } finally {
+      setUploading(false);
       setProcessingId(null);
     }
   };
@@ -74,14 +81,16 @@ export default function AdminWithdrawals() {
     toast.success(`${label} copiado!`);
   };
 
-  const filteredWithdrawals = pendingWithdrawals.filter(w => 
+  const filteredBalances = payableBalances.filter(w => 
     w.userName.toLowerCase().includes(searchTerm.toLowerCase()) ||
     w.userEmail.toLowerCase().includes(searchTerm.toLowerCase()) ||
     w.pixKey.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
+  const totalPending = payableBalances.reduce((acc, curr) => acc + curr.monthlyPending + curr.annualPending, 0);
+
   return (
-    <AdminLayout title="Gestão de Saques" subtitle="Aprovação e processamento de resgates PIX">
+    <AdminLayout title="Gestão de Pagamentos" subtitle="Central de pagamentos manuais de cashback">
       <div className="p-8 lg:p-12 space-y-10">
         
         {/* Stats Header */}
@@ -91,9 +100,9 @@ export default function AdminWithdrawals() {
                 <DollarSign size={32} />
              </div>
              <div>
-                <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest leading-none mb-2">Total Pendente para Pagamento</p>
+                <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest leading-none mb-2">Total Geral Pendente</p>
                 <p className="text-4xl font-black text-white tracking-tighter italic">
-                  R$ {pendingWithdrawals.reduce((acc, curr) => acc + curr.amount, 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                  R$ {totalPending.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                 </p>
              </div>
           </div>
@@ -118,19 +127,19 @@ export default function AdminWithdrawals() {
           {loading ? (
             <div className="bg-[#0a0e17] rounded-[2.5rem] p-32 flex flex-col items-center justify-center border border-white/5">
               <Loader2 className="size-12 text-indigo-500 animate-spin mb-4" />
-              <p className="text-slate-500 font-black uppercase tracking-widest text-[10px]">Carregando solicitações...</p>
+              <p className="text-slate-500 font-black uppercase tracking-widest text-[10px]">Carregando saldos...</p>
             </div>
-          ) : filteredWithdrawals.length === 0 ? (
+          ) : filteredBalances.length === 0 ? (
             <div className="bg-[#0a0e17] rounded-[2.5rem] p-32 flex flex-col items-center justify-center border border-white/5 text-center">
               <div className="size-20 bg-white/5 rounded-full flex items-center justify-center text-slate-700 mb-6 font-black text-4xl italic">!</div>
-              <h3 className="text-xl font-black text-white uppercase tracking-tighter mb-2 italic">Nenhum saque pendente</h3>
-              <p className="text-slate-500 font-bold uppercase text-[10px] tracking-widest">Todas as solicitações foram processadas ou não há pedidos no momento.</p>
+              <h3 className="text-xl font-black text-white uppercase tracking-tighter mb-2 italic">Nenhum pagamento pendente</h3>
+              <p className="text-slate-500 font-bold uppercase text-[10px] tracking-widest">Todos os usuários estão com os pagamentos em dia.</p>
             </div>
           ) : (
             <AnimatePresence mode='popLayout'>
-              {filteredWithdrawals.map((w, i) => (
+              {filteredBalances.map((w, i) => (
                 <motion.div
-                  key={w.id}
+                  key={w.profileId}
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, scale: 0.95 }}
@@ -145,21 +154,40 @@ export default function AdminWithdrawals() {
                       <div>
                         <div className="flex items-center gap-2 mb-1">
                           <h3 className="text-xl font-black text-white italic uppercase tracking-tighter">{w.userName}</h3>
-                          <span className="text-[10px] font-black bg-indigo-500/10 text-indigo-400 px-2 py-0.5 rounded uppercase tracking-widest">#{w.id.slice(0, 8)}</span>
                         </div>
                         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-slate-500 font-bold text-[10px] uppercase tracking-widest">
                           <span className="flex items-center gap-1.5"><User size={12} className="text-slate-600" /> {w.userEmail}</span>
-                          <span className="flex items-center gap-1.5"><Clock size={12} className="text-slate-600" /> {w.date}</span>
+                          <span className="flex items-center gap-1.5"><Calendar size={12} className="text-slate-600" /> Ref: {new Date().toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}</span>
                         </div>
                       </div>
                     </div>
 
                     <div className="flex flex-col md:flex-row items-center gap-8 bg-white/5 p-6 rounded-[2rem] border border-white/5">
-                      <div className="text-center md:text-left">
-                         <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Valor do Saque</p>
-                         <p className="text-3xl font-black text-white tracking-tighter italic">
-                           R$ {w.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                         </p>
+                      <div className="flex gap-8">
+                        <div className="text-center md:text-left border-r border-white/10 pr-8">
+                           <p className="text-[10px] font-black text-emerald-500 uppercase tracking-widest mb-1">Mensal</p>
+                           <p className="text-2xl font-black text-white tracking-tighter italic">
+                             R$ {w.monthlyPending.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                           </p>
+                           <button 
+                             onClick={() => setSelectedPayout({ ...w, currentType: 'mensal' })}
+                             className="mt-2 text-[8px] font-black uppercase text-emerald-400 hover:text-white transition-colors"
+                           >
+                             Dar Baixa
+                           </button>
+                        </div>
+                        <div className="text-center md:text-left">
+                           <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest mb-1">Anual</p>
+                           <p className="text-2xl font-black text-white tracking-tighter italic">
+                             R$ {w.annualPending.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                           </p>
+                           <button 
+                             onClick={() => setSelectedPayout({ ...w, currentType: 'anual' })}
+                             className="mt-2 text-[8px] font-black uppercase text-blue-400 hover:text-white transition-colors"
+                           >
+                             Dar Baixa
+                           </button>
+                        </div>
                       </div>
 
                       <div className="h-10 w-px bg-white/10 hidden md:block"></div>
@@ -178,25 +206,6 @@ export default function AdminWithdrawals() {
                           </button>
                         </div>
                       </div>
-
-                      <div className="flex gap-2">
-                         <button
-                           disabled={processingId === w.id}
-                           onClick={() => handleReject(w.id)}
-                           className="px-6 py-4 rounded-xl font-black text-[10px] uppercase tracking-widest bg-white/5 border border-white/5 text-red-500 hover:bg-red-500/10 transition-all flex items-center gap-2"
-                         >
-                           {processingId === w.id ? <Loader2 size={14} className="animate-spin" /> : <XCircle size={14} />}
-                           Negar
-                         </button>
-                         <button
-                           disabled={processingId === w.id}
-                           onClick={() => handleApprove(w.id)}
-                           className="px-6 py-4 rounded-xl font-black text-[10px] uppercase tracking-widest bg-emerald-600 text-white shadow-lg shadow-emerald-600/20 hover:scale-105 active:scale-95 transition-all flex items-center gap-2"
-                         >
-                           {processingId === w.id ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle2 size={14} />}
-                           Aprovar PIX
-                         </button>
-                      </div>
                     </div>
                   </div>
 
@@ -211,6 +220,103 @@ export default function AdminWithdrawals() {
             </AnimatePresence>
           )}
         </div>
+
+        {/* Payout Modal */}
+        <AnimatePresence>
+          {selectedPayout && (
+            <div className="fixed inset-0 z-[100] flex items-center justify-center p-6">
+              <motion.div 
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="absolute inset-0 bg-midnight/90 backdrop-blur-md"
+                onClick={() => setSelectedPayout(null)}
+              />
+              <motion.div
+                initial={{ opacity: 0, scale: 0.9, y: 20 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.9, y: 20 }}
+                className="relative w-full max-w-lg bg-[#0d1117] rounded-[3rem] border border-white/10 shadow-3xl p-12 overflow-hidden"
+              >
+                <div className="absolute top-0 right-0 p-8">
+                  <button onClick={() => setSelectedPayout(null)} className="text-slate-500 hover:text-white transition-colors">
+                    <XCircle size={24} />
+                  </button>
+                </div>
+
+                <div className="relative z-10 space-y-8">
+                  <div className="text-center">
+                    <div className="size-20 bg-indigo-500/10 text-indigo-400 rounded-[2rem] flex items-center justify-center mx-auto mb-6">
+                      <DollarSign size={40} />
+                    </div>
+                    <h3 className="text-3xl font-black text-white tracking-tighter uppercase italic">Confirmar Pagamento</h3>
+                    <p className="text-slate-400 font-bold uppercase text-[10px] tracking-widest mt-2">
+                      {selectedPayout.userName} • {selectedPayout.currentType === 'mensal' ? 'Cashback Mensal' : 'Cashback Anual'}
+                    </p>
+                  </div>
+
+                  <div className="bg-white/5 rounded-3xl p-8 border border-white/10 text-center">
+                    <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">Valor a Pagar</p>
+                    <p className="text-5xl font-black text-white tracking-tighter italic">
+                      R$ {(selectedPayout.currentType === 'mensal' ? selectedPayout.monthlyPending : selectedPayout.annualPending).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                    </p>
+                  </div>
+
+                  <div className="space-y-4">
+                    <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Anexar Comprovante (Obrigatório)</label>
+                    <div 
+                      onClick={() => fileInputRef.current?.click()}
+                      className={`w-full aspect-video rounded-3xl border-2 border-dashed transition-all flex flex-col items-center justify-center cursor-pointer gap-4 ${
+                        receiptFile ? 'border-emerald-500/50 bg-emerald-500/5' : 'border-white/10 bg-white/5 hover:border-indigo-500/30'
+                      }`}
+                    >
+                      {receiptFile ? (
+                        <>
+                          <div className="size-12 bg-emerald-500/20 text-emerald-400 rounded-2xl flex items-center justify-center">
+                            <FileText size={24} />
+                          </div>
+                          <p className="text-xs font-black text-emerald-400 uppercase tracking-widest">{receiptFile.name}</p>
+                        </>
+                      ) : (
+                        <>
+                          <div className="size-12 bg-white/10 text-slate-500 rounded-2xl flex items-center justify-center">
+                            <Upload size={24} />
+                          </div>
+                          <p className="text-xs font-black text-slate-500 uppercase tracking-widest">Clique para selecionar</p>
+                        </>
+                      )}
+                    </div>
+                    <input 
+                      type="file" 
+                      ref={fileInputRef} 
+                      className="hidden" 
+                      accept="image/*,.pdf"
+                      onChange={(e) => setReceiptFile(e.target.files?.[0] || null)}
+                    />
+                  </div>
+
+                  <button
+                    disabled={!receiptFile || uploading}
+                    onClick={() => handleProcessPayout(selectedPayout.currentType)}
+                    className="w-full py-6 bg-emerald-600 hover:bg-emerald-500 text-white rounded-2xl font-black text-sm uppercase tracking-widest shadow-xl shadow-emerald-600/20 transition-all flex items-center justify-center gap-3 disabled:opacity-50 disabled:grayscale"
+                  >
+                    {uploading ? (
+                      <>
+                        <Loader2 size={20} className="animate-spin" />
+                        Processando...
+                      </>
+                    ) : (
+                      <>
+                        <CheckCircle2 size={20} />
+                        Dar Baixa no Pagamento
+                      </>
+                    )}
+                  </button>
+                </div>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
       </div>
     </AdminLayout>
   );

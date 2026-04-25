@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import {
-    LayoutGrid,
     Mail,
     Lock,
     ArrowRight,
@@ -8,7 +7,8 @@ import {
     Instagram,
     Twitter,
     Linkedin,
-    ShieldCheck
+    ShieldCheck,
+    LayoutGrid
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { Link, useNavigate } from 'react-router-dom';
@@ -109,8 +109,10 @@ export default function Login() {
                     <div className="bg-white/5 backdrop-blur-2xl p-8 lg:p-12 rounded-[2.5rem] border border-white/10 shadow-2xl relative overflow-hidden">
                         {/* Top Branding Section */}
                         <div className="text-center mb-10">
-                            <div className="inline-flex items-center justify-center size-16 bg-primary-blue rounded-3xl mb-6 shadow-xl shadow-primary-blue/20">
-                                <LayoutGrid size={32} />
+                            <div className="flex items-center justify-center gap-2 text-white mb-6">
+                                <div className="size-12 bg-primary-blue rounded-2xl flex items-center justify-center">
+                                    <LayoutGrid size={24} className="text-white" />
+                                </div>
                             </div>
                             <h1 className="text-3xl font-black mb-2 tracking-tight">Bem-vindo de volta</h1>
                             <p className="text-slate-400 font-medium">Acesse sua conta para continuar</p>

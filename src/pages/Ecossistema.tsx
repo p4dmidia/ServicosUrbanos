@@ -57,7 +57,7 @@ export default function Ecossistema() {
                                 <div className="w-[600px] h-[600px] border-2 border-dashed border-midnight rounded-full animate-[spin_60s_linear_infinite]"></div>
                             </div>
 
-                            <div className="grid grid-cols-3 lg:grid-cols-5 items-center gap-12 relative">
+                            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 items-center gap-8 md:gap-12 relative">
                                 {/* Connections are implied by proximity and a central focus */}
                                 <div className="flex flex-col items-center gap-4">
                                     <motion.div whileHover={{ scale: 1.1 }} className="size-16 lg:size-20 bg-white shadow-xl rounded-3xl flex items-center justify-center text-midnight border border-slate-100">
@@ -73,8 +73,8 @@ export default function Ecossistema() {
                                     <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">UrbaFood</span>
                                 </div>
 
-                                {/* Central User */}
-                                <div className="flex flex-col items-center gap-6 relative z-20 col-span-1">
+                                {/* Central User - Takes full row on very small screens or integrates in grid */}
+                                <div className="flex flex-col items-center gap-6 relative z-20 col-span-2 md:col-span-1 py-8 md:py-0">
                                     <motion.div
                                         animate={{ scale: [1, 1.05, 1] }}
                                         transition={{ repeat: Infinity, duration: 3 }}

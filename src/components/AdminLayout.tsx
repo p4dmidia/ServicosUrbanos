@@ -122,7 +122,7 @@ export default function AdminLayout({ children, title, subtitle }: AdminLayoutPr
     { name: 'Marketplace', icon: Store, path: '/admin/marketplace' },
     { name: 'Lista de Espera', icon: Clock, path: '/admin/lista-espera' },
     { name: 'Relatórios', icon: PieChart, path: '/admin/relatorios' },
-    { name: 'Saques', icon: DollarSign, path: '/admin/saques' },
+    { name: 'Pagamentos', icon: DollarSign, path: '/admin/saques' },
     { name: 'Configurações', icon: Settings, path: '/admin/configuracoes' },
   ];
 
@@ -134,12 +134,12 @@ export default function AdminLayout({ children, title, subtitle }: AdminLayoutPr
       <aside className="hidden lg:flex w-72 bg-[#0a0e17] border-r border-white/5 flex-col sticky top-0 h-screen z-40">
         <div className="p-8 border-b border-white/5">
           <Link to="/admin/dashboard" className="flex items-center gap-3 text-white mb-2">
-            <div className="size-10 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-500/20">
-              <ShieldCheck size={22} />
+            <div className="size-10 bg-primary-blue rounded-xl flex items-center justify-center shadow-lg shadow-primary-blue/20">
+              <LayoutGrid size={22} />
             </div>
             <div>
-              <span className="text-xl font-black tracking-tighter uppercase leading-none block">UrbaAdmin</span>
-              <span className="text-[9px] font-black text-indigo-400 uppercase tracking-[0.2em] opacity-80">Central de Controle</span>
+              <span className="text-xl font-black tracking-tighter uppercase italic leading-none block">SERVIÇOS <span className="text-primary-blue">URBANOS</span></span>
+              <span className="text-[9px] font-black text-primary-blue uppercase tracking-[0.2em] opacity-80">Central de Controle</span>
             </div>
           </Link>
         </div>
@@ -330,10 +330,10 @@ export default function AdminLayout({ children, title, subtitle }: AdminLayoutPr
             >
               <div className="p-8 border-b border-white/5 flex items-center justify-between">
                 <div className="flex items-center gap-3 text-white">
-                  <div className="size-8 bg-indigo-600 rounded-lg flex items-center justify-center">
-                    <ShieldCheck size={16} />
+                  <div className="size-8 bg-primary-blue rounded-lg flex items-center justify-center">
+                    <LayoutGrid size={16} />
                   </div>
-                  <span className="font-black uppercase tracking-tighter">UrbaAdmin</span>
+                  <span className="font-black uppercase tracking-tighter italic text-sm">SERVIÇOS <span className="text-primary-blue">URBANOS</span></span>
                 </div>
                 <button 
                   onClick={() => setIsMobileMenuOpen(false)}

@@ -73,8 +73,9 @@ export default function AffiliateOrders() {
   const getStatusIcon = (status: string) => {
     switch(status) {
       case 'Concluído': return <CheckCircle2 size={16} className="text-emerald-500" />;
+      case 'Aguardando Pagamento': return <Clock size={16} className="text-amber-500" />;
+      case 'Pago, Aguardando Retirada': return <ShoppingBag size={16} className="text-indigo-500" />;
       case 'Processando': return <Clock size={16} className="text-blue-500" />;
-      case 'Enviado': return <Truck size={16} className="text-orange-500" />;
       case 'Cancelado': return <XCircle size={16} className="text-red-500" />;
       default: return <Package size={16} className="text-slate-500" />;
     }
@@ -83,8 +84,9 @@ export default function AffiliateOrders() {
   const getStatusColor = (status: string) => {
     switch(status) {
       case 'Concluído': return 'bg-emerald-50 text-emerald-600 border-emerald-100';
+      case 'Aguardando Pagamento': return 'bg-amber-50 text-amber-600 border-amber-100';
+      case 'Pago, Aguardando Retirada': return 'bg-indigo-50 text-indigo-600 border-indigo-100';
       case 'Processando': return 'bg-blue-50 text-blue-600 border-blue-100';
-      case 'Enviado': return 'bg-orange-50 text-orange-600 border-orange-100';
       case 'Cancelado': return 'bg-red-50 text-red-600 border-red-100';
       default: return 'bg-slate-50 text-slate-600 border-slate-100';
     }
@@ -262,32 +264,6 @@ export default function AffiliateOrders() {
                       </div>
                     )}
                   </div>
-                </div>
-
-                {/* Logística e Pagamento */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="p-6 bg-slate-50 rounded-3xl border border-slate-100">
-                      <div className="flex items-center gap-3 mb-3">
-                          <motion.div animate={{ y: [0, -2, 0] }} transition={{ repeat: Infinity, duration: 2 }}>
-                            <Truck size={16} className="text-primary-blue" />
-                          </motion.div>
-                          <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Endereço de Envio</span>
-                      </div>
-                      <p className="text-xs font-bold text-midnight leading-relaxed">
-                        {selectedOrder.shipping_address || 'Não informado'}
-                      </p>
-                    </div>
-                    <div className="p-6 bg-slate-50 rounded-3xl border border-slate-100">
-                      <div className="flex items-center gap-3 mb-3">
-                          <motion.div animate={{ rotate: [0, 10, 0] }} transition={{ repeat: Infinity, duration: 3 }}>
-                            <CheckCircle2 size={16} className="text-emerald-500" />
-                          </motion.div>
-                          <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Forma de Pagamento</span>
-                      </div>
-                      <p className="text-xs font-bold text-midnight uppercase tracking-widest">
-                        {selectedOrder.payment_method || 'Mercado Pago'}
-                      </p>
-                    </div>
                 </div>
 
                 {/* Resumo Financeiro */}

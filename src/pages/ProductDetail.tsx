@@ -21,12 +21,17 @@ import {
   User,
   MessageSquare,
   X,
-  Trash2
+  Trash2,
+  Menu,
+  Store,
+  LayoutDashboard,
+  LogOut
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { supabase } from '../lib/supabase';
 import toast from 'react-hot-toast';
 import { useAuth } from '../contexts/AuthContext';
+import { businessRules } from '../lib/businessRules';
 
 interface Product {
   id: string;
@@ -58,6 +63,8 @@ export default function ProductDetail() {
   const [loading, setLoading] = useState(true);
   const [quantity, setQuantity] = useState(1);
   const [activeImage, setActiveImage] = useState(0);
+  const [mmnConfig, setMmnConfig] = useState<any>(null);
+  const [g1Value, setG1Value] = useState(0);
 
   const [search, setSearch] = useState('');
   const [showNotifications, setShowNotifications] = useState(false);
@@ -74,6 +81,7 @@ export default function ProductDetail() {
   
   const { user: authUser, profile, signOut } = useAuth();
   const [showUserMenu, setShowUserMenu] = useState(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   const [cartItems, setCartItems] = useState<any[]>(() => {
     try {
@@ -185,7 +193,22 @@ export default function ProductDetail() {
       }
     }
 
-    if (id) fetchProduct();
+    async function fetchMMN() {
+      try {
+        const config = await businessRules.getMMNConfig();
+        const levels = await businessRules.getMMNLevels();
+        setMmnConfig(config);
+        const g1 = levels.find(l => l.level === 1);
+        if (g1) setG1Value(g1.value);
+      } catch (e) {
+        console.error('Error fetching MMN for product display:', e);
+      }
+    }
+
+    if (id) {
+      fetchProduct();
+      fetchMMN();
+    }
   }, [id, navigate]);
 
   if (loading) {
@@ -200,7 +223,12 @@ export default function ProductDetail() {
 
   const mainImg = product.main_image || product.image || '📦';
   const images = [mainImg, ...(product.gallery || [])].filter(Boolean);
-  const cashbackAmount = (product.price * (product.cashback / 100));
+  
+  // MMN Calculations for G1 (Buyer)
+  const g1TotalCommission = (product.price * (g1Value / 100));
+  const totalRatios = (mmnConfig?.cashbackMensal || 2.75) + (mmnConfig?.cashbackDigital || 1.0) + (mmnConfig?.cashbackAnual || 0.75);
+  const mensalAmount = g1TotalCommission * ((mmnConfig?.cashbackMensal || 2.75) / totalRatios);
+  const anualAmount = g1TotalCommission * ((mmnConfig?.cashbackAnual || 0.75) / totalRatios);
 
   const handleBuy = () => {
     setCartItems(prev => {
@@ -268,19 +296,26 @@ export default function ProductDetail() {
 
   return (
     <div className="min-h-screen bg-[#f8fafc] font-sans">
-      {/* Marketplace Custom Header */}
-      <header className="bg-midnight py-4 px-6 lg:px-20 sticky top-0 z-50 shadow-xl">
-        <div className="max-w-7xl mx-auto flex items-center gap-8">
-          {/* Logo */}
-          <Link to="/" className="flex items-center gap-2 text-white shrink-0">
-            <div className="size-8 bg-primary-blue rounded flex items-center justify-center">
-              <LayoutGrid size={18} />
-            </div>
-            <span className="text-xl font-black tracking-tighter uppercase">UrbaShop</span>
-          </Link>
+      <header className="bg-midnight py-4 md:py-6 px-6 lg:px-20 sticky top-0 z-50 shadow-xl border-b border-white/5">
+        <div className="max-w-7xl mx-auto flex items-center justify-between gap-4 md:gap-8">
+          <div className="flex items-center gap-4">
+            <button 
+              onClick={() => setIsMobileMenuOpen(true)}
+              className="md:hidden size-10 flex items-center justify-center bg-white/5 rounded-xl text-white"
+            >
+              <Menu size={20} />
+            </button>
+            {/* Logo */}
+            <Link to="/" className="flex items-center gap-2 text-white shrink-0">
+              <div className="size-8 bg-primary-blue rounded flex items-center justify-center">
+                <LayoutGrid size={18} />
+              </div>
+              <span className="text-xl font-black tracking-tighter uppercase italic">URBA<span className="text-primary-blue">SHOP</span></span>
+            </Link>
+          </div>
 
-          {/* Search Bar */}
-          <div className="flex-1 relative group max-w-2xl">
+          {/* Search Bar - Hidden on mobile, visible on md+ */}
+          <div className="flex-1 relative group max-w-2xl hidden md:block">
             <input 
               type="text" 
               value={search}
@@ -420,18 +455,39 @@ export default function ProductDetail() {
                           </div>
                         </div>
                         <div className="p-2 space-y-1">
-                          <Link 
-                            to="/afiliado/perfil" 
-                            className="flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-slate-50 transition-colors text-xs font-bold text-slate-600 hover:text-primary-blue"
-                          >
-                            <User size={16} /> Meu Perfil
-                          </Link>
-                          <Link 
-                            to="/afiliado/pedidos" 
-                            className="flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-slate-50 transition-colors text-xs font-bold text-slate-600 hover:text-primary-blue"
-                          >
-                            <ShoppingBag size={16} /> Meus Pedidos
-                          </Link>
+                          {profile?.role === 'admin' ? (
+                            <Link 
+                              to="/admin/dashboard" 
+                              onClick={() => setShowUserMenu(false)}
+                              className="flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-indigo-50 transition-colors text-xs font-bold text-indigo-600"
+                            >
+                              <ShieldCheck size={16} /> Painel Administrativo
+                            </Link>
+                          ) : (
+                            <>
+                              <Link 
+                                to="/afiliado/dashboard" 
+                                onClick={() => setShowUserMenu(false)}
+                                className="flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-slate-50 transition-colors text-xs font-bold text-slate-600 hover:text-primary-blue"
+                              >
+                                <LayoutDashboard size={16} /> Painel do Afiliado
+                              </Link>
+                              <Link 
+                                to="/afiliado/perfil" 
+                                onClick={() => setShowUserMenu(false)}
+                                className="flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-slate-50 transition-colors text-xs font-bold text-slate-600 hover:text-primary-blue"
+                              >
+                                <User size={16} /> Meu Perfil
+                              </Link>
+                              <Link 
+                                to="/afiliado/pedidos" 
+                                onClick={() => setShowUserMenu(false)}
+                                className="flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-slate-50 transition-colors text-xs font-bold text-slate-600 hover:text-primary-blue"
+                              >
+                                <ShoppingBag size={16} /> Meus Pedidos
+                              </Link>
+                            </>
+                          )}
                         </div>
                         <div className="p-2 border-t border-slate-100">
                           <button 
@@ -459,7 +515,105 @@ export default function ProductDetail() {
             )}
           </div>
         </div>
+
+        {/* Mobile Search - Only visible on small screens */}
+        <div className="mt-4 md:hidden">
+          <div className="relative group">
+            <input 
+              type="text" 
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Buscar produtos..." 
+              className="w-full bg-white/10 text-white placeholder-white/50 py-2.5 pl-5 pr-12 rounded-lg focus:outline-none transition-all focus:bg-white focus:text-midnight focus:placeholder-slate-400 border border-white/5"
+            />
+            <button className="absolute right-0 top-0 bottom-0 px-4 text-white/50">
+              <Search size={18} />
+            </button>
+          </div>
+        </div>
       </header>
+
+      {/* Mobile Menu Overlay */}
+      <AnimatePresence>
+        {isMobileMenuOpen && (
+          <>
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsMobileMenuOpen(false)}
+              className="fixed inset-0 bg-midnight/80 backdrop-blur-md z-[100] md:hidden"
+            />
+            <motion.div 
+              initial={{ x: '-100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '-100%' }}
+              transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+              className="fixed inset-y-0 left-0 w-80 bg-midnight z-[101] md:hidden p-8 flex flex-col shadow-2xl border-r border-white/5"
+            >
+              <div className="flex items-center justify-between mb-12">
+                <Link to="/marketplace" onClick={() => setIsMobileMenuOpen(false)} className="flex items-center gap-2">
+                  <div className="size-8 bg-primary-blue rounded flex items-center justify-center">
+                    <LayoutGrid size={18} />
+                  </div>
+                  <span className="text-xl font-black tracking-tighter uppercase italic text-white">URBA<span className="text-primary-blue">SHOP</span></span>
+                </Link>
+                <button onClick={() => setIsMobileMenuOpen(false)} className="text-slate-400 hover:text-white transition-colors">
+                  <X size={24} />
+                </button>
+              </div>
+
+              <nav className="flex flex-col gap-2">
+                <Link to="/marketplace" onClick={() => setIsMobileMenuOpen(false)} className="px-4 py-4 rounded-2xl font-black uppercase tracking-widest text-xs text-accent bg-white/10">Marketplace</Link>
+                <Link to="/lojista/login" onClick={() => setIsMobileMenuOpen(false)} className="px-4 py-4 rounded-2xl font-black uppercase tracking-widest text-xs text-slate-400 hover:text-white transition-all flex items-center gap-3">
+                  <Store size={18} /> Área do Lojista
+                </Link>
+                <Link to="/afiliado/dashboard" onClick={() => setIsMobileMenuOpen(false)} className="px-4 py-4 rounded-2xl font-black uppercase tracking-widest text-xs text-slate-400 hover:text-white transition-all flex items-center gap-3">
+                  <LayoutDashboard size={18} /> Escritório Virtual
+                </Link>
+              </nav>
+
+              <div className="mt-auto pt-8 border-t border-white/5">
+                {authUser ? (
+                  <>
+                    <div className="flex items-center gap-4 px-4 mb-6">
+                      <div className="size-12 rounded-full bg-white/10 border border-white/10 overflow-hidden shrink-0">
+                        {profile?.avatar_url ? <img src={profile.avatar_url} alt="Profile" className="w-full h-full object-cover" /> : <User size={24} className="text-slate-500 m-auto h-full" />}
+                      </div>
+                      <div className="overflow-hidden">
+                        <p className="font-black text-sm text-white truncate">{profile?.full_name || 'Usuário'}</p>
+                        <p className="text-[10px] font-bold text-slate-500 truncate">{authUser.email}</p>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-1 gap-2">
+                      <Link to="/afiliado/pedidos" onClick={() => setIsMobileMenuOpen(false)} className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-white/5 text-xs font-bold text-slate-300">
+                        <ShoppingBag size={16} /> Meus Pedidos
+                      </Link>
+                      <Link to="/afiliado/perfil" onClick={() => setIsMobileMenuOpen(false)} className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-white/5 text-xs font-bold text-slate-300">
+                        <User size={16} /> Meu Perfil
+                      </Link>
+                      <button 
+                        onClick={async () => {
+                          await signOut();
+                          setIsMobileMenuOpen(false);
+                        }} 
+                        className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-red-500/10 text-xs font-black uppercase tracking-widest text-red-400 transition-all mt-4"
+                      >
+                        <LogOut size={16} /> Sair da Conta
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <div className="grid grid-cols-2 gap-4">
+                    <Link to="/login" onClick={() => setIsMobileMenuOpen(false)} className="flex items-center justify-center px-4 py-4 rounded-2xl border border-white/10 text-white font-black uppercase tracking-widest text-xs">Entrar</Link>
+                    <Link to="/cadastro" onClick={() => setIsMobileMenuOpen(false)} className="flex items-center justify-center px-4 py-4 rounded-2xl bg-primary-blue text-white font-black uppercase tracking-widest text-xs shadow-lg shadow-primary-blue/20">Cadastrar</Link>
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
 
       {/* Cart Drawer Overlay */}
       <AnimatePresence>
@@ -663,11 +817,24 @@ export default function ProductDetail() {
                 R$ {product.price.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
               </p>
               <div className="h-10 w-px bg-slate-200" />
-              <div>
-                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-0.5">Cashback Real</p>
-                <div className="flex items-center gap-2 text-emerald-600">
-                  <TrendingUp size={16} />
-                  <span className="text-sm font-black">R$ {cashbackAmount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+              <div className="flex gap-8">
+                <div>
+                  <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 flex items-center gap-1">
+                    <div className="size-1.5 bg-emerald-500 rounded-full" /> Bônus Mensal
+                  </div>
+                  <div className="flex items-center gap-2 text-emerald-600">
+                    <TrendingUp size={16} />
+                    <span className="text-sm font-black italic">R$ {mensalAmount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                  </div>
+                </div>
+                <div>
+                  <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 flex items-center gap-1">
+                    <div className="size-1.5 bg-indigo-500 rounded-full" /> Bônus Anual
+                  </div>
+                  <div className="flex items-center gap-2 text-indigo-600">
+                    <Award size={16} />
+                    <span className="text-sm font-black italic">R$ {anualAmount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                  </div>
                 </div>
               </div>
             </div>

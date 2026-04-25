@@ -6,7 +6,8 @@ import {
   Eye, 
   EyeOff, 
   ArrowRight,
-  Zap
+  Zap,
+  LayoutGrid
 } from 'lucide-react';
 import { useNavigate, Link } from 'react-router-dom';
 import { motion } from 'motion/react';
@@ -75,11 +76,11 @@ export default function AdminLogin() {
         {/* Logo */}
         <div className="text-center mb-10">
           <Link to="/" className="inline-flex items-center gap-3 text-white mb-6">
-            <div className="size-14 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-2xl flex items-center justify-center shadow-2xl shadow-indigo-500/20 transform -rotate-6 rotate-hover:rotate-0 transition-transform">
-              <ShieldCheck size={32} />
+            <div className="size-14 bg-primary-blue rounded-2xl flex items-center justify-center shadow-2xl shadow-primary-blue/20 transform -rotate-6 rotate-hover:rotate-0 transition-transform">
+              <LayoutGrid size={32} />
             </div>
           </Link>
-          <h1 className="text-3xl font-black text-white tracking-tighter uppercase italic">UrbaAdmin</h1>
+          <h1 className="text-3xl font-black text-white tracking-tighter uppercase italic">SERVIÇOS <span className="text-primary-blue">URBANOS</span></h1>
           <p className="text-slate-500 text-xs font-black uppercase tracking-[0.3em] mt-2">Acesso Restrito ao Ecossistema</p>
         </div>
 

@@ -17,13 +17,18 @@ import {
   Truck,
   Plus,
   Minus,
-  Trash2
+  Trash2,
+  User,
+  Menu,
+  LogOut,
+  LayoutDashboard
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Link, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
+import { businessRules } from '../lib/businessRules';
 import { useAuth } from '../contexts/AuthContext';
-import { User } from 'lucide-react';
+
 
 interface Product {
   id: string;
@@ -53,6 +58,8 @@ export default function Loja() {
   const [selectedCategory, setSelectedCategory] = useState('Todos');
   const [priceRange, setPriceRange] = useState(5000);
   const [isCartOpen, setIsCartOpen] = useState(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [showFilters, setShowFilters] = useState(false);
   const [cartItems, setCartItems] = useState<CartItem[]>(() => {
     try {
       const saved = localStorage.getItem('urbashop_cart');
@@ -71,6 +78,8 @@ export default function Loja() {
 
   const { user: authUser, profile, signOut } = useAuth();
   const [showUserMenu, setShowUserMenu] = useState(false);
+  const [mmnConfig, setMmnConfig] = useState<any>(null);
+  const [g1Value, setG1Value] = useState(0);
 
   useEffect(() => {
     async function loadData() {
@@ -120,6 +129,13 @@ export default function Loja() {
             uniqueCategoriesMap.set(c.name, c);
           }
         });
+
+        // Fetch MMN Config
+        const mmn = await businessRules.getMMNConfig();
+        const levels = await businessRules.getMMNLevels();
+        setMmnConfig(mmn);
+        const g1 = levels.find(l => l.level === 1);
+        if (g1) setG1Value(g1.value);
 
         setCategories(Array.from(uniqueCategoriesMap.values()).sort((a, b) => a.name.localeCompare(b.name)));
         setProducts(formattedProducts);
@@ -181,14 +197,22 @@ export default function Loja() {
   return (
     <div className="min-h-screen bg-[#f8fafc] font-sans flex flex-col">
       {/* Search Header */}
-      <header className="bg-midnight py-4 px-6 lg:px-20 sticky top-0 z-50 border-b border-white/5 shadow-2xl">
-        <div className="max-w-7xl mx-auto flex items-center gap-6 md:gap-12">
-          <Link to="/marketplace" className="text-white hover:text-primary-blue transition-colors flex items-center gap-2 group">
-            <ArrowLeft size={20} className="group-hover:-translate-x-1 transition-transform" />
-            <span className="hidden md:inline font-bold text-sm">Voltar</span>
-          </Link>
+      <header className="bg-midnight py-4 md:py-6 px-6 lg:px-20 sticky top-0 z-50 border-b border-white/5 shadow-2xl">
+        <div className="max-w-7xl mx-auto flex items-center justify-between gap-4 md:gap-12">
+          <div className="flex items-center gap-4">
+            <button 
+              onClick={() => setIsMobileMenuOpen(true)}
+              className="md:hidden size-10 flex items-center justify-center bg-white/5 rounded-xl text-white"
+            >
+              <Menu size={20} />
+            </button>
+            <Link to="/marketplace" className="text-white hover:text-primary-blue transition-colors flex items-center gap-2 group">
+              <ArrowLeft size={20} className="group-hover:-translate-x-1 transition-transform" />
+              <span className="hidden md:inline font-bold text-sm">Voltar</span>
+            </Link>
+          </div>
 
-          <div className="flex-1 relative">
+          <div className="flex-1 relative hidden md:block">
             <input 
               type="text" 
               placeholder="O que você está procurando hoje?"
@@ -251,18 +275,39 @@ export default function Loja() {
                           </div>
                         </div>
                         <div className="p-2 space-y-1">
-                          <Link 
-                            to="/afiliado/perfil" 
-                            className="flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-slate-50 transition-colors text-xs font-bold text-slate-600 hover:text-primary-blue"
-                          >
-                            <User size={16} /> Meu Perfil
-                          </Link>
-                          <Link 
-                            to="/afiliado/pedidos" 
-                            className="flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-slate-50 transition-colors text-xs font-bold text-slate-600 hover:text-primary-blue"
-                          >
-                            <ShoppingBag size={16} /> Meus Pedidos
-                          </Link>
+                          {profile?.role === 'admin' ? (
+                            <Link 
+                              to="/admin/dashboard" 
+                              onClick={() => setShowUserMenu(false)}
+                              className="flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-indigo-50 transition-colors text-xs font-bold text-indigo-600"
+                            >
+                              <ShieldCheck size={16} /> Painel Administrativo
+                            </Link>
+                          ) : (
+                            <>
+                              <Link 
+                                to="/afiliado/dashboard" 
+                                onClick={() => setShowUserMenu(false)}
+                                className="flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-slate-50 transition-colors text-xs font-bold text-slate-600 hover:text-primary-blue"
+                              >
+                                <LayoutDashboard size={16} /> Painel do Afiliado
+                              </Link>
+                              <Link 
+                                to="/afiliado/perfil" 
+                                onClick={() => setShowUserMenu(false)}
+                                className="flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-slate-50 transition-colors text-xs font-bold text-slate-600 hover:text-primary-blue"
+                              >
+                                <User size={16} /> Meu Perfil
+                              </Link>
+                              <Link 
+                                to="/afiliado/pedidos" 
+                                onClick={() => setShowUserMenu(false)}
+                                className="flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-slate-50 transition-colors text-xs font-bold text-slate-600 hover:text-primary-blue"
+                              >
+                                <ShoppingBag size={16} /> Meus Pedidos
+                              </Link>
+                            </>
+                          )}
                         </div>
                         <div className="p-2 border-t border-slate-100">
                           <button 
@@ -290,11 +335,116 @@ export default function Loja() {
             )}
           </div>
         </div>
+
+        {/* Mobile Search - Only visible on small screens */}
+        <div className="mt-4 md:hidden">
+          <div className="relative group">
+            <input 
+              type="text" 
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Buscar produtos..." 
+              className="w-full bg-white/10 text-white placeholder-white/50 py-2.5 pl-5 pr-12 rounded-lg focus:outline-none transition-all focus:bg-white focus:text-midnight focus:placeholder-slate-400 border border-white/5"
+            />
+            <button className="absolute right-0 top-0 bottom-0 px-4 text-white/50">
+              <Search size={18} />
+            </button>
+          </div>
+        </div>
       </header>
 
+      {/* Mobile Menu Overlay */}
+      <AnimatePresence>
+        {isMobileMenuOpen && (
+          <>
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsMobileMenuOpen(false)}
+              className="fixed inset-0 bg-midnight/80 backdrop-blur-md z-[100] md:hidden"
+            />
+            <motion.div 
+              initial={{ x: '-100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '-100%' }}
+              transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+              className="fixed inset-y-0 left-0 w-80 bg-midnight z-[101] md:hidden p-8 flex flex-col shadow-2xl border-r border-white/5"
+            >
+              <div className="flex items-center justify-between mb-12">
+                <Link to="/" className="flex items-center gap-2 text-white shrink-0">
+                  <div className="size-8 bg-primary-blue rounded flex items-center justify-center">
+                    <LayoutGrid size={18} />
+                  </div>
+                  <span className="text-xl font-black tracking-tighter uppercase italic">URBA<span className="text-primary-blue">SHOP</span></span>
+                </Link>
+                <button onClick={() => setIsMobileMenuOpen(false)} className="text-slate-400 hover:text-white transition-colors">
+                  <X size={24} />
+                </button>
+              </div>
+
+              <nav className="flex flex-col gap-2">
+                <Link to="/marketplace" onClick={() => setIsMobileMenuOpen(false)} className="px-4 py-4 rounded-2xl font-black uppercase tracking-widest text-xs text-slate-400 hover:text-white transition-all">Marketplace</Link>
+                <Link to="/lojista/login" onClick={() => setIsMobileMenuOpen(false)} className="px-4 py-4 rounded-2xl font-black uppercase tracking-widest text-xs text-slate-400 hover:text-white transition-all">Área do Lojista</Link>
+              </nav>
+
+              <div className="mt-auto pt-8 border-t border-white/5">
+                {authUser ? (
+                  <>
+                    <div className="flex items-center gap-4 px-4 mb-6">
+                      <div className="size-12 rounded-full bg-white/10 border border-white/10 overflow-hidden shrink-0">
+                        {profile?.avatar_url ? <img src={profile.avatar_url} alt="Profile" className="w-full h-full object-cover" /> : <User size={24} className="text-slate-500 m-auto h-full" />}
+                      </div>
+                      <div className="overflow-hidden">
+                        <p className="font-black text-sm text-white truncate">{profile?.full_name || 'Usuário'}</p>
+                        <p className="text-[10px] font-bold text-slate-500 truncate">{authUser.email}</p>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-1 gap-2">
+                      <Link to="/afiliado/pedidos" onClick={() => setIsMobileMenuOpen(false)} className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-white/5 text-xs font-bold text-slate-300">
+                        <ShoppingBag size={16} /> Meus Pedidos
+                      </Link>
+                      <Link to="/afiliado/perfil" onClick={() => setIsMobileMenuOpen(false)} className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-white/5 text-xs font-bold text-slate-300">
+                        <User size={16} /> Meu Perfil
+                      </Link>
+                      <button 
+                        onClick={async () => {
+                          await signOut();
+                          setIsMobileMenuOpen(false);
+                        }} 
+                        className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-red-500/10 text-xs font-black uppercase tracking-widest text-red-400 transition-all mt-4"
+                      >
+                        <LogOut size={16} /> Sair da Conta
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <div className="grid grid-cols-2 gap-4">
+                    <Link to="/login" onClick={() => setIsMobileMenuOpen(false)} className="flex items-center justify-center px-4 py-4 rounded-2xl border border-white/10 text-white font-black uppercase tracking-widest text-xs">Entrar</Link>
+                    <Link to="/cadastro" onClick={() => setIsMobileMenuOpen(false)} className="flex items-center justify-center px-4 py-4 rounded-2xl bg-accent text-midnight font-black uppercase tracking-widest text-xs shadow-lg shadow-accent/20">Cadastrar</Link>
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
       <div className="flex-1 max-w-7xl mx-auto w-full px-6 lg:px-20 py-10 flex flex-col md:flex-row gap-10">
+        {/* Mobile Filter Toggle */}
+        <button 
+          onClick={() => setShowFilters(!showFilters)}
+          className="md:hidden w-full flex items-center justify-between bg-white p-4 rounded-2xl border border-slate-100 shadow-sm"
+        >
+          <div className="flex items-center gap-3">
+            <Filter size={20} className="text-primary-blue" />
+            <span className="font-black text-midnight uppercase tracking-tighter">Filtros Avançados</span>
+          </div>
+          <ChevronRight size={20} className={`text-slate-400 transition-transform ${showFilters ? 'rotate-90' : ''}`} />
+        </button>
+
         {/* Sidebar Filters */}
-        <aside className="w-full md:w-72 shrink-0 space-y-10">
+        <aside className={`${showFilters ? 'block' : 'hidden'} md:block w-full md:w-72 shrink-0 space-y-10 animate-in fade-in slide-in-from-top-4 duration-300`}>
           <div>
             <div className="flex items-center gap-2 mb-6">
               <Filter size={18} className="text-primary-blue" />
@@ -439,7 +589,23 @@ export default function Loja() {
                     <div className="mt-auto pt-4 border-t border-slate-50 flex items-end justify-between">
                       <div>
                         <p className="text-2xl font-black text-midnight tracking-tighter">R$ {p.price.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
-                        <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest">+ R$ {(p.price * (p.cashback / 100)).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} de cashback</p>
+                        {(() => {
+                          const g1Total = (p.price * (g1Value / 100));
+                          const totalRatios = (mmnConfig?.cashbackMensal || 2.75) + (mmnConfig?.cashbackDigital || 1.0) + (mmnConfig?.cashbackAnual || 0.75);
+                          const mensal = g1Total * ((mmnConfig?.cashbackMensal || 2.75) / totalRatios);
+                          const anual = g1Total * ((mmnConfig?.cashbackAnual || 0.75) / totalRatios);
+                          
+                          return (
+                            <div className="flex flex-col gap-0.5 mt-1">
+                              <p className="text-[9px] font-black text-emerald-600 uppercase tracking-widest flex items-center gap-1">
+                                <TrendingUp size={10} /> Bônus Mensal: R$ {mensal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                              </p>
+                              <p className="text-[9px] font-black text-indigo-600 uppercase tracking-widest flex items-center gap-1">
+                                <ShoppingBag size={10} /> Bônus Anual: R$ {anual.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                              </p>
+                            </div>
+                          );
+                        })()}
                       </div>
                       <Link to={`/produto/${p.id}`} className="size-8 bg-slate-50 rounded-xl flex items-center justify-center text-slate-300 hover:text-primary-blue transition-colors">
                         <ChevronRight size={20} />

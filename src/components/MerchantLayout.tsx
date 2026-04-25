@@ -52,11 +52,11 @@ export default function MerchantLayout({ children, title, subtitle }: MerchantLa
         <div className="p-8 border-b border-white/5">
           <Link to="/marketplace" className="flex items-center gap-3 text-white mb-2">
             <div className="size-10 bg-primary-blue rounded-xl flex items-center justify-center shadow-lg shadow-primary-blue/30">
-              <Building2 size={20} />
+              <LayoutGrid size={20} />
             </div>
             <div>
-              <span className="text-xl font-black tracking-tighter uppercase leading-none block">UrbaShop</span>
-              <span className="text-[9px] font-black text-primary-red uppercase tracking-[0.2em] opacity-80">Merchant Center</span>
+              <span className="text-xl font-black tracking-tighter uppercase italic leading-none block">URBA<span className="text-primary-blue">SHOP</span></span>
+              <span className="text-[9px] font-black text-primary-blue uppercase tracking-[0.2em] opacity-80">Merchant Center</span>
             </div>
           </Link>
         </div>
@@ -186,9 +186,9 @@ export default function MerchantLayout({ children, title, subtitle }: MerchantLa
               <div className="p-8 border-b border-white/5 flex items-center justify-between">
                 <div className="flex items-center gap-3 text-white">
                   <div className="size-8 bg-primary-blue rounded-lg flex items-center justify-center">
-                    <Building2 size={16} />
+                    <LayoutGrid size={16} />
                   </div>
-                  <span className="font-black uppercase tracking-tighter">UrbaShop</span>
+                  <span className="font-black uppercase tracking-tighter italic">URBA<span className="text-primary-blue">SHOP</span></span>
                 </div>
                 <button 
                   onClick={() => setIsMobileMenuOpen(false)}

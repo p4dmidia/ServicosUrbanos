@@ -188,14 +188,21 @@ export default function Checkout() {
   const subtotal = cartItems.reduce((acc, item) => acc + (item.price * item.quantity), 0);
   const total = subtotal; // Sem frete
 
-  // MMN Calculations for the whole order - Using the sum of Admin Rules (2.75% + 1% + 0.75% = 4.5%)
-  const adminCashbackRate = (mmnConfig?.cashbackMensal || 2.75) + (mmnConfig?.cashbackDigital || 1.0) + (mmnConfig?.cashbackAnual || 0.75);
-  const totalCashbackAmount = total * (adminCashbackRate / 100);
+  // MMN Calculations for the whole order - Using dynamic Admin Rules (Excel Proportional Logic)
+  const pMensal = Number(mmnConfig?.cashbackMensal || 2.75);
+  const pDigital = Number(mmnConfig?.cashbackDigital || 1.0);
+  const pAnual = Number(mmnConfig?.cashbackAnual || 0.75);
+  const totalRatios = pMensal + pDigital + pAnual || 4.5;
 
-  const totalRatios = adminCashbackRate;
-  const totalMensal = total * ((mmnConfig?.cashbackMensal || 2.75) / 100);
-  const totalDigital = total * ((mmnConfig?.cashbackDigital || 1.0) / 100);
-  const totalAnual = total * ((mmnConfig?.cashbackAnual || 0.75) / 100);
+  // Calculamos o ganho do usuário (G1) sobre o pool total dos itens do carrinho
+  const userTotalCashbackAmount = cartItems.reduce((acc, item) => {
+    const itemPool = item.price * (item.cashback / 100) * item.quantity;
+    return acc + (itemPool * (g1Value / 100));
+  }, 0);
+
+  const totalMensal = userTotalCashbackAmount * (pMensal / totalRatios);
+  const totalDigital = userTotalCashbackAmount * (pDigital / totalRatios);
+  const totalAnual = userTotalCashbackAmount * (pAnual / totalRatios);
 
   useEffect(() => {
     setShippingCost(0);
@@ -244,7 +251,7 @@ export default function Checkout() {
             status: 'Aguardando Pagamento',
             items: cartItems,
             branch_id: cartItems[0].branchId || cartItems[0].merchant_id || null, 
-            cashback_amount: totalCashbackAmount,
+            cashback_amount: userTotalCashbackAmount,
             shipping_address: shippingMethod === 'pickup' ? 'Retirada na Loja' : `${address.logradouro}, ${address.numero} - ${address.cidade}/${address.estado}`,
             payment_method: 'Carteira Digital'
           }])
@@ -277,6 +284,11 @@ export default function Checkout() {
           }]);
 
         if (transError) throw transError;
+        
+        // 4. Dar baixa no estoque de cada produto
+        await Promise.all(cartItems.map(item => 
+          businessRules.decrementStock(item.id, item.quantity)
+        ));
 
         toast.dismiss(loadingToast);
         toast.success('Pagamento realizado com sucesso!');
@@ -302,12 +314,17 @@ export default function Checkout() {
           status: 'Aguardando Pagamento',
           items: cartItems,
           branch_id: cartItems[0].branchId || cartItems[0].merchant_id || null, 
-          cashback_amount: totalCashbackAmount,
+          cashback_amount: userTotalCashbackAmount,
           shipping_address: `RETIRADA NA LOJA: ${pickupAddress}`,
           payment_method: paymentMethod === 'wallet' ? 'Carteira Digital' : 'Mercado Pago'
         }]);
 
       if (orderError) throw orderError;
+
+      // 2. Dar baixa no estoque de cada produto
+      await Promise.all(cartItems.map(item => 
+        businessRules.decrementStock(item.id, item.quantity)
+      ));
 
       // 2. Se for retirada, criar o registro de código de retirada antecipadamente
       if (shippingMethod === 'pickup') {

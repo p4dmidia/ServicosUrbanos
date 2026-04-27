@@ -77,6 +77,9 @@ CREATE TABLE IF NOT EXISTS public.mmn_config (
     id INTEGER PRIMARY KEY DEFAULT 1,
     depth INTEGER DEFAULT 4,
     payment_type TEXT CHECK (payment_type IN ('percent', 'fixed')) DEFAULT 'percent',
+    cashback_mensal NUMERIC DEFAULT 2.75,
+    cashback_digital NUMERIC DEFAULT 1.00,
+    cashback_anual NUMERIC DEFAULT 0.75,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
     CONSTRAINT single_row CHECK (id = 1)
 );
@@ -175,7 +178,12 @@ DECLARE
     mmn_pay_type TEXT;
     commission_record RECORD;
     commission_val NUMERIC;
-    part_val NUMERIC;
+    p_mensal NUMERIC;
+    p_digital NUMERIC;
+    p_anual NUMERIC;
+    v_mensal NUMERIC;
+    v_digital NUMERIC;
+    v_anual NUMERIC;
 BEGIN
     -- [CONDIÇÃO DE DISPARO]
     -- Só processa se o novo status for 'Pago, Aguardando Retirada' ou 'Concluído'
@@ -205,6 +213,11 @@ BEGIN
             FROM public.get_upline_chain(NEW.customer_id, mmn_depth) u
             JOIN public.mmn_levels l ON u.level = l.level
         LOOP
+            -- Pegar as proporções configuradas
+            SELECT cashback_mensal, cashback_digital, cashback_anual 
+            INTO p_mensal, p_digital, p_anual 
+            FROM public.mmn_config WHERE id = 1;
+
             -- Calcular o valor TOTAL da comissão para este nível
             IF mmn_pay_type = 'percent' THEN
                 commission_val := (NEW.amount * (commission_record.value / 100));
@@ -212,36 +225,40 @@ BEGIN
                 commission_val := commission_record.value;
             END IF;
             
-            -- Dividir em 3 partes conforme PRD (Tri-Split)
-            part_val := ROUND(commission_val / 3, 2);
+            -- Calcular as partes baseadas nos percentuais reais (Normalizando para o total da comissão se necessário)
+            -- Mas aqui vamos usar os percentuais diretos se o total bater com o nível
+            -- Para manter a flexibilidade:
+            v_mensal := ROUND(commission_val * (p_mensal / (p_mensal + p_digital + p_anual)), 2);
+            v_digital := ROUND(commission_val * (p_digital / (p_mensal + p_digital + p_anual)), 2);
+            v_anual := commission_val - (v_mensal + v_digital); -- Resíduo no anual
             
-            -- 1. Bônus Mensal (33.33%)
+            -- 1. Bônus Mensal
             INSERT INTO public.transactions (profile_id, type, description, amount, status)
             VALUES (
                 commission_record.upline_id, 
                 'commission', 
                 'Comissão MMN (Mensal) - Pedido #' || NEW.id || ' (Nível ' || commission_record.level || ')', 
-                part_val, 
+                v_mensal, 
                 'completed'
             );
 
-            -- 2. Bônus Anual (33.33%)
+            -- 2. Bônus Anual
             INSERT INTO public.transactions (profile_id, type, description, amount, status)
             VALUES (
                 commission_record.upline_id, 
                 'commission', 
                 'Comissão MMN (Anual) - Pedido #' || NEW.id || ' (Nível ' || commission_record.level || ')', 
-                part_val, 
+                v_anual, 
                 'completed'
             );
 
-            -- 3. Bônus Carteira Digital (CD) (Resíduo para fechar o total)
+            -- 3. Bônus Carteira Digital (CD)
             INSERT INTO public.transactions (profile_id, type, description, amount, status)
             VALUES (
                 commission_record.upline_id, 
                 'commission', 
                 'Comissão MMN (CD) - Pedido #' || NEW.id || ' (Nível ' || commission_record.level || ')', 
-                commission_val - (2 * part_val), 
+                v_digital, 
                 'completed'
             );
         END LOOP;

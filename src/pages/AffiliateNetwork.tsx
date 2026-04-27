@@ -23,6 +23,8 @@ export default function AffiliateNetwork() {
   const [network, setNetwork] = useState<any[]>([]);
   const [stats, setStats] = useState<any>(null);
   const [treeData, setTreeData] = useState<any>(null);
+  const [mmnConfig, setMmnConfig] = useState<any[]>([]);
+  const [levelFilter, setLevelFilter] = useState<number>(0);
 
   const handleInvite = () => {
     if (!user) return;
@@ -51,15 +53,17 @@ export default function AffiliateNetwork() {
       
       try {
         setLoading(true);
-        const [networkData, treeInfo, statsData] = await Promise.all([
+        const [networkData, treeInfo, statsData, levelsConfig] = await Promise.all([
           businessRules.getAffiliateNetwork(user.id),
           businessRules.getAffiliateTree(user.id),
-          businessRules.getAffiliateStats(user.id)
+          businessRules.getAffiliateStats(user.id),
+          businessRules.getMMNLevels()
         ]);
         
         setNetwork(networkData);
         setTreeData(treeInfo);
         setStats(statsData);
+        setMmnConfig(levelsConfig);
       } catch (error) {
         console.error("Error loading network:", error);
       } finally {
@@ -80,17 +84,38 @@ export default function AffiliateNetwork() {
     );
   }
 
-  const filteredNetwork = network.filter(item => 
-    item.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (item.referralCode || item.id).toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredNetwork = network.filter(item => {
+    const matchesSearch = item.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (item.referralCode || item.id).toLowerCase().includes(searchTerm.toLowerCase());
+    
+    const matchesLevel = levelFilter === 0 || Number(item.level) === levelFilter;
+    
+    return matchesSearch && matchesLevel;
+  });
 
-  const levels = [
-    { label: 'G1 (Diretos)', count: stats.networkSummary.g1, limit: 10, bonus: '0.75%', color: 'text-emerald-500', bg: 'bg-emerald-50' },
-    { label: 'G2', count: stats.networkSummary.g2, limit: 100, bonus: '0.75%', color: 'text-blue-500', bg: 'bg-blue-50' },
-    { label: 'G3', count: stats.networkSummary.g3, limit: 1000, bonus: '0.75%', color: 'text-purple-500', bg: 'bg-purple-50' },
-    { label: 'G4', count: stats.networkSummary.g4, limit: 10000, bonus: '0.75%', color: 'text-slate-400', bg: 'bg-slate-50' },
-  ];
+  const levels = mmnConfig
+    .filter(level => level.level > 1) // Pular o nível 1 (G0 - Você)
+    .map((level, i) => {
+      const gen = level.level - 1; // G1, G2...
+      const count = stats.networkSummary[`g${gen}`] || 0;
+      const colors = [
+        { text: 'text-emerald-500', bg: 'bg-emerald-50' },
+        { text: 'text-blue-500', bg: 'bg-blue-50' },
+        { text: 'text-purple-500', bg: 'bg-purple-50' },
+        { text: 'text-indigo-500', bg: 'bg-indigo-50' },
+        { text: 'text-amber-500', bg: 'bg-amber-50' },
+        { text: 'text-rose-500', bg: 'bg-rose-50' }
+      ];
+      const colorSet = colors[i % colors.length];
+
+      return {
+        label: `G${gen}${gen === 1 ? ' (Diretos)' : ''}`,
+        count: count,
+        bonus: `${level.value.toFixed(2)}%`,
+        color: colorSet.text,
+        bg: colorSet.bg
+      };
+    });
 
   return (
     <AffiliateLayout title="Minha Rede MMN">
@@ -136,7 +161,7 @@ export default function AffiliateNetwork() {
               <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">{level.label}</p>
               <div className="flex items-baseline gap-2 mb-4">
                 <h3 className="text-3xl font-black text-midnight tracking-tighter">{level.count}</h3>
-                <span className="text-xs text-slate-300 font-bold">/ {level.limit}</span>
+                <span className="text-xs text-slate-300 font-bold uppercase tracking-widest italic">Parceiros</span>
               </div>
               <div className="flex flex-col gap-2">
                  <span className={`text-[10px] font-black px-2 py-0.5 rounded-md w-fit ${level.bg} ${level.color}`}>BÔNUS: {level.bonus}</span>
@@ -177,10 +202,19 @@ export default function AffiliateNetwork() {
                       Árvore
                     </button>
                  </div>
-                 <button className="flex items-center gap-2 bg-slate-50 border border-slate-100 px-6 py-4 rounded-2xl text-xs font-black text-slate-500 hover:text-midnight transition-colors uppercase tracking-widest">
-                    <Filter size={16} />
-                    Filtrar Nível
-                 </button>
+                 <div className="relative">
+                   <select 
+                     value={levelFilter}
+                     onChange={(e) => setLevelFilter(Number(e.target.value))}
+                     className="appearance-none flex items-center gap-2 bg-slate-50 border border-slate-100 px-6 py-4 rounded-2xl text-xs font-black text-slate-500 hover:text-midnight transition-all uppercase tracking-widest cursor-pointer pr-10 focus:outline-none focus:border-primary-blue focus:ring-4 focus:ring-primary-blue/5"
+                   >
+                      <option value={0}>Todos os Níveis</option>
+                      {mmnConfig.filter(l => l.level > 1).map((l) => (
+                        <option key={l.level} value={l.level - 1}>Nível G{l.level - 1}</option>
+                      ))}
+                   </select>
+                   <Filter size={16} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                 </div>
               </div>
            </div>
 

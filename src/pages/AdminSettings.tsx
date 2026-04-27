@@ -298,7 +298,7 @@ export default function AdminSettings() {
                     {mmnLevels.slice(0, Math.max(mmnDepth, 6)).map((level, index) => (
                       <div key={level.level} className={`bg-white/5 p-6 rounded-[2rem] border border-white/5 hover:border-indigo-500/30 transition-colors group ${level.level > mmnDepth ? 'opacity-20 pointer-events-none' : ''}`}>
                         <div className="flex items-center justify-between mb-4">
-                           <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">{level.level === 1 ? 'G1 - Você' : `G${level.level} - Nível ${level.level - 1}`}</p>
+                           <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">{level.level === 1 ? 'G0 - Você' : `G${level.level - 1} - Nível ${level.level - 1}`}</p>
                            {level.level === 1 && <div className="size-2 bg-emerald-500 rounded-full shadow-lg shadow-emerald-500/20 animate-pulse" />}
                         </div>
                         <div className="relative">

@@ -124,10 +124,20 @@ export default function ProductDetail() {
     return acc + (item.price * (item.cashback / 100) * item.quantity);
   }, 0);
 
-  const totalRatios = (mmnConfig?.cashbackMensal || 2.75) + (mmnConfig?.cashbackDigital || 1.0) + (mmnConfig?.cashbackAnual || 0.75);
-  const totalMensal = totalCashback * ((mmnConfig?.cashbackMensal || 2.75) / totalRatios);
-  const totalDigital = totalCashback * ((mmnConfig?.cashbackDigital || 1.0) / totalRatios);
-  const totalAnual = totalCashback * ((mmnConfig?.cashbackAnual || 0.75) / totalRatios);
+  const pMensal = Number(mmnConfig?.cashbackMensal || 2.75);
+  const pDigital = Number(mmnConfig?.cashbackDigital || 1.0);
+  const pAnual = Number(mmnConfig?.cashbackAnual || 0.75);
+  const totalRatios = pMensal + pDigital + pAnual || 4.5;
+
+  // Ganho total do usuário (G1) sobre os itens no carrinho
+  const userTotalCashbackAmount = cartItems.reduce((acc, item) => {
+    // Lógica correta: Preço * (G1 / 100)
+    return acc + (item.price * (g1Value / 100) * item.quantity);
+  }, 0);
+
+  const totalMensal = userTotalCashbackAmount * (pMensal / totalRatios);
+  const totalDigital = userTotalCashbackAmount * (pDigital / totalRatios);
+  const totalAnual = userTotalCashbackAmount * (pAnual / totalRatios);
 
   const markAllAsRead = () => {
     setNotifications(notifications.map(n => ({ ...n, read: true })));
@@ -231,18 +241,18 @@ export default function ProductDetail() {
   const mainImg = product.main_image || product.image || '📦';
   const images = [mainImg, ...(product.gallery || [])].filter(Boolean);
   
-  // MMN Calculations for G1 (Buyer)
-  const totalCashbackPercent = product.cashback || 5;
-  const totalCashbackAmount = product.price * (totalCashbackPercent / 100);
+  // MMN Calculations for G1 (Buyer) - Proportional Logic
+  const pMensalRatio = Number(mmnConfig?.cashbackMensal || 2.75);
+  const pDigitalRatio = Number(mmnConfig?.cashbackDigital || 1.0);
+  const pAnualRatio = Number(mmnConfig?.cashbackAnual || 0.75);
+  const totalWeight = pMensalRatio + pDigitalRatio + pAnualRatio || 4.5;
   
-  const mensalRatio = mmnConfig?.cashbackMensal || 2.75;
-  const digitalRatio = mmnConfig?.cashbackDigital || 1.0;
-  const anualRatio = mmnConfig?.cashbackAnual || 0.75;
-  const totalRatio = mensalRatio + digitalRatio + anualRatio;
+  // Ganho do usuário (G1) direto sobre o valor do produto
+  const userShareAmount = product.price * (g1Value / 100);
   
-  const mensalAmount = totalCashbackAmount * (mensalRatio / totalRatio);
-  const digitalAmount = totalCashbackAmount * (digitalRatio / totalRatio);
-  const anualAmount = totalCashbackAmount * (anualRatio / totalRatio);
+  const mensalAmount = userShareAmount * (pMensalRatio / totalWeight);
+  const digitalAmount = userShareAmount * (pDigitalRatio / totalWeight);
+  const anualAmount = userShareAmount * (pAnualRatio / totalWeight);
 
   const handleBuy = () => {
     setCartItems(prev => {
@@ -849,7 +859,7 @@ export default function ProductDetail() {
                   </div>
                   <div className="flex items-center gap-2 text-emerald-600">
                     <TrendingUp size={16} />
-                    <span className="text-sm font-black italic">R$ {mensalAmount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                    <span className="text-sm font-black italic">R$ {mensalAmount.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                   </div>
                 </div>
                 <div>
@@ -858,7 +868,7 @@ export default function ProductDetail() {
                   </div>
                   <div className="flex items-center gap-2 text-blue-600">
                     <Smartphone size={16} />
-                    <span className="text-sm font-black italic">R$ {digitalAmount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                    <span className="text-sm font-black italic">R$ {digitalAmount.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                   </div>
                 </div>
                 <div>
@@ -867,7 +877,7 @@ export default function ProductDetail() {
                   </div>
                   <div className="flex items-center gap-2 text-indigo-600">
                     <Award size={16} />
-                    <span className="text-sm font-black italic">R$ {anualAmount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                    <span className="text-sm font-black italic">R$ {anualAmount.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                   </div>
                 </div>
               </div>

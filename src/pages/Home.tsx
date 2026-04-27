@@ -44,6 +44,7 @@ export default function Home() {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [mmnConfig, setMmnConfig] = useState<any>(null);
+  const [g1Value, setG1Value] = useState<number>(3.0); // Default 3% share
 
   useEffect(() => {
     async function loadData() {
@@ -53,6 +54,11 @@ export default function Home() {
         // Fetch MMN Config
         const configData = await businessRules.getMMNConfig();
         if (configData) setMmnConfig(configData);
+
+        // Fetch MMN Levels for G1
+        const levels = await businessRules.getMMNLevels();
+        const g1 = levels.find(l => Number(l.level) === 1);
+        if (g1) setG1Value(Number(g1.value));
 
         console.log('Fetching products from Supabase...');
         const { data, error } = await supabase
@@ -296,28 +302,28 @@ export default function Home() {
                         </p>
                         <div className="flex flex-col gap-0.5 mt-1">
                           {(() => {
-                            const totalCashbackPercent = product.cashback || 5;
-                            const totalCashbackAmount = product.price * (totalCashbackPercent / 100);
+                            const pMensal = Number(mmnConfig?.cashbackMensal || 2.75);
+                            const pDigital = Number(mmnConfig?.cashbackDigital || 1.0);
+                            const pAnual = Number(mmnConfig?.cashbackAnual || 0.75);
+                            const totalRatios = pMensal + pDigital + pAnual || 4.5;
                             
-                            const mensalRatio = mmnConfig?.cashbackMensal || 2.75;
-                            const digitalRatio = mmnConfig?.cashbackDigital || 1.0;
-                            const anualRatio = mmnConfig?.cashbackAnual || 0.75;
-                            const totalRatio = mensalRatio + digitalRatio + anualRatio;
+                            // Ganho do usuário (G1) direto sobre o valor do produto
+                            const userShare = product.price * (g1Value / 100);
                             
-                            const mensal = totalCashbackAmount * (mensalRatio / totalRatio);
-                            const digital = totalCashbackAmount * (digitalRatio / totalRatio);
-                            const anual = totalCashbackAmount * (anualRatio / totalRatio);
+                            const mensal = userShare * (pMensal / totalRatios);
+                            const digital = userShare * (pDigital / totalRatios);
+                            const anual = userShare * (pAnual / totalRatios);
                             
                             return (
                               <>
                                 <p className="text-[8px] font-bold text-emerald-500 uppercase tracking-widest flex items-center gap-1">
-                                  <TrendingUp size={8} /> Mensal: R$ {mensal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                  <TrendingUp size={8} /> Mensal ({pMensal}%): R$ {mensal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                 </p>
                                 <p className="text-[8px] font-bold text-blue-500 uppercase tracking-widest flex items-center gap-1">
-                                  <Smartphone size={8} /> Digital: R$ {digital.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                  <Smartphone size={8} /> Digital ({pDigital}%): R$ {digital.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                 </p>
                                 <p className="text-[8px] font-bold text-indigo-500 uppercase tracking-widest flex items-center gap-1">
-                                  <Calendar size={8} /> Anual: R$ {anual.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                  <Calendar size={8} /> Anual ({pAnual}%): R$ {anual.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                 </p>
                               </>
                             );

@@ -200,10 +200,20 @@ export default function Loja() {
     return acc + (item.price * (item.cashback / 100) * item.quantity);
   }, 0);
 
-  const totalRatios = (mmnConfig?.cashbackMensal || 2.75) + (mmnConfig?.cashbackDigital || 1.0) + (mmnConfig?.cashbackAnual || 0.75);
-  const totalMensal = totalCashback * ((mmnConfig?.cashbackMensal || 2.75) / totalRatios);
-  const totalDigital = totalCashback * ((mmnConfig?.cashbackDigital || 1.0) / totalRatios);
-  const totalAnual = totalCashback * ((mmnConfig?.cashbackAnual || 0.75) / totalRatios);
+  const pMensal = Number(mmnConfig?.cashbackMensal || 2.75);
+  const pDigital = Number(mmnConfig?.cashbackDigital || 1.0);
+  const pAnual = Number(mmnConfig?.cashbackAnual || 0.75);
+  const totalRatios = pMensal + pDigital + pAnual || 4.5;
+
+  // O totalCashback aqui já deve considerar o G1 do usuário para ser o "Seu Retorno"
+  const userTotalCashback = cartItems.reduce((acc, item) => {
+    // A lógica correta é: Preço * (G1 / 100)
+    return acc + (item.price * (g1Value / 100) * item.quantity);
+  }, 0);
+
+  const totalMensal = userTotalCashback * (pMensal / totalRatios);
+  const totalDigital = userTotalCashback * (pDigital / totalRatios);
+  const totalAnual = userTotalCashback * (pAnual / totalRatios);
 
   return (
     <div className="min-h-screen bg-[#f8fafc] font-sans flex flex-col">
@@ -602,28 +612,28 @@ export default function Loja() {
                       <div>
                         <p className="text-2xl font-black text-midnight tracking-tighter">R$ {p.price.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
                         {(() => {
-                          const totalCashbackPercent = p.cashback || 5;
-                          const totalCashbackAmount = p.price * (totalCashbackPercent / 100);
+                          const pMensal = Number(mmnConfig?.cashbackMensal || 2.75);
+                          const pDigital = Number(mmnConfig?.cashbackDigital || 1.0);
+                          const pAnual = Number(mmnConfig?.cashbackAnual || 0.75);
+                          const totalRatios = pMensal + pDigital + pAnual || 4.5;
                           
-                          const mensalRatio = mmnConfig?.cashbackMensal || 2.75;
-                          const digitalRatio = mmnConfig?.cashbackDigital || 1.0;
-                          const anualRatio = mmnConfig?.cashbackAnual || 0.75;
-                          const totalRatio = mensalRatio + digitalRatio + anualRatio;
+                          // Ganho do usuário (G1) direto sobre o valor do produto
+                          const userShare = p.price * (g1Value / 100);
                           
-                          const mensal = totalCashbackAmount * (mensalRatio / totalRatio);
-                          const digital = totalCashbackAmount * (digitalRatio / totalRatio);
-                          const anual = totalCashbackAmount * (anualRatio / totalRatio);
+                          const mensal = userShare * (pMensal / totalRatios);
+                          const digital = userShare * (pDigital / totalRatios);
+                          const anual = userShare * (pAnual / totalRatios);
                           
                           return (
                             <div className="flex flex-col gap-0.5 mt-1">
                               <p className="text-[9px] font-black text-emerald-600 uppercase tracking-widest flex items-center gap-1">
-                                <TrendingUp size={10} /> Bônus Mensal: R$ {mensal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                <TrendingUp size={10} /> Bônus Mensal ({pMensal}%): R$ {mensal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                               </p>
                               <p className="text-[9px] font-black text-blue-600 uppercase tracking-widest flex items-center gap-1">
-                                <Smartphone size={10} /> Bônus Digital: R$ {digital.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                <Smartphone size={10} /> Bônus Digital ({pDigital}%): R$ {digital.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                               </p>
                               <p className="text-[9px] font-black text-indigo-600 uppercase tracking-widest flex items-center gap-1">
-                                <Calendar size={10} /> Bônus Anual: R$ {anual.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                <Calendar size={10} /> Bônus Anual ({pAnual}%): R$ {anual.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                               </p>
                             </div>
                           );

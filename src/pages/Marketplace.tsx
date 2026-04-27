@@ -240,10 +240,20 @@ export default function Marketplace() {
     return acc + (item.price * (item.cashback / 100) * item.quantity);
   }, 0);
 
-  const totalRatios = (mmnConfig?.cashbackMensal || 2.75) + (mmnConfig?.cashbackDigital || 1.0) + (mmnConfig?.cashbackAnual || 0.75);
-  const totalMensal = totalCashback * ((mmnConfig?.cashbackMensal || 2.75) / totalRatios);
-  const totalDigital = totalCashback * ((mmnConfig?.cashbackDigital || 1.0) / totalRatios);
-  const totalAnual = totalCashback * ((mmnConfig?.cashbackAnual || 0.75) / totalRatios);
+  const pMensal = Number(mmnConfig?.cashbackMensal || 2.75);
+  const pDigital = Number(mmnConfig?.cashbackDigital || 1.0);
+  const pAnual = Number(mmnConfig?.cashbackAnual || 0.75);
+  const totalRatios = pMensal + pDigital + pAnual || 4.5;
+
+  // Ganho total do usuário (G1) sobre os itens no carrinho
+  const userTotalCashback = cartItems.reduce((acc, item) => {
+    // Lógica correta: Preço * (G1 / 100)
+    return acc + (item.price * (g1Value / 100) * item.quantity);
+  }, 0);
+
+  const totalMensal = userTotalCashback * (pMensal / totalRatios);
+  const totalDigital = userTotalCashback * (pDigital / totalRatios);
+  const totalAnual = userTotalCashback * (pAnual / totalRatios);
 
   const markAllAsRead = () => {
     setNotifications(notifications.map(n => ({ ...n, read: true })));
@@ -683,15 +693,15 @@ export default function Marketplace() {
                       </div>
                       <div className="flex justify-between items-center">
                         <span className="text-[10px] font-bold text-emerald-600">Mensal</span>
-                        <span className="text-xs font-black text-emerald-600">+ R$ {totalMensal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                        <span className="text-xs font-black text-emerald-600">+ R$ {totalMensal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                       </div>
                       <div className="flex justify-between items-center">
                         <span className="text-[10px] font-bold text-blue-600">Digital</span>
-                        <span className="text-xs font-black text-blue-600">+ R$ {totalDigital.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                        <span className="text-xs font-black text-blue-600">+ R$ {totalDigital.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                       </div>
                       <div className="flex justify-between items-center">
                         <span className="text-[10px] font-bold text-indigo-600">Anual</span>
-                        <span className="text-xs font-black text-indigo-600">+ R$ {totalAnual.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                        <span className="text-xs font-black text-indigo-600">+ R$ {totalAnual.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                       </div>
                     </div>
                     <div className="flex justify-between items-center pt-3 mt-3 border-t border-slate-200">
@@ -900,31 +910,31 @@ export default function Marketplace() {
                     <div className="flex items-center justify-between mb-3">
                       <div className="flex flex-wrap gap-1 mb-3">
                         {(() => {
-                          const totalCashbackPercent = product.cashback || 5;
-                          const totalCashbackAmount = product.price * (totalCashbackPercent / 100);
+                          const pMensal = Number(mmnConfig?.cashbackMensal || 2.75);
+                          const pDigital = Number(mmnConfig?.cashbackDigital || 1.0);
+                          const pAnual = Number(mmnConfig?.cashbackAnual || 0.75);
+                          const totalRatios = pMensal + pDigital + pAnual || 4.5;
                           
-                          const mensalRatio = mmnConfig?.cashbackMensal || 2.75;
-                          const digitalRatio = mmnConfig?.cashbackDigital || 1.0;
-                          const anualRatio = mmnConfig?.cashbackAnual || 0.75;
-                          const totalRatio = mensalRatio + digitalRatio + anualRatio;
+                          // Ganho do usuário (G1) direto sobre o valor do produto
+                          const userShare = product.price * (g1Value / 100);
                           
-                          const mensal = totalCashbackAmount * (mensalRatio / totalRatio);
-                          const digital = totalCashbackAmount * (digitalRatio / totalRatio);
-                          const anual = totalCashbackAmount * (anualRatio / totalRatio);
+                          const mensal = userShare * (pMensal / totalRatios);
+                          const digital = userShare * (pDigital / totalRatios);
+                          const anual = userShare * (pAnual / totalRatios);
                           
                           return (
                             <>
                               <span className="text-[8px] font-black text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-lg uppercase tracking-tight border border-emerald-100 flex items-center gap-1 shadow-sm">
                                 <TrendingUp size={8} />
-                                Mensal: R$ {mensal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                Mensal ({pMensal}%): R$ {mensal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                               </span>
                               <span className="text-[8px] font-black text-blue-600 bg-blue-50 px-2 py-0.5 rounded-lg uppercase tracking-tight border border-blue-100 flex items-center gap-1 shadow-sm">
                                 <Smartphone size={8} />
-                                Digital: R$ {digital.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                Digital ({pDigital}%): R$ {digital.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                               </span>
                               <span className="text-[8px] font-black text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-lg uppercase tracking-tight border border-indigo-100 flex items-center gap-1 shadow-sm">
                                 <Calendar size={8} />
-                                Anual: R$ {anual.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                Anual ({pAnual}%): R$ {anual.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                               </span>
                             </>
                           );

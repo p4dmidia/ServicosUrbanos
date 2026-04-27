@@ -24,24 +24,43 @@ export default function AffiliateOrders() {
   const [selectedOrder, setSelectedOrder] = useState<any | null>(null);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [extras, setExtras] = useState<Record<string, any>>({});
+  const [mmnConfig, setMmnConfig] = useState<any>(null);
+  const [mmnLevels, setMmnLevels] = useState<any[]>([]);
+  const [transactions, setTransactions] = useState<any[]>([]);
 
+  // Unificamos tudo em um único useEffect para evitar race conditions
   useEffect(() => {
-    async function fetchOrders() {
+    async function loadAllData() {
       if (!user) return;
+      
       try {
         setLoading(true);
-        const { data, error } = await supabase
-          .from('orders')
-          .select('*')
-          .eq('customer_id', user.id)
-          .order('order_date', { ascending: false });
+        // Buscamos Pedidos, Configurações, Níveis e Transações em paralelo
+        const [ordersRes, config, levels, transRes] = await Promise.all([
+          supabase
+            .from('orders')
+            .select('*')
+            .eq('customer_id', user.id)
+            .order('order_date', { ascending: false }),
+          businessRules.getMMNConfig(),
+          businessRules.getMMNLevels(),
+          supabase
+            .from('transactions')
+            .select('*')
+            .eq('profile_id', user.id)
+            .eq('type', 'commission')
+        ]);
+        
+        if (ordersRes.error) throw ordersRes.error;
+        
+        setOrders(ordersRes.data || []);
+        setMmnConfig(config);
+        setMmnLevels(levels || []);
+        setTransactions(transRes.data || []);
 
-        if (error) throw error;
-        setOrders(data || []);
-
-        // Fetch extras (withdrawal codes)
-        if (data && data.length > 0) {
-          const orderIds = data.map(o => o.id);
+        // Busca extras (códigos de retirada)
+        if (ordersRes.data && ordersRes.data.length > 0) {
+          const orderIds = ordersRes.data.map(o => o.id);
           const { data: extrasData } = await supabase
             .from('order_extras')
             .select('*')
@@ -55,15 +74,66 @@ export default function AffiliateOrders() {
             setExtras(extrasMap);
           }
         }
-      } catch (err) {
-        console.error('Erro ao buscar pedidos:', err);
+      } catch (error) {
+        console.error('Erro ao carregar dados do afiliado:', error);
       } finally {
         setLoading(false);
       }
     }
 
-    fetchOrders();
+    loadAllData();
   }, [user]);
+
+  const calculateCashbackBreakdown = (order: any) => {
+    if (!mmnConfig || !mmnLevels.length || !order) return { mensal: 0, digital: 0, anual: 0, total: 0 };
+    
+    const isPaid = order.status === 'Concluído' || order.status === 'Pago, Aguardando Retirada' || order.status === 'Enviado' || order.status === 'Entregue';
+    const totalOrderAmount = Number(order.amount) || 0;
+
+    // 1. SE O PEDIDO JÁ FOI PAGO: Histórico Real (Transações)
+    if (isPaid) {
+      const orderTransactions = transactions.filter(t => t.order_id === order.id || t.description?.includes(order.id?.substring(0, 8)));
+      
+      if (orderTransactions.length > 0) {
+        const mensal = orderTransactions.filter(t => t.description?.toLowerCase().includes('mensal')).reduce((acc, t) => acc + Number(t.amount), 0);
+        const digital = orderTransactions.filter(t => t.description?.toLowerCase().includes('cd') || t.description?.toLowerCase().includes('digital')).reduce((acc, t) => acc + Number(t.amount), 0);
+        const anual = orderTransactions.filter(t => t.description?.toLowerCase().includes('anual')).reduce((acc, t) => acc + Number(t.amount), 0);
+        const total = orderTransactions.reduce((acc, t) => acc + Number(t.amount), 0);
+        
+        if (total > 0) return { mensal, digital, anual, total };
+      }
+    }
+
+    // 2. SE O PEDIDO NÃO FOI PAGO (Aguardando Pagamento): Lógica Live do Banco
+    // Pesos atuais definidos pelo Admin no Banco
+    const pMensal = Number(mmnConfig.cashbackMensal) || 0;
+    const pDigital = Number(mmnConfig.cashbackDigital) || 0;
+    const pAnual = Number(mmnConfig.cashbackAnual) || 0;
+    const totalRatios = (pMensal + pDigital + pAnual) || 4.5;
+
+    // Percentual atual do Nível 1 (G1) definido no Banco
+    const g1Level = mmnLevels.find(l => Number(l.level) === 1);
+    const g1Value = g1Level ? Number(g1Level.value) : 0.75;
+
+    let userTotalCashback = 0;
+    if (mmnConfig.paymentType === 'percent') {
+      userTotalCashback = totalOrderAmount * (g1Value / 100);
+    } else {
+      userTotalCashback = g1Value;
+    }
+
+    // Distribuição Proporcional baseada nos pesos ATUAIS
+    const vMensal = userTotalCashback * (pMensal / totalRatios);
+    const vDigital = userTotalCashback * (pDigital / totalRatios);
+    const vAnual = userTotalCashback * (pAnual / totalRatios);
+    
+    return {
+      mensal: Number(vMensal.toFixed(2)),
+      digital: Number(vDigital.toFixed(2)),
+      anual: Number(vAnual.toFixed(2)),
+      total: Number(userTotalCashback.toFixed(2))
+    };
+  };
 
   const filteredOrders = orders.filter(o => 
     o.id.toLowerCase().includes(searchTerm.toLowerCase()) || 
@@ -142,7 +212,9 @@ export default function AffiliateOrders() {
               </div>
             ) : (
               <div className="divide-y divide-slate-100">
-                {filteredOrders.map((order, idx) => (
+                {filteredOrders.map((order, idx) => {
+                  const breakdown = calculateCashbackBreakdown(order);
+                  return (
                   <motion.div 
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
@@ -177,16 +249,32 @@ export default function AffiliateOrders() {
                         <p className="text-xs text-slate-500 font-bold uppercase tracking-widest mb-0.5">Total</p>
                         <p className="font-black text-midnight text-lg">R$ {Number(order.amount).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
                       </div>
-                      <div className="text-left md:text-right">
-                        <p className="text-xs text-slate-500 font-bold uppercase tracking-widest mb-0.5 text-emerald-600">Cashback</p>
-                        <p className="font-black text-emerald-500">R$ {Number(order.cashback_amount || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                      <div className="text-left md:text-right min-w-[120px]">
+                        <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-1 text-emerald-600">Cashback Recebido</p>
+                        <div className="space-y-0.5">
+                          <div className="flex justify-between md:justify-end gap-2 text-[10px] font-bold">
+                            <span className="text-slate-400">Mensal ({mmnConfig?.cashbackMensal || '...'}%):</span>
+                            <span className="text-emerald-600">R$ {breakdown.mensal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                          </div>
+                          <div className="flex justify-between md:justify-end gap-2 text-[10px] font-bold">
+                            <span className="text-slate-400">Digital ({mmnConfig?.cashbackDigital || '...'}%):</span>
+                            <span className="text-emerald-600">R$ {breakdown.digital.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                          </div>
+                          <div className="flex justify-between md:justify-end gap-2 text-[10px] font-bold border-b border-slate-100 pb-0.5">
+                            <span className="text-slate-400">Anual ({mmnConfig?.cashbackAnual || '...'}%):</span>
+                            <span className="text-emerald-600">R$ {breakdown.anual.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                          </div>
+                          <p className="font-black text-emerald-500 text-base mt-1 text-right">
+                            R$ {breakdown.total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                          </p>
+                        </div>
                       </div>
                       <div className="size-8 rounded-full bg-white border border-slate-200 flex items-center justify-center text-slate-400 group-hover:bg-primary-blue group-hover:text-white group-hover:border-primary-blue transition-all shrink-0">
                         <ChevronRight size={18} />
                       </div>
                     </div>
                   </motion.div>
-                ))}
+                )})}
               </div>
             )}
           </div>
@@ -272,10 +360,32 @@ export default function AffiliateOrders() {
                       <span>Subtotal</span>
                       <span>R$ {Number(selectedOrder.amount).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
                     </div>
-                    <div className="flex justify-between text-xs font-bold text-emerald-500 uppercase tracking-widest">
-                      <span>Cashback Gerado</span>
-                      <span>R$ {Number(selectedOrder.cashback_amount || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
-                    </div>
+                    <div className="bg-emerald-50 rounded-2xl p-6 border border-emerald-100">
+                          <p className="text-[10px] font-black text-emerald-600 uppercase tracking-widest mb-4">Breakdown de Cashback (Seu Nível)</p>
+                          {(() => {
+                            const breakdown = calculateCashbackBreakdown(selectedOrder);
+                            return (
+                              <div className="space-y-4">
+                                <div className="flex justify-between items-center">
+                                  <span className="text-xs font-bold text-slate-500">Bônus Mensal ({mmnConfig?.cashbackMensal || '...'}%)</span>
+                                  <span className="text-sm font-black text-blue-600">R$ {breakdown.mensal.toFixed(2).replace('.', ',')}</span>
+                                </div>
+                                <div className="flex justify-between items-center">
+                                  <span className="text-xs font-bold text-slate-500">Bônus Digital ({mmnConfig?.cashbackDigital || 1.00}%)</span>
+                                  <span className="text-sm font-black text-emerald-600">R$ {breakdown.digital.toFixed(2).replace('.', ',')}</span>
+                                </div>
+                                <div className="flex justify-between items-center">
+                                  <span className="text-xs font-bold text-slate-500">Bônus Anual ({mmnConfig?.cashbackAnual || 0.75}%)</span>
+                                  <span className="text-sm font-black text-indigo-600">R$ {breakdown.anual.toFixed(2).replace('.', ',')}</span>
+                                </div>
+                                <div className="pt-4 border-t border-emerald-200 flex justify-between items-center">
+                                  <span className="text-xs font-black text-emerald-600 uppercase tracking-widest">Total a Receber</span>
+                                  <span className="text-lg font-black text-emerald-600">R$ {breakdown.total.toFixed(2).replace('.', ',')}</span>
+                                </div>
+                              </div>
+                            );
+                          })()}
+                        </div>
                     <div className="flex justify-between items-center bg-midnight text-white p-6 rounded-2xl mt-4 shadow-xl shadow-midnight/20">
                       <span className="text-[10px] font-black uppercase tracking-[0.2em]">Total Pago</span>
                       <span className="text-2xl font-black italic tracking-tighter">R$ {Number(selectedOrder.amount).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>

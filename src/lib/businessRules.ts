@@ -592,6 +592,34 @@ export const businessRules = {
     return data;
   },
 
+  decrementStock: async (productId: string, quantity: number) => {
+    // Busca estoque atual
+    const { data: product, error: fetchError } = await supabase
+      .from('products')
+      .select('stock, sales')
+      .eq('id', productId)
+      .single();
+    
+    if (fetchError || !product) return;
+
+    const newStock = Math.max(0, (product.stock || 0) - quantity);
+    const newSales = (product.sales || 0) + quantity;
+
+    const { error: updateError } = await supabase
+      .from('products')
+      .update({ 
+        stock: newStock,
+        sales: newSales 
+      })
+      .eq('id', productId);
+
+    if (updateError) {
+      console.error('ERRO CRÍTICO AO ATUALIZAR ESTOQUE:', updateError.message, updateError.details);
+    } else {
+      console.log(`Estoque atualizado com sucesso para o produto ${productId}. Novo saldo: ${newStock}`);
+    }
+  },
+
   updateShippingMethod: async (id: string, updates: Partial<ShippingMethod>) => {
     const { error } = await supabase
       .from('merchant_shipping')
@@ -648,13 +676,14 @@ export const businessRules = {
     const { data, error } = await supabase
       .from('mmn_config')
       .select('*')
-      .limit(1)
+      .eq('id', 1)
       .maybeSingle();
     
     if (error || !data) {
-      if (error && error.code !== 'PGRST116') {
-        console.error('Error fetching MMN config:', error);
+      if (error) {
+        console.error('ERRO AO BUSCAR MMN_CONFIG NO BANCO:', error);
       }
+      // Retorna um padrão inicial seguro para não quebrar a tela, mas permite salvar por cima
       return { 
         depth: 6, 
         paymentType: 'percent' as const,
@@ -667,9 +696,9 @@ export const businessRules = {
     return {
       depth: data.depth,
       paymentType: data.payment_type as 'percent' | 'fixed',
-      cashbackMensal: data.cashback_mensal || 2.75,
-      cashbackDigital: data.cashback_digital || 1.00,
-      cashbackAnual: data.cashback_anual || 0.75
+      cashbackMensal: Number(data.cashback_mensal),
+      cashbackDigital: Number(data.cashback_digital),
+      cashbackAnual: Number(data.cashback_anual)
     };
   },
 
@@ -764,34 +793,69 @@ export const businessRules = {
     if (error) throw error;
   },
 
+  getMMNLevels: async () => {
+    const { data, error } = await supabase
+      .from('mmn_levels')
+      .select('*')
+      .order('level', { ascending: true });
+    
+    if (error) {
+      console.error("Error fetching MMN levels:", error);
+      return [];
+    }
+    return data;
+  },
+
   // Cálculos de Rede e Nível
   getNetworkSummary: async (userId: string) => {
     try {
-      // G1
-      const { data: g1 } = await supabase.from('profiles').select('id').eq('referred_by', userId);
-      const g1Ids = g1?.map(p => p.id) || [];
-      
-      let g2Ids: string[] = [];
-      if (g1Ids.length > 0) {
-        const { data: g2 } = await supabase.from('profiles').select('id').in('referred_by', g1Ids);
-        g2Ids = g2?.map(p => p.id) || [];
+      // 1. Buscar profundidade real no banco
+      const { data: config } = await supabase.from('mmn_config').select('depth').single();
+      const depth = config?.depth || 4; // Fallback para 4 se não achar
+
+      // 2. Buscar todos os níveis dinamicamente
+      const levels: { [key: string]: number } = {};
+      const allSeenIds = new Set([userId]); // Começamos com o usuário logado
+      let currentParentIds = [userId];
+      let total = 0;
+
+      // Inicializar todos os níveis com 0
+      for (let i = 1; i <= depth; i++) {
+        levels[`g${i}`] = 0;
       }
 
-      let g3Ids: string[] = [];
-      if (g2Ids.length > 0) {
-        const { data: g3 } = await supabase.from('profiles').select('id').in('referred_by', g2Ids);
-        g3Ids = g3?.map(p => p.id) || [];
+      for (let i = 1; i <= depth; i++) {
+        if (currentParentIds.length === 0) break;
+
+        const { data: levelMembers, error: levelError } = await supabase
+          .from('profiles')
+          .select('id, full_name, referred_by')
+          .in('referred_by', currentParentIds);
+
+        if (levelError || !levelMembers || levelMembers.length === 0) {
+          currentParentIds = [];
+          continue;
+        }
+
+        // Filtrar apenas quem NUNCA vimos antes
+        const newIds: string[] = [];
+        const newNames: string[] = [];
+        levelMembers.forEach(p => {
+          if (!allSeenIds.has(p.id)) {
+            newIds.push(p.id);
+            newNames.push(p.full_name || 'Sem Nome');
+            allSeenIds.add(p.id);
+          }
+        });
+
+        levels[`g${i}`] = newIds.length;
+        total += newIds.length;
+        
+        // Os "pais" do próximo nível são apenas os "filhos" NOVOS deste nível
+        currentParentIds = newIds;
       }
 
-      let g4Ids: string[] = [];
-      if (g3Ids.length > 0) {
-        const { data: g4 } = await supabase.from('profiles').select('id').in('referred_by', g3Ids);
-        g4Ids = g4?.map(p => p.id) || [];
-      }
-
-      const total = g1Ids.length + g2Ids.length + g3Ids.length + g4Ids.length;
-
-      // Cálculo de Rank
+      // Cálculo de Rank (Mantendo por compatibilidade, mas pode ser ajustado)
       let rank = 'Afiliado';
       if (total >= 500) rank = 'Diamante';
       else if (total >= 300) rank = 'Ouro';
@@ -799,15 +863,12 @@ export const businessRules = {
       else if (total >= 50) rank = 'Bronze';
 
       return {
-        g1: g1Ids.length,
-        g2: g2Ids.length,
-        g3: g3Ids.length,
-        g4: g4Ids.length,
+        ...levels,
         total,
         rank
       };
     } catch (error) {
-      console.error("Error calculating network summary:", error);
+      console.error("Error calculating dynamic network summary:", error);
       return { g1: 0, g2: 0, g3: 0, g4: 0, total: 0, rank: 'Afiliado' };
     }
   },
@@ -882,24 +943,47 @@ export const businessRules = {
     try {
       if (!userId || userId === 'user123') return [];
 
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('id, full_name, created_at, role, referral_code, whatsapp')
-        .eq('referred_by', userId);
+      // 1. Buscar profundidade
+      const { data: config } = await supabase.from('mmn_config').select('depth').single();
+      const depth = config?.depth || 4;
 
-      if (error) throw error;
+      const fullNetwork: any[] = [];
+      let currentParentIds = [userId];
+      let allSeenIds = new Set([userId]);
 
-      return data.map(p => ({
-        id: p.id,
-        name: p.full_name,
-        referralCode: p.referral_code,
-        whatsapp: p.whatsapp,
-        level: 1,
-        joinedDate: new Date(p.created_at).toLocaleDateString('pt-BR'),
-        status: 'Ativo',
-        earnings: 0,
-        spillover: false
-      }));
+      for (let i = 1; i <= depth; i++) {
+        if (currentParentIds.length === 0) break;
+
+        const { data: members } = await supabase
+          .from('profiles')
+          .select('id, full_name, created_at, role, referral_code, whatsapp, referred_by')
+          .in('referred_by', currentParentIds);
+
+        if (!members || members.length === 0) break;
+
+        const newIds: string[] = [];
+        members.forEach(p => {
+          if (!allSeenIds.has(p.id)) {
+            fullNetwork.push({
+              id: p.id,
+              name: p.full_name,
+              referralCode: p.referral_code,
+              whatsapp: p.whatsapp,
+              level: i, // Nível real na rede (G1, G2...)
+              joinedDate: new Date(p.created_at).toLocaleDateString('pt-BR'),
+              status: 'Ativo',
+              earnings: 0,
+              spillover: false
+            });
+            newIds.push(p.id);
+            allSeenIds.add(p.id);
+          }
+        });
+
+        currentParentIds = newIds;
+      }
+
+      return fullNetwork;
     } catch (error) {
       console.error("Network Fetch Error:", error);
       return [];
@@ -934,24 +1018,42 @@ export const businessRules = {
   },
 
   getAffiliateTree: async (userId: string) => {
-    const { data: profile } = await supabase.from('profiles').select('full_name, referral_code, whatsapp').eq('id', userId).single();
-    const { data: directChildren } = await supabase.from('profiles').select('id, full_name, referral_code, whatsapp').eq('referred_by', userId);
+    try {
+      const { data: config } = await supabase.from('mmn_config').select('depth').single();
+      const depth = config?.depth || 4;
 
-    return {
-      id: userId,
-      name: profile?.full_name || 'Usuário',
-      referralCode: profile?.referral_code,
-      whatsapp: profile?.whatsapp,
-      level: 1,
-      children: directChildren?.map(c => ({
-        id: c.id,
-        name: c.full_name,
-        referralCode: c.referral_code,
-        whatsapp: c.whatsapp,
-        level: 2,
-        children: []
-      })) || []
-    };
+      // Buscar todos os perfis da rede de uma vez para construir a árvore na memória
+      // (Mais eficiente do que múltiplas chamadas recursivas ao banco)
+      const { data: allMembers } = await supabase
+        .from('profiles')
+        .select('id, full_name, referral_code, whatsapp, referred_by');
+
+      if (!allMembers) return null;
+
+      const buildTree = (currentId: string, currentLevel: number): any => {
+        const profile = allMembers.find(p => p.id === currentId);
+        if (!profile || currentLevel > depth + 1) return null;
+
+        const children = allMembers
+          .filter(p => p.referred_by === currentId)
+          .map(c => buildTree(c.id, currentLevel + 1))
+          .filter(Boolean);
+
+        return {
+          id: profile.id,
+          name: profile.full_name,
+          referralCode: profile.referral_code,
+          whatsapp: profile.whatsapp,
+          level: currentLevel,
+          children
+        };
+      };
+
+      return buildTree(userId, 1);
+    } catch (error) {
+      console.error("Tree Build Error:", error);
+      return null;
+    }
   },
 
   getAffiliateLinks: (codeOrId: string) => {

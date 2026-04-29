@@ -275,7 +275,9 @@ export default function MerchantOrders() {
                           exit={{ opacity: 0 }}
                           className="hover:bg-slate-50/50 transition-colors group"
                         >
-                          <td className="px-1 py-5 font-black text-xs text-midnight">{o.id.substring(0, 6)}...</td>
+                          <td className="px-1 py-5 font-black text-xs text-midnight">
+                            {o.id.length > 12 ? `${o.id.substring(0, 8)}...` : o.id}
+                          </td>
                           <td className="px-1 py-5">
                             <div className="flex items-center gap-1.5">
                               <div className="size-7 rounded-full bg-slate-100 flex items-center justify-center text-[9px] font-black text-slate-500 shadow-sm shrink-0">

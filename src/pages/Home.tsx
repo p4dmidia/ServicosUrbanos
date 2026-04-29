@@ -317,13 +317,13 @@ export default function Home() {
                             return (
                               <>
                                 <p className="text-[8px] font-bold text-emerald-500 uppercase tracking-widest flex items-center gap-1">
-                                  <TrendingUp size={8} /> Mensal ({pMensal}%): R$ {mensal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                  <TrendingUp size={8} /> Mensal: R$ {mensal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                 </p>
                                 <p className="text-[8px] font-bold text-blue-500 uppercase tracking-widest flex items-center gap-1">
-                                  <Smartphone size={8} /> Digital ({pDigital}%): R$ {digital.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                  <Smartphone size={8} /> Digital: R$ {digital.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                 </p>
                                 <p className="text-[8px] font-bold text-indigo-500 uppercase tracking-widest flex items-center gap-1">
-                                  <Calendar size={8} /> Anual ({pAnual}%): R$ {anual.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                  <Calendar size={8} /> Anual: R$ {anual.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                 </p>
                               </>
                             );

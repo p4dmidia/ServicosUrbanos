@@ -926,15 +926,15 @@ export default function Marketplace() {
                             <>
                               <span className="text-[8px] font-black text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-lg uppercase tracking-tight border border-emerald-100 flex items-center gap-1 shadow-sm">
                                 <TrendingUp size={8} />
-                                Mensal ({pMensal}%): R$ {mensal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                Mensal: R$ {mensal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                               </span>
                               <span className="text-[8px] font-black text-blue-600 bg-blue-50 px-2 py-0.5 rounded-lg uppercase tracking-tight border border-blue-100 flex items-center gap-1 shadow-sm">
                                 <Smartphone size={8} />
-                                Digital ({pDigital}%): R$ {digital.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                Digital: R$ {digital.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                               </span>
                               <span className="text-[8px] font-black text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-lg uppercase tracking-tight border border-indigo-100 flex items-center gap-1 shadow-sm">
                                 <Calendar size={8} />
-                                Anual ({pAnual}%): R$ {anual.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                Anual: R$ {anual.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                               </span>
                             </>
                           );

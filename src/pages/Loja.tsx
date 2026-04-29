@@ -627,13 +627,13 @@ export default function Loja() {
                           return (
                             <div className="flex flex-col gap-0.5 mt-1">
                               <p className="text-[9px] font-black text-emerald-600 uppercase tracking-widest flex items-center gap-1">
-                                <TrendingUp size={10} /> Bônus Mensal ({pMensal}%): R$ {mensal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                <TrendingUp size={10} /> Mensal: R$ {mensal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                               </p>
                               <p className="text-[9px] font-black text-blue-600 uppercase tracking-widest flex items-center gap-1">
-                                <Smartphone size={10} /> Bônus Digital ({pDigital}%): R$ {digital.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                <Smartphone size={10} /> Digital: R$ {digital.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                               </p>
                               <p className="text-[9px] font-black text-indigo-600 uppercase tracking-widest flex items-center gap-1">
-                                <Calendar size={10} /> Bônus Anual ({pAnual}%): R$ {anual.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                <Calendar size={10} /> Anual: R$ {anual.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                               </p>
                             </div>
                           );

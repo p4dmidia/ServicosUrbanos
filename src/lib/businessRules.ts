@@ -664,7 +664,7 @@ export const businessRules = {
       .from('order_extras')
       .upsert({
         id: orderId,
-        withdrawal_code: extra.withdrawalCode || Math.random().toString(36).substring(2, 8).toUpperCase(),
+        withdrawal_code: extra.withdrawalCode || `${orderId}/${String(new Date().getMonth() + 1).padStart(2, '0')}/${new Date().getFullYear()}`,
         status: extra.status || 'Pendente'
       });
 
@@ -994,23 +994,72 @@ export const businessRules = {
     try {
       if (!userId || userId === 'user123') return [];
 
-      const { data, error } = await supabase
+      const { data: transactions, error } = await supabase
         .from('transactions')
         .select('*')
         .eq('profile_id', userId)
-        .order('created_at', { ascending: false })
-        .limit(5);
+        .order('created_at', { ascending: false });
 
       if (error) throw error;
+      if (!transactions || transactions.length === 0) return [];
 
-      return data.map(t => ({
-        id: t.id,
-        type: t.type === 'commission' ? 'Comissão' : 'Atividade',
-        description: t.description,
-        date: new Date(t.created_at).toLocaleString('pt-BR'),
-        amount: t.amount,
-        points: Math.floor(Number(t.amount) / 10)
-      }));
+      // Extrair IDs de pedidos das descrições para buscar nomes dos compradores
+      const orderIds = transactions
+        .map(t => {
+          const match = t.description?.match(/Pedido #([A-Z0-9-]+)/i);
+          return match ? match[1] : null;
+        })
+        .filter(Boolean) as string[];
+
+      // Buscar informações dos pedidos (nomes dos compradores)
+      const { data: orders } = await supabase
+        .from('orders')
+        .select(`
+          id, 
+          customer_name, 
+          status, 
+          customer_id,
+          profiles:customer_id (
+            full_name
+          )
+        `)
+        .in('id', [...new Set(orderIds)]);
+
+      const ordersMap = new Map(orders?.map(o => [o.id, {
+        ...o,
+        // Priorizar o nome atual do perfil, se disponível
+        buyer_name: (o.profiles as any)?.full_name || o.customer_name || 'Desconhecido'
+      }]) || []);
+
+      return transactions.map(t => {
+        // Regex mais flexível para capturar IDs de pedidos (pode ter espaços ou ser apenas números)
+        const orderMatch = t.description?.match(/Pedido\s*#\s*([A-Z0-9-]+)/i);
+        const levelMatch = t.description?.match(/\(Nível\s*(\d+)\)/i);
+        const typeMatch = t.description?.match(/\((Mensal|Anual|CD|Digital)\)/i);
+
+        const orderId = orderMatch ? orderMatch[1].trim() : null;
+        const order = orderId ? ordersMap.get(orderId) : null;
+
+        // Mapeamento de tipo para exibição
+        let cashbackType = typeMatch ? typeMatch[1] : 'Outros';
+        if (cashbackType === 'CD') cashbackType = 'Digital';
+
+        // Se for uma comissão mas não tem nível na descrição, assumimos nível 0 (Cashback próprio)
+        const level = levelMatch ? levelMatch[1] : (t.type === 'commission' ? '0' : '---');
+
+        return {
+          id: t.id,
+          orderId: orderId || '---',
+          affiliateName: order?.buyer_name || (t.type === 'withdrawal' ? 'Resgate' : 'Sistema'),
+          level: level,
+          cashbackType: cashbackType,
+          date: new Date(t.created_at).toLocaleDateString('pt-BR'),
+          amount: t.amount,
+          status: order?.status || (t.status === 'completed' ? 'Concluído' : 'Pendente'),
+          originalType: t.type,
+          description: t.description
+        };
+      });
     } catch (error) {
       console.error("Activity Fetch Error:", error);
       return [];

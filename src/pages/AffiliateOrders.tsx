@@ -233,7 +233,7 @@ export default function AffiliateOrders() {
                       
                       <div className="flex-1">
                         <div className="flex flex-wrap items-center gap-3 mb-1">
-                          <h4 className="font-black text-midnight">Pedido #{order.id?.substring(0,8).toUpperCase()}</h4>
+                          <h4 className="font-black text-midnight">Pedido #{order.id.length > 12 ? order.id.substring(0, 8).toUpperCase() : order.id}</h4>
                           <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-widest border flex items-center gap-1.5 ${getStatusColor(order.status)}`}>
                             {getStatusIcon(order.status)} {order.status || 'Pendente'}
                           </span>

@@ -30,7 +30,8 @@ serve(async (req) => {
         name: payer.name ? payer.name.split(' ')[0] : 'Usuário',
         surname: payer.name && payer.name.split(' ').length > 1 ? payer.name.split(' ').slice(1).join(' ') : 'UrbaShop'
       },
-      external_reference: orderId
+      external_reference: orderId,
+      notification_url: "https://ioslywxfppswfuzxzwkn.supabase.co/functions/v1/mercadopago-webhook"
     }
 
     if (shippingCost && Number(shippingCost) > 0) {

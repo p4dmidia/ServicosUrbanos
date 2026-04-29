@@ -194,10 +194,10 @@ export default function Checkout() {
   const pAnual = Number(mmnConfig?.cashbackAnual || 0.75);
   const totalRatios = pMensal + pDigital + pAnual || 4.5;
 
-  // Calculamos o ganho do usuário (G1) sobre o pool total dos itens do carrinho
+  // Calculamos o ganho do usuário (G1) sobre os itens no carrinho
   const userTotalCashbackAmount = cartItems.reduce((acc, item) => {
-    const itemPool = item.price * (item.cashback / 100) * item.quantity;
-    return acc + (itemPool * (g1Value / 100));
+    // Lógica correta (igual ao Marketplace/Produto): Preço * (G1 / 100)
+    return acc + (item.price * (g1Value / 100) * item.quantity);
   }, 0);
 
   const totalMensal = userTotalCashbackAmount * (pMensal / totalRatios);
@@ -229,6 +229,11 @@ export default function Checkout() {
       setIsProcessing(true);
 
       if (paymentMethod === 'wallet') {
+        if (walletBalance < 10) {
+          toast.error('Saldo mínimo de R$ 10,00 necessário para usar a carteira.');
+          setIsProcessing(false);
+          return;
+        }
         if (walletBalance < total) {
           toast.error('Saldo insuficiente na carteira digital.');
           setIsProcessing(false);
@@ -237,13 +242,10 @@ export default function Checkout() {
 
         const loadingToast = toast.loading('Processando pagamento com saldo...');
 
-        const orderId = `ORD-${Math.random().toString(36).substring(2, 9).toUpperCase()}`;
-
-        // 1. Criar o pedido
+        // 1. Criar o pedido (O ID agora é gerado pelo banco via sequence)
         const { data: order, error: orderError } = await supabase
           .from('orders')
           .insert([{
-            id: orderId,
             customer_id: authUser.id,
             customer_name: profile.full_name,
             customer_initial: profile.full_name?.[0] || 'U',
@@ -260,13 +262,20 @@ export default function Checkout() {
 
         if (orderError) throw orderError;
 
+        const orderId = order.id;
+
         // 2. Se for retirada, criar o registro de código de retirada
         if (shippingMethod === 'pickup') {
-          const withdrawalCode = Math.random().toString(36).substring(2, 8).toUpperCase();
+          // Formato: [ID do pedido]/[mês]/[ano]
+          const now = new Date();
+          const month = String(now.getMonth() + 1).padStart(2, '0');
+          const year = now.getFullYear();
+          const withdrawalCode = `${orderId}/${month}/${year}`;
+          
           await supabase
             .from('order_extras')
             .insert([{
-              id: order.id,
+              id: orderId,
               withdrawal_code: withdrawalCode,
               status: 'Pendente'
             }]);
@@ -300,13 +309,11 @@ export default function Checkout() {
 
       const loadingToast = toast.loading('Gerando pagamento...');
 
-      const orderId = `ORD-${Math.random().toString(36).substring(2, 9).toUpperCase()}`;
-
       // 1. Criar o pedido como 'Pendente' para visibilidade do lojista
-      const { error: orderError } = await supabase
+      // O ID agora é gerado automaticamente pelo banco (sequence a partir de 1000)
+      const { data: orderData, error: orderError } = await supabase
         .from('orders')
         .insert([{
-          id: orderId,
           customer_id: authUser.id,
           customer_name: profile.full_name,
           customer_initial: profile.full_name?.[0] || 'U',
@@ -317,18 +324,26 @@ export default function Checkout() {
           cashback_amount: userTotalCashbackAmount,
           shipping_address: `RETIRADA NA LOJA: ${pickupAddress}`,
           payment_method: paymentMethod === 'wallet' ? 'Carteira Digital' : 'Mercado Pago'
-        }]);
+        }])
+        .select()
+        .single();
 
       if (orderError) throw orderError;
+      const orderId = orderData.id;
 
       // 2. Dar baixa no estoque de cada produto
       await Promise.all(cartItems.map(item => 
         businessRules.decrementStock(item.id, item.quantity)
       ));
 
-      // 2. Se for retirada, criar o registro de código de retirada antecipadamente
+      // 3. Se for retirada, criar o registro de código de retirada antecipadamente
       if (shippingMethod === 'pickup') {
-        const withdrawalCode = Math.random().toString(36).substring(2, 8).toUpperCase();
+        // Formato: [ID do pedido]/[mês]/[ano]
+        const now = new Date();
+        const month = String(now.getMonth() + 1).padStart(2, '0');
+        const year = now.getFullYear();
+        const withdrawalCode = `${orderId}/${month}/${year}`;
+
         await supabase
           .from('order_extras')
           .insert([{
@@ -758,7 +773,7 @@ export default function Checkout() {
                   <input type="radio" name="payment" className="hidden" checked={paymentMethod === 'mercadopago'} onChange={() => setPaymentMethod('mercadopago')} />
                 </label>
 
-                <label className={`flex items-center justify-between p-4 rounded-xl border-2 cursor-pointer transition-all ${paymentMethod === 'wallet' ? 'border-primary-blue bg-blue-50/50' : 'border-slate-100 hover:border-slate-200'} ${(!authUser || walletBalance < total) ? 'opacity-50 grayscale' : ''}`}>
+                <label className={`flex items-center justify-between p-4 rounded-xl border-2 cursor-pointer transition-all ${paymentMethod === 'wallet' ? 'border-primary-blue bg-blue-50/50' : 'border-slate-100 hover:border-slate-200'} ${(!authUser || walletBalance < total || walletBalance < 10 || !isEligibleForWallet) ? 'opacity-50 grayscale' : ''}`}>
                   <div className="flex items-center gap-4">
                     <div className={`size-5 rounded-full border-2 flex items-center justify-center ${paymentMethod === 'wallet' ? 'border-primary-blue' : 'border-slate-300'}`}>
                       {paymentMethod === 'wallet' && <div className="size-2.5 bg-primary-blue rounded-full" />}
@@ -771,6 +786,9 @@ export default function Checkout() {
                         {authUser && !isEligibleForWallet && (
                           <p className="text-[9px] text-red-500 font-bold uppercase mt-1 italic">Liberação após o 1º consumo na plataforma</p>
                         )}
+                        {authUser && isEligibleForWallet && walletBalance < 10 && (
+                          <p className="text-[9px] text-amber-500 font-bold uppercase mt-1 italic">Saldo mínimo de R$ 10,00 para uso</p>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -778,6 +796,8 @@ export default function Checkout() {
                     <span className="text-[10px] font-bold text-amber-500 uppercase">Faça login</span>
                   ) : !isEligibleForWallet ? (
                     <span className="text-[10px] font-bold text-red-500 uppercase">Conta Inativa</span>
+                  ) : walletBalance < 10 ? (
+                    <span className="text-[10px] font-bold text-amber-500 uppercase">Mínimo R$ 10</span>
                   ) : walletBalance < total ? (
                     <span className="text-[10px] font-bold text-red-500 uppercase">Saldo Insuficiente</span>
                   ) : (
@@ -787,7 +807,7 @@ export default function Checkout() {
                     type="radio" 
                     name="payment" 
                     className="hidden" 
-                    disabled={!authUser || walletBalance < total || !isEligibleForWallet}
+                    disabled={!authUser || walletBalance < total || walletBalance < 10 || !isEligibleForWallet}
                     checked={paymentMethod === 'wallet'} 
                     onChange={() => setPaymentMethod('wallet')} 
                   />

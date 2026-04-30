@@ -10,8 +10,11 @@ import {
     ShieldCheck,
     LayoutGrid,
     Eye,
-    EyeOff
+    EyeOff,
+    User,
+    Hash
 } from 'lucide-react';
+
 import { motion } from 'motion/react';
 import { Link, useNavigate } from 'react-router-dom';
 import Header from '../components/Header';
@@ -34,34 +37,25 @@ export default function Login() {
         try {
             let loginEmail = email;
 
-            // Se o input não parece um e-mail, tentamos buscar por CPF no banco
+            // Se o input não parece um e-mail (não tem @), tentamos buscar por CPF no banco
             if (!email.includes('@')) {
-                const { data: profile, error: profileError } = await supabase
-                    .from('profiles')
-                    .select('id')
-                    .eq('cpf', email.replace(/\D/g, '')) // Limpa formatação do CPF
-                    .single();
+                const cleanCpf = email.replace(/\D/g, '');
                 
-                if (profileError || !profile) {
-                    throw new Error('CPF não encontrado ou inválido');
+                if (cleanCpf.length === 11) {
+                    const { data: profile, error: profileError } = await supabase
+                        .from('profiles')
+                        .select('email')
+                        .eq('cpf', cleanCpf)
+                        .single();
+                    
+                    if (profileError || !profile?.email) {
+                        throw new Error('CPF não encontrado ou sem e-mail vinculado');
+                    }
+                    
+                    loginEmail = profile.email;
+                } else {
+                    throw new Error('Formato de E-mail ou CPF inválido');
                 }
-
-                // Agora buscamos o e-mail associado a esse ID de usuário (precisamos de uma RPC ou acesso ao auth.users se permitido, 
-                // ou simplesmente assumir que o usuário sabe seu e-mail. 
-                // Melhor alternativa: O profile deve ter o email duplicado se quisermos login via CPF simples sem RPC complexa.
-                // Vou assumir que por enquanto o login é via E-mail, mas preparo a lógica para CPF se o campo email existir no profile.
-                
-                const { data: userData, error: userError } = await supabase
-                    .from('profiles')
-                    .select('email_hidden_field') // Supondo um campo auxiliar ou RPC
-                    .eq('id', profile.id)
-                    .single();
-                
-                // Como o Supabase Auth não permite buscar email de outros usuários sem Admin SDK, 
-                // a recomendação é que o login via CPF use o e-mail cadastrado internamente.
-                // Para este exemplo, vou manter o login via Email como principal e dar erro amigável para CPF 
-                // se não houver mapeamento direto acessível.
-                throw new Error('Login via CPF requer configuração adicional no Supabase (Edge Functions). Por favor, use seu E-mail.');
             }
 
             const { data, error: authError } = await supabase.auth.signInWithPassword({
@@ -71,6 +65,15 @@ export default function Login() {
 
             if (authError) throw authError;
 
+            // Sincroniza o e-mail no perfil (garante que o login por CPF funcione na próxima vez)
+            if (data?.user?.email) {
+                await supabase
+                    .from('profiles')
+                    .update({ email: data.user.email })
+                    .eq('id', data.user.id);
+            }
+
+
             // Buscar o perfil para saber para onde redirecionar
             const { data: profile } = await supabase
                 .from('profiles')
@@ -79,12 +82,12 @@ export default function Login() {
                 .single();
 
             // Redireciona para o dashboard do afiliado
-            // Se for um admin real (role === 'admin'), manda para admin.
             if (profile?.role === 'admin') {
                 navigate('/admin/dashboard');
             } else {
                 navigate('/afiliado/dashboard');
             }
+
         } catch (err: any) {
             setError(err.message || 'Erro ao realizar login');
             setLoading(false);
@@ -121,20 +124,23 @@ export default function Login() {
                             <p className="text-slate-400 font-medium">Acesse sua conta para continuar</p>
                         </div>
 
-                        <form className="space-y-6" onSubmit={handleSubmit}>
+                        <form className="space-y-6" onSubmit={handleSubmit} noValidate>
+
                             {/* Input: Email/CPF */}
                             <div className="space-y-2">
                                 <label className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1">E-mail ou CPF</label>
                                 <div className="relative group">
-                                    <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-emerald-500 transition-colors" size={20} />
+                                    <User className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-emerald-500 transition-colors" size={20} />
+
                                     <input
-                                        type="email"
-                                        placeholder="exemplo@email.com"
+                                        type="text"
+                                        placeholder="E-mail ou CPF"
                                         value={email}
                                         onChange={e => setEmail(e.target.value)}
                                         className="w-full bg-white/5 border border-white/10 rounded-2xl py-4 pl-12 pr-4 focus:outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 transition-all font-medium text-white placeholder:text-slate-600"
                                         required
                                     />
+
                                 </div>
                             </div>
 

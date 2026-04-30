@@ -26,6 +26,8 @@ export default function AffiliateDashboard() {
   const [stats, setStats] = useState<any>(null);
   const [activity, setActivity] = useState<any[]>([]);
   const [links, setLinks] = useState<any[]>([]);
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 8;
 
   useEffect(() => {
     async function loadDashboardData() {
@@ -303,7 +305,7 @@ export default function AffiliateDashboard() {
                     </td>
                   </tr>
                 ) : (
-                  activity.map((item: any, i: number) => (
+                  activity.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage).map((item: any, i: number) => (
                     <motion.tr 
                       key={item.id}
                       initial={{ opacity: 0, x: -10 }}
@@ -345,6 +347,44 @@ export default function AffiliateDashboard() {
               </tbody>
             </table>
           </div>
+
+          {/* Pagination Controls */}
+          {activity.length > itemsPerPage && (
+            <div className="flex items-center justify-center gap-4 mt-10 pt-10 border-t border-slate-50">
+              <button 
+                onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                disabled={currentPage === 1}
+                className="size-10 rounded-xl border border-slate-200 flex items-center justify-center text-slate-500 hover:border-primary-blue hover:text-primary-blue disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+              >
+                <ChevronRight size={18} className="rotate-180" />
+              </button>
+              
+              <div className="flex items-center gap-2">
+                {Array.from({ length: Math.ceil(activity.length / itemsPerPage) }).map((_, i) => (
+                  <button
+                    key={i}
+                    onClick={() => setCurrentPage(i + 1)}
+                    className={`size-10 rounded-xl font-black text-xs transition-all ${
+                      currentPage === i + 1 
+                        ? 'bg-primary-blue text-white shadow-lg shadow-primary-blue/20' 
+                        : 'bg-slate-50 text-slate-400 hover:bg-slate-100'
+                    }`}
+                  >
+                    {i + 1}
+                  </button>
+                ))}
+              </div>
+
+              <button 
+                onClick={() => setCurrentPage(prev => Math.min(prev + 1, Math.ceil(activity.length / itemsPerPage)))}
+                disabled={currentPage === Math.ceil(activity.length / itemsPerPage)}
+                className="size-10 rounded-xl border border-slate-200 flex items-center justify-center text-slate-500 hover:border-primary-blue hover:text-primary-blue disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+              >
+                <ChevronRight size={18} />
+              </button>
+            </div>
+          )}
+
         </div>
 
       </div>

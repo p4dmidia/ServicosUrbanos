@@ -30,6 +30,8 @@ import toast from 'react-hot-toast';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import { businessRules } from '../lib/businessRules';
+import { QRCodeCanvas } from 'qrcode.react';
+import { Copy, Check } from 'lucide-react';
 
 export default function Checkout() {
   const navigate = useNavigate();
@@ -80,6 +82,11 @@ export default function Checkout() {
   const [walletBalance, setWalletBalance] = useState(0);
   const [walletLoading, setWalletLoading] = useState(false);
   const [isEligibleForWallet, setIsEligibleForWallet] = useState(false);
+  const [pixData, setPixData] = useState<{ id: string; qr_code: string; qr_code_base64: string } | null>(null);
+  const [showPixModal, setShowPixModal] = useState(false);
+  const [orderId, setOrderId] = useState<string | null>(null);
+  const [paymentConfirmed, setPaymentConfirmed] = useState(false);
+  const [isCopying, setIsCopying] = useState(false);
 
   useEffect(() => {
     async function fetchPickupAddress() {
@@ -323,13 +330,14 @@ export default function Checkout() {
           branch_id: cartItems[0].branchId || cartItems[0].merchant_id || null, 
           cashback_amount: userTotalCashbackAmount,
           shipping_address: `RETIRADA NA LOJA: ${pickupAddress}`,
-          payment_method: paymentMethod === 'wallet' ? 'Carteira Digital' : 'Mercado Pago'
+          payment_method: paymentMethod === 'wallet' ? 'Saldo de Carteira Virtual' : 'Pix'
         }])
         .select()
         .single();
 
       if (orderError) throw orderError;
-      const orderId = orderData.id;
+      const newOrderId = orderData.id;
+      setOrderId(newOrderId);
 
       // 2. Dar baixa no estoque de cada produto
       await Promise.all(cartItems.map(item => 
@@ -342,12 +350,12 @@ export default function Checkout() {
         const now = new Date();
         const month = String(now.getMonth() + 1).padStart(2, '0');
         const year = now.getFullYear();
-        const withdrawalCode = `${orderId}/${month}/${year}`;
+        const withdrawalCode = `${newOrderId}/${month}/${year}`;
 
         await supabase
           .from('order_extras')
           .insert([{
-            id: orderId,
+            id: newOrderId,
             withdrawal_code: withdrawalCode,
             status: 'Pendente'
           }]);
@@ -355,11 +363,12 @@ export default function Checkout() {
 
       const payer = {
         email: authUser.email,
-        name: profile.full_name || 'Usuário UrbaShop'
+        name: profile.full_name || 'Usuário UrbaShop',
+        cpf: profile.cpf // Assuming it might be there or will be handled
       };
 
       const payload = {
-        orderId, // Passamos o ID gerado
+        orderId: newOrderId, // Passamos o ID gerado
         items: cartItems.map(item => ({
           id: item.id,
           title: item.name || item.title || 'Produto UrbaShop',
@@ -368,6 +377,7 @@ export default function Checkout() {
         })),
         payer,
         shippingCost: shippingMethod === 'pickup' ? 0 : shippingCost,
+        method: 'pix',
         origin: window.location.origin
       };
 
@@ -383,21 +393,67 @@ export default function Checkout() {
       }
 
       if (data?.ok === false) {
-        console.error("Payment API Error:", data.error, data.details);
+        console.error("Payment API Error:", data.error);
         throw new Error(data.error || 'Erro no Mercado Pago');
       }
 
-      if (data?.init_point) {
-        window.location.href = data.init_point;
+      if (data?.qr_code) {
+        setPixData(data);
+        setShowPixModal(true);
+        
+        // 1. Realtime listener
+        const channel = supabase
+          .channel(`order_status_${newOrderId}`)
+          .on(
+            'postgres_changes',
+            {
+              event: 'UPDATE',
+              schema: 'public',
+              table: 'orders',
+              filter: `id=eq.${newOrderId}`
+            },
+            (payload) => {
+              console.log("Realtime update received:", payload.new.status);
+              if (payload.new.status === 'Pago, Aguardando Retirada' || payload.new.status === 'Concluído') {
+                setPaymentConfirmed(true);
+                setShowPixModal(false);
+                localStorage.removeItem('urbashop_cart');
+                supabase.removeChannel(channel);
+              }
+            }
+          )
+          .subscribe();
+
+        // 2. Polling Fallback (every 5 seconds)
+        const pollInterval = setInterval(async () => {
+          const { data: orderUpdate, error: pollError } = await supabase
+            .from('orders')
+            .select('status')
+            .eq('id', newOrderId)
+            .single();
+
+          if (!pollError && orderUpdate) {
+            console.log("Polling status check:", orderUpdate.status);
+            if (orderUpdate.status === 'Pago, Aguardando Retirada' || orderUpdate.status === 'Concluído') {
+              setPaymentConfirmed(true);
+              setShowPixModal(false);
+              localStorage.removeItem('urbashop_cart');
+              supabase.removeChannel(channel);
+              clearInterval(pollInterval);
+            }
+          }
+        }, 5000);
       } else {
-        throw new Error('Link de pagamento não retornado');
+        throw new Error('PIX QR Code não retornado');
       }
+
 
     } catch (err: any) {
       console.error('Checkout error:', err);
       toast.error(`Erro ao processar pagamento: ${err.message || 'Erro desconhecido'}`);
       setIsProcessing(false);
     }
+
   };
 
   if (cartItems.length === 0) {
@@ -763,15 +819,18 @@ export default function Checkout() {
                       {paymentMethod === 'mercadopago' && <div className="size-2.5 bg-primary-blue rounded-full" />}
                     </div>
                     <div className="flex items-center gap-3">
-                      <CreditCard size={20} className="text-slate-400" />
+                      <div className="size-8 bg-blue-100 rounded-lg flex items-center justify-center text-primary-blue">
+                        <TrendingUp size={20} />
+                      </div>
                       <div>
-                        <p className="font-black text-midnight">Cartão, Pix ou Boleto</p>
-                        <p className="text-[10px] text-slate-400 font-bold uppercase">Processado pelo Mercado Pago</p>
+                        <p className="font-black text-midnight uppercase tracking-tight">Pagamento via PIX</p>
+                        <p className="text-[10px] text-slate-400 font-bold uppercase">QR Code gerado na hora</p>
                       </div>
                     </div>
                   </div>
                   <input type="radio" name="payment" className="hidden" checked={paymentMethod === 'mercadopago'} onChange={() => setPaymentMethod('mercadopago')} />
                 </label>
+
 
                 <label className={`flex items-center justify-between p-4 rounded-xl border-2 cursor-pointer transition-all ${paymentMethod === 'wallet' ? 'border-primary-blue bg-blue-50/50' : 'border-slate-100 hover:border-slate-200'} ${(!authUser || walletBalance < total || walletBalance < 10 || !isEligibleForWallet) ? 'opacity-50 grayscale' : ''}`}>
                   <div className="flex items-center gap-4">
@@ -1099,6 +1158,127 @@ export default function Checkout() {
           </>
         )}
       </AnimatePresence>
+
+      {/* PIX Payment Modal */}
+      <AnimatePresence>
+        {showPixModal && pixData && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-6">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowPixModal(false)}
+              className="absolute inset-0 bg-midnight/90 backdrop-blur-md" 
+            />
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className="relative bg-white w-full max-w-md rounded-[2.5rem] overflow-hidden shadow-2xl p-8 text-center"
+            >
+              <div className="flex justify-between items-center mb-6">
+                <div className="text-left">
+                  <h3 className="text-2xl font-black text-midnight uppercase tracking-tighter italic">Pagamento PIX</h3>
+                  <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Pedido #{orderId?.substring(0, 8).toUpperCase()}</p>
+                </div>
+                <button onClick={() => setShowPixModal(false)} className="size-10 bg-slate-50 rounded-full flex items-center justify-center text-slate-400 hover:bg-slate-100 transition-colors">
+                  <X size={20} />
+                </button>
+              </div>
+
+              <div className="bg-slate-50 rounded-3xl p-6 mb-6 flex flex-col items-center border border-slate-100">
+                <div className="bg-white p-4 rounded-2xl shadow-sm mb-4 border border-slate-100">
+                  <QRCodeCanvas 
+                    value={pixData.qr_code} 
+                    size={200}
+                    level="H"
+                    includeMargin={true}
+                  />
+                </div>
+                <p className="text-xs text-slate-500 font-medium max-w-[200px] leading-relaxed">
+                  Escaneie o QR Code acima com o app do seu banco para pagar.
+                </p>
+              </div>
+
+              <div className="space-y-4">
+                <div className="flex flex-col gap-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest text-left ml-2">Pix Copia e Cola</label>
+                  <div className="flex gap-2">
+                    <input 
+                      readOnly 
+                      value={pixData.qr_code}
+                      className="flex-1 bg-slate-50 border border-slate-100 rounded-xl px-4 py-3 text-xs font-mono text-slate-500 truncate"
+                    />
+                    <button 
+                      onClick={() => {
+                        navigator.clipboard.writeText(pixData.qr_code);
+                        setIsCopying(true);
+                        toast.success('Copiado para a área de transferência!');
+                        setTimeout(() => setIsCopying(false), 2000);
+                      }}
+                      className="size-12 bg-primary-blue text-white rounded-xl flex items-center justify-center shrink-0 shadow-lg shadow-primary-blue/20 active:scale-90 transition-all"
+                    >
+                      {isCopying ? <Check size={20} /> : <Check size={20} />}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="pt-4 border-t border-slate-100">
+                  <div className="flex items-center justify-center gap-3 text-emerald-500 font-black text-[10px] uppercase tracking-widest animate-pulse">
+                    <div className="size-2 bg-emerald-500 rounded-full" />
+                    Aguardando confirmação do pagamento...
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Success Screen Overlay */}
+      <AnimatePresence>
+        {paymentConfirmed && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="fixed inset-0 z-[110] bg-white flex flex-col items-center justify-center p-6 text-center"
+          >
+            <motion.div
+              initial={{ scale: 0.5, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={{ type: 'spring', damping: 15 }}
+              className="size-32 bg-emerald-500 text-white rounded-full flex items-center justify-center mb-8 shadow-2xl shadow-emerald-500/20"
+            >
+              <CheckCircle2 size={64} />
+            </motion.div>
+            
+            <h2 className="text-4xl font-black text-midnight uppercase tracking-tighter italic mb-4 leading-none">
+              Pagamento <br />
+              <span className="text-emerald-500">Confirmado!</span>
+            </h2>
+            
+            <p className="text-slate-500 font-medium max-w-md mb-12">
+              Seu pedido foi processado com sucesso. Você já pode acompanhar o status e baixar seu comprovante na área do cliente.
+            </p>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 w-full max-w-md">
+              <button 
+                onClick={() => navigate('/afiliado/pedidos')}
+                className="bg-midnight text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-slate-800 transition-all shadow-xl shadow-midnight/20"
+              >
+                Ver Meus Pedidos
+              </button>
+              <button 
+                onClick={() => navigate('/marketplace')}
+                className="bg-white border-2 border-slate-100 text-slate-400 py-4 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-slate-50 transition-all"
+              >
+                Voltar para Loja
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
+

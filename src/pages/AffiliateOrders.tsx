@@ -8,8 +8,14 @@ import {
   XCircle,
   ChevronRight,
   Search,
-  Filter
+  Filter,
+  Download,
+  FileText,
+  X
 } from 'lucide-react';
+
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 import { motion, AnimatePresence } from 'motion/react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
@@ -17,7 +23,7 @@ import { businessRules } from '../lib/businessRules';
 import AffiliateLayout from '../components/AffiliateLayout';
 
 export default function AffiliateOrders() {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const [orders, setOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -133,6 +139,80 @@ export default function AffiliateOrders() {
       anual: Number(vAnual.toFixed(2)),
       total: Number(userTotalCashback.toFixed(2))
     };
+  };
+
+  const generateReceipt = (order: any) => {
+    const doc = new jsPDF({
+      unit: 'mm',
+      format: [80, 200] // Thermal printer style width
+    });
+
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const margin = 5;
+
+    // Header
+    doc.setFontSize(14);
+    doc.setFont('helvetica', 'bold');
+    doc.text('URBASHOP', pageWidth / 2, 10, { align: 'center' });
+    
+    doc.setFontSize(8);
+    doc.setFont('helvetica', 'normal');
+    doc.text('Comprovante de Pagamento', pageWidth / 2, 15, { align: 'center' });
+    doc.text('------------------------------------------------', pageWidth / 2, 18, { align: 'center' });
+
+    // Order Info
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'bold');
+    doc.text(`Pedido: #${order.id.substring(0, 8).toUpperCase()}`, margin, 25);
+    
+    doc.setFontSize(8);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`Data: ${new Date(order.order_date).toLocaleString('pt-BR')}`, margin, 30);
+    doc.text(`Cliente: ${profile?.full_name || user?.user_metadata?.full_name || 'Consumidor'}`, margin, 35);
+    
+    let displayMethod = order.payment_method || 'Não informada';
+    if (displayMethod === 'Mercado Pago') displayMethod = 'Pix';
+    if (displayMethod === 'Carteira Digital') displayMethod = 'Saldo de Carteira Virtual';
+    
+    doc.text(`Forma de pagamento: ${displayMethod}`, margin, 40);
+
+
+    doc.text('------------------------------------------------', pageWidth / 2, 45, { align: 'center' });
+
+    // Items Table
+    const items = Array.isArray(order.items) ? order.items : [];
+    const tableData = items.map((item: any) => [
+      item.product_name || item.name || 'Prod.',
+      item.quantity || 1,
+      `R$ ${Number(item.price || 0).toFixed(2)}`
+    ]);
+
+    autoTable(doc, {
+      startY: 50,
+      head: [['Item', 'Qtd', 'Subtotal']],
+      body: tableData,
+      theme: 'plain',
+      styles: { fontSize: 7, cellPadding: 1 },
+      headStyles: { fontStyle: 'bold' },
+      margin: { left: margin, right: margin }
+    });
+
+    const finalY = (doc as any).lastAutoTable.finalY || 60;
+
+    // Totals
+    doc.text('------------------------------------------------', pageWidth / 2, finalY + 5, { align: 'center' });
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(10);
+    doc.text(`TOTAL: R$ ${Number(order.amount).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, pageWidth - margin, finalY + 12, { align: 'right' });
+
+    // Footer
+    doc.setFontSize(7);
+    doc.setFont('helvetica', 'italic');
+    doc.text('Obrigado por comprar no UrbaShop!', pageWidth / 2, finalY + 22, { align: 'center' });
+    doc.text('www.urbashop.com.br', pageWidth / 2, finalY + 26, { align: 'center' });
+
+    doc.save(`recibo-urbashop-${order.id.substring(0, 8)}.pdf`);
+    toast.success('Comprovante gerado com sucesso!');
   };
 
   const filteredOrders = orders.filter(o => 
@@ -269,9 +349,24 @@ export default function AffiliateOrders() {
                           </p>
                         </div>
                       </div>
-                      <div className="size-8 rounded-full bg-white border border-slate-200 flex items-center justify-center text-slate-400 group-hover:bg-primary-blue group-hover:text-white group-hover:border-primary-blue transition-all shrink-0">
-                        <ChevronRight size={18} />
+                      <div className="flex items-center gap-3">
+                        {['Pago, Aguardando Retirada', 'Concluído', 'Entregue', 'Enviado'].includes(order.status) && (
+                          <button 
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              generateReceipt(order);
+                            }}
+                            className="size-10 rounded-xl bg-emerald-50 text-emerald-600 hover:bg-emerald-500 hover:text-white transition-all flex items-center justify-center shrink-0 shadow-sm group/btn"
+                            title="Baixar Comprovante"
+                          >
+                            <Download size={18} />
+                          </button>
+                        )}
+                        <div className="size-8 rounded-full bg-white border border-slate-200 flex items-center justify-center text-slate-400 group-hover:bg-primary-blue group-hover:text-white group-hover:border-primary-blue transition-all shrink-0">
+                          <ChevronRight size={18} />
+                        </div>
                       </div>
+
                     </div>
                   </motion.div>
                 )})}
@@ -299,12 +394,22 @@ export default function AffiliateOrders() {
                     </span>
                   </div>
                 </div>
-                <button 
-                  onClick={() => setShowDetailsModal(false)}
-                  className="size-12 bg-slate-50 hover:bg-slate-100 rounded-2xl flex items-center justify-center text-slate-400 transition-all"
-                >
-                  <Clock size={24} className="rotate-45" />
-                </button>
+                <div className="flex items-center gap-3">
+                  {(selectedOrder.status === 'Pago, Aguardando Retirada' || selectedOrder.status === 'Concluído' || selectedOrder.status === 'Entregue' || selectedOrder.status === 'Enviado') && (
+                    <button 
+                      onClick={() => generateReceipt(selectedOrder)}
+                      className="flex items-center gap-2 bg-emerald-500 hover:bg-emerald-600 text-midnight px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-lg shadow-emerald-500/20"
+                    >
+                      <Download size={14} /> Baixar Comprovante
+                    </button>
+                  )}
+                  <button 
+                    onClick={() => setShowDetailsModal(false)}
+                    className="size-12 bg-slate-50 hover:bg-slate-100 rounded-2xl flex items-center justify-center text-slate-400 transition-all"
+                  >
+                    <X size={24} />
+                  </button>
+                </div>
               </div>
 
               {/* Content */}

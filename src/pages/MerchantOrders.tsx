@@ -258,7 +258,6 @@ export default function MerchantOrders() {
                     <th className="px-1 py-5 text-[9px] font-black text-slate-400 uppercase tracking-wider whitespace-nowrap">Cliente</th>
                     <th className="px-1 py-5 text-[9px] font-black text-slate-400 uppercase tracking-wider whitespace-nowrap">Data</th>
                     <th className="px-1 py-5 text-[9px] font-black text-slate-400 uppercase tracking-wider whitespace-nowrap text-center">Valor</th>
-                    <th className="px-1 py-5 text-[9px] font-black text-slate-400 uppercase tracking-wider whitespace-nowrap text-center">Cód.</th>
                     <th className="px-1 py-5 text-[9px] font-black text-slate-400 uppercase tracking-wider whitespace-nowrap text-center">Status</th>
                     <th className="px-1 py-5 text-[9px] font-black text-slate-400 uppercase tracking-wider text-right whitespace-nowrap">Ações</th>
                   </tr>
@@ -289,11 +288,6 @@ export default function MerchantOrders() {
                           <td className="px-1 py-5 text-[10px] font-bold text-slate-400 whitespace-nowrap">{o.date.split(',')[0]}</td>
                           <td className="px-1 py-5 text-center">
                             <span className="font-black text-midnight tracking-tighter text-xs whitespace-nowrap">R$ {o.amount.toFixed(2).replace('.', ',')}</span>
-                          </td>
-                          <td className="px-1 py-5 text-center">
-                             <span className="bg-slate-50 px-2 py-1 rounded-lg font-mono font-black text-[10px] text-primary-blue border border-slate-100">
-                               {extra?.withdrawalCode || o.id.substring(0, 4).toUpperCase()}
-                             </span>
                           </td>
                           <td className="px-1 py-5 whitespace-nowrap text-center">
                             <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[8px] font-black uppercase tracking-wider border transition-all whitespace-nowrap ${getStatusColor(o.status)}`}>

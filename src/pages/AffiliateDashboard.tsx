@@ -197,7 +197,10 @@ export default function AffiliateDashboard() {
             <div className="relative z-10 space-y-8">
               <div>
                 <h2 className="text-2xl font-black text-midnight tracking-tight mb-2 italic uppercase">Indique e Ganhe</h2>
-                <p className="text-slate-500 font-medium">Compartilhe seu link exclusivo e receba comissões imediatas por cada novo usuário ou parceiro.</p>
+                <p className="text-slate-500 font-medium">
+                  Indique uma vez, ganhe sempre. <br />
+                  Receba Cashback mensal, digital e anual recorrentes sobre todas as compras que seus indicados fizerem.
+                </p>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

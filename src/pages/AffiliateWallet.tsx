@@ -214,7 +214,48 @@ export default function AffiliateWallet() {
         {/* Balance Cards Grid - Credit Card Style */}
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8">
            
-           {/* Card 1: Saldo Disponível */}
+           {/* Card 1: Bônus Mensal */}
+           <motion.div 
+             whileHover={{ y: -5 }}
+             onClick={() => {
+               setActiveFilter(activeFilter === 'mensal' ? 'all' : 'mensal');
+               setCurrentPage(1);
+             }}
+             className={`aspect-[1.6/1] bg-gradient-to-br from-indigo-600 via-blue-700 to-slate-900 p-8 rounded-[2.5rem] text-white relative overflow-hidden flex flex-col justify-between shadow-2xl transition-all cursor-pointer group ${
+               activeFilter === 'mensal' ? 'ring-4 ring-blue-400 shadow-blue-500/20' : 'shadow-blue-900/20'
+             }`}
+           >
+              <div className="absolute top-[-20%] right-[-10%] w-40 h-40 bg-white/10 rounded-full blur-3xl"></div>
+              
+              <div className="relative z-10 flex justify-between items-start">
+                 <div>
+                    <p className="text-[10px] font-black text-blue-200/60 uppercase tracking-widest mb-1">Saldo Disponível</p>
+                    <p className="text-[8px] font-bold text-blue-300/40 uppercase tracking-[0.2em]">Cashback Mensal</p>
+                 </div>
+                 <div className={`size-10 rounded-xl flex items-center justify-center border transition-colors ${
+                   activeFilter === 'mensal' ? 'bg-white text-indigo-600 border-white' : 'bg-white/10 text-white border-white/10'
+                 }`}>
+                    <TrendingUp size={20} />
+                 </div>
+              </div>
+
+              <div className="relative z-10">
+                 <h2 className="text-4xl font-black tracking-tighter italic uppercase mb-2">R$ {Number(stats.monthlyBonus).toFixed(2)}</h2>
+                 <p className="text-[9px] font-black text-blue-200/60 uppercase tracking-widest flex items-center gap-2">
+                    <ShieldCheck size={12} /> Proteção Ativa
+                 </p>
+              </div>
+
+              <div className="relative z-10 flex justify-between items-center opacity-40">
+                 <div className="flex gap-1">
+                    <div className="w-6 h-1 bg-white/20 rounded-full"></div>
+                    <div className="w-3 h-1 bg-white/20 rounded-full"></div>
+                 </div>
+                 <span className="text-[8px] font-black uppercase tracking-widest">PRO PREMIUM</span>
+              </div>
+           </motion.div>
+
+           {/* Card 2: Saldo Disponível (Carteira CD) */}
            <motion.div 
              whileHover={{ y: -5 }}
              onClick={() => {
@@ -232,7 +273,7 @@ export default function AffiliateWallet() {
               <div className="relative z-10 flex justify-between items-start">
                  <div>
                     <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Saldo Disponível</p>
-                    <p className="text-[8px] font-bold text-slate-600 uppercase tracking-[0.2em]">Carteira CD</p>
+                    <p className="text-[8px] font-bold text-slate-600 uppercase tracking-[0.2em]">Cashback Digital</p>
                  </div>
                  <div className={`size-10 rounded-xl flex items-center justify-center border transition-colors ${
                    activeFilter === 'cd' ? 'bg-emerald-500 text-white border-emerald-500' : 'bg-white/5 text-emerald-500 border-white/5'
@@ -259,47 +300,6 @@ export default function AffiliateWallet() {
               </div>
            </motion.div>
 
-           {/* Card 2: Bônus Mensal */}
-           <motion.div 
-             whileHover={{ y: -5 }}
-             onClick={() => {
-               setActiveFilter(activeFilter === 'mensal' ? 'all' : 'mensal');
-               setCurrentPage(1);
-             }}
-             className={`aspect-[1.6/1] bg-gradient-to-br from-indigo-600 via-blue-700 to-slate-900 p-8 rounded-[2.5rem] text-white relative overflow-hidden flex flex-col justify-between shadow-2xl transition-all cursor-pointer group ${
-               activeFilter === 'mensal' ? 'ring-4 ring-blue-400 shadow-blue-500/20' : 'shadow-blue-900/20'
-             }`}
-           >
-              <div className="absolute top-[-20%] right-[-10%] w-40 h-40 bg-white/10 rounded-full blur-3xl"></div>
-              
-              <div className="relative z-10 flex justify-between items-start">
-                 <div>
-                    <p className="text-[10px] font-black text-blue-200/60 uppercase tracking-widest mb-1">Bônus Acumulado</p>
-                    <p className="text-[8px] font-bold text-blue-300/40 uppercase tracking-[0.2em]">Mensalidade</p>
-                 </div>
-                 <div className={`size-10 rounded-xl flex items-center justify-center border transition-colors ${
-                   activeFilter === 'mensal' ? 'bg-white text-indigo-600 border-white' : 'bg-white/10 text-white border-white/10'
-                 }`}>
-                    <TrendingUp size={20} />
-                 </div>
-              </div>
-
-              <div className="relative z-10">
-                 <h2 className="text-4xl font-black tracking-tighter italic uppercase mb-2">R$ {Number(stats.monthlyBonus).toFixed(2)}</h2>
-                 <p className="text-[9px] font-black text-blue-200/60 uppercase tracking-widest flex items-center gap-2">
-                    <ShieldCheck size={12} /> Proteção Ativa
-                 </p>
-              </div>
-
-              <div className="relative z-10 flex justify-between items-center opacity-40">
-                 <div className="flex gap-1">
-                    <div className="w-6 h-1 bg-white/20 rounded-full"></div>
-                    <div className="w-3 h-1 bg-white/20 rounded-full"></div>
-                 </div>
-                 <span className="text-[8px] font-black uppercase tracking-widest">PRO PREMIUM</span>
-              </div>
-           </motion.div>
-
            {/* Card 3: Bônus Anual */}
            <motion.div 
              whileHover={{ y: -5 }}
@@ -315,8 +315,8 @@ export default function AffiliateWallet() {
               
               <div className="relative z-10 flex justify-between items-start">
                  <div>
-                    <p className="text-[10px] font-black text-emerald-200/60 uppercase tracking-widest mb-1">Bônus Acumulado</p>
-                    <p className="text-[8px] font-bold text-emerald-300/40 uppercase tracking-[0.2em]">Anualidade</p>
+                    <p className="text-[10px] font-black text-emerald-200/60 uppercase tracking-widest mb-1">Saldo Disponível</p>
+                    <p className="text-[8px] font-bold text-emerald-300/40 uppercase tracking-[0.2em]">Cashback Anual</p>
                  </div>
                  <div className={`size-10 rounded-xl flex items-center justify-center border transition-colors ${
                    activeFilter === 'anual' ? 'bg-white text-emerald-600 border-white' : 'bg-white/10 text-white border-white/10'

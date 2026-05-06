@@ -1011,7 +1011,7 @@ export const businessRules = {
         })
         .filter(Boolean) as string[];
 
-      // Buscar informações dos pedidos (nomes dos compradores)
+      // 1. Buscar informações dos pedidos (nomes dos compradores)
       const { data: orders } = await supabase
         .from('orders')
         .select(`
@@ -1027,25 +1027,56 @@ export const businessRules = {
 
       const ordersMap = new Map(orders?.map(o => [o.id, {
         ...o,
-        // Priorizar o nome atual do perfil, se disponível
         buyer_name: (o.profiles as any)?.full_name || o.customer_name || 'Desconhecido'
       }]) || []);
 
-      return transactions.map(t => {
-        // Regex mais flexível para capturar IDs de pedidos (pode ter espaços ou ser apenas números)
-        const orderMatch = t.description?.match(/Pedido\s*#\s*([A-Z0-9-]+)/i);
-        const levelMatch = t.description?.match(/\(Nível\s*(\d+)\)/i);
-        const typeMatch = t.description?.match(/\((Mensal|Anual|CD|Digital)\)/i);
+      // 2. Buscar rede para cálculo de níveis (Fallback seguro para evitar erro 500)
+      const levelMap = new Map();
+      try {
+        const { data: allProfiles } = await supabase.from('profiles').select('id, referred_by').limit(5000);
+        if (allProfiles) {
+          const childrenMap = new Map();
+          allProfiles.forEach(p => {
+            if (p.referred_by) {
+              const children = childrenMap.get(p.referred_by) || [];
+              children.push(p.id);
+              childrenMap.set(p.referred_by, children);
+            }
+          });
 
+          const buildLevelsRecursive = (parentId: string, currentLevel: number, visited: Set<string>) => {
+            if (currentLevel > 10 || visited.has(parentId)) return;
+            visited.add(parentId);
+            const children = childrenMap.get(parentId) || [];
+            children.forEach((childId: string) => {
+              levelMap.set(childId, currentLevel);
+              buildLevelsRecursive(childId, currentLevel + 1, visited);
+            });
+          };
+          buildLevelsRecursive(userId, 1, new Set());
+        }
+      } catch (err) {
+        console.error("Erro no cálculo de níveis:", err);
+      }
+
+      return transactions.map(t => {
+        const orderMatch = t.description?.match(/Pedido\s*#\s*([A-Z0-9-]+)/i);
         const orderId = orderMatch ? orderMatch[1].trim() : null;
         const order = orderId ? ordersMap.get(orderId) : null;
 
-        // Mapeamento de tipo para exibição
+        const typeMatch = t.description?.match(/\((Mensal|Anual|CD|Digital)\)/i);
         let cashbackType = typeMatch ? typeMatch[1] : 'Outros';
         if (cashbackType === 'CD') cashbackType = 'Digital';
 
-        // Se for uma comissão mas não tem nível na descrição, assumimos nível 0 (Cashback próprio)
-        const level = levelMatch ? levelMatch[1] : (t.type === 'commission' ? '0' : '---');
+        // Determinar o nível
+        let level = '0';
+        if (order?.customer_id && levelMap.has(order.customer_id)) {
+          level = String(levelMap.get(order.customer_id));
+        } else {
+          const todosNumeros = t.description?.match(/\d+/g) || [];
+          const nivelEncontrado = todosNumeros.find(n => n !== orderId && n.length < 3);
+          level = nivelEncontrado || (t.type === 'commission' ? '0' : '---');
+        }
 
         return {
           id: t.id,
@@ -1109,7 +1140,6 @@ export const businessRules = {
     const baseUrl = window.location.origin + '/invite/';
     return [
       { id: 'l1', name: 'Link Geral', url: baseUrl + codeOrId, description: 'Convidar novos usuários' },
-      { id: 'l2', name: 'Link Lojista', url: baseUrl + 'lojista/' + codeOrId, description: 'Convidar novos parceiros lojistas' },
     ];
   },
 
@@ -1158,6 +1188,41 @@ export const businessRules = {
     };
   },
 
+  updateUserByAdmin: async (userId: string, data: any) => {
+    // Atualiza os dados na tabela profiles
+    const { error: profileError } = await supabase
+      .from('profiles')
+      .update({
+        full_name: data.name,
+        cpf: data.cpf,
+        whatsapp: data.whatsapp,
+        address: data.address,
+        number: data.number,
+        neighborhood: data.neighborhood,
+        city: data.city,
+        state: data.state,
+        zip_code: data.zipCode
+      })
+      .eq('id', userId);
+
+    if (profileError) throw profileError;
+
+    // Se tiver e-mail ou senha, chama a RPC admin_update_user_auth
+    if (data.email || data.password) {
+      const authUpdates = { 
+        p_user_id: userId,
+        p_email: data.email || null,
+        p_password: data.password || null
+      };
+
+      const { error: authError } = await supabase.rpc('admin_update_user_auth', authUpdates);
+      if (authError) {
+        console.error('Error updating auth:', authError);
+        throw new Error('Erro ao atualizar e-mail ou senha: ' + authError.message);
+      }
+    }
+  },
+
   updateUserStatus: async (userId: string, status: 'active' | 'blocked') => {
     const { error } = await supabase
       .from('profiles')
@@ -1176,8 +1241,9 @@ export const businessRules = {
     const [
       { data: currentRevenue },
       { data: lastRevenue },
-      { count: currentUserCount },
-      { count: lastUserCount },
+      { count: totalUserCount },
+      { count: currentMonthUserCount },
+      { count: lastMonthUserCount },
       { count: currentBranchCount },
       { count: lastBranchCount },
       { data: currentCommissions },
@@ -1190,8 +1256,9 @@ export const businessRules = {
       supabase.from('orders').select('amount').eq('status', 'Concluído').gte('order_date', firstDayLastMonth.toISOString()).lte('order_date', lastDayLastMonth.toISOString()),
       
       // Users
-      supabase.from('profiles').select('*', { count: 'exact', head: true }),
-      supabase.from('profiles').select('*', { count: 'exact', head: true }).lte('created_at', lastDayLastMonth.toISOString()),
+      supabase.from('profiles').select('*', { count: 'exact', head: true }), // Total
+      supabase.from('profiles').select('*', { count: 'exact', head: true }).gte('created_at', firstDayCurrentMonth.toISOString()), // Novos este mês
+      supabase.from('profiles').select('*', { count: 'exact', head: true }).gte('created_at', firstDayLastMonth.toISOString()).lte('created_at', lastDayLastMonth.toISOString()), // Novos mês passado
       
       // Lojistas
       supabase.from('branches').select('*', { count: 'exact', head: true }).gte('created_at', firstDayCurrentMonth.toISOString()),
@@ -1223,13 +1290,13 @@ export const businessRules = {
       return ((current - last) / last) * 100;
     };
 
-    const usersCurrent = (currentUserCount || 0) - (lastUserCount || 0);
-    const usersLast = lastUserCount || 0;
+    const usersCurrent = totalUserCount || 0;
+    const usersLast = (totalUserCount || 0) - (currentMonthUserCount || 0);
 
     return {
       revenueTotal: currentTotalRevenue,
       revenueTrend: calculateTrend(currentTotalRevenue, lastTotalRevenue),
-      userCount: currentUserCount || 0,
+      userCount: totalUserCount || 0,
       userTrend: calculateTrend(usersCurrent, usersLast),
       branchCount: currentBranchCount || 0,
       branchTrend: calculateTrend(currentBranchCount || 0, lastBranchCount || 0),
@@ -1238,6 +1305,37 @@ export const businessRules = {
       blockedUserCount: blockedUserCount || 0,
       pendingWithdrawals: pendingWithdrawalCount || 0
     };
+  },
+
+  async getAllOrders() {
+    const { data, error } = await supabase
+      .from('orders')
+      .select('*')
+      .order('order_date', { ascending: false });
+
+    if (error) throw error;
+    return data.map(o => ({
+      id: o.id,
+      customerName: o.customer_name,
+      customerInitial: o.customer_initial,
+      date: o.order_date,
+      amount: o.amount,
+      status: o.status,
+      branchId: o.branch_id
+    }));
+  },
+
+  async getAllOrderExtras() {
+    const { data, error } = await supabase
+      .from('order_extras')
+      .select('*');
+
+    if (error) throw error;
+    return data.map(e => ({
+      id: e.id,
+      withdrawalCode: e.withdrawal_code,
+      status: e.status
+    }));
   },
 
   getAdminSystemLogs: async (limit: number = 8) => {

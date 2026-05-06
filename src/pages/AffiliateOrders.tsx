@@ -333,15 +333,15 @@ export default function AffiliateOrders() {
                         <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-1 text-emerald-600">Cashback Recebido</p>
                         <div className="space-y-0.5">
                           <div className="flex justify-between md:justify-end gap-2 text-[10px] font-bold">
-                            <span className="text-slate-400">Mensal ({mmnConfig?.cashbackMensal || '...'}%):</span>
+                            <span className="text-slate-400">Mensal:</span>
                             <span className="text-emerald-600">R$ {breakdown.mensal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
                           </div>
                           <div className="flex justify-between md:justify-end gap-2 text-[10px] font-bold">
-                            <span className="text-slate-400">Digital ({mmnConfig?.cashbackDigital || '...'}%):</span>
+                            <span className="text-slate-400">Digital:</span>
                             <span className="text-emerald-600">R$ {breakdown.digital.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
                           </div>
                           <div className="flex justify-between md:justify-end gap-2 text-[10px] font-bold border-b border-slate-100 pb-0.5">
-                            <span className="text-slate-400">Anual ({mmnConfig?.cashbackAnual || '...'}%):</span>
+                            <span className="text-slate-400">Anual:</span>
                             <span className="text-emerald-600">R$ {breakdown.anual.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
                           </div>
                           <p className="font-black text-emerald-500 text-base mt-1 text-right">
@@ -472,15 +472,15 @@ export default function AffiliateOrders() {
                             return (
                               <div className="space-y-4">
                                 <div className="flex justify-between items-center">
-                                  <span className="text-xs font-bold text-slate-500">Bônus Mensal ({mmnConfig?.cashbackMensal || '...'}%)</span>
+                                  <span className="text-xs font-bold text-slate-500">Bônus Mensal</span>
                                   <span className="text-sm font-black text-blue-600">R$ {breakdown.mensal.toFixed(2).replace('.', ',')}</span>
                                 </div>
                                 <div className="flex justify-between items-center">
-                                  <span className="text-xs font-bold text-slate-500">Bônus Digital ({mmnConfig?.cashbackDigital || 1.00}%)</span>
+                                  <span className="text-xs font-bold text-slate-500">Bônus Digital</span>
                                   <span className="text-sm font-black text-emerald-600">R$ {breakdown.digital.toFixed(2).replace('.', ',')}</span>
                                 </div>
                                 <div className="flex justify-between items-center">
-                                  <span className="text-xs font-bold text-slate-500">Bônus Anual ({mmnConfig?.cashbackAnual || 0.75}%)</span>
+                                  <span className="text-xs font-bold text-slate-500">Bônus Anual</span>
                                   <span className="text-sm font-black text-indigo-600">R$ {breakdown.anual.toFixed(2).replace('.', ',')}</span>
                                 </div>
                                 <div className="pt-4 border-t border-emerald-200 flex justify-between items-center">

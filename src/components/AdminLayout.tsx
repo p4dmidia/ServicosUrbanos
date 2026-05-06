@@ -16,7 +16,10 @@ import {
   LayoutGrid,
   Loader2,
   DollarSign,
-  Clock
+  Clock,
+  CreditCard,
+  ShoppingBag,
+  Package
 } from 'lucide-react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
@@ -112,7 +115,8 @@ export default function AdminLayout({ children, title, subtitle }: AdminLayoutPr
     { name: 'Marketplace', icon: Store, path: '/admin/marketplace' },
     { name: 'Lista de Espera', icon: Clock, path: '/admin/lista-espera' },
     { name: 'Relatórios', icon: PieChart, path: '/admin/relatorios' },
-    { name: 'Pagamentos', icon: DollarSign, path: '/admin/saques' },
+    { name: 'Financeiro', icon: DollarSign, path: '/admin/financeiro' },
+    { name: 'Pagamentos', icon: CreditCard, path: '/admin/saques' },
     { name: 'Configurações', icon: Settings, path: '/admin/configuracoes' },
   ];
 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   BarChart3, 
   TrendingUp, 
@@ -21,17 +21,29 @@ import { motion } from 'motion/react';
 import AdminLayout from '../components/AdminLayout';
 import { businessRules } from '../lib/businessRules';
 import { toast } from 'react-hot-toast';
+import FinancialReportTable, { FinancialRecord } from '../components/FinancialReportTable';
+import BIInsightsModal from '../components/BIInsightsModal';
 
 export default function AdminReports() {
   const [dateRange, setDateRange] = useState('30 dias');
   const [loading, setLoading] = useState(true);
   const [reportData, setReportData] = useState<any>(null);
+  const [orders, setOrders] = useState<any[]>([]);
+  const [extras, setExtras] = useState<any[]>([]);
+  const [isBIModalOpen, setIsBIModalOpen] = useState(false);
 
   const loadData = async () => {
     setLoading(true);
     try {
-      const data = await businessRules.getAdminReportsData(dateRange);
-      setReportData(data);
+      const [reports, ordersData, extrasData] = await Promise.all([
+        businessRules.getAdminReportsData(dateRange),
+        businessRules.getAllOrders(),
+        businessRules.getAllOrderExtras()
+      ]);
+      
+      setReportData(reports);
+      setOrders(ordersData);
+      setExtras(extrasData);
     } catch (error) {
       console.error('Erro ao carregar relatórios:', error);
       toast.error('Ocorreu um erro ao carregar os dados do relatório.');
@@ -68,6 +80,27 @@ export default function AdminReports() {
     document.body.removeChild(link);
     toast.success('Relatório exportado com sucesso!');
   };
+
+  const financialReportData: FinancialRecord[] = useMemo(() => {
+    return orders.map(o => {
+      const extra = extras.find(e => e.id === o.id);
+      const saleDate = new Date(o.date);
+      
+      const payDate = new Date(saleDate);
+      payDate.setDate(payDate.getDate() + 1);
+
+      return {
+        orderId: o.id,
+        buyerName: o.customerName || 'Cliente',
+        orderStatus: o.status === 'Concluído' ? 'Pago' : o.status,
+        deliveryStatus: (extra?.status as any) || 'Pendente',
+        saleDate: saleDate.toLocaleDateString('pt-BR'),
+        amount: o.amount,
+        repasse: o.amount * 0.8,
+        payDate: payDate.toLocaleDateString('pt-BR')
+      };
+    });
+  }, [orders, extras]);
 
   const mainKPIs = [
     { label: 'Volume Transacional (GMV)', value: `R$ ${reportData?.gmv?.value?.toLocaleString('pt-BR') || '0'}`, trend: `${(reportData?.gmv?.trend || 0) >= 0 ? '+' : ''}${reportData?.gmv?.trend?.toFixed(1) || '0'}%`, icon: DollarSign, color: 'text-indigo-500' },
@@ -313,17 +346,47 @@ export default function AdminReports() {
               <div className="inline-flex items-center gap-2 px-3 py-1 bg-indigo-500/20 text-indigo-400 rounded-full text-[10px] font-black uppercase tracking-widest mb-6">
                 <TrendingUp size={14} /> Insights Automáticos
               </div>
-              <h2 className="text-3xl lg:text-4xl font-black text-white tracking-tighter uppercase italic leading-none mb-6">Relatório de Crescimento</h2>
+            <h2 className="text-3xl lg:text-4xl font-black text-white tracking-tighter uppercase italic leading-none mb-6">Relatório de Crescimento</h2>
               <p className="text-slate-400 text-sm font-medium leading-relaxed">
                 A UrbaShop registrou um { (reportData?.gmv?.trend || 0) >= 0 ? 'aumento' : 'redução' } de { Math.abs(reportData?.gmv?.trend || 0).toFixed(1) }% no volume transacional (GMV) no período de {dateRange}. 
                 O crescimento da rede de afiliados foi de { (reportData?.userGrowth?.trend || 0) >= 0 ? '+' : '' }{ (reportData?.userGrowth?.trend || 0).toFixed(1) }% em relação ao período anterior, indicando a viralidade orgânica da rede SERVICES URBANOS.
               </p>
             </div>
             
-            <button className="flex items-center gap-3 bg-white text-indigo-900 px-10 py-5 rounded-[1.5rem] font-black text-xs uppercase tracking-[0.2em] shadow-2xl shadow-white/10 hover:bg-slate-200 transition-all active:scale-[0.98] group shrink-0">
-              Assinatura BI Digital
+            <button 
+              onClick={() => setIsBIModalOpen(true)}
+              className="flex items-center gap-3 bg-white text-indigo-900 px-10 py-5 rounded-[1.5rem] font-black text-xs uppercase tracking-[0.2em] shadow-2xl shadow-white/10 hover:bg-slate-200 transition-all active:scale-[0.98] group shrink-0"
+            >
+              Relatórios BI (Business Intelligence)
               <ChevronRight size={18} className="group-hover:translate-x-1 transition-transform" />
             </button>
+          </div>
+        </div>
+
+        {/* BI Insights Modal */}
+        <BIInsightsModal 
+          isOpen={isBIModalOpen} 
+          onClose={() => setIsBIModalOpen(false)} 
+        />
+
+        {/* Financial Report Table Integration */}
+        <div className="space-y-6">
+          <div className="flex items-center gap-3">
+            <div className="size-10 bg-indigo-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-indigo-600/20">
+              <DollarSign size={20} />
+            </div>
+            <div>
+              <h3 className="text-xl font-black text-white tracking-tighter uppercase italic leading-none">Detalhamento Financeiro</h3>
+              <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-1">Auditoria completa de liquidação</p>
+            </div>
+          </div>
+          
+          <div className="bg-white rounded-[2.5rem] overflow-hidden shadow-2xl">
+            <FinancialReportTable 
+              data={financialReportData} 
+              title="Auditoria de Pedidos do Ecossistema" 
+              isAdmin={true} 
+            />
           </div>
         </div>
 

@@ -52,6 +52,9 @@ export default function AdminUsers() {
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [showDetails, setShowDetails] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editForm, setEditForm] = useState<any>({});
+  const [savingDetails, setSavingDetails] = useState(false);
 
   const loadData = async () => {
     setLoading(true);
@@ -102,6 +105,34 @@ export default function AdminUsers() {
       toast.error('Erro ao atualizar status do usuário.');
     } finally {
       setActionLoading(null);
+    }
+  };
+
+  const handleSaveUser = async () => {
+    if (!selectedUser) return;
+    setSavingDetails(true);
+    try {
+      await businessRules.updateUserByAdmin(selectedUser.id, editForm);
+      toast.success('Usuário atualizado com sucesso!');
+      setIsEditing(false);
+      loadData();
+      setSelectedUser({
+        ...selectedUser,
+        name: editForm.name,
+        email: editForm.email,
+        cpf: editForm.cpf,
+        whatsapp: editForm.whatsapp,
+        address: editForm.address,
+        number: editForm.number,
+        neighborhood: editForm.neighborhood,
+        city: editForm.city,
+        state: editForm.state,
+        zipCode: editForm.zipCode
+      });
+    } catch (error: any) {
+      toast.error(error.message || 'Erro ao atualizar usuário');
+    } finally {
+      setSavingDetails(false);
     }
   };
 
@@ -275,6 +306,20 @@ export default function AdminUsers() {
                           <button 
                             onClick={() => {
                               setSelectedUser(user);
+                              setEditForm({
+                                name: user.name,
+                                email: user.email,
+                                cpf: user.cpf || '',
+                                whatsapp: user.whatsapp || '',
+                                address: user.address || '',
+                                number: user.number || '',
+                                neighborhood: user.neighborhood || '',
+                                city: user.city || '',
+                                state: user.state || '',
+                                zipCode: user.zipCode || '',
+                                password: ''
+                              });
+                              setIsEditing(false);
                               setShowDetails(true);
                             }}
                             className="p-2 hover:bg-white/5 rounded-xl text-slate-400 hover:text-white transition-all"
@@ -362,9 +407,37 @@ export default function AdminUsers() {
                   <div className="size-24 rounded-full bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400 font-black text-3xl">
                     {selectedUser.name?.charAt(0) || '?'}
                   </div>
-                  <div className="text-center">
-                    <h4 className="text-xl font-black text-white">{selectedUser.name}</h4>
-                    <p className="text-sm font-bold text-slate-500">{selectedUser.email}</p>
+                  <div className="text-center w-full px-6">
+                    {isEditing ? (
+                      <div className="space-y-3">
+                        <input 
+                          type="text" 
+                          value={editForm.name} 
+                          onChange={e => setEditForm({...editForm, name: e.target.value})}
+                          className="w-full bg-black/20 border border-white/10 rounded-xl px-4 py-2 text-white text-center font-bold focus:outline-none focus:border-indigo-500"
+                          placeholder="Nome do Usuário"
+                        />
+                        <input 
+                          type="email" 
+                          value={editForm.email} 
+                          onChange={e => setEditForm({...editForm, email: e.target.value})}
+                          className="w-full bg-black/20 border border-white/10 rounded-xl px-4 py-2 text-white text-center text-sm focus:outline-none focus:border-indigo-500"
+                          placeholder="E-mail"
+                        />
+                        <input 
+                          type="text" 
+                          value={editForm.password} 
+                          onChange={e => setEditForm({...editForm, password: e.target.value})}
+                          className="w-full bg-black/20 border border-white/10 rounded-xl px-4 py-2 text-white text-center text-sm focus:outline-none focus:border-indigo-500 placeholder:text-red-400/50"
+                          placeholder="Nova senha (deixe vazio para manter)"
+                        />
+                      </div>
+                    ) : (
+                      <>
+                        <h4 className="text-xl font-black text-white">{selectedUser.name}</h4>
+                        <p className="text-sm font-bold text-slate-500">{selectedUser.email}</p>
+                      </>
+                    )}
                   </div>
                   <div className="flex items-center gap-3">
                     {getRoleBadge(selectedUser.role)}
@@ -376,64 +449,134 @@ export default function AdminUsers() {
                   <div className="grid grid-cols-1 gap-6">
                     <div className="space-y-1.5">
                       <p className="text-[9px] text-slate-500 font-bold uppercase tracking-widest ml-1">Documento (CPF)</p>
-                      <div className="bg-white/5 p-4 rounded-2xl border border-white/5 text-sm font-bold text-white uppercase italic">
-                        {selectedUser.cpf || 'Não informado'}
-                      </div>
+                      {isEditing ? (
+                        <input 
+                          type="text" 
+                          value={editForm.cpf} 
+                          onChange={e => setEditForm({...editForm, cpf: e.target.value})}
+                          className="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-3 text-white font-bold focus:outline-none focus:border-indigo-500"
+                        />
+                      ) : (
+                        <div className="bg-white/5 p-4 rounded-2xl border border-white/5 text-sm font-bold text-white uppercase italic">
+                          {selectedUser.cpf || 'Não informado'}
+                        </div>
+                      )}
                     </div>
                     <div className="space-y-1.5">
                       <p className="text-[9px] text-slate-500 font-bold uppercase tracking-widest ml-1">WhatsApp</p>
-                      <div className="bg-white/5 p-4 rounded-2xl border border-white/5 text-sm font-bold text-white">
-                        {selectedUser.whatsapp || 'Não informado'}
-                      </div>
+                      {isEditing ? (
+                        <input 
+                          type="text" 
+                          value={editForm.whatsapp} 
+                          onChange={e => setEditForm({...editForm, whatsapp: e.target.value})}
+                          className="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-3 text-white font-bold focus:outline-none focus:border-indigo-500"
+                        />
+                      ) : (
+                        <div className="bg-white/5 p-4 rounded-2xl border border-white/5 text-sm font-bold text-white">
+                          {selectedUser.whatsapp || 'Não informado'}
+                        </div>
+                      )}
                     </div>
                   </div>
 
                   <div className="space-y-1.5">
                     <p className="text-[9px] text-slate-500 font-bold uppercase tracking-widest ml-1">Endereço Completo</p>
                     <div className="bg-white/5 p-6 rounded-[2rem] border border-white/5 space-y-4">
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="col-span-2">
-                          <p className="text-[8px] text-slate-600 font-bold uppercase tracking-widest mb-1">Rua / Logradouro</p>
-                          <p className="text-xs font-bold text-white">{selectedUser.address || '--'}</p>
+                      {isEditing ? (
+                        <div className="grid grid-cols-2 gap-4">
+                          <div className="col-span-2 space-y-1">
+                            <p className="text-[8px] text-slate-600 font-bold uppercase tracking-widest">Rua / Logradouro</p>
+                            <input type="text" value={editForm.address} onChange={e => setEditForm({...editForm, address: e.target.value})} className="w-full bg-black/20 border border-white/10 rounded-xl px-3 py-2 text-white text-xs font-bold focus:outline-none focus:border-indigo-500" />
+                          </div>
+                          <div className="space-y-1">
+                            <p className="text-[8px] text-slate-600 font-bold uppercase tracking-widest">Número</p>
+                            <input type="text" value={editForm.number} onChange={e => setEditForm({...editForm, number: e.target.value})} className="w-full bg-black/20 border border-white/10 rounded-xl px-3 py-2 text-white text-xs font-bold focus:outline-none focus:border-indigo-500" />
+                          </div>
+                          <div className="space-y-1">
+                            <p className="text-[8px] text-slate-600 font-bold uppercase tracking-widest">Bairro</p>
+                            <input type="text" value={editForm.neighborhood} onChange={e => setEditForm({...editForm, neighborhood: e.target.value})} className="w-full bg-black/20 border border-white/10 rounded-xl px-3 py-2 text-white text-xs font-bold focus:outline-none focus:border-indigo-500" />
+                          </div>
+                          <div className="space-y-1">
+                            <p className="text-[8px] text-slate-600 font-bold uppercase tracking-widest">Cidade</p>
+                            <input type="text" value={editForm.city} onChange={e => setEditForm({...editForm, city: e.target.value})} className="w-full bg-black/20 border border-white/10 rounded-xl px-3 py-2 text-white text-xs font-bold focus:outline-none focus:border-indigo-500" />
+                          </div>
+                          <div className="space-y-1">
+                            <p className="text-[8px] text-slate-600 font-bold uppercase tracking-widest">UF</p>
+                            <input type="text" value={editForm.state} onChange={e => setEditForm({...editForm, state: e.target.value})} className="w-full bg-black/20 border border-white/10 rounded-xl px-3 py-2 text-white text-xs font-bold focus:outline-none focus:border-indigo-500" />
+                          </div>
+                          <div className="col-span-2 space-y-1">
+                            <p className="text-[8px] text-slate-600 font-bold uppercase tracking-widest">CEP</p>
+                            <input type="text" value={editForm.zipCode} onChange={e => setEditForm({...editForm, zipCode: e.target.value})} className="w-full bg-black/20 border border-white/10 rounded-xl px-3 py-2 text-white text-xs font-bold focus:outline-none focus:border-indigo-500" />
+                          </div>
                         </div>
-                        <div>
-                          <p className="text-[8px] text-slate-600 font-bold uppercase tracking-widest mb-1">Número</p>
-                          <p className="text-xs font-bold text-white">{selectedUser.number || '--'}</p>
+                      ) : (
+                        <div className="grid grid-cols-2 gap-4">
+                          <div className="col-span-2">
+                            <p className="text-[8px] text-slate-600 font-bold uppercase tracking-widest mb-1">Rua / Logradouro</p>
+                            <p className="text-xs font-bold text-white">{selectedUser.address || '--'}</p>
+                          </div>
+                          <div>
+                            <p className="text-[8px] text-slate-600 font-bold uppercase tracking-widest mb-1">Número</p>
+                            <p className="text-xs font-bold text-white">{selectedUser.number || '--'}</p>
+                          </div>
+                          <div>
+                            <p className="text-[8px] text-slate-600 font-bold uppercase tracking-widest mb-1">Bairro</p>
+                            <p className="text-xs font-bold text-white">{selectedUser.neighborhood || '--'}</p>
+                          </div>
+                          <div>
+                            <p className="text-[8px] text-slate-600 font-bold uppercase tracking-widest mb-1">Cidade / UF</p>
+                            <p className="text-xs font-bold text-white">{selectedUser.city ? `${selectedUser.city} / ${selectedUser.state}` : '--'}</p>
+                          </div>
+                          <div>
+                            <p className="text-[8px] text-slate-600 font-bold uppercase tracking-widest mb-1">CEP</p>
+                            <p className="text-xs font-bold text-white">{selectedUser.zipCode || '--'}</p>
+                          </div>
                         </div>
-                        <div>
-                          <p className="text-[8px] text-slate-600 font-bold uppercase tracking-widest mb-1">Bairro</p>
-                          <p className="text-xs font-bold text-white">{selectedUser.neighborhood || '--'}</p>
-                        </div>
-                        <div>
-                          <p className="text-[8px] text-slate-600 font-bold uppercase tracking-widest mb-1">Cidade / UF</p>
-                          <p className="text-xs font-bold text-white">{selectedUser.city ? `${selectedUser.city} / ${selectedUser.state}` : '--'}</p>
-                        </div>
-                        <div>
-                          <p className="text-[8px] text-slate-600 font-bold uppercase tracking-widest mb-1">CEP</p>
-                          <p className="text-xs font-bold text-white">{selectedUser.zipCode || '--'}</p>
-                        </div>
-                      </div>
+                      )}
                     </div>
                   </div>
                 </div>
 
                 <div className="pt-8 flex flex-col gap-4">
-                  <button 
-                    onClick={() => handleToggleStatus(selectedUser.id, selectedUser.status)}
-                    disabled={actionLoading === selectedUser.id}
-                    className={`w-full py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 ${selectedUser.status === 'blocked' ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-xl shadow-emerald-600/20' : 'bg-red-600 hover:bg-red-500 text-white shadow-xl shadow-red-600/20'}`}
-                  >
-                    {actionLoading === selectedUser.id ? (
-                      <Loader2 className="animate-spin" size={16} />
-                    ) : selectedUser.status === 'blocked' ? (
-                      <><CheckCircle size={16} /> Desbloquear Conta</>
-                    ) : (
-                      <><Ban size={16} /> Bloquear Conta</>
-                    )}
-                  </button>
-                  <button className="w-full py-4 bg-white/5 hover:bg-white/10 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest border border-white/5 transition-all">
-                    Resetar Senha
-                  </button>
+                  {isEditing ? (
+                    <div className="flex gap-4">
+                      <button 
+                        onClick={() => setIsEditing(false)}
+                        className="flex-1 py-4 bg-white/5 hover:bg-white/10 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest border border-white/5 transition-all"
+                      >
+                        Cancelar
+                      </button>
+                      <button 
+                        onClick={handleSaveUser}
+                        disabled={savingDetails}
+                        className="flex-1 py-4 bg-indigo-600 hover:bg-indigo-500 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-xl shadow-indigo-600/20 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                      >
+                        {savingDetails ? <Loader2 className="animate-spin" size={16} /> : 'Salvar Alterações'}
+                      </button>
+                    </div>
+                  ) : (
+                    <>
+                      <button 
+                        onClick={() => setIsEditing(true)}
+                        className="w-full py-4 bg-indigo-600 hover:bg-indigo-500 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-xl shadow-indigo-600/20 transition-all"
+                      >
+                        Editar Informações
+                      </button>
+                      <button 
+                        onClick={() => handleToggleStatus(selectedUser.id, selectedUser.status)}
+                        disabled={actionLoading === selectedUser.id}
+                        className={`w-full py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 ${selectedUser.status === 'blocked' ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-xl shadow-emerald-600/20' : 'bg-red-600 hover:bg-red-500 text-white shadow-xl shadow-red-600/20'}`}
+                      >
+                        {actionLoading === selectedUser.id ? (
+                          <Loader2 className="animate-spin" size={16} />
+                        ) : selectedUser.status === 'blocked' ? (
+                          <><CheckCircle size={16} /> Desbloquear Conta</>
+                        ) : (
+                          <><Ban size={16} /> Bloquear Conta</>
+                        )}
+                      </button>
+                    </>
+                  )}
                 </div>
               </div>
             </motion.div>

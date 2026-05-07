@@ -94,9 +94,9 @@ export default function AffiliateNetwork() {
   });
 
   const levels = mmnConfig
-    .filter(level => level.level > 1) // Pular o nível 1 (G0 - Você)
+    .filter(level => level.level >= 1)
     .map((level, i) => {
-      const gen = level.level - 1; // G1, G2...
+      const gen = level.level; // G1, G2...
       const count = stats.networkSummary[`g${gen}`] || 0;
       const colors = [
         { text: 'text-emerald-500', bg: 'bg-emerald-50' },
@@ -209,8 +209,8 @@ export default function AffiliateNetwork() {
                      className="appearance-none flex items-center gap-2 bg-slate-50 border border-slate-100 px-6 py-4 rounded-2xl text-xs font-black text-slate-500 hover:text-midnight transition-all uppercase tracking-widest cursor-pointer pr-10 focus:outline-none focus:border-primary-blue focus:ring-4 focus:ring-primary-blue/5"
                    >
                       <option value={0}>Todos os Níveis</option>
-                      {mmnConfig.filter(l => l.level > 1).map((l) => (
-                        <option key={l.level} value={l.level - 1}>Nível G{l.level - 1}</option>
+                      {mmnConfig.filter(l => l.level >= 1).map((l) => (
+                        <option key={l.level} value={l.level}>Nível G{l.level}</option>
                       ))}
                    </select>
                    <Filter size={16} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />

@@ -1129,7 +1129,7 @@ export const businessRules = {
         };
       };
 
-      return buildTree(userId, 1);
+      return buildTree(userId, 0);
     } catch (error) {
       console.error("Tree Build Error:", error);
       return null;

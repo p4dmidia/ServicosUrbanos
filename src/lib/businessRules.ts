@@ -1316,13 +1316,43 @@ export const businessRules = {
     if (error) throw error;
     return data.map(o => ({
       id: o.id,
-      customerName: o.customer_name,
-      customerInitial: o.customer_initial,
-      date: o.order_date,
-      amount: o.amount,
+      customerName: o.customer_name || o.customerName,
+      customerInitial: o.customer_initial || o.customerInitial,
+      date: o.order_date || o.date || o.created_at,
+      amount: Number(o.total_amount || o.amount || 0),
       status: o.status,
-      branchId: o.branch_id
+      branchId: o.branch_id || o.branchId,
+      userId: o.user_id || o.userId,
+      affiliateId: o.affiliate_id || o.affiliateId,
+      payoutStatus: o.payout_status || o.payoutStatus || 'pending',
+      payoutDate: o.payout_date || o.payoutDate,
+      payoutReceiptUrl: o.payout_receipt_url || o.payoutReceiptUrl,
+      paymentMethod: o.payment_method || o.paymentMethod || 'PIX',
+      items: o.items || []
     }));
+  },
+
+  async updateOrderPayoutStatus(orderIds: string[], status: 'paid' | 'failed', receiptUrl?: string) {
+    const { error } = await supabase
+      .from('orders')
+      .update({ 
+        payout_status: status, 
+        payout_date: new Date().toISOString(),
+        payout_receipt_url: receiptUrl 
+      })
+      .in('id', orderIds);
+    
+    if (error) throw error;
+  },
+
+  async getPayeeDetails(userIds: string[]) {
+    const { data, error } = await supabase
+      .from('user_profiles')
+      .select('id, full_name, pix_key, cpf')
+      .in('id', userIds);
+    
+    if (error) throw error;
+    return data;
   },
 
   async getAllOrderExtras() {

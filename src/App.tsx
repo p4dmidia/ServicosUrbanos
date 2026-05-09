@@ -28,6 +28,7 @@ import AdminReports from './pages/AdminReports';
 import AdminWaitlist from './pages/AdminWaitlist';
 import AdminWithdrawals from './pages/AdminWithdrawals';
 import AdminCategories from './pages/AdminCategories';
+import AdminFinancials from './pages/AdminFinancials';
 import AffiliateDashboard from './pages/AffiliateDashboard';
 import AffiliateNetwork from './pages/AffiliateNetwork';
 import AffiliateWallet from './pages/AffiliateWallet';
@@ -103,6 +104,10 @@ export default function App() {
             <Route 
               path="/admin/categorias" 
               element={<ProtectedRoute allowedRoles={['admin']}><AdminCategories /></ProtectedRoute>} 
+            />
+            <Route 
+              path="/admin/financeiro" 
+              element={<ProtectedRoute allowedRoles={['admin']}><AdminFinancials /></ProtectedRoute>} 
             />
 
             {/* Affiliate / Virtual Office Routes */}

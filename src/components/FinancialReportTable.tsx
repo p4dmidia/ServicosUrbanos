@@ -1,338 +1,346 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState } from 'react';
 import { 
+  FileText, 
   Search, 
   Filter, 
-  ChevronRight, 
-  ChevronLeft,
+  Download, 
+  Eye, 
+  CheckCircle2, 
   Clock, 
-  CheckCircle, 
   AlertCircle,
-  Calendar,
-  Download,
-  Info
+  X,
+  Package,
+  User,
+  ExternalLink,
+  QrCode,
+  CheckSquare,
+  Square,
+  Building2,
+  CreditCard,
+  Wallet,
+  Shield
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 export interface FinancialRecord {
   orderId: string;
   buyerName: string;
-  orderStatus: 'Pendente' | 'Processando' | 'Pago' | 'Cancelado' | 'Pago, Aguardando Retirada';
-  deliveryStatus: 'Pendente' | 'Enviado' | 'Entregue' | 'Cancelado';
+  payeeName: string;
+  orderStatus: string;
+  deliveryStatus: string;
   saleDate: string;
   amount: number;
   repasse: number;
   payDate: string;
-  managerName?: string;
+  payeeId?: string;
+  payeePixKey?: string;
+  payeeCpf?: string;
+  paymentMethod?: string;
+  items?: any[];
 }
 
-interface Props {
+interface FinancialReportTableProps {
   data: FinancialRecord[];
   title?: string;
   isAdmin?: boolean;
+  onGeneratePayments?: (selected: FinancialRecord[]) => void;
 }
 
-export default function FinancialReportTable({ data, title = "Histórico Financeiro", isAdmin = false }: Props) {
-  const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState('Todos');
-  const [deliveryFilter, setDeliveryFilter] = useState('Todos');
-  const [payDateFilter, setPayDateFilter] = useState('Todos');
-  const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 10;
+export default function FinancialReportTable({ 
+  data, 
+  title = "Relatório Financeiro", 
+  isAdmin = false,
+  onGeneratePayments
+}: FinancialReportTableProps) {
+  const [searchTerm, setSearchTerm] = useState("");
+  const [selectedRecords, setSelectedRecords] = useState<string[]>([]);
+  const [viewingOrder, setViewingOrder] = useState<FinancialRecord | null>(null);
 
-  // Extrair datas de pagamento únicas para o filtro
-  const uniquePayDates = useMemo(() => {
-    const dates = [...new Set(data.map(item => item.payDate))];
-    return dates.sort((a, b) => {
-      const dateA = a.split('/').reverse().join('');
-      const dateB = b.split('/').reverse().join('');
-      return dateB.localeCompare(dateA); // Ordem decrescente
-    });
-  }, [data]);
+  const filteredData = data.filter(record => 
+    record.orderId.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    record.payeeName.toLowerCase().includes(searchTerm.toLowerCase())
+  );
 
-  const filteredData = useMemo(() => {
-    return data.filter(item => {
-      const matchesSearch = item.orderId.toLowerCase().includes(search.toLowerCase()) || 
-                            item.buyerName.toLowerCase().includes(search.toLowerCase());
-      const matchesStatus = statusFilter === 'Todos' || item.orderStatus === statusFilter;
-      const matchesDelivery = deliveryFilter === 'Todos' || item.deliveryStatus === deliveryFilter;
-      const matchesPayDate = payDateFilter === 'Todos' || item.payDate === payDateFilter;
-      
-      return matchesSearch && matchesStatus && matchesDelivery && matchesPayDate;
-    });
-  }, [data, search, statusFilter, deliveryFilter, payDateFilter]);
-
-  // Pagination logic
-  const totalPages = Math.ceil(filteredData.length / itemsPerPage);
-  const paginatedData = useMemo(() => {
-    const start = (currentPage - 1) * itemsPerPage;
-    return filteredData.slice(start, start + itemsPerPage);
-  }, [filteredData, currentPage, itemsPerPage]);
-
-  // Reset to page 1 when filters change
-  React.useEffect(() => {
-    setCurrentPage(1);
-  }, [search, statusFilter, deliveryFilter, payDateFilter]);
-
-  const totalAReceber = useMemo(() => {
-    return filteredData
-      .filter(item => {
-        const isPaid = item.orderStatus.toLowerCase() === 'pago' || item.orderStatus.toLowerCase() === 'concluído';
-        const isDelivered = item.deliveryStatus.toLowerCase() === 'entregue' || item.deliveryStatus.toLowerCase() === 'concluído';
-        return isPaid && isDelivered;
-      })
-      .reduce((acc, curr) => acc + curr.repasse, 0);
-  }, [filteredData]);
-
-  const getStatusStyle = (status: string) => {
-    const s = status.toLowerCase();
-    if (s === 'pago' || s === 'entregue' || s === 'concluído') {
-      return 'bg-emerald-50 text-emerald-600 border-emerald-100';
+  const toggleSelectAll = () => {
+    if (selectedRecords.length === filteredData.length) {
+      setSelectedRecords([]);
+    } else {
+      setSelectedRecords(filteredData.map(r => r.orderId));
     }
-    if (s === 'pendente' || s === 'processando' || s === 'pago, aguardando retirada') {
-      return 'bg-amber-50 text-amber-600 border-amber-100';
+  };
+
+  const toggleSelect = (id: string) => {
+    if (selectedRecords.includes(id)) {
+      setSelectedRecords(prev => prev.filter(item => item !== id));
+    } else {
+      setSelectedRecords(prev => [...prev, id]);
     }
-    if (s === 'cancelado') {
-      return 'bg-red-50 text-red-600 border-red-100';
+  };
+
+  const handleGenerateClick = () => {
+    if (onGeneratePayments) {
+      const selectedItems = data.filter(r => selectedRecords.includes(r.orderId));
+      onGeneratePayments(selectedItems);
     }
-    return 'bg-slate-50 text-slate-500 border-slate-100';
   };
 
   return (
-    <div className="space-y-6">
-      {/* Header & Filters */}
-      <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm space-y-6">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
-          <div>
-            <h3 className="text-xl font-black text-midnight tracking-tighter uppercase italic">{title}</h3>
-            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">
-              {isAdmin ? 'Gestão de repasses e liquidação' : 'Comissões de Gerentes (Filiais)'}
-            </p>
-          </div>
-          <div className="flex items-center gap-3">
-             <button className="px-4 py-2 bg-slate-50 hover:bg-slate-100 text-slate-400 rounded-xl transition-all flex items-center gap-2 text-[10px] font-black uppercase tracking-widest border border-slate-100">
-                <Download size={14} /> Exportar
-             </button>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-           <div className="relative">
-              <input 
-                type="text" 
-                placeholder="ID ou Comprador..." 
-                value={search}
-                onChange={e => setSearch(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-100 py-3 pl-11 pr-4 rounded-2xl text-xs font-bold focus:outline-none focus:ring-2 focus:ring-primary-blue/20 transition-all text-midnight"
-              />
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-           </div>
-
-           <select 
-             value={statusFilter}
-             onChange={e => setStatusFilter(e.target.value)}
-             className="bg-slate-50 border border-slate-100 px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest focus:outline-none text-midnight cursor-pointer"
-           >
-             <option value="Todos">Status Pedido</option>
-             <option value="Pago">Pago</option>
-             <option value="Pendente">Pendente</option>
-             <option value="Cancelado">Cancelado</option>
-           </select>
-
-           <select 
-             value={deliveryFilter}
-             onChange={e => setDeliveryFilter(e.target.value)}
-             className="bg-slate-50 border border-slate-100 px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest focus:outline-none text-midnight cursor-pointer"
-           >
-             <option value="Todos">Status Entrega</option>
-             <option value="Entregue">Entregue</option>
-             <option value="Pendente">Pendente</option>
-             <option value="Cancelado">Cancelado</option>
-           </select>
-
-           <select 
-             value={payDateFilter}
-             onChange={e => setPayDateFilter(e.target.value)}
-             className="bg-slate-50 border border-slate-100 px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest focus:outline-none text-midnight cursor-pointer"
-           >
-             <option value="Todos">A Pagar Dia</option>
-             {uniquePayDates.map(date => (
-               <option key={date} value={date}>{date}</option>
-             ))}
-           </select>
-        </div>
-      </div>
-
-      {/* Rules Alert - Premium Spreadsheet Style */}
-      <div className="bg-[#fffbeb] border-2 border-[#fef3c7] p-8 rounded-[2rem] relative overflow-hidden group">
-         <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
-            <Info size={120} />
-         </div>
-         
-         <div className="relative z-10 space-y-4">
-            <div className="flex items-center gap-3">
-              <div className="size-8 bg-amber-400 rounded-lg flex items-center justify-center text-white shadow-lg shadow-amber-400/20">
-                <CheckCircle size={18} />
-              </div>
-              <h4 className="text-xs font-black text-amber-900 uppercase tracking-[0.2em] italic">Regras de Liberação de Valores</h4>
-            </div>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="bg-white/50 p-4 rounded-2xl border border-amber-200/50">
-                <p className="text-[10px] font-black text-amber-800 uppercase tracking-widest mb-1">Condição de Repasse</p>
-                <p className="text-xs text-amber-900/70 font-medium leading-relaxed">
-                  Os valores só serão liberados ao lojista quando o status do pedido e status da entrega estiverem <strong className="text-amber-900 font-black">PAGOS E ENTREGUES</strong>.
-                </p>
-              </div>
-              
-              <div className="bg-amber-400 p-4 rounded-2xl shadow-xl shadow-amber-400/10 border border-amber-500/20">
-                <p className="text-[10px] font-black text-amber-900 uppercase tracking-widest mb-1">Horário de Liquidação</p>
-                <p className="text-xs text-amber-900 font-black italic leading-tight">
-                  OS REPASSES SERÃO FEITOS TODOS OS DIAS ATÉ AS 17 HS DE TODOS OS PEDIDOS DEVIDAMENTE QUITADOS E ENTREGUES ATÉ AS 17 HS DO DIA ANTERIOR.
-                </p>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2 text-[9px] font-bold text-amber-700/60 uppercase tracking-widest">
-              <AlertCircle size={12} />
-              Caso algum status esteja pendente, o valor ficará retido pela Serviços Urbanos
-            </div>
-         </div>
-      </div>
-
-      {/* Table */}
-      <div className="bg-white rounded-[2.5rem] border border-slate-100 shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left table-auto">
-            <thead>
-              <tr className="bg-slate-50 border-b border-slate-100">
-                <th className="px-8 py-6 text-[9px] font-black text-slate-400 uppercase tracking-wider whitespace-nowrap">ID do Pedido</th>
-                <th className="px-8 py-6 text-[9px] font-black text-slate-400 uppercase tracking-wider whitespace-nowrap">Comprador</th>
-                {!isAdmin && <th className="px-8 py-6 text-[9px] font-black text-slate-400 uppercase tracking-wider whitespace-nowrap">Gerente (Filial)</th>}
-                <th className="px-8 py-6 text-[9px] font-black text-slate-400 uppercase tracking-wider text-center whitespace-nowrap">Status Pedido</th>
-                <th className="px-8 py-6 text-[9px] font-black text-slate-400 uppercase tracking-wider text-center whitespace-nowrap">Status Entrega</th>
-                <th className="px-8 py-6 text-[9px] font-black text-slate-400 uppercase tracking-wider text-center whitespace-nowrap">Data Venda</th>
-                <th className="px-8 py-6 text-[9px] font-black text-slate-400 uppercase tracking-wider text-right whitespace-nowrap">Valor Compra</th>
-                <th className="px-8 py-6 text-[9px] font-black text-slate-400 uppercase tracking-wider text-right whitespace-nowrap">{isAdmin ? 'Repasse' : 'Comissão Gerente'}</th>
-                <th className="px-8 py-6 text-[9px] font-black text-slate-400 uppercase tracking-wider text-center whitespace-nowrap">A Pagar Dia</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-50 text-[11px]">
-              <AnimatePresence mode="popLayout">
-                {paginatedData.length > 0 ? paginatedData.map((item, idx) => (
-                  <motion.tr 
-                    key={item.orderId + idx}
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    className="hover:bg-slate-50/50 transition-colors group"
-                  >
-                    <td className="px-8 py-6 font-black text-midnight italic">#{item.orderId}</td>
-                    <td className="px-8 py-6">
-                       <span className="font-bold text-midnight uppercase tracking-tight">{item.buyerName}</span>
-                    </td>
-                    {!isAdmin && (
-                      <td className="px-8 py-6">
-                        <span className="font-bold text-primary-blue uppercase tracking-tight">{item.managerName || 'N/A'}</span>
-                      </td>
-                    )}
-                    <td className="px-8 py-6 text-center">
-                       <span className={`px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-widest border ${getStatusStyle(item.orderStatus)}`}>
-                         {item.orderStatus}
-                       </span>
-                    </td>
-                    <td className="px-8 py-6 text-center">
-                       <span className={`px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-widest border ${getStatusStyle(item.deliveryStatus)}`}>
-                         {item.deliveryStatus}
-                       </span>
-                    </td>
-                    <td className="px-8 py-6 text-center font-bold text-slate-400">{item.saleDate}</td>
-                    <td className="px-8 py-6 text-right font-bold text-slate-400">R$ {item.amount.toFixed(2).replace('.', ',')}</td>
-                    <td className="px-8 py-6 text-right font-black text-midnight tracking-tighter italic text-sm">R$ {item.repasse.toFixed(2).replace('.', ',')}</td>
-                    <td className="px-8 py-6 text-center">
-                       <div className="flex flex-col items-center">
-                          <span className="font-black text-primary-blue italic">{item.payDate}</span>
-                          <span className="text-[7px] font-bold text-slate-300 uppercase tracking-widest leading-none">Previsto</span>
-                       </div>
-                    </td>
-                  </motion.tr>
-                )) : (
-                  <tr>
-                    <td colSpan={8} className="px-8 py-20 text-center">
-                       <div className="flex flex-col items-center opacity-20">
-                          <AlertCircle size={48} className="mb-4" />
-                          <p className="text-sm font-black uppercase tracking-widest">Nenhum registro encontrado</p>
-                       </div>
-                    </td>
-                  </tr>
-                )}
-              </AnimatePresence>
-            </tbody>
-            <tfoot>
-               <tr className="bg-midnight text-white font-black italic">
-                  <td colSpan={isAdmin ? 6 : 7} className="px-8 py-6 text-right uppercase tracking-[0.2em] text-[10px]">
-                    {isAdmin ? 'Total a Receber (Liquidados)' : 'Total de Comissões a Pagar (Liquidados)'}
-                  </td>
-                  <td className="px-8 py-6 text-right text-lg tracking-tighter">R$ {totalAReceber.toFixed(2).replace('.', ',')}</td>
-                  <td></td>
-               </tr>
-            </tfoot>
-          </table>
-        </div>
-      </div>
-
-      {/* Pagination Controls */}
-      {totalPages > 1 && (
-        <div className="flex items-center justify-between px-8 py-6 bg-white rounded-[2rem] border border-slate-100 shadow-sm">
-          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-            Mostrando {((currentPage - 1) * itemsPerPage) + 1} a {Math.min(currentPage * itemsPerPage, filteredData.length)} de {filteredData.length} registros
+    <div className="flex flex-col h-full">
+      {/* Header com busca e filtros */}
+      <div className="p-8 border-b border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-6 bg-white">
+        <div>
+          <h3 className="text-2xl font-black text-midnight italic uppercase tracking-tighter">{title}</h3>
+          <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">
+            {filteredData.length} registros em auditoria
           </p>
-          
-          <div className="flex items-center gap-2">
-            <button 
-              onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-              disabled={currentPage === 1}
-              className="size-10 flex items-center justify-center rounded-xl bg-slate-50 text-midnight disabled:opacity-30 border border-slate-100 hover:bg-slate-100 transition-all"
-            >
-              <ChevronLeft size={18} />
-            </button>
-            
-            <div className="flex items-center gap-1">
-              {Array.from({ length: totalPages }).map((_, i) => {
-                const page = i + 1;
-                // Mostrar apenas algumas páginas se houver muitas
-                if (totalPages > 7) {
-                  if (page !== 1 && page !== totalPages && Math.abs(page - currentPage) > 1) {
-                    if (page === 2 || page === totalPages - 1) return <span key={page} className="px-2 text-slate-300">...</span>;
-                    return null;
-                  }
-                }
-                
-                return (
-                  <button
-                    key={page}
-                    onClick={() => setCurrentPage(page)}
-                    className={`size-10 rounded-xl text-[10px] font-black transition-all ${
-                      currentPage === page 
-                        ? 'bg-primary-blue text-white shadow-lg shadow-primary-blue/20' 
-                        : 'bg-white text-slate-400 hover:bg-slate-50'
-                    }`}
-                  >
-                    {page}
-                  </button>
-                );
-              })}
-            </div>
-
-            <button 
-              onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-              disabled={currentPage === totalPages}
-              className="size-10 flex items-center justify-center rounded-xl bg-slate-50 text-midnight disabled:opacity-30 border border-slate-100 hover:bg-slate-100 transition-all"
-            >
-              <ChevronRight size={18} />
-            </button>
-          </div>
         </div>
-      )}
+
+        <div className="flex items-center gap-4">
+          <div className="relative">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+            <input 
+              type="text"
+              placeholder="Localizar lojista ou pedido..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-12 pr-6 py-4 bg-slate-50 border border-slate-100 rounded-2xl text-xs font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500/20 w-full md:w-72 transition-all"
+            />
+          </div>
+          
+          {isAdmin && selectedRecords.length > 0 && (
+            <motion.button 
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              onClick={handleGenerateClick}
+              className="bg-indigo-600 text-white px-8 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest flex items-center gap-2 hover:bg-indigo-700 transition-all shadow-xl shadow-indigo-600/20 active:scale-95"
+            >
+              <QrCode size={18} />
+              Gerar Pagamentos ({selectedRecords.length})
+            </motion.button>
+          )}
+        </div>
+      </div>
+
+      {/* Tabela */}
+      <div className="overflow-x-auto">
+        <table className="w-full text-left border-collapse">
+          <thead>
+            <tr className="bg-slate-50/50">
+              {isAdmin && (
+                <th className="p-6 w-12">
+                  <button onClick={toggleSelectAll} className="text-slate-400 hover:text-indigo-600 transition-colors">
+                    {selectedRecords.length === filteredData.length && filteredData.length > 0 
+                      ? <CheckSquare size={22} className="text-indigo-600" /> 
+                      : <Square size={22} />
+                    }
+                  </button>
+                </th>
+              )}
+              <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">ID do Pedido</th>
+              <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Lojista / Beneficiário</th>
+              <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Status</th>
+              <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Data</th>
+              <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Valor Bruto</th>
+              <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Líquido (80%)</th>
+              <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Data Pagamento</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filteredData.map((record) => (
+              <tr 
+                key={record.orderId} 
+                className={`border-b border-slate-50 hover:bg-slate-50/80 transition-colors ${selectedRecords.includes(record.orderId) ? 'bg-indigo-50/40' : ''}`}
+              >
+                {isAdmin && (
+                  <td className="p-6">
+                    <button onClick={() => toggleSelect(record.orderId)} className="text-slate-300 hover:text-indigo-600 transition-colors">
+                      {selectedRecords.includes(record.orderId) 
+                        ? <CheckSquare size={22} className="text-indigo-600" /> 
+                        : <Square size={22} />
+                      }
+                    </button>
+                  </td>
+                )}
+                <td className="p-6">
+                   <button 
+                     onClick={() => setViewingOrder(record)}
+                     className="flex items-center gap-2 group bg-slate-100/50 px-3 py-1.5 rounded-lg border border-slate-200/50 hover:border-indigo-200 transition-all"
+                   >
+                      <span className="text-xs font-black text-midnight group-hover:text-indigo-600 transition-colors">#{record.orderId}</span>
+                      <ExternalLink size={12} className="text-slate-400" />
+                   </button>
+                </td>
+                <td className="p-6">
+                  <div className="flex items-center gap-3">
+                    <div className="size-8 bg-indigo-50 rounded-lg flex items-center justify-center text-indigo-600 shrink-0">
+                       <Building2 size={16} />
+                    </div>
+                    <div className="flex flex-col">
+                      <span className="text-xs font-black text-midnight uppercase tracking-tight">{record.payeeName}</span>
+                      <div className="flex items-center gap-1 text-[9px] text-slate-400 font-bold italic">
+                        <User size={8} /> Comprador: {record.buyerName}
+                      </div>
+                    </div>
+                  </div>
+                </td>
+                <td className="p-6 text-center">
+                  <div className="flex flex-col items-center gap-1">
+                    <span className={`px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-widest ${
+                      record.orderStatus === 'Pago' || record.orderStatus === 'Concluído' ? 'bg-emerald-100 text-emerald-600' : 'bg-slate-100 text-slate-500'
+                    }`}>
+                      {record.orderStatus}
+                    </span>
+                    <span className={`px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-widest ${
+                      record.deliveryStatus === 'Concluído' ? 'bg-emerald-100 text-emerald-600' : 'bg-amber-100 text-amber-600'
+                    }`}>
+                      {record.deliveryStatus}
+                    </span>
+                  </div>
+                </td>
+                <td className="p-6 text-[11px] font-bold text-slate-500 whitespace-nowrap">{record.saleDate}</td>
+                <td className="p-6 text-right text-xs font-bold text-slate-600 whitespace-nowrap">R$ {record.amount.toFixed(2).replace('.', ',')}</td>
+                <td className="p-6 text-right whitespace-nowrap">
+                  <span className="text-xs font-black text-indigo-600 italic">R$ {record.repasse.toFixed(2).replace('.', ',')}</span>
+                </td>
+                <td className="p-6 text-center">
+                   <div className="flex flex-col items-center">
+                      <span className="text-[10px] font-black text-indigo-600 italic tracking-tighter underline">{record.payDate}</span>
+                      <span className="text-[8px] text-slate-300 font-bold uppercase tracking-widest mt-1">Previsto</span>
+                   </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Modal de Detalhes do Pedido */}
+      <AnimatePresence>
+        {viewingOrder && (
+          <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setViewingOrder(null)}
+              className="absolute inset-0 bg-midnight/80 backdrop-blur-md"
+            />
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.9, opacity: 0, y: 20 }}
+              className="relative w-full max-w-lg bg-white rounded-[3rem] shadow-2xl overflow-hidden border border-white/20 flex flex-col max-h-[90vh]"
+            >
+              <div className="p-10 space-y-8 overflow-y-auto custom-scrollbar">
+                <div className="flex items-center justify-between">
+                   <div className="flex items-center gap-4">
+                      <div className="size-14 bg-indigo-600 rounded-2xl flex items-center justify-center text-white shadow-xl shadow-indigo-600/20">
+                         <Package size={28} />
+                      </div>
+                      <div>
+                         <h4 className="text-2xl font-black text-midnight italic uppercase tracking-tighter leading-none">Pedido #{viewingOrder.orderId}</h4>
+                         <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">Extrato de Auditoria Financeira</p>
+                      </div>
+                   </div>
+                   <button onClick={() => setViewingOrder(null)} className="p-3 hover:bg-slate-100 rounded-2xl transition-all">
+                      <X size={24} className="text-slate-400" />
+                   </button>
+                </div>
+
+                {/* Info Grid */}
+                <div className="grid grid-cols-1 gap-3">
+                   <div className="bg-slate-50 p-6 rounded-[2rem] border border-slate-100 flex items-center gap-4">
+                      <div className="size-10 bg-white rounded-xl flex items-center justify-center text-indigo-600 shadow-sm">
+                         <Building2 size={20} />
+                      </div>
+                      <div className="flex-1">
+                         <p className="text-[9px] text-slate-400 font-black uppercase tracking-widest mb-0.5">Lojista / Beneficiário</p>
+                         <p className="text-sm font-black text-midnight uppercase">{viewingOrder.payeeName}</p>
+                         {viewingOrder.payeeCpf && (
+                           <div className="flex items-center gap-1 mt-1">
+                              <Shield size={10} className="text-slate-300" />
+                              <span className="text-[9px] text-slate-400 font-bold">CPF/CNPJ: {viewingOrder.payeeCpf}</span>
+                           </div>
+                         )}
+                      </div>
+                   </div>
+                   <div className="bg-slate-50 p-6 rounded-[2rem] border border-slate-100 flex items-center gap-4">
+                      <div className="size-10 bg-white rounded-xl flex items-center justify-center text-slate-400 shadow-sm">
+                         <User size={20} />
+                      </div>
+                      <div>
+                         <p className="text-[9px] text-slate-400 font-black uppercase tracking-widest mb-0.5">Cliente Comprador</p>
+                         <p className="text-sm font-black text-midnight uppercase">{viewingOrder.buyerName}</p>
+                      </div>
+                   </div>
+                   <div className="bg-slate-50 p-6 rounded-[2rem] border border-slate-100 flex items-center gap-4">
+                      <div className="size-10 bg-white rounded-xl flex items-center justify-center text-emerald-500 shadow-sm">
+                         <CreditCard size={20} />
+                      </div>
+                      <div>
+                         <p className="text-[9px] text-slate-400 font-black uppercase tracking-widest mb-0.5">Forma de Pagamento</p>
+                         <p className="text-sm font-black text-midnight uppercase">{viewingOrder.paymentMethod || 'Não Informado'}</p>
+                      </div>
+                   </div>
+                </div>
+
+                {/* Product Items List */}
+                <div className="space-y-4">
+                   <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest px-4">Produtos Vinculados</p>
+                   <div className="bg-slate-50 rounded-[2.5rem] border border-slate-100 overflow-hidden">
+                      {viewingOrder.items && viewingOrder.items.length > 0 ? (
+                        <div className="divide-y divide-slate-100">
+                           {viewingOrder.items.map((item: any, idx: number) => (
+                             <div key={idx} className="p-4 flex items-center justify-between">
+                                <div className="flex flex-col">
+                                   <span className="text-xs font-black text-midnight uppercase">{item.name || item.title || 'Produto'}</span>
+                                   <span className="text-[9px] text-slate-400 font-bold italic">Quantidade: {item.quantity || 1}x</span>
+                                </div>
+                                <span className="text-xs font-black text-slate-600 italic">R$ {(item.price || 0).toFixed(2).replace('.', ',')}</span>
+                             </div>
+                           ))}
+                        </div>
+                      ) : (
+                        <div className="p-8 text-center">
+                           <p className="text-[10px] text-slate-300 font-black uppercase italic">Nenhum item detalhado encontrado</p>
+                        </div>
+                      )}
+                   </div>
+                </div>
+
+                {/* Financial Summary */}
+                <div className="space-y-4 pt-6 border-t border-slate-100">
+                   <div className="flex items-center justify-between">
+                      <span className="text-sm font-bold text-slate-500 uppercase tracking-tight">Valor Total da Venda</span>
+                      <span className="text-lg font-black text-midnight tracking-tighter italic">R$ {viewingOrder.amount.toFixed(2).replace('.', ',')}</span>
+                   </div>
+                   <div className="flex items-center justify-between text-slate-400">
+                      <span className="text-xs font-bold uppercase tracking-tight italic">Comissão Serviços Urbanos (20%)</span>
+                      <span className="text-sm font-black text-red-500 italic">- R$ {(viewingOrder.amount * 0.2).toFixed(2).replace('.', ',')}</span>
+                   </div>
+                   
+                   <div className="mt-8 p-8 bg-indigo-600 rounded-[2.5rem] text-white shadow-2xl shadow-indigo-600/20 relative overflow-hidden">
+                      <div className="absolute top-0 right-0 p-4 opacity-10">
+                         <QrCode size={80} />
+                      </div>
+                      <p className="text-[10px] font-black uppercase tracking-[0.2em] mb-1 opacity-80">Líquido a Repassar</p>
+                      <h2 className="text-4xl font-black italic tracking-tighter leading-none">
+                        R$ {viewingOrder.repasse.toFixed(2).replace('.', ',')}
+                      </h2>
+                   </div>
+                </div>
+
+                <button 
+                  onClick={() => setViewingOrder(null)}
+                  className="w-full bg-slate-100 text-slate-600 py-6 rounded-[2rem] font-black text-[11px] uppercase tracking-widest hover:bg-slate-200 transition-all active:scale-95 shadow-sm"
+                >
+                  Fechar Visualização
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
-

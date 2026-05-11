@@ -17,6 +17,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import AdminLayout from '../components/AdminLayout';
 import { businessRules } from '../lib/businessRules';
 import { useAuth } from '../contexts/AuthContext';
+import { supabase } from '../lib/supabase';
 import toast from 'react-hot-toast';
 import FinancialReportTable, { FinancialRecord } from '../components/FinancialReportTable';
 import PaymentModal from '../components/PaymentModal';
@@ -26,6 +27,8 @@ export default function AdminFinancials() {
   const [orders, setOrders] = useState<any[]>([]);
   const [extras, setExtras] = useState<any[]>([]);
   const [payees, setPayees] = useState<Record<string, any>>({});
+  const [matrixPixKey, setMatrixPixKey] = useState('31998007412');
+  const [matrixCpf, setMatrixCpf] = useState('123.456.789-00');
   const [loading, setLoading] = useState(true);
   
   // Payment Flow State
@@ -35,10 +38,18 @@ export default function AdminFinancials() {
   async function loadAdminData() {
     try {
       setLoading(true);
-      const [ordersData, extrasData] = await Promise.all([
+      const [ordersData, extrasData, settingsData] = await Promise.all([
         businessRules.getAllOrders(),
-        businessRules.getAllOrderExtras()
+        businessRules.getAllOrderExtras(),
+        supabase.from('system_settings').select('key, value').in('key', ['matrix_pix_key', 'matrix_cpf'])
       ]);
+
+      if (settingsData.data) {
+        const pix = settingsData.data.find(s => s.key === 'matrix_pix_key')?.value;
+        const cpf = settingsData.data.find(s => s.key === 'matrix_cpf')?.value || '000.000.000-00';
+        setMatrixPixKey(pix || '31998007412');
+        setMatrixCpf(cpf);
+      }
 
       // Somente pedidos com repasse pendente
       const pendingOrders = ordersData.filter(o => o.payoutStatus === 'pending');
@@ -86,7 +97,8 @@ export default function AdminFinancials() {
         const payDate = new Date(saleDate);
         payDate.setDate(payDate.getDate() + 1);
 
-        const payeeId = o.affiliateId || o.userId;
+        const affiliateId = o.affiliateId;
+        const payeeId = affiliateId || null; 
         const payeeKey = payeeId ? String(payeeId) : null;
         const payee = payeeKey ? payees[payeeKey] : null;
 
@@ -100,23 +112,23 @@ export default function AdminFinancials() {
           amount: o.amount,
           repasse: o.amount * 0.8,
           payDate: payDate.toLocaleDateString('pt-BR'),
-          payeeId: String(payeeId || 'unknown'),
-          payeePixKey: payee?.pix_key || (payeeId ? '' : profile?.pix_key || ''),
-          payeeCpf: payee?.cpf || (payeeId ? '' : profile?.cpf || ''),
+          payeeId: String(payeeId || 'matriz'),
+          payeePixKey: payee?.pix_key || (!payeeId ? profile?.pix_key || matrixPixKey || '' : ''),
+          payeeCpf: payee?.cpf || (!payeeId ? profile?.cpf || matrixCpf || '' : ''),
           paymentMethod: o.paymentMethod || 'PIX',
           items: o.items || []
         };
-
-        if (!payeeId) {
-          console.log(`[DEBUG-FINANCEIRO] Pedido Matriz #${o.id} - Chave: ${record.payeePixKey}, CPF: ${record.payeeCpf}`);
+        
+        if (record.payeeId === 'matriz') {
+          // Log discreto para confirmação se necessário
         }
-
+        
         return record;
       });
 
     console.log('[DEBUG-FINANCEIRO] Dados Mapeados:', mapped);
     return mapped;
-  }, [orders, extras, payees, profile]);
+  }, [orders, extras, payees, profile, matrixPixKey, matrixCpf]);
 
   const handleGeneratePayments = (selectedRecords: FinancialRecord[]) => {
     if (selectedRecords.length === 0) {

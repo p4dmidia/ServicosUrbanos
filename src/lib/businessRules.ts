@@ -792,20 +792,6 @@ export const businessRules = {
     
     if (error) throw error;
   },
-
-  getMMNLevels: async () => {
-    const { data, error } = await supabase
-      .from('mmn_levels')
-      .select('*')
-      .order('level', { ascending: true });
-    
-    if (error) {
-      console.error("Error fetching MMN levels:", error);
-      return [];
-    }
-    return data;
-  },
-
   // Cálculos de Rede e Nível
   getNetworkSummary: async (userId: string) => {
     try {
@@ -1331,16 +1317,18 @@ export const businessRules = {
       items: o.items || []
     }));
   },
+  async updateOrderPayoutStatus(orderIds: string[], status: string) {
+    // Converter IDs para números e garantir que são strings para o JSONB se necessário
+    const numericIds = orderIds.map(id => parseInt(id.replace(/\D/g, ''))).filter(id => !isNaN(id));
+    
+    if (numericIds.length === 0) return;
 
-  async updateOrderPayoutStatus(orderIds: string[], status: 'paid' | 'failed', receiptUrl?: string) {
-    const { error } = await supabase
-      .from('orders')
-      .update({ 
-        payout_status: status, 
-        payout_date: new Date().toISOString(),
-        payout_receipt_url: receiptUrl 
-      })
-      .in('id', orderIds);
+    const { error } = await supabase.rpc('update_order_payout', {
+      payload: {
+        order_ids: numericIds,
+        new_status: status
+      }
+    });
     
     if (error) throw error;
   },

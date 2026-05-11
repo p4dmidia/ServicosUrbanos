@@ -67,12 +67,16 @@ export default function PaymentModal({ isOpen, onClose, selectedRecords, onConfi
 
   useEffect(() => {
     if (currentPayee) {
-      console.log('[DEBUG-MODAL] Recebido Payee:', currentPayee);
       // Prioridade: Chave PIX cadastrada > CPF cadastrado > Vazio
       const initialKey = currentPayee.payeePixKey || currentPayee.payeeCpf || '';
-      console.log('[DEBUG-MODAL] Chave Inicial Calculada:', initialKey);
       setManualPixKey(initialKey);
-      setEditingPix(!initialKey || initialKey.trim() === '');
+      
+      // Só entra em modo de edição se a chave estiver vazia
+      if (initialKey && initialKey.trim() !== '' && initialKey !== '000.000.000-00') {
+        setEditingPix(false);
+      } else {
+        setEditingPix(true);
+      }
     }
   }, [currentIndex, currentPayee]);
 

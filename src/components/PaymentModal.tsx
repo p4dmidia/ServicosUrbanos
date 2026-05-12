@@ -216,8 +216,25 @@ export default function PaymentModal({ isOpen, onClose, selectedRecords, onConfi
                 </div>
               </div>
               <div className="text-right">
-                 <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest mb-1">Valor Total</p>
+                 <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest mb-1">Valor Total Líquido</p>
                  <p className="text-4xl font-black text-indigo-600 italic tracking-tighter">R$ {currentPayee.totalAmount.toFixed(2).replace('.', ',')}</p>
+                 
+                 {/* Detalhamento para Afiliados */}
+                 {currentPayee.orders[0]?.buyerName === 'Rede MMN' && (
+                   <div className="flex flex-col items-end gap-1 mt-3 border-t border-slate-100 pt-3">
+                     {currentPayee.orders[0].items?.map((item: any, i: number) => (
+                       <div key={i} className="flex items-center gap-2">
+                         <span className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">{item.name}:</span>
+                         <span className={`text-[9px] font-black ${
+                           item.name.includes('Mensal') ? 'text-emerald-500' : 
+                           item.name.includes('Digital') ? 'text-blue-500' : 'text-indigo-400'
+                         }`}>
+                           R$ {Number(item.price || 0).toFixed(2).replace('.', ',')}
+                         </span>
+                       </div>
+                     ))}
+                   </div>
+                 )}
               </div>
            </div>
 

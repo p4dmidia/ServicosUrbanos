@@ -954,7 +954,7 @@ export default function ProductDetail() {
               { icon: <Package size={24} />, label: "Status do Estoque", value: product.stock > 0 ? `${product.stock} unidades` : 'Sob consulta' },
               { icon: <Award size={24} />, label: "Garantia", value: "12 meses oficial" },
               { icon: <Star size={24} />, label: "Vendas na Rede", value: `${product.sales} unidades` },
-              { icon: <TrendingUp size={24} />, label: "MMN Status", value: "Elegível para comissão" },
+              { icon: <TrendingUp size={24} />, label: "MMN Status", value: "Elegível para cashback" },
             ].map((item, idx) => (
               <div key={idx} className="bg-white p-8 rounded-[2rem] border border-slate-100 shadow-sm hover:shadow-md transition-shadow">
                 <div className="text-midnight mb-4">{item.icon}</div>

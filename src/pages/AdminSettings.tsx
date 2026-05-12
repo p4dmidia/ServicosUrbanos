@@ -402,7 +402,7 @@ export default function AdminSettings() {
 
                     <div className="space-y-6">
                       <div className="space-y-2">
-                        <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Taxa de Comissão da Plataforma</label>
+                        <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Taxa de Cashback da Plataforma</label>
                         <div className="flex items-center gap-6 p-6 bg-white/5 rounded-3xl border border-white/5">
                           <input 
                             type="range" 
@@ -481,7 +481,7 @@ export default function AdminSettings() {
           {/* Footer Action */}
           <div className="p-8 lg:p-12 border-t border-white/5 flex items-center justify-between gap-6">
             <p className="text-[10px] text-slate-600 font-bold uppercase tracking-[0.2em] hidden md:block italic">
-              Atenção: Alterações nas configurações MMN afetam cálculos de comissões futuras.
+              Atenção: Alterações nas configurações MMN afetam cálculos de cashbacks futuros.
             </p>
             <button 
               onClick={handleSave}

@@ -817,7 +817,7 @@ export default function MerchantSettings() {
                     <tr className="border-b border-slate-100">
                       <th className="py-4 text-[10px] text-midnight uppercase">Gerente</th>
                       <th className="py-4 text-[10px] text-midnight uppercase">Filial</th>
-                      <th className="py-4 text-[10px] text-midnight uppercase text-center">Comissão</th>
+                      <th className="py-4 text-[10px] text-midnight uppercase text-center">Cashback</th>
                       <th className="py-4 text-[10px] text-midnight uppercase text-right">Ações</th>
                     </tr>
                   </thead>
@@ -1001,10 +1001,10 @@ export default function MerchantSettings() {
                   </div>
 
                   <div className="space-y-1">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Comissão Gerencial (%)</label>
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Cashback Gerencial (%)</label>
                     <div className="relative">
                       <DollarSign className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-                      <input required type="number" placeholder="Comissão (%)" value={newMember.commissionRate} onChange={e => setNewMember({...newMember, commissionRate: parseInt(e.target.value)})} className="w-full pl-12 pr-4 py-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold text-midnight" />
+                      <input required type="number" placeholder="Cashback (%)" value={newMember.commissionRate} onChange={e => setNewMember({...newMember, commissionRate: parseInt(e.target.value)})} className="w-full pl-12 pr-4 py-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold text-midnight" />
                     </div>
                   </div>
                 <button type="submit" className="w-full bg-primary-blue text-white py-4 rounded-2xl font-black uppercase tracking-widest mt-4">
@@ -1076,10 +1076,10 @@ export default function MerchantSettings() {
                   </div>
 
                   <div className="space-y-1">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Comissão Gerencial (%)</label>
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Cashback Gerencial (%)</label>
                     <div className="relative">
                       <DollarSign className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-                      <input required type="number" placeholder="Comissão (%)" value={editingMember.commissionRate} onChange={e => setEditingMember({...editingMember, commissionRate: parseInt(e.target.value)})} className="w-full pl-12 pr-4 py-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold text-midnight" />
+                      <input required type="number" placeholder="Cashback (%)" value={editingMember.commissionRate} onChange={e => setEditingMember({...editingMember, commissionRate: parseInt(e.target.value)})} className="w-full pl-12 pr-4 py-4 bg-slate-50 border border-slate-200 rounded-2xl font-bold text-midnight" />
                     </div>
                   </div>
                 </div>

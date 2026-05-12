@@ -117,7 +117,7 @@ export default function MerchantReports() {
       .reduce((acc, r) => acc + r.repasse, 0);
 
     const kpiList = [
-      { title: 'Total Comissões', value: totalCommissions, trend: 0, isPositive: true },
+      { title: 'Total Cashbacks', value: totalCommissions, trend: 0, isPositive: true },
       { title: 'Volume de Vendas', value: totalSales, trend: 0, isPositive: true },
       { title: 'Média por Pedido', value: avgCommission, trend: 0, isPositive: true },
       { title: 'Pendentes Liberação', value: pendingCommissions, trend: 0, isPositive: false }
@@ -172,7 +172,7 @@ export default function MerchantReports() {
   }
 
   return (
-    <MerchantLayout title="Relatórios de Comissões" subtitle="Controle de pagamentos para gerentes de filiais">
+    <MerchantLayout title="Relatórios de Cashbacks" subtitle="Controle de pagamentos para gerentes de filiais">
       <div className="p-8 lg:p-12 space-y-12">
         
         {/* Header Actions */}
@@ -234,8 +234,8 @@ export default function MerchantReports() {
           <div className="lg:col-span-2 bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm flex flex-col">
             <div className="flex items-center justify-between mb-12">
               <div>
-                <h3 className="text-xl font-black text-midnight tracking-tighter uppercase italic">Evolução de Comissões</h3>
-                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Total de comissões geradas por dia</p>
+                <h3 className="text-xl font-black text-midnight tracking-tighter uppercase italic">Evolução de Cashbacks</h3>
+                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Total de cashbacks geradas por dia</p>
               </div>
               <div className="size-12 bg-primary-blue/10 rounded-2xl flex items-center justify-center text-primary-blue">
                 <LineChart size={24} />
@@ -280,7 +280,7 @@ export default function MerchantReports() {
               <div className="absolute -right-10 -top-10 size-40 bg-purple-500 rounded-full blur-[60px] opacity-20 pointer-events-none"></div>
               
               <div className="flex items-center justify-between mb-8 relative z-10">
-                <h3 className="text-lg font-black text-white tracking-tighter uppercase italic">Comissões por Filial</h3>
+                <h3 className="text-lg font-black text-white tracking-tighter uppercase italic">Cashbacks por Filial</h3>
                 <PieChart className="text-slate-400" size={20} />
               </div>
 

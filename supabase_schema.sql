@@ -194,11 +194,11 @@ BEGIN
         (OLD.status IS NULL OR OLD.status NOT IN ('Pago, Aguardando Retirada', 'Concluído'))
     ) THEN
         
-        -- [TRAVA DE SEGURANÇA]
-        -- Verifica se já existem transações de comissão para este pedido
+        -- Verifica se já existem transações de cashback para este pedido
         IF EXISTS (
             SELECT 1 FROM public.transactions 
-            WHERE description LIKE '%Pedido #' || NEW.id || '%' 
+            WHERE (description LIKE 'Cashback%' OR description LIKE 'Comissão MMN%') 
+            AND description LIKE '%Pedido #' || NEW.id || '%' 
             AND type = 'commission'
         ) THEN
             RETURN NEW;
@@ -232,32 +232,32 @@ BEGIN
             v_digital := ROUND(commission_val * (p_digital / (p_mensal + p_digital + p_anual)), 2);
             v_anual := commission_val - (v_mensal + v_digital); -- Resíduo no anual
             
-            -- 1. Bônus Mensal
+            -- 1. Cashback Mensal
             INSERT INTO public.transactions (profile_id, type, description, amount, status)
             VALUES (
                 commission_record.upline_id, 
                 'commission', 
-                'Comissão MMN (Mensal) - Pedido #' || NEW.id || ' (Nível ' || commission_record.level || ')', 
+                'Cashback Mensal - Pedido #' || NEW.id || ' (Nível ' || commission_record.level || ')', 
                 v_mensal, 
                 'completed'
             );
 
-            -- 2. Bônus Anual
+            -- 2. Cashback Anual
             INSERT INTO public.transactions (profile_id, type, description, amount, status)
             VALUES (
                 commission_record.upline_id, 
                 'commission', 
-                'Comissão MMN (Anual) - Pedido #' || NEW.id || ' (Nível ' || commission_record.level || ')', 
+                'Cashback Anual - Pedido #' || NEW.id || ' (Nível ' || commission_record.level || ')', 
                 v_anual, 
                 'completed'
             );
 
-            -- 3. Bônus Carteira Digital (CD)
+            -- 3. Cashback Digital
             INSERT INTO public.transactions (profile_id, type, description, amount, status)
             VALUES (
                 commission_record.upline_id, 
                 'commission', 
-                'Comissão MMN (CD) - Pedido #' || NEW.id || ' (Nível ' || commission_record.level || ')', 
+                'Cashback Digital - Pedido #' || NEW.id || ' (Nível ' || commission_record.level || ')', 
                 v_digital, 
                 'completed'
             );

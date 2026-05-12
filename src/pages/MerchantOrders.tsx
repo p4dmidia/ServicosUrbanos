@@ -312,7 +312,7 @@ export default function MerchantOrders() {
                                   </button>
                                   <button 
                                     onClick={() => {
-                                      if(confirm('Confirmar recebimento do pagamento? Isso também liberará as comissões na rede.')) {
+                                      if(confirm('Confirmar recebimento do pagamento? Isso também liberará os cashbacks na rede.')) {
                                         handleUpdateStatus(o.id, 'Pago, Aguardando Retirada');
                                       }
                                     }}
@@ -542,7 +542,7 @@ export default function MerchantOrders() {
                     </button>
                     <button 
                       onClick={() => {
-                        if(confirm('Confirmar recebimento do pagamento? Isso também liberará as comissões na rede.')) {
+                        if(confirm('Confirmar recebimento do pagamento? Isso também liberará os cashbacks na rede.')) {
                           handleUpdateStatus(selectedOrder.id, 'Pago, Aguardando Retirada');
                           setShowDetailsModal(false);
                         }

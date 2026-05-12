@@ -85,7 +85,7 @@ export default function AdminDashboard() {
       icon: Store, color: 'text-emerald-500' 
     },
     { 
-      title: 'Comissões MMN', 
+      title: 'Cashbacks MMN', 
       value: `R$ ${globalStats?.commissionTotal?.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) || '0,00'}`, 
       trend: `${(globalStats?.commissionTrend || 0) >= 0 ? '+' : ''}${globalStats?.commissionTrend?.toFixed(1) || '0'}%`, 
       isPositive: (globalStats?.commissionTrend || 0) >= 0, 

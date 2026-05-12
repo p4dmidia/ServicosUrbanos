@@ -159,7 +159,7 @@ export default function AffiliateEcosystem() {
                     é centralizado no seu painel.
                  </h2>
                  <p className="text-slate-400 font-medium">
-                    Indique usuários para qualquer app do grupo e acompanhe as comissões unificadas na sua carteira digital. 
+                    Indique usuários para qualquer app do grupo e acompanhe os cashbacks unificados na sua carteira digital. 
                     Simples, rápido e transparente.
                  </p>
               </div>

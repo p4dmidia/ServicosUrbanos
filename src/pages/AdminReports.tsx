@@ -33,16 +33,20 @@ export default function AdminReports() {
   const [extras, setExtras] = useState<any[]>([]);
   const [payees, setPayees] = useState<Record<string, any>>({});
   const [isBIModalOpen, setIsBIModalOpen] = useState(false);
+  const [viewType, setViewType] = useState<'merchants' | 'affiliates'>('merchants');
+  const [affiliatePayouts, setAffiliatePayouts] = useState<any[]>([]);
 
   const loadData = async () => {
     setLoading(true);
     try {
-      const [reports, ordersData, extrasData] = await Promise.all([
+      const [reports, ordersData, extrasData, affiliatePayoutsData] = await Promise.all([
         businessRules.getAdminReportsData(dateRange),
         businessRules.getAllOrders(),
-        businessRules.getAllOrderExtras()
+        businessRules.getAllOrderExtras(),
+        businessRules.getAffiliatePayouts()
       ]);
       
+      setAffiliatePayouts(affiliatePayoutsData);
       // Somente pedidos com repasse pago
       const paidOrders = ordersData.filter(o => o.payoutStatus === 'paid');
       
@@ -99,34 +103,56 @@ export default function AdminReports() {
   };
 
   const financialReportData: FinancialRecord[] = useMemo(() => {
-    // No Relatório, mostramos apenas o que JÁ FOI PAGO
-    return orders
-      .filter(o => o.payoutStatus === 'paid')
-      .map(o => {
-        const extra = extras.find(e => e.id === o.id);
-        const saleDate = new Date(o.date || o.created_at);
-        
-        const payDate = o.payoutDate ? new Date(o.payoutDate) : new Date(saleDate);
-        if (!o.payoutDate) payDate.setDate(payDate.getDate() + 1);
+    if (viewType === 'merchants') {
+      // No Relatório, mostramos apenas o que JÁ FOI PAGO (Lojistas)
+      return orders
+        .filter(o => o.payoutStatus === 'paid')
+        .map(o => {
+          const extra = extras.find(e => e.id === o.id);
+          const saleDate = new Date(o.date || o.created_at);
+          
+          const payDate = o.payoutDate ? new Date(o.payoutDate) : new Date(saleDate);
+          if (!o.payoutDate) payDate.setDate(payDate.getDate() + 1);
 
-        const payeeId = o.affiliateId || o.userId;
-        const payee = payeeId ? payees[String(payeeId)] : null;
+          const payeeId = o.affiliateId || o.userId;
+          const payee = payeeId ? payees[String(payeeId)] : null;
 
-        return {
-          orderId: String(o.id),
-          buyerName: o.customerName || 'Cliente',
-          orderStatus: o.status === 'Concluído' ? 'Pago' : o.status,
-          deliveryStatus: (extra?.status as any) || 'Pendente',
-          saleDate: saleDate.toLocaleDateString('pt-BR'),
-          amount: o.amount,
-          repasse: o.amount * 0.8,
-          payDate: payDate.toLocaleDateString('pt-BR'),
-          payeeId: String(payeeId || 'unknown'),
-          payeeName: payee?.full_name || (payeeId ? 'Destinatário não identificado' : 'Sem vínculo (Admin)'),
-          payeePixKey: payee?.pix_key || ''
-        };
-      });
-  }, [orders, extras, payees]);
+          return {
+            orderId: String(o.id),
+            buyerName: o.customerName || 'Cliente',
+            orderStatus: o.status === 'Concluído' ? 'Pago' : o.status,
+            deliveryStatus: (extra?.status as any) || 'Pendente',
+            saleDate: saleDate.toLocaleDateString('pt-BR'),
+            amount: o.amount,
+            repasse: o.amount * 0.8,
+            payDate: payDate.toLocaleDateString('pt-BR'),
+            payeeId: String(payeeId || 'unknown'),
+            payeeName: payee?.full_name || (payeeId ? 'Destinatário não identificado' : 'Sem vínculo (Admin)'),
+            payeePixKey: payee?.pix_key || ''
+          };
+        });
+    } else {
+      // Relatório de Afiliados (JÁ PAGOS)
+      return affiliatePayouts.map(p => ({
+        id: p.id,
+        orderId: `REP-${p.id.substring(0, 8)}`,
+        buyerName: 'Rede MMN',
+        payeeName: p.profiles?.full_name || 'Afiliado',
+        payeeId: p.profile_id,
+        amount: p.amount,
+        repasse: p.amount,
+        mensal: p.mensal_amount || 0,
+        digital: p.digital_amount || 0,
+        anual: p.anual_amount || 0,
+        saleDate: new Date(p.payout_date).toLocaleDateString('pt-BR'),
+        payDate: new Date(p.payout_date).toLocaleDateString('pt-BR'),
+        orderStatus: 'Liquidado',
+        deliveryStatus: 'Pago',
+        payeePixKey: p.pix_key || '',
+        cpf: p.profiles?.cpf || '---'
+      }));
+    }
+  }, [orders, extras, payees, viewType, affiliatePayouts]);
 
   if (loading) {
     return (
@@ -281,9 +307,35 @@ export default function AdminReports() {
            </div>
         </div>
 
+        {/* Toggle de Visualização de Repasses */}
+        <div className="flex bg-white p-2 rounded-2xl shadow-sm border border-slate-100 w-fit">
+          <button
+            onClick={() => setViewType('merchants')}
+            className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
+              viewType === 'merchants' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-slate-600'
+            }`}
+          >
+            Lojistas
+          </button>
+          <button
+            onClick={() => setViewType('affiliates')}
+            className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
+              viewType === 'affiliates' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-slate-600'
+            }`}
+          >
+            Afiliados
+          </button>
+        </div>
+
         {/* Detalhamento Financeiro - Apenas Pagos */}
         <div className="bg-white rounded-[2.5rem] overflow-hidden shadow-2xl">
-           <FinancialReportTable data={financialReportData} title="Repasses Liquidados (Já Pagos)" isAdmin={true} />
+           <FinancialReportTable 
+              data={viewType === 'merchants' ? financialReportData : []} 
+              affiliateData={viewType === 'affiliates' ? financialReportData : []}
+              title={viewType === 'merchants' ? "Repasses Liquidados (Lojistas)" : "Repasses Liquidados (Afiliados)"} 
+              isAdmin={true} 
+              mode={viewType}
+           />
         </div>
 
       </div>

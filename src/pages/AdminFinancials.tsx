@@ -34,14 +34,23 @@ export default function AdminFinancials() {
   // Payment Flow State
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [selectedForPayment, setSelectedForPayment] = useState<FinancialRecord[]>([]);
+  
+  // View State
+  const [viewType, setViewType] = useState<'merchants' | 'affiliates'>('merchants');
+  const [dateRange, setDateRange] = useState({
+    start: new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0],
+    end: new Date().toISOString().split('T')[0]
+  });
+  const [affiliateReport, setAffiliateReport] = useState<any[]>([]);
 
   async function loadAdminData() {
     try {
       setLoading(true);
-      const [ordersData, extrasData, settingsData] = await Promise.all([
+      const [ordersData, extrasData, settingsData, affiliateData] = await Promise.all([
         businessRules.getAllOrders(),
         businessRules.getAllOrderExtras(),
-        supabase.from('system_settings').select('key, value').in('key', ['matrix_pix_key', 'matrix_cpf'])
+        supabase.from('system_settings').select('key, value').in('key', ['matrix_pix_key', 'matrix_cpf']),
+        businessRules.getAffiliateCashbackReport(dateRange.start, `${dateRange.end}T23:59:59`)
       ]);
 
       if (settingsData.data) {
@@ -70,6 +79,7 @@ export default function AdminFinancials() {
 
       setOrders(ordersData);
       setExtras(extrasData);
+      setAffiliateReport(affiliateData);
 
     } catch (error) {
       console.error('Erro ao carregar dados financeiros admin:', error);
@@ -83,7 +93,7 @@ export default function AdminFinancials() {
     if (profile && !authLoading) {
       loadAdminData();
     }
-  }, [profile, authLoading]);
+  }, [profile, authLoading, dateRange]);
 
   const reportData: FinancialRecord[] = useMemo(() => {
     console.log('[DEBUG-FINANCEIRO] Profile Atual:', profile);
@@ -130,29 +140,89 @@ export default function AdminFinancials() {
     return mapped;
   }, [orders, extras, payees, profile, matrixPixKey, matrixCpf]);
 
-  const handleGeneratePayments = (selectedRecords: FinancialRecord[]) => {
-    if (selectedRecords.length === 0) {
+  // Filtro para mostrar apenas afiliados com saldo pendente
+  const filteredAffiliateData = useMemo(() => {
+    return affiliateReport.filter(r => (r.mensal + r.digital + r.anual) > 0.01);
+  }, [affiliateReport]);
+
+  const handleGeneratePayments = (selectedItems: any[]) => {
+    if (selectedItems.length === 0) {
       toast.error('Nenhum registro selecionado para pagamento.');
       return;
     }
 
-    setSelectedForPayment(selectedRecords);
+    // Se estiver no modo afiliados, transformamos para o formato que o PaymentModal espera
+    if (viewType === 'affiliates') {
+      const transformed = selectedItems.map(r => ({
+        orderId: `CASH-${r.id.substring(0, 5)}`,
+        buyerName: 'Rede MMN',
+        payeeName: r.name,
+        orderStatus: 'Concluído',
+        deliveryStatus: 'Concluído',
+        saleDate: new Date().toLocaleDateString('pt-BR'),
+        amount: r.mensal,
+        repasse: r.mensal, // No modo afiliado, o repasse líquido a pagar é apenas o mensal
+        payDate: new Date().toLocaleDateString('pt-BR'),
+        payeeId: r.id,
+        payeePixKey: r.pix_key,
+        payeeCpf: r.cpf,
+        paymentMethod: 'PIX',
+        items: [
+          { name: 'Cashback Mensal', price: r.mensal },
+          { name: 'Cashback Digital', price: r.digital },
+          { name: 'Cashback Anual', price: r.anual }
+        ]
+      }));
+      setSelectedForPayment(transformed);
+    } else {
+      setSelectedForPayment(selectedItems);
+    }
+    
     setIsPaymentModalOpen(true);
   };
 
   const handleConfirmPayment = async (payeeGroup: any) => {
     try {
-      const orderIds = payeeGroup.orders.map((o: any) => o.orderId);
-      await businessRules.updateOrderPayoutStatus(orderIds, 'paid');
+      if (viewType === 'merchants') {
+        const orderIds = payeeGroup.orders.map((o: any) => o.orderId);
+        await businessRules.updateOrderPayoutStatus(orderIds, 'paid');
+        
+        setOrders(prev => prev.map(o => 
+          orderIds.includes(String(o.id)) ? { ...o, payoutStatus: 'paid' } : o
+        ));
+      } else {
+        // 1. Registramos o histórico na tabela de relatórios
+        await businessRules.registerAffiliatePayout({
+          profile_id: payeeGroup.payeeId,
+          amount: payeeGroup.totalAmount,
+          mensal: payeeGroup.orders[0]?.items?.find((i: any) => i.name.includes('Mensal'))?.price || 0,
+          digital: payeeGroup.orders[0]?.items?.find((i: any) => i.name.includes('Digital'))?.price || 0,
+          anual: payeeGroup.orders[0]?.items?.find((i: any) => i.name.includes('Anual'))?.price || 0,
+          pix_key: payeeGroup.payeePixKey
+        });
+
+        // 2. Mudamos o status das transações para 'paid' (IGUAL AO LOJISTA)
+        const { error: updateError } = await supabase
+          .from('transactions')
+          .update({ status: 'paid' })
+          .eq('profile_id', payeeGroup.payeeId)
+          .eq('type', 'commission')
+          .eq('status', 'pending');
+
+        if (updateError) throw updateError;
+        
+        toast.success(`Pagamento de R$ ${payeeGroup.totalAmount.toFixed(2)} para ${payeeGroup.payeeName} liquidado.`);
+        
+        // 3. Recarrega os dados
+        await loadAdminData();
+      }
       
-      setOrders(prev => prev.map(o => 
-        orderIds.includes(String(o.id)) ? { ...o, payoutStatus: 'paid' } : o
-      ));
-      
-      toast.success('Pagamento registrado com sucesso!');
-    } catch (error) {
-      console.error('Erro ao confirmar pagamento:', error);
-      toast.error('Erro ao atualizar status no banco.');
+      toast.success('Pagamento processado com sucesso!');
+    } catch (error: any) {
+      console.error('Erro detalhado ao confirmar pagamento:', error);
+      // Mostra o erro real do banco para sabermos o que está faltando
+      const errorMsg = error.message || error.details || 'Falha ao atualizar status no banco.';
+      toast.error(`Erro no Banco: ${errorMsg}`);
     }
   };
 
@@ -174,6 +244,60 @@ export default function AdminFinancials() {
   return (
     <AdminLayout title="Gestão de Pagamentos PIX" subtitle="Auditoria global de repasses para lojistas e parceiros">
       <div className="p-8 lg:p-12 space-y-12">
+        
+        {/* Toggle de Visualização e Filtros */}
+        <div className="flex flex-col md:flex-row items-center justify-between gap-6 bg-white p-6 rounded-[2.5rem] shadow-xl border border-slate-100">
+          <div className="flex bg-slate-100 p-1.5 rounded-2xl w-full md:w-auto">
+            <button
+              onClick={() => setViewType('merchants')}
+              className={`flex-1 md:flex-none px-8 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
+                viewType === 'merchants' ? 'bg-white text-indigo-600 shadow-md' : 'text-slate-400 hover:text-slate-600'
+              }`}
+            >
+              Lojistas
+            </button>
+            <button
+              onClick={() => setViewType('affiliates')}
+              className={`flex-1 md:flex-none px-8 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
+                viewType === 'affiliates' ? 'bg-white text-indigo-600 shadow-md' : 'text-slate-400 hover:text-slate-600'
+              }`}
+            >
+              Afiliados
+            </button>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-4 w-full md:w-auto">
+            <div className="flex items-center gap-3 bg-slate-50 px-4 py-2 rounded-2xl border border-slate-100">
+              <Clock size={16} className="text-indigo-500" />
+              <input 
+                type="date" 
+                value={dateRange.start}
+                onChange={(e) => setDateRange(prev => ({ ...prev, start: e.target.value }))}
+                className="bg-transparent text-[10px] font-black text-slate-600 outline-none"
+              />
+              <span className="text-slate-300 text-[10px]">Até</span>
+              <input 
+                type="date" 
+                value={dateRange.end}
+                onChange={(e) => setDateRange(prev => ({ ...prev, end: e.target.value }))}
+                className="bg-transparent text-[10px] font-black text-slate-600 outline-none"
+              />
+            </div>
+            
+            <button 
+              onClick={() => {
+                const now = new Date();
+                setDateRange({
+                  start: new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0],
+                  end: new Date().toISOString().split('T')[0]
+                });
+              }}
+              className="px-6 py-3 bg-indigo-50 text-indigo-600 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-indigo-100 transition-all"
+            >
+              Este Mês
+            </button>
+          </div>
+        </div>
         
         {/* Banner de Regras */}
         <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
@@ -219,9 +343,11 @@ export default function AdminFinancials() {
         {/* Tabela de Relatórios */}
         <div className="bg-white rounded-[3rem] overflow-hidden shadow-2xl border border-slate-100">
            <FinancialReportTable 
-             data={reportData} 
-             title="Auditoria de Pedidos Pendentes" 
+             data={viewType === 'merchants' ? reportData : []} 
+             affiliateData={viewType === 'affiliates' ? filteredAffiliateData : []}
+             title={viewType === 'merchants' ? "Auditoria de Pedidos Pendentes" : "Relatório de Cashbacks por Afiliado"} 
              isAdmin={true} 
+             mode={viewType}
              onGeneratePayments={handleGeneratePayments}
            />
         </div>

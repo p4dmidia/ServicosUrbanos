@@ -92,7 +92,7 @@ export default function AdminMarketplace() {
   };
 
   const handleUpdateCommission = async () => {
-    const newRate = prompt('Defina a nova comissão global (%):', config.commissionRate.toString());
+    const newRate = prompt('Defina o novo cashback global (%):', config.commissionRate.toString());
     if (newRate === null) return;
     
     const rate = parseFloat(newRate);
@@ -101,10 +101,10 @@ export default function AdminMarketplace() {
     setIsSaving(true);
     try {
       await businessRules.updateMarketplaceConfig({ commissionRate: rate });
-      toast.success('Comissão global atualizada!');
+      toast.success('Cashback global atualizado!');
       setConfig({ commissionRate: rate });
     } catch (error) {
-      toast.error('Erro ao salvar comissão.');
+      toast.error('Erro ao salvar cashback.');
     } finally {
       setIsSaving(false);
     }
@@ -157,7 +157,7 @@ export default function AdminMarketplace() {
               </div>
               <h2 className="text-2xl lg:text-3xl font-black text-white tracking-tighter uppercase italic leading-none mb-4">Parâmetros do Marketplace</h2>
               <p className="text-slate-400 text-sm font-medium leading-relaxed">
-                A comissão padrão atual da UrbaShop é de <strong>{config.commissionRate}%</strong>. Você pode ajustar este valor global ou definir taxas específicas por categoria de produto.
+                O cashback padrão atual da UrbaShop é de <strong>{config.commissionRate}%</strong>. Você pode ajustar este valor global ou definir taxas específicas por categoria de produto.
               </p>
             </div>
             <div className="flex flex-wrap justify-center gap-4">

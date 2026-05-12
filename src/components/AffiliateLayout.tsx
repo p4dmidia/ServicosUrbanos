@@ -75,7 +75,7 @@ export default function AffiliateLayout({ children, title }: AffiliateLayoutProp
       if (permission === "granted") {
         toast.success("Notificações ativadas com sucesso!");
         new Notification("Serviços Urbanos", {
-          body: "Parabéns! Você receberá alertas de novas comissões.",
+          body: "Parabéns! Você receberá alertas de novos cashbacks.",
           icon: "/vite.svg"
         });
       }

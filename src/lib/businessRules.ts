@@ -877,17 +877,17 @@ export const businessRules = {
       // Cálculo Real baseado no PRD (Divisão Tripla)
       // Buscamos por palavras-chave na descrição ou tipo de forma mais flexível
       const monthlyBonus = transactions
-        .filter(t => (t.description?.includes('(Mensal)') || t.description?.includes('Mensal')) && 
+        .filter(t => (t.description?.includes('Mensal')) && 
                 (t.status === 'completed' || t.status === 'pago'))
         .reduce((acc, t) => acc + Number(t.amount || 0), 0);
 
       const annualBonus = transactions
-        .filter(t => (t.description?.includes('(Anual)') || t.description?.includes('Anual')) && 
+        .filter(t => (t.description?.includes('Anual')) && 
                 (t.status === 'completed' || t.status === 'pago'))
         .reduce((acc, t) => acc + Number(t.amount || 0), 0);
 
       const walletBonus = transactions
-        .filter(t => (t.description?.includes('(CD)') || t.description?.includes('Digital')) && 
+        .filter(t => (t.description?.includes('Digital') || t.description?.includes('(CD)')) && 
                 (t.status === 'completed' || t.status === 'pago'))
         .reduce((acc, t) => acc + Number(t.amount || 0), 0);
 
@@ -1050,7 +1050,7 @@ export const businessRules = {
         const orderId = orderMatch ? orderMatch[1].trim() : null;
         const order = orderId ? ordersMap.get(orderId) : null;
 
-        const typeMatch = t.description?.match(/\((Mensal|Anual|CD|Digital)\)/i);
+        const typeMatch = t.description?.match(/(Mensal|Anual|Digital|CD)/i);
         let cashbackType = typeMatch ? typeMatch[1] : 'Outros';
         if (cashbackType === 'CD') cashbackType = 'Digital';
 
@@ -1395,7 +1395,7 @@ export const businessRules = {
         if (t.type === 'commission') {
           logs.push({
             type: 'Success',
-            text: `Comissão gerada: R$ ${Number(t.amount).toFixed(2)} - ${t.description.split(' (')[0]}`,
+            text: `Cashback gerado: R$ ${Number(t.amount).toFixed(2)} - ${t.description.split(' - ')[0]}`,
             time: new Date(t.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
             date: new Date(t.created_at)
           });
@@ -1698,12 +1698,164 @@ export const businessRules = {
         values: values,
         labels: labels
       },
-      distribution: [
-        { label: 'UrbaShop', percent: '100%', color: 'bg-indigo-600' },
-        { label: 'UrbaPay', percent: '0%', color: 'bg-purple-500' },
-        { label: 'Outros', percent: '0%', color: 'bg-emerald-500' },
-      ]
+      payoutRate: platformRate
     };
+  },
+
+  getAffiliateCashbackReport: async (startDate: string, endDate: string) => {
+    try {
+      // 1. Busca as transações de comissão
+      const { data: transactions, error: transError } = await supabase
+        .from('transactions')
+        .select('id, profile_id, type, description, amount, created_at, status')
+        .eq('type', 'commission')
+        .eq('status', 'pending')
+        .gte('created_at', startDate)
+        .lte('created_at', endDate);
+
+      if (transError) throw transError;
+      if (!transactions || transactions.length === 0) return [];
+
+      // 2. Coleta IDs únicos de perfis
+      const profileIds = [...new Set(transactions.map(t => (t as any).profile_id).filter(Boolean))];
+
+      // 3. Busca os perfis (tabela 'profiles')
+      const { data: profiles, error: profError } = await supabase
+        .from('profiles')
+        .select('id, full_name, pix_key, pix_type, cpf')
+        .in('id', profileIds);
+
+      if (profError) {
+        console.error('Error fetching profiles for report:', profError);
+      }
+
+      const profilesMap: Record<string, any> = {};
+      profiles?.forEach(p => {
+        profilesMap[String(p.id)] = p;
+      });
+
+      // 4. Agrupa e une os dados
+      const report: Record<string, any> = {};
+
+      transactions.forEach(t => {
+        const profileId = (t as any).profile_id;
+        if (!profileId) return;
+
+        const profile = profilesMap[String(profileId)];
+
+        if (!report[profileId]) {
+          report[profileId] = {
+            id: String(profileId),
+            name: profile?.full_name || 'Desconhecido',
+            pix_key: profile?.pix_key || '---',
+            pix_type: profile?.pix_type || '---',
+            cpf: profile?.cpf || '---',
+            mensal: 0,
+            anual: 0,
+            digital: 0,
+            total: 0
+          };
+        }
+
+        const amount = Number(t.amount);
+        const desc = (t.description || '').toLowerCase();
+        const type = (t as any).type;
+
+        // Se for uma comissão, distribui nos potes
+        if (type === 'commission') {
+          if (desc.includes('mensal')) {
+            report[profileId].mensal += amount;
+          } else if (desc.includes('anual')) {
+            report[profileId].anual += amount;
+          } else if (desc.includes('digital') || desc.includes('cd')) {
+            report[profileId].digital += amount;
+          }
+        } 
+        // Se for uma saída (pagamento realizado), abate do saldo mensal
+        else if (type === 'withdrawal') {
+          report[profileId].mensal += amount; // amount já é negativo
+        }
+        
+        report[profileId].total += amount;
+      });
+
+      return Object.values(report).sort((a: any, b: any) => b.total - a.total);
+    } catch (error) {
+      console.error('Error fetching affiliate cashback report:', error);
+      return [];
+    }
+  },
+
+  registerAffiliatePayout: async (payoutData: {
+    profile_id: string;
+    amount: number;
+    mensal: number;
+    digital: number;
+    anual: number;
+    pix_key: string;
+  }) => {
+    try {
+      const { data, error } = await supabase
+        .from('affiliate_payouts')
+        .insert([{
+          profile_id: payoutData.profile_id,
+          amount: payoutData.amount,
+          mensal_amount: payoutData.mensal,
+          digital_amount: payoutData.digital,
+          anual_amount: payoutData.anual,
+          pix_key: payoutData.pix_key,
+          status: 'paid'
+        }])
+        .select();
+
+      if (error) throw error;
+
+      // Opcional: Marcar as transações como processadas no futuro
+      return data;
+    } catch (error) {
+      console.error('Error registering affiliate payout:', error);
+      throw error;
+    }
+  },
+
+  registerTransaction: async (transaction: {
+    profile_id: string;
+    type: string;
+    description: string;
+    amount: number;
+    status: string;
+    order_id?: string;
+  }) => {
+    try {
+      const { data, error } = await supabase
+        .from('transactions')
+        .insert([transaction])
+        .select();
+
+      if (error) throw error;
+      return data;
+    } catch (error) {
+      console.error('Error registering transaction:', error);
+      throw error;
+    }
+  },
+
+  getAffiliatePayouts: async () => {
+    try {
+      const { data, error } = await supabase
+        .from('affiliate_payouts')
+        .select(`
+          *,
+          profiles:profile_id (full_name, cpf)
+        `)
+        .order('payout_date', { ascending: false });
+
+      if (error) throw error;
+      return data;
+    } catch (error) {
+      console.error('Error fetching affiliate payouts:', error);
+      return [];
+    }
   },
 
   searchEcosystem: async (query: string) => {

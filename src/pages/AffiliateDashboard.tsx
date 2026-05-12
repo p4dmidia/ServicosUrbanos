@@ -281,7 +281,7 @@ export default function AffiliateDashboard() {
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-10">
             <div>
               <h2 className="text-2xl font-black text-midnight tracking-tight italic uppercase">Atividade no Ecossistema</h2>
-              <p className="text-slate-500 font-medium">Histórico de consumos e comissões geradas recentemente.</p>
+              <p className="text-slate-500 font-medium">Histórico de consumos e cashbacks gerados recentemente.</p>
             </div>
             <button className="flex items-center gap-2 text-xs font-black text-slate-400 hover:text-midnight transition-colors tracking-widest uppercase">
               Ver Histórico Completo
@@ -317,14 +317,14 @@ export default function AffiliateDashboard() {
                       className="group hover:bg-slate-50 transition-all border-b border-slate-50 last:border-0"
                     >
                       <td className="py-6 pl-4">
-                         <div className="flex items-center gap-3">
+                          <div className="flex items-center gap-3">
                             <div className={`size-10 rounded-xl flex items-center justify-center ${
-                              item.type === 'Comissão' ? 'bg-emerald-50 text-emerald-600' : 'bg-primary-blue/10 text-primary-blue'
+                              item.type === 'commission' || item.type === 'Comissão' ? 'bg-emerald-50 text-emerald-600' : 'bg-primary-blue/10 text-primary-blue'
                             }`}>
-                              {item.type === 'Comissão' ? <ArrowUpRight size={18} /> : <ExternalLink size={18} />}
+                              {item.type === 'commission' || item.type === 'Comissão' ? <ArrowUpRight size={18} /> : <ExternalLink size={18} />}
                             </div>
-                            <span className="font-bold text-sm tracking-tight">{item.type}</span>
-                         </div>
+                            <span className="font-bold text-sm tracking-tight">{item.type === 'commission' || item.type === 'Comissão' ? 'Cashback' : item.type}</span>
+                          </div>
                       </td>
                       <td className="py-6">
                         <p className="font-bold text-midnight text-sm max-w-xs truncate">{item.description}</p>

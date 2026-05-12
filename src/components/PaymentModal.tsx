@@ -40,35 +40,13 @@ export default function PaymentModal({ isOpen, onClose, selectedRecords, onConfi
   const [manualPixKey, setManualPixKey] = useState('');
   const [editingPix, setEditingPix] = useState(false);
 
-  // Agrupar registros por destinatário (payeeId)
-  const payeeGroups = useMemo(() => {
-    const groups: Record<string, any> = {};
-    
-    selectedRecords.forEach(record => {
-      const key = record.payeeId || 'matriz';
-      if (!groups[key]) {
-        groups[key] = {
-          payeeName: record.payeeName,
-          payeeId: record.payeeId,
-          payeePixKey: record.payeePixKey,
-          payeeCpf: record.payeeCpf,
-          totalAmount: 0,
-          orders: []
-        };
-      }
-      groups[key].totalAmount += record.repasse;
-      groups[key].orders.push(record);
-    });
-    
-    return Object.values(groups);
-  }, [selectedRecords]);
-
-  const currentPayee = payeeGroups[currentIndex];
+  // Removido o agrupamento por destinatário para mostrar registros individuais conforme pedido
+  const currentRecord = selectedRecords[currentIndex];
 
   useEffect(() => {
-    if (currentPayee) {
+    if (currentRecord) {
       // Prioridade: Chave PIX cadastrada > CPF cadastrado > Vazio
-      const initialKey = currentPayee.payeePixKey || currentPayee.payeeCpf || '';
+      const initialKey = currentRecord.payeePixKey || currentRecord.payeeCpf || '';
       setManualPixKey(initialKey);
       
       // Só entra em modo de edição se a chave estiver vazia
@@ -78,24 +56,24 @@ export default function PaymentModal({ isOpen, onClose, selectedRecords, onConfi
         setEditingPix(true);
       }
     }
-  }, [currentIndex, currentPayee]);
+  }, [currentIndex, currentRecord]);
 
   const qrCodePayload = useMemo(() => {
-    if (!currentPayee || !manualPixKey) return null;
+    if (!currentRecord || !manualPixKey) return null;
     try {
       return generatePixPayload({
         key: manualPixKey,
-        amount: currentPayee.totalAmount,
-        description: `REP ${currentPayee.orders.map((o: any) => o.orderId).join(',')}`,
-        name: currentPayee.payeeName
+        amount: currentRecord.repasse,
+        description: `PAG ${currentRecord.orderId}`,
+        name: currentRecord.payeeName
       });
     } catch (e) {
       return null;
     }
-  }, [currentPayee, manualPixKey]);
+  }, [currentRecord, manualPixKey]);
 
   const handleNext = () => {
-    if (currentIndex < payeeGroups.length - 1) {
+    if (currentIndex < selectedRecords.length - 1) {
       setCurrentIndex(prev => prev + 1);
     }
   };
@@ -114,8 +92,17 @@ export default function PaymentModal({ isOpen, onClose, selectedRecords, onConfi
     
     setIsProcessing(true);
     try {
-      await onConfirmPayment(currentPayee);
-      if (currentIndex < payeeGroups.length - 1) {
+      // Como agora trabalhamos individualmente, passamos o registro no formato que o onConfirmPayment espera
+      // (simulando um grupo com apenas um pedido)
+      await onConfirmPayment({
+        payeeId: currentRecord.payeeId,
+        payeeName: currentRecord.payeeName,
+        payeePixKey: manualPixKey,
+        totalAmount: currentRecord.repasse,
+        orders: [currentRecord]
+      });
+
+      if (currentIndex < selectedRecords.length - 1) {
         handleNext();
       } else {
         onClose();
@@ -132,7 +119,7 @@ export default function PaymentModal({ isOpen, onClose, selectedRecords, onConfi
     }
   };
 
-  if (!isOpen || !currentPayee) return null;
+  if (!isOpen || !currentRecord) return null;
 
   return (
     <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 overflow-y-auto">
@@ -158,27 +145,28 @@ export default function PaymentModal({ isOpen, onClose, selectedRecords, onConfi
 
            <div className="space-y-1">
               <h3 className="text-xl font-black text-midnight italic uppercase tracking-tighter leading-none">Pagamentos</h3>
-              <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Lote de Liquidação</p>
+              <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Lista de Beneficiários</p>
            </div>
 
            <div className="mt-12 space-y-3 flex-1 overflow-y-auto custom-scrollbar pr-2">
-              {payeeGroups.map((group, idx) => (
+              {selectedRecords.map((record, idx) => (
                 <div 
                   key={idx}
-                  className={`p-4 rounded-2xl border transition-all ${
+                  onClick={() => setCurrentIndex(idx)}
+                  className={`p-4 rounded-2xl border cursor-pointer transition-all ${
                     idx === currentIndex 
                       ? 'bg-indigo-600 border-indigo-600 shadow-lg shadow-indigo-600/20' 
                       : idx < currentIndex ? 'bg-emerald-50 border-emerald-100 opacity-60' : 'bg-white border-slate-100'
                   }`}
                 >
                   <p className={`text-[8px] font-black uppercase tracking-widest mb-1 ${idx === currentIndex ? 'text-indigo-200' : 'text-slate-400'}`}>
-                    {idx + 1} de {payeeGroups.length}
+                    Ref: {record.orderId}
                   </p>
                   <p className={`text-[11px] font-black uppercase truncate ${idx === currentIndex ? 'text-white' : 'text-midnight'}`}>
-                    {group.payeeName}
+                    {record.payeeName}
                   </p>
                   <p className={`text-xs font-black italic ${idx === currentIndex ? 'text-white/90' : 'text-indigo-600'}`}>
-                    R$ {group.totalAmount.toFixed(2).replace('.', ',')}
+                    R$ {record.repasse.toFixed(2).replace('.', ',')}
                   </p>
                 </div>
               ))}
@@ -191,38 +179,36 @@ export default function PaymentModal({ isOpen, onClose, selectedRecords, onConfi
               <div className="flex flex-col">
                 <div className="flex items-center gap-2">
                   <h2 className="text-3xl font-black text-midnight italic uppercase tracking-tighter">Liquidando Repasse</h2>
-                  {currentPayee.orders.length > 0 && (
-                    <div className="flex items-center gap-1 bg-slate-100 px-3 py-1 rounded-full border border-slate-200">
-                      <Hash size={12} className="text-slate-400" />
-                      <span className="text-[10px] font-black text-slate-500 uppercase">
-                        {currentPayee.orders.map((o: any) => o.orderId).join(', ')}
-                      </span>
-                    </div>
-                  )}
+                  <div className="flex items-center gap-1 bg-slate-100 px-3 py-1 rounded-full border border-slate-200">
+                    <Hash size={12} className="text-slate-400" />
+                    <span className="text-[10px] font-black text-slate-500 uppercase">
+                      ID: {currentRecord.orderId}
+                    </span>
+                  </div>
                 </div>
                 <div className="flex items-center gap-3 mt-2">
-                  <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">{currentPayee.payeeName}</span>
+                  <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">{currentRecord.payeeName}</span>
                   <span className="text-xs text-slate-300">•</span>
-                  <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">{currentPayee.orders.length} Pedido(s)</span>
-                  {currentPayee.payeeCpf && (
+                  <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">Pagamento Único</span>
+                  {currentRecord.payeeCpf && (
                     <>
                       <span className="text-xs text-slate-300">•</span>
                       <div className="flex items-center gap-1">
                         <Shield size={12} className="text-indigo-400" />
-                        <span className="text-xs font-bold text-slate-400">CPF: {currentPayee.payeeCpf}</span>
+                        <span className="text-xs font-bold text-slate-400">CPF: {currentRecord.payeeCpf}</span>
                       </div>
                     </>
                   )}
                 </div>
               </div>
               <div className="text-right">
-                 <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest mb-1">Valor Total Líquido</p>
-                 <p className="text-4xl font-black text-indigo-600 italic tracking-tighter">R$ {currentPayee.totalAmount.toFixed(2).replace('.', ',')}</p>
+                 <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest mb-1">Valor do Repasse</p>
+                 <p className="text-4xl font-black text-indigo-600 italic tracking-tighter">R$ {currentRecord.repasse.toFixed(2).replace('.', ',')}</p>
                  
                  {/* Detalhamento para Afiliados */}
-                 {currentPayee.orders[0]?.buyerName === 'Rede MMN' && (
+                 {currentRecord.buyerName === 'Rede MMN' && (
                    <div className="flex flex-col items-end gap-1 mt-3 border-t border-slate-100 pt-3">
-                     {currentPayee.orders[0].items?.map((item: any, i: number) => (
+                     {currentRecord.items?.map((item: any, i: number) => (
                        <div key={i} className="flex items-center gap-2">
                          <span className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">{item.name}:</span>
                          <span className={`text-[9px] font-black ${
@@ -323,7 +309,7 @@ export default function PaymentModal({ isOpen, onClose, selectedRecords, onConfi
                  </button>
                  <button 
                    onClick={handleNext}
-                   disabled={currentIndex === payeeGroups.length - 1}
+                   disabled={currentIndex === selectedRecords.length - 1}
                    className="p-4 rounded-2xl bg-slate-100 text-slate-400 hover:bg-slate-200 disabled:opacity-30 transition-all"
                  >
                    <ChevronRight size={20} />

@@ -53,17 +53,21 @@ export default function AffiliateNetwork() {
       
       try {
         setLoading(true);
-        const [networkData, treeInfo, statsData, levelsConfig] = await Promise.all([
+        const [networkData, treeInfo, statsData, levelsConfig, mmnConfigData] = await Promise.all([
           businessRules.getAffiliateNetwork(user.id),
           businessRules.getAffiliateTree(user.id),
           businessRules.getAffiliateStats(user.id),
-          businessRules.getMMNLevels()
+          businessRules.getMMNLevels(),
+          businessRules.getMMNConfig()
         ]);
+        
+        // Filter levels based on depth
+        const filteredLevels = levelsConfig.filter(l => l.level <= mmnConfigData.depth);
         
         setNetwork(networkData);
         setTreeData(treeInfo);
         setStats(statsData);
-        setMmnConfig(levelsConfig);
+        setMmnConfig(filteredLevels);
       } catch (error) {
         console.error("Error loading network:", error);
       } finally {
@@ -93,29 +97,39 @@ export default function AffiliateNetwork() {
     return matchesSearch && matchesLevel;
   });
 
-  const levels = mmnConfig
-    .filter(level => level.level >= 1)
-    .map((level, i) => {
-      const gen = level.level; // G1, G2...
-      const count = stats.networkSummary[`g${gen}`] || 0;
-      const colors = [
-        { text: 'text-emerald-500', bg: 'bg-emerald-50' },
-        { text: 'text-blue-500', bg: 'bg-blue-50' },
-        { text: 'text-purple-500', bg: 'bg-purple-50' },
-        { text: 'text-indigo-500', bg: 'bg-indigo-50' },
-        { text: 'text-amber-500', bg: 'bg-amber-50' },
-        { text: 'text-rose-500', bg: 'bg-rose-50' }
-      ];
-      const colorSet = colors[i % colors.length];
+  const levels = [
+    {
+      label: 'G0 ( AFILIADOS TITULAR )',
+      count: 1,
+      bonus: 'VOCÊ',
+      color: 'text-indigo-600',
+      bg: 'bg-indigo-50'
+    },
+    ...mmnConfig
+      .filter(level => level.level >= 1)
+      .map((level, i) => {
+        const gen = level.level; // G1, G2...
+        const count = stats.networkSummary[`g${gen}`] || 0;
+        const colors = [
+          { text: 'text-emerald-500', bg: 'bg-emerald-50' },
+          { text: 'text-blue-500', bg: 'bg-blue-50' },
+          { text: 'text-purple-500', bg: 'bg-purple-50' },
+          { text: 'text-indigo-500', bg: 'bg-indigo-50' },
+          { text: 'text-amber-500', bg: 'bg-amber-50' },
+          { text: 'text-rose-500', bg: 'bg-rose-50' }
+        ];
+        // i + 1 because we added G0 at the start of the final array, but here i starts from 0 for G1
+        const colorSet = colors[i % colors.length];
 
-      return {
-        label: `G${gen}${gen === 1 ? ' (Diretos)' : ''}`,
-        count: count,
-        bonus: `${level.value.toFixed(2)}%`,
-        color: colorSet.text,
-        bg: colorSet.bg
-      };
-    });
+        return {
+          label: `G${gen} ( ${gen === 1 ? 'DIRETOS' : 'INDIRETOS'} )`,
+          count: count,
+          bonus: `${level.value.toFixed(2)}%`,
+          color: colorSet.text,
+          bg: colorSet.bg
+        };
+      })
+  ];
 
   return (
     <AffiliateLayout title="Minha Rede MMN">
@@ -210,7 +224,9 @@ export default function AffiliateNetwork() {
                    >
                       <option value={0}>Todos os Níveis</option>
                       {mmnConfig.filter(l => l.level >= 1).map((l) => (
-                        <option key={l.level} value={l.level}>Nível G{l.level}</option>
+                        <option key={l.level} value={l.level}>
+                          G{l.level} ( {l.level === 1 ? 'DIRETOS' : 'INDIRETOS'} )
+                        </option>
                       ))}
                    </select>
                    <Filter size={16} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />

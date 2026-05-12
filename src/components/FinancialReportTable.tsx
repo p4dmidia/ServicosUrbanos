@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   FileText, 
   Search, 
@@ -27,6 +27,8 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { format } from 'date-fns';
 import PaymentReceipt from './PaymentReceipt';
+import { businessRules } from '../lib/businessRules';
+import { Loader2 } from 'lucide-react';
 
 export interface FinancialRecord {
   orderId: string;
@@ -52,6 +54,8 @@ interface FinancialReportTableProps {
   isAdmin?: boolean;
   mode?: 'merchants' | 'affiliates';
   onGeneratePayments?: (selected: FinancialRecord[]) => void;
+  hideReceiptButton?: boolean;
+  hidePdfButton?: boolean;
 }
 
 export default function FinancialReportTable({ 
@@ -60,7 +64,9 @@ export default function FinancialReportTable({
   title = "Relatório Financeiro", 
   isAdmin = false,
   mode = 'merchants',
-  onGeneratePayments
+  onGeneratePayments,
+  hideReceiptButton = false,
+  hidePdfButton = false
 }: FinancialReportTableProps) {
   const [searchTerm, setSearchTerm] = useState("");
   const [startDate, setStartDate] = useState("");
@@ -70,6 +76,29 @@ export default function FinancialReportTable({
   const [selectedRecords, setSelectedRecords] = useState<string[]>([]);
   const [viewingOrder, setViewingOrder] = useState<FinancialRecord | null>(null);
   const [viewingReceipt, setViewingReceipt] = useState<FinancialRecord | null>(null);
+  const [orderCommissions, setOrderCommissions] = useState<any[]>([]);
+  const [loadingCommissions, setLoadingCommissions] = useState(false);
+
+  useEffect(() => {
+    const fetchCommissions = async () => {
+      if (!viewingOrder?.orderId || viewingOrder.orderId.includes('REP-')) {
+        setOrderCommissions([]);
+        return;
+      }
+
+      setLoadingCommissions(true);
+      try {
+        const comms = await businessRules.getOrderCommissions(viewingOrder.orderId);
+        setOrderCommissions(comms);
+      } catch (error) {
+        console.error('Erro ao buscar comissões:', error);
+      } finally {
+        setLoadingCommissions(false);
+      }
+    };
+
+    fetchCommissions();
+  }, [viewingOrder?.orderId]);
 
   const filteredData = (mode === 'merchants' ? data : affiliateData).filter((record: any) => {
     const term = searchTerm.toLowerCase();
@@ -230,13 +259,15 @@ export default function FinancialReportTable({
             />
           </div>
           
-          <button 
-            onClick={exportToPDF}
-            className="flex items-center gap-2 bg-slate-900 text-white px-6 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-black transition-all shadow-xl shadow-slate-900/20 active:scale-95"
-          >
-            <Download size={18} />
-            PDF
-          </button>
+          {!hidePdfButton && (
+            <button 
+              onClick={exportToPDF}
+              className="flex items-center gap-2 bg-slate-900 text-white px-6 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-black transition-all shadow-xl shadow-slate-900/20 active:scale-95"
+            >
+              <Download size={18} />
+              PDF
+            </button>
+          )}
 
           {isAdmin && selectedRecords.length > 0 && (
             <motion.button 
@@ -353,16 +384,16 @@ export default function FinancialReportTable({
                        <div className="flex flex-col items-center">
                           <span className="text-[10px] font-black text-indigo-600 italic tracking-tighter underline">{record.payDate}</span>
                           <span className="text-[8px] text-slate-300 font-bold uppercase tracking-widest mt-1">Previsto</span>
-                          {(record.orderStatus === 'Pago' || record.orderStatus === 'Concluído') && (
-                            <button 
-                              onClick={() => setViewingReceipt(record)}
-                              className="mt-2 flex items-center gap-1.5 bg-emerald-50 text-emerald-600 px-3 py-1.5 rounded-lg border border-emerald-100 hover:bg-emerald-100 transition-all text-[9px] font-black uppercase tracking-tighter"
-                            >
-                              <FileText size={10} /> Comprovante
-                            </button>
-                          )}
-                       </div>
-                    </td>
+                      {(record.orderStatus === 'Pago' || record.orderStatus === 'Concluído') && !hideReceiptButton && (
+                        <button 
+                          onClick={() => setViewingReceipt(record)}
+                          className="mt-2 flex items-center gap-1.5 bg-emerald-50 text-emerald-600 px-3 py-1.5 rounded-lg border border-emerald-100 hover:bg-emerald-100 transition-all text-[9px] font-black uppercase tracking-tighter"
+                        >
+                          <FileText size={10} /> Comprovante
+                        </button>
+                      )}
+                    </div>
+                  </td>
                   </>
                 ) : (
                   <>
@@ -387,12 +418,14 @@ export default function FinancialReportTable({
                       <div className="flex flex-col items-center">
                          <span className="text-[10px] font-black text-slate-700 italic tracking-tighter">{record.pix_key}</span>
                          <span className="text-[8px] text-slate-400 font-bold uppercase tracking-widest mt-1">{record.pix_type}</span>
-                         <button 
-                           onClick={() => setViewingReceipt(record)}
-                           className="mt-2 flex items-center gap-1.5 bg-indigo-50 text-indigo-600 px-3 py-1.5 rounded-lg border border-indigo-100 hover:bg-indigo-100 transition-all text-[9px] font-black uppercase tracking-tighter"
-                         >
-                           <FileText size={10} /> Comprovante
-                         </button>
+                         {!hideReceiptButton && (
+                           <button 
+                             onClick={() => setViewingReceipt(record)}
+                             className="mt-2 flex items-center gap-1.5 bg-indigo-50 text-indigo-600 px-3 py-1.5 rounded-lg border border-indigo-100 hover:bg-indigo-100 transition-all text-[9px] font-black uppercase tracking-tighter"
+                           >
+                             <FileText size={10} /> Comprovante
+                           </button>
+                         )}
                       </div>
                     </td>
                   </>
@@ -521,6 +554,51 @@ export default function FinancialReportTable({
                       </div>
                    </div>
                 </div>
+
+                 {/* Commissions List */}
+                 <div className="space-y-4">
+                    <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest px-4">Participação nas Comissões (MMN)</p>
+                    <div className="bg-slate-50 rounded-[2.5rem] border border-slate-100 overflow-hidden">
+                       {loadingCommissions ? (
+                         <div className="p-8 flex flex-col items-center justify-center gap-2">
+                           <Loader2 size={24} className="text-indigo-500 animate-spin opacity-40" />
+                           <p className="text-[9px] text-slate-400 font-black uppercase tracking-widest">Buscando rede...</p>
+                         </div>
+                       ) : orderCommissions.length > 0 ? (
+                         <div className="divide-y divide-slate-100">
+                            {orderCommissions.map((comm, idx) => (
+                              <div key={idx} className="p-5 flex items-center justify-between hover:bg-white transition-all">
+                                 <div className="flex items-center gap-3">
+                                    <div className="size-8 bg-white rounded-lg flex items-center justify-center text-indigo-600 border border-slate-100 shadow-sm text-[10px] font-black">
+                                       L{comm.level}
+                                    </div>
+                                    <div className="flex flex-col">
+                                       <span className="text-xs font-black text-midnight uppercase leading-none mb-1">{comm.affiliateName}</span>
+                                       <div className="flex items-center gap-2">
+                                          <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">Nível {comm.level}</span>
+                                          <span className="text-slate-200">•</span>
+                                          <span className={`text-[8px] font-black uppercase ${
+                                             comm.status === 'paid' ? 'text-emerald-500' : 
+                                             comm.status === 'released' ? 'text-indigo-500' : 'text-amber-500'
+                                          }`}>
+                                             {comm.status === 'paid' ? 'Pago' : comm.status === 'released' ? 'Disponível' : 'Pendente'}
+                                          </span>
+                                       </div>
+                                    </div>
+                                 </div>
+                                 <div className="text-right">
+                                    <span className="text-sm font-black text-indigo-600 italic tracking-tighter">R$ {comm.amount.toFixed(2).replace('.', ',')}</span>
+                                 </div>
+                              </div>
+                            ))}
+                         </div>
+                       ) : (
+                         <div className="p-8 text-center">
+                            <p className="text-[10px] text-slate-300 font-black uppercase italic">Nenhuma comissão de rede vinculada</p>
+                         </div>
+                       )}
+                    </div>
+                 </div>
 
                 {/* Product Items List */}
                 <div className="space-y-4">

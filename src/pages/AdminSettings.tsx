@@ -111,7 +111,7 @@ export default function AdminSettings() {
           cashbackDigital,
           cashbackAnual
         });
-        await businessRules.saveMMNLevels(mmnLevels.slice(0, Math.max(mmnDepth, 6)));
+        await businessRules.saveMMNLevels(mmnLevels.slice(0, mmnDepth));
       } else if (activeTab === 'financeiro') {
         await businessRules.saveFinancialConfig({
           minWithdrawalAmount: minWithdrawal,

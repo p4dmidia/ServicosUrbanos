@@ -2781,6 +2781,29 @@ export const businessRules = {
     
     if (error) throw error;
     return data;
+  },
+
+  // Busca comissões vinculadas a um pedido
+  getOrderCommissions: async (orderId: string) => {
+    const { data, error } = await supabase
+      .from('commissions')
+      .select(`
+        amount,
+        level,
+        status,
+        user_profiles:affiliate_id (
+          full_name
+        )
+      `)
+      .eq('order_id', orderId);
+    
+    if (error) throw error;
+    return data.map(c => ({
+      amount: Number(c.amount),
+      level: c.level,
+      status: c.status,
+      affiliateName: (c.user_profiles as any)?.full_name || 'Afiliado não identificado'
+    }));
   }
 };
 

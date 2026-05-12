@@ -342,14 +342,16 @@ export default function AdminFinancials() {
 
         {/* Tabela de Relatórios */}
         <div className="bg-white rounded-[3rem] overflow-hidden shadow-2xl border border-slate-100">
-           <FinancialReportTable 
-             data={viewType === 'merchants' ? reportData : []} 
-             affiliateData={viewType === 'affiliates' ? filteredAffiliateData : []}
-             title={viewType === 'merchants' ? "Auditoria de Pedidos Pendentes" : "Relatório de Cashbacks por Afiliado"} 
-             isAdmin={true} 
-             mode={viewType}
-             onGeneratePayments={handleGeneratePayments}
-           />
+            <FinancialReportTable 
+              data={viewType === 'merchants' ? reportData : []} 
+              affiliateData={viewType === 'affiliates' ? filteredAffiliateData : []}
+              title={viewType === 'merchants' ? "Auditoria de Pedidos Pendentes" : "Relatório de Cashbacks por Afiliado"} 
+              isAdmin={true} 
+              mode={viewType}
+              onGeneratePayments={handleGeneratePayments}
+              hideReceiptButton={true}
+              hidePdfButton={true}
+            />
         </div>
 
       </div>

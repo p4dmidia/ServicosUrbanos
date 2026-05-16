@@ -29,6 +29,7 @@ export default function AdminFinancials() {
   const [payees, setPayees] = useState<Record<string, any>>({});
   const [matrixPixKey, setMatrixPixKey] = useState('31998007412');
   const [matrixCpf, setMatrixCpf] = useState('123.456.789-00');
+  const [dynamicPlatformRate, setDynamicPlatformRate] = useState(20);
   const [loading, setLoading] = useState(true);
   
   // Payment Flow State
@@ -46,11 +47,12 @@ export default function AdminFinancials() {
   async function loadAdminData() {
     try {
       setLoading(true);
-      const [ordersData, extrasData, settingsData, affiliateData] = await Promise.all([
+      const [ordersData, extrasData, settingsData, affiliateData, marketConfig] = await Promise.all([
         businessRules.getAllOrders(),
         businessRules.getAllOrderExtras(),
         supabase.from('system_settings').select('key, value').in('key', ['matrix_pix_key', 'matrix_cpf']),
-        businessRules.getAffiliateCashbackReport(dateRange.start, `${dateRange.end}T23:59:59`)
+        businessRules.getAffiliateCashbackReport(dateRange.start, `${dateRange.end}T23:59:59`),
+        businessRules.getMarketplaceConfig()
       ]);
 
       if (settingsData.data) {
@@ -80,7 +82,9 @@ export default function AdminFinancials() {
       setOrders(ordersData);
       setExtras(extrasData);
       setAffiliateReport(affiliateData);
-
+      const rateFromDb = marketConfig?.commissionRate || 12; // Mudei para 12 como fallback
+      console.log('!!! DEBUG V2 - TAXA DO BANCO:', rateFromDb);
+      setDynamicPlatformRate(rateFromDb);
     } catch (error) {
       console.error('Erro ao carregar dados financeiros admin:', error);
       toast.error('Erro ao carregar dados financeiros');
@@ -120,7 +124,7 @@ export default function AdminFinancials() {
           deliveryStatus: (extra?.status as any) || 'Pendente',
           saleDate: saleDate.toLocaleDateString('pt-BR'),
           amount: o.amount,
-          repasse: o.amount * 0.8,
+          repasse: o.amount * (1 - (dynamicPlatformRate / 100)),
           payDate: payDate.toLocaleDateString('pt-BR'),
           payeeId: String(payeeId || 'matriz'),
           payeePixKey: payee?.pix_key || (!payeeId ? profile?.pix_key || matrixPixKey || '' : ''),
@@ -138,7 +142,7 @@ export default function AdminFinancials() {
 
     console.log('[DEBUG-FINANCEIRO] Dados Mapeados:', mapped);
     return mapped;
-  }, [orders, extras, payees, profile, matrixPixKey, matrixCpf]);
+  }, [orders, extras, payees, profile, matrixPixKey, matrixCpf, dynamicPlatformRate]);
 
   // Filtro para mostrar apenas afiliados com saldo pendente
   const filteredAffiliateData = useMemo(() => {
@@ -203,11 +207,10 @@ export default function AdminFinancials() {
 
         // 2. Mudamos o status das transações para 'paid' (IGUAL AO LOJISTA)
         const { error: updateError } = await supabase
-          .from('transactions')
+          .from('commissions')
           .update({ status: 'paid' })
-          .eq('profile_id', payeeGroup.payeeId)
-          .eq('type', 'commission')
-          .eq('status', 'pending');
+          .eq('affiliate_id', payeeGroup.payeeId)
+          .eq('status', 'released');
 
         if (updateError) throw updateError;
         
@@ -230,9 +233,9 @@ export default function AdminFinancials() {
     return (
       <AdminLayout title="Financeiro Global" subtitle="Sincronizando auditoria...">
         <div className="flex items-center justify-center p-20">
-          <div className="flex flex-col items-center gap-4">
-            <Loader2 size={42} className="text-indigo-500 animate-spin opacity-40" />
-            <p className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400">Carregando Fluxo Financeiro</p>
+          <div className="flex flex-col">
+            <h2 className="text-4xl font-black text-midnight italic uppercase tracking-tighter">Financeiro [Sincronizado]</h2>
+            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-[0.2em] mt-1">Gestão de Repasses e Auditoria de Fluxo</p>
           </div>
         </div>
       </AdminLayout>
@@ -242,7 +245,7 @@ export default function AdminFinancials() {
   const pendingPayoutTotal = reportData.reduce((a, b) => a + b.repasse, 0);
 
   return (
-    <AdminLayout title="Gestão de Pagamentos PIX" subtitle="Auditoria global de repasses para lojistas e parceiros">
+    <AdminLayout title="Gestão de Pagamentos PIX [Sincronizado]" subtitle="Auditoria global de repasses para lojistas e parceiros">
       <div className="p-8 lg:p-12 space-y-12">
         
         {/* Toggle de Visualização e Filtros */}
@@ -316,9 +319,9 @@ export default function AdminFinancials() {
                     </div>
                     <div className="bg-amber-100/50 p-4 rounded-2xl border border-amber-200">
                        <p className="text-[10px] text-amber-700 font-black uppercase tracking-widest mb-1">Padrão de Liquidação</p>
-                       <p className="text-[10px] text-amber-800 font-bold leading-tight uppercase">
-                         Repasses automáticos em D+1. <br/> Taxa de Administração: 20%.
-                       </p>
+                        <p className="text-[10px] text-amber-800 font-bold leading-tight uppercase">
+                          Repasses automáticos em D+1. <br/> Taxa de Administração: {dynamicPlatformRate}%.
+                        </p>
                     </div>
                  </div>
               </div>
@@ -351,6 +354,7 @@ export default function AdminFinancials() {
               onGeneratePayments={handleGeneratePayments}
               hideReceiptButton={true}
               hidePdfButton={true}
+              platformRate={dynamicPlatformRate}
             />
         </div>
 

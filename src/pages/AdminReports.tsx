@@ -35,15 +35,17 @@ export default function AdminReports() {
   const [isBIModalOpen, setIsBIModalOpen] = useState(false);
   const [viewType, setViewType] = useState<'merchants' | 'affiliates'>('merchants');
   const [affiliatePayouts, setAffiliatePayouts] = useState<any[]>([]);
+  const [platformRate, setPlatformRate] = useState(20);
 
   const loadData = async () => {
     setLoading(true);
     try {
-      const [reports, ordersData, extrasData, affiliatePayoutsData] = await Promise.all([
+      const [reports, ordersData, extrasData, affiliatePayoutsData, marketConfig] = await Promise.all([
         businessRules.getAdminReportsData(dateRange),
         businessRules.getAllOrders(),
         businessRules.getAllOrderExtras(),
-        businessRules.getAffiliatePayouts()
+        businessRules.getAffiliatePayouts(),
+        businessRules.getMarketplaceConfig()
       ]);
       
       setAffiliatePayouts(affiliatePayoutsData);
@@ -65,6 +67,7 @@ export default function AdminReports() {
       setReportData(reports);
       setOrders(ordersData);
       setExtras(extrasData);
+      setPlatformRate(marketConfig?.commissionRate || 12);
     } catch (error) {
       console.error('Erro ao carregar relatórios:', error);
       toast.error('Ocorreu um erro ao carregar os dados do relatório.');
@@ -124,7 +127,7 @@ export default function AdminReports() {
             deliveryStatus: (extra?.status as any) || 'Pendente',
             saleDate: saleDate.toLocaleDateString('pt-BR'),
             amount: o.amount,
-            repasse: o.amount * 0.8,
+            repasse: o.amount * (1 - (platformRate / 100)),
             payDate: payDate.toLocaleDateString('pt-BR'),
             payeeId: String(payeeId || 'unknown'),
             payeeName: payee?.full_name || (payeeId ? 'Destinatário não identificado' : 'Sem vínculo (Admin)'),
@@ -152,7 +155,7 @@ export default function AdminReports() {
         cpf: p.profiles?.cpf || '---'
       }));
     }
-  }, [orders, extras, payees, viewType, affiliatePayouts]);
+  }, [orders, extras, payees, viewType, affiliatePayouts, platformRate]);
 
   if (loading) {
     return (
@@ -335,6 +338,7 @@ export default function AdminReports() {
               title={viewType === 'merchants' ? "Repasses Liquidados (Lojistas)" : "Repasses Liquidados (Afiliados)"} 
               isAdmin={true} 
               mode={viewType}
+              platformRate={platformRate}
            />
         </div>
 

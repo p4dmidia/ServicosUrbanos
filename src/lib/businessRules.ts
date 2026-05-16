@@ -1335,7 +1335,7 @@ export const businessRules = {
 
   async getPayeeDetails(userIds: string[]) {
     const { data, error } = await supabase
-      .from('user_profiles')
+      .from('profiles')
       .select('id, full_name, pix_key, cpf')
       .in('id', userIds);
     
@@ -1704,29 +1704,28 @@ export const businessRules = {
 
   getAffiliateCashbackReport: async (startDate: string, endDate: string) => {
     try {
-      // 1. Busca as transações de comissão
-      const { data: transactions, error: transError } = await supabase
-        .from('transactions')
-        .select('id, profile_id, type, description, amount, created_at, status')
-        .eq('type', 'commission')
-        .eq('status', 'pending')
+      // 1. Busca as comissões registradas
+      const { data: commissions, error: commError } = await supabase
+        .from('commissions')
+        .select('id, affiliate_id, amount, created_at, status')
+        .eq('status', 'released')
         .gte('created_at', startDate)
         .lte('created_at', endDate);
 
-      if (transError) throw transError;
-      if (!transactions || transactions.length === 0) return [];
+      if (commError) throw commError;
+      if (!commissions || commissions.length === 0) return [];
 
-      // 2. Coleta IDs únicos de perfis
-      const profileIds = [...new Set(transactions.map(t => (t as any).profile_id).filter(Boolean))];
+      // 2. Coleta IDs únicos de afiliados
+      const affiliateIds = [...new Set(commissions.map(c => c.affiliate_id).filter(Boolean))];
 
       // 3. Busca os perfis (tabela 'profiles')
       const { data: profiles, error: profError } = await supabase
         .from('profiles')
         .select('id, full_name, pix_key, pix_type, cpf')
-        .in('id', profileIds);
+        .in('id', affiliateIds);
 
       if (profError) {
-        console.error('Error fetching profiles for report:', profError);
+        console.error('Error fetching user_profiles for report:', profError);
       }
 
       const profilesMap: Record<string, any> = {};
@@ -1737,15 +1736,15 @@ export const businessRules = {
       // 4. Agrupa e une os dados
       const report: Record<string, any> = {};
 
-      transactions.forEach(t => {
-        const profileId = (t as any).profile_id;
-        if (!profileId) return;
+      commissions.forEach(c => {
+        const affiliateId = c.affiliate_id;
+        if (!affiliateId) return;
 
-        const profile = profilesMap[String(profileId)];
+        const profile = profilesMap[String(affiliateId)];
 
-        if (!report[profileId]) {
-          report[profileId] = {
-            id: String(profileId),
+        if (!report[affiliateId]) {
+          report[affiliateId] = {
+            id: String(affiliateId),
             name: profile?.full_name || 'Desconhecido',
             pix_key: profile?.pix_key || '---',
             pix_type: profile?.pix_type || '---',
@@ -1757,26 +1756,12 @@ export const businessRules = {
           };
         }
 
-        const amount = Number(t.amount);
-        const desc = (t.description || '').toLowerCase();
-        const type = (t as any).type;
-
-        // Se for uma comissão, distribui nos potes
-        if (type === 'commission') {
-          if (desc.includes('mensal')) {
-            report[profileId].mensal += amount;
-          } else if (desc.includes('anual')) {
-            report[profileId].anual += amount;
-          } else if (desc.includes('digital') || desc.includes('cd')) {
-            report[profileId].digital += amount;
-          }
-        } 
-        // Se for uma saída (pagamento realizado), abate do saldo mensal
-        else if (type === 'withdrawal') {
-          report[profileId].mensal += amount; // amount já é negativo
-        }
+        const amount = Number(c.amount);
         
-        report[profileId].total += amount;
+        // Como a tabela commissions não tem descrição, colocamos em 'digital' por padrão (ou total)
+        // No futuro podemos separar por tipo se adicionarmos essa coluna
+        report[affiliateId].digital += amount;
+        report[affiliateId].total += amount;
       });
 
       return Object.values(report).sort((a: any, b: any) => b.total - a.total);
@@ -2783,27 +2768,33 @@ export const businessRules = {
     return data;
   },
 
-  // Busca comissões vinculadas a um pedido
-  getOrderCommissions: async (orderId: string) => {
-    const { data, error } = await supabase
-      .from('commissions')
-      .select(`
-        amount,
-        level,
-        status,
-        user_profiles:affiliate_id (
-          full_name
-        )
-      `)
-      .eq('order_id', orderId);
-    
-    if (error) throw error;
-    return data.map(c => ({
-      amount: Number(c.amount),
-      level: c.level,
-      status: c.status,
-      affiliateName: (c.user_profiles as any)?.full_name || 'Afiliado não identificado'
-    }));
+  getOrderCommissions: async (orderId: string | number) => {
+    try {
+      const { data, error } = await supabase
+        .from('commissions')
+        .select(`
+          amount,
+          level,
+          status,
+          profiles (
+            full_name
+          )
+        `)
+        .eq('order_id', orderId)
+        .order('level', { ascending: true });
+
+      if (error) {
+        console.error('Error fetching order commissions:', error);
+        return [];
+      }
+      return (data || []).map((c: any) => ({
+        ...c,
+        affiliateName: c.profiles?.full_name || 'Desconhecido'
+      }));
+    } catch (error) {
+      console.error('Error in getOrderCommissions:', error);
+      return [];
+    }
   }
 };
 

@@ -22,6 +22,7 @@ export default function MerchantFinancials() {
   const [financials, setFinancials] = useState<any>(null);
   const [orders, setOrders] = useState<any[]>([]);
   const [extras, setExtras] = useState<any[]>([]);
+  const [platformRate, setPlatformRate] = useState(20);
   const [loading, setLoading] = useState(true);
 
   async function loadAppData() {
@@ -32,10 +33,11 @@ export default function MerchantFinancials() {
       const mId = await businessRules.getMerchantId(profile.id);
       if (!mId) return;
 
-      const [branchesData, finStats, ordersData] = await Promise.all([
+      const [branchesData, finStats, ordersData, marketConfig] = await Promise.all([
         businessRules.getBranches(),
         businessRules.getMerchantFinancials(profile.id, profile.role, profile.branch_id),
-        businessRules.getMerchantOrders(mId, profile.branch_id)
+        businessRules.getMerchantOrders(mId, profile.branch_id),
+        businessRules.getMarketplaceConfig()
       ]);
 
       // Buscar extras (status de entrega) para os pedidos
@@ -47,6 +49,7 @@ export default function MerchantFinancials() {
       setFinancials(finStats);
       setOrders(ordersData);
       setExtras(extrasData.filter(Boolean));
+      setPlatformRate(marketConfig?.commissionRate || 20);
 
     } catch (error) {
       console.error('Erro ao carregar dados financeiros:', error);
@@ -79,11 +82,11 @@ export default function MerchantFinancials() {
         deliveryStatus: extra?.status || 'Pendente',
         saleDate: saleDate.toLocaleDateString('pt-BR'),
         amount: o.amount,
-        repasse: o.amount * 0.8, // 80% conforme planilha
+        repasse: o.amount * (1 - (platformRate / 100)),
         payDate: payDate.toLocaleDateString('pt-BR')
       };
     });
-  }, [orders, extras]);
+  }, [orders, extras, platformRate]);
 
   if (authLoading || loading) {
     return (
@@ -107,7 +110,7 @@ export default function MerchantFinancials() {
              { title: 'Saldo Disponível', value: financials?.balance, icon: Wallet, color: 'emerald' },
              { title: 'Total Faturado', value: financials?.totalBilled, icon: TrendingUp, color: 'blue' },
              { title: 'A Receber', value: reportData.filter(r => r.orderStatus !== 'Pago' || r.deliveryStatus !== 'Entregue').reduce((a, b) => a + b.repasse, 0), icon: Clock, color: 'purple' },
-             { title: 'Taxa Plataforma', value: '20%', icon: Percent, color: 'slate' }
+             { title: 'Taxa Plataforma', value: `${platformRate}%`, icon: Percent, color: 'slate' }
            ].map((stat, i) => (
              <div key={i} className="bg-white p-8 rounded-[2rem] border border-slate-100 shadow-sm group">
                 <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest mb-1">{stat.title}</p>
@@ -119,7 +122,7 @@ export default function MerchantFinancials() {
         </div>
 
         {/* Novo Relatório Financeiro Detalhado */}
-        <FinancialReportTable data={reportData} title="Histórico Financeiro Detalhado" />
+        <FinancialReportTable data={reportData} title="Histórico Financeiro Detalhado" platformRate={platformRate} />
 
       </div>
     </MerchantLayout>

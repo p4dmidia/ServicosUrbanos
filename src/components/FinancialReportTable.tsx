@@ -56,6 +56,7 @@ interface FinancialReportTableProps {
   onGeneratePayments?: (selected: FinancialRecord[]) => void;
   hideReceiptButton?: boolean;
   hidePdfButton?: boolean;
+  platformRate?: number;
 }
 
 export default function FinancialReportTable({ 
@@ -66,7 +67,8 @@ export default function FinancialReportTable({
   mode = 'merchants',
   onGeneratePayments,
   hideReceiptButton = false,
-  hidePdfButton = false
+  hidePdfButton = false,
+  platformRate = 20
 }: FinancialReportTableProps) {
   const [searchTerm, setSearchTerm] = useState("");
   const [startDate, setStartDate] = useState("");
@@ -305,7 +307,7 @@ export default function FinancialReportTable({
                   <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Status</th>
                   <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Data</th>
                   <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Valor Bruto</th>
-                  <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Líquido (80%)</th>
+                  <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Líquido ({100 - platformRate}%)</th>
                   <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Data Pagamento</th>
                 </>
               ) : (
@@ -631,8 +633,8 @@ export default function FinancialReportTable({
                       <span className="text-lg font-black text-midnight tracking-tighter italic">R$ {viewingOrder.amount.toFixed(2).replace('.', ',')}</span>
                    </div>
                    <div className="flex items-center justify-between text-slate-400">
-                      <span className="text-xs font-bold uppercase tracking-tight italic">Cashback Serviços Urbanos (20%)</span>
-                      <span className="text-sm font-black text-red-500 italic">- R$ {(viewingOrder.amount * 0.2).toFixed(2).replace('.', ',')}</span>
+                      <span className="text-xs font-bold uppercase tracking-tight italic">Cashback Serviços Urbanos ({platformRate}%)</span>
+                      <span className="text-sm font-black text-red-500 italic">- R$ {(viewingOrder.amount * (platformRate / 100)).toFixed(2).replace('.', ',')}</span>
                    </div>
                    
                    <div className="mt-8 p-8 bg-indigo-600 rounded-[2.5rem] text-white shadow-2xl shadow-indigo-600/20 relative overflow-hidden">

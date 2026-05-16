@@ -216,6 +216,15 @@ export default function Checkout() {
     setShippingMethod('pickup');
   }, []);
 
+  // Reset payment state when cart changes to avoid inconsistencies
+  useEffect(() => {
+    if (orderId) {
+      setOrderId(null);
+      setPixData(null);
+      setShowPixModal(false);
+    }
+  }, [cartItems]);
+
   const handleCheckout = async () => {
     if (!shippingMethod) {
       toast.error('Selecione um método de envio ou retirada.');
@@ -316,49 +325,53 @@ export default function Checkout() {
 
       const loadingToast = toast.loading('Gerando pagamento...');
 
-      // 1. Criar o pedido como 'Pendente' para visibilidade do lojista
-      // O ID agora é gerado automaticamente pelo banco (sequence a partir de 1000)
-      const { data: orderData, error: orderError } = await supabase
-        .from('orders')
-        .insert([{
-          customer_id: authUser.id,
-          customer_name: profile.full_name,
-          customer_initial: profile.full_name?.[0] || 'U',
-          amount: total,
-          status: 'Aguardando Pagamento',
-          items: cartItems,
-          branch_id: cartItems[0].branchId || cartItems[0].merchant_id || null, 
-          cashback_amount: userTotalCashbackAmount,
-          shipping_address: `RETIRADA NA LOJA: ${pickupAddress}`,
-          payment_method: paymentMethod === 'wallet' ? 'Saldo de Carteira Virtual' : 'Pix'
-        }])
-        .select()
-        .single();
+      let currentOrderId = orderId;
 
-      if (orderError) throw orderError;
-      const newOrderId = orderData.id;
-      setOrderId(newOrderId);
-
-      // 2. Dar baixa no estoque de cada produto
-      await Promise.all(cartItems.map(item => 
-        businessRules.decrementStock(item.id, item.quantity)
-      ));
-
-      // 3. Se for retirada, criar o registro de código de retirada antecipadamente
-      if (shippingMethod === 'pickup') {
-        // Formato: [ID do pedido]/[mês]/[ano]
-        const now = new Date();
-        const month = String(now.getMonth() + 1).padStart(2, '0');
-        const year = now.getFullYear();
-        const withdrawalCode = `${newOrderId}/${month}/${year}`;
-
-        await supabase
-          .from('order_extras')
+      if (!currentOrderId) {
+        // 1. Criar o pedido como 'Pendente' para visibilidade do lojista
+        // O ID agora é gerado automaticamente pelo banco (sequence a partir de 1000)
+        const { data: orderData, error: orderError } = await supabase
+          .from('orders')
           .insert([{
-            id: newOrderId,
-            withdrawal_code: withdrawalCode,
-            status: 'Pendente'
-          }]);
+            customer_id: authUser.id,
+            customer_name: profile.full_name,
+            customer_initial: profile.full_name?.[0] || 'U',
+            amount: total,
+            status: 'Aguardando Pagamento',
+            items: cartItems,
+            branch_id: cartItems[0].branchId || cartItems[0].merchant_id || null, 
+            cashback_amount: userTotalCashbackAmount,
+            shipping_address: `RETIRADA NA LOJA: ${pickupAddress}`,
+            payment_method: paymentMethod === 'wallet' ? 'Saldo de Carteira Virtual' : 'Pix'
+          }])
+          .select()
+          .single();
+
+        if (orderError) throw orderError;
+        currentOrderId = orderData.id;
+        setOrderId(currentOrderId);
+
+        // 2. Dar baixa no estoque de cada produto (apenas se for pedido novo)
+        await Promise.all(cartItems.map(item => 
+          businessRules.decrementStock(item.id, item.quantity)
+        ));
+
+        // 3. Se for retirada, criar o registro de código de retirada antecipadamente
+        if (shippingMethod === 'pickup') {
+          // Formato: [ID do pedido]/[mês]/[ano]
+          const now = new Date();
+          const month = String(now.getMonth() + 1).padStart(2, '0');
+          const year = now.getFullYear();
+          const withdrawalCode = `${currentOrderId}/${month}/${year}`;
+
+          await supabase
+            .from('order_extras')
+            .insert([{
+              id: currentOrderId,
+              withdrawal_code: withdrawalCode,
+              status: 'Pendente'
+            }]);
+        }
       }
 
       const payer = {
@@ -368,7 +381,7 @@ export default function Checkout() {
       };
 
       const payload = {
-        orderId: newOrderId, // Passamos o ID gerado
+        orderId: currentOrderId, // Passamos o ID gerado ou reutilizado
         items: cartItems.map(item => ({
           id: item.id,
           title: item.name || item.title || 'Produto UrbaShop',
@@ -403,14 +416,14 @@ export default function Checkout() {
         
         // 1. Realtime listener
         const channel = supabase
-          .channel(`order_status_${newOrderId}`)
+          .channel(`order_status_${currentOrderId}`)
           .on(
             'postgres_changes',
             {
               event: 'UPDATE',
               schema: 'public',
               table: 'orders',
-              filter: `id=eq.${newOrderId}`
+              filter: `id=eq.${currentOrderId}`
             },
             (payload) => {
               console.log("Realtime update received:", payload.new.status);
@@ -429,7 +442,7 @@ export default function Checkout() {
           const { data: orderUpdate, error: pollError } = await supabase
             .from('orders')
             .select('status')
-            .eq('id', newOrderId)
+            .eq('id', currentOrderId)
             .single();
 
           if (!pollError && orderUpdate) {

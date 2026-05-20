@@ -15,6 +15,7 @@ import { motion, AnimatePresence } from 'motion/react';
 interface BIInsightsModalProps {
   isOpen: boolean;
   onClose: () => void;
+  data?: any;
 }
 
 export default function BIInsightsModal({ isOpen, onClose }: BIInsightsModalProps) {

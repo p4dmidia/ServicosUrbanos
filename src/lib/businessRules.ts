@@ -855,7 +855,7 @@ export const businessRules = {
       };
     } catch (error) {
       console.error("Error calculating dynamic network summary:", error);
-      return { g1: 0, g2: 0, g3: 0, g4: 0, total: 0, rank: 'Afiliado' };
+      return { g1: 0, g2: 0, g3: 0, g4: 0, g5: 0, total: 0, rank: 'Afiliado' };
     }
   },
 
@@ -919,7 +919,7 @@ export const businessRules = {
         monthlyBonus: 0, annualBonus: 0, walletBonus: 0, maintenanceFee: 0,
         totalEarnings: 0, availableBalance: 0, cashbackBalance: 0,
         consumptionCount: 0, isEligible: false,
-        networkSummary: { g1: 0, g2: 0, g3: 0, g4: 0, total: 0, rank: 'Afiliado' },
+        networkSummary: { g1: 0, g2: 0, g3: 0, g4: 0, g5: 0, total: 0, rank: 'Afiliado' },
         rank: 'Afiliado'
       };
     }
@@ -1064,6 +1064,12 @@ export const businessRules = {
           level = nivelEncontrado || (t.type === 'commission' ? '0' : '---');
         }
 
+        let mappedDescription = t.description || '';
+        mappedDescription = mappedDescription
+          .replace(/Comiss[aã]o MMN\s*\(Mensal\)/gi, 'Cashback Mensal')
+          .replace(/Comiss[aã]o MMN\s*\(Anual\)/gi, 'Cashback Anual')
+          .replace(/Comiss[aã]o MMN\s*\(CD\)/gi, 'Cashback Digital');
+
         return {
           id: t.id,
           orderId: orderId || '---',
@@ -1074,7 +1080,7 @@ export const businessRules = {
           amount: t.amount,
           status: order?.status || (t.status === 'completed' ? 'Concluído' : 'Pendente'),
           originalType: t.type,
-          description: t.description
+          description: mappedDescription
         };
       });
     } catch (error) {
@@ -1393,9 +1399,15 @@ export const businessRules = {
 
       transactions?.forEach(t => {
         if (t.type === 'commission') {
+          let mappedDesc = t.description || '';
+          mappedDesc = mappedDesc
+            .replace(/Comiss[aã]o MMN\s*\(Mensal\)/gi, 'Cashback Mensal')
+            .replace(/Comiss[aã]o MMN\s*\(Anual\)/gi, 'Cashback Anual')
+            .replace(/Comiss[aã]o MMN\s*\(CD\)/gi, 'Cashback Digital');
+
           logs.push({
             type: 'Success',
-            text: `Cashback gerado: R$ ${Number(t.amount).toFixed(2)} - ${t.description.split(' - ')[0]}`,
+            text: `Cashback gerado: R$ ${Number(t.amount).toFixed(2)} - ${mappedDesc.split(' - ')[0]}`,
             time: new Date(t.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
             date: new Date(t.created_at)
           });
@@ -1575,49 +1587,84 @@ export const businessRules = {
     if (error) throw error;
   },
 
-  getAdminReportsData: async (range: string) => {
+  getAdminReportsData: async (range: string, customStartDate?: string, customEndDate?: string) => {
     const now = new Date();
     let days = 30;
     let groupBy: 'day' | 'month' = 'day';
     let startDate = new Date();
+    let endDate = new Date();
     let previousStartDate = new Date();
 
-    switch (range) {
-      case '7 dias':
-        days = 7;
-        startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-        previousStartDate = new Date(startDate.getTime() - 7 * 24 * 60 * 60 * 1000);
-        groupBy = 'day';
-        break;
-      case '15 dias':
-        days = 15;
-        startDate = new Date(now.getTime() - 15 * 24 * 60 * 60 * 1000);
-        previousStartDate = new Date(startDate.getTime() - 15 * 24 * 60 * 60 * 1000);
-        groupBy = 'day';
-        break;
-      case '30 dias':
-        days = 30;
-        startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-        previousStartDate = new Date(startDate.getTime() - 30 * 24 * 60 * 60 * 1000);
-        groupBy = 'day';
-        break;
-      case '6 meses':
-        days = 180;
-        startDate = new Date(now.getFullYear(), now.getMonth() - 5, 1);
-        previousStartDate = new Date(now.getFullYear(), now.getMonth() - 11, 1);
+    if (customStartDate && customEndDate) {
+      startDate = new Date(customStartDate);
+      endDate = new Date(customEndDate);
+      // Garantir o final do dia selecionado
+      endDate.setHours(23, 59, 59, 999);
+      
+      const diffTime = Math.abs(endDate.getTime() - startDate.getTime());
+      days = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      
+      previousStartDate = new Date(startDate.getTime() - diffTime);
+      
+      if (days > 45) {
         groupBy = 'month';
-        break;
-      case '1 ano':
-        days = 365;
-        startDate = new Date(now.getFullYear() - 1, now.getMonth() + 1, 1);
-        previousStartDate = new Date(now.getFullYear() - 2, now.getMonth() + 1, 1);
-        groupBy = 'month';
-        break;
-      default:
-        days = 30;
-        startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-        previousStartDate = new Date(startDate.getTime() - 30 * 24 * 60 * 60 * 1000);
+      } else {
         groupBy = 'day';
+      }
+    } else {
+      switch (range) {
+        case '7 dias':
+          days = 7;
+          startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+          previousStartDate = new Date(startDate.getTime() - 7 * 24 * 60 * 60 * 1000);
+          groupBy = 'day';
+          break;
+        case '15 dias':
+          days = 15;
+          startDate = new Date(now.getTime() - 15 * 24 * 60 * 60 * 1000);
+          previousStartDate = new Date(startDate.getTime() - 15 * 24 * 60 * 60 * 1000);
+          groupBy = 'day';
+          break;
+        case '30 dias':
+          days = 30;
+          startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+          previousStartDate = new Date(startDate.getTime() - 30 * 24 * 60 * 60 * 1000);
+          groupBy = 'day';
+          break;
+        case '6 meses':
+          days = 180;
+          startDate = new Date(now.getFullYear(), now.getMonth() - 5, 1);
+          previousStartDate = new Date(now.getFullYear(), now.getMonth() - 11, 1);
+          groupBy = 'month';
+          break;
+        case '1 ano':
+          days = 365;
+          startDate = new Date(now.getFullYear() - 1, now.getMonth() + 1, 1);
+          previousStartDate = new Date(now.getFullYear() - 2, now.getMonth() + 1, 1);
+          groupBy = 'month';
+          break;
+        default:
+          days = 30;
+          startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+          previousStartDate = new Date(startDate.getTime() - 30 * 24 * 60 * 60 * 1000);
+          groupBy = 'day';
+      }
+    }
+
+    // Queries construídas dinamicamente
+    let currentRevenueQuery = supabase.from('orders').select('amount, order_date').eq('status', 'Concluído').gte('order_date', startDate.toISOString());
+    let lastRevenueQuery = supabase.from('orders').select('amount').eq('status', 'Concluído').gte('order_date', previousStartDate.toISOString()).lt('order_date', startDate.toISOString());
+    let currentUserGrowthQuery = supabase.from('profiles').select('*', { count: 'exact', head: true }).gte('created_at', startDate.toISOString());
+    let lastUserGrowthQuery = supabase.from('profiles').select('*', { count: 'exact', head: true }).gte('created_at', previousStartDate.toISOString()).lt('created_at', startDate.toISOString());
+    let currentCommissionsQuery = supabase.from('transactions').select('amount').eq('type', 'commission').gte('created_at', startDate.toISOString());
+    let lastCommissionsQuery = supabase.from('transactions').select('amount').eq('type', 'commission').gte('created_at', previousStartDate.toISOString()).lt('created_at', startDate.toISOString());
+    let chartRawDataQuery = supabase.from('orders').select('amount, order_date').eq('status', 'Concluído').gte('order_date', startDate.toISOString());
+
+    if (customStartDate && customEndDate) {
+      currentRevenueQuery = currentRevenueQuery.lte('order_date', endDate.toISOString());
+      currentUserGrowthQuery = currentUserGrowthQuery.lte('created_at', endDate.toISOString());
+      currentCommissionsQuery = currentCommissionsQuery.lte('created_at', endDate.toISOString());
+      chartRawDataQuery = chartRawDataQuery.lte('order_date', endDate.toISOString());
     }
 
     const [
@@ -1630,14 +1677,14 @@ export const businessRules = {
       { data: config },
       { data: chartRawData }
     ] = await Promise.all([
-      supabase.from('orders').select('amount, order_date').eq('status', 'Concluído').gte('order_date', startDate.toISOString()),
-      supabase.from('orders').select('amount').eq('status', 'Concluído').gte('order_date', previousStartDate.toISOString()).lt('order_date', startDate.toISOString()),
-      supabase.from('profiles').select('*', { count: 'exact', head: true }).gte('created_at', startDate.toISOString()),
-      supabase.from('profiles').select('*', { count: 'exact', head: true }).gte('created_at', previousStartDate.toISOString()).lt('created_at', startDate.toISOString()),
-      supabase.from('transactions').select('amount').eq('type', 'commission').gte('created_at', startDate.toISOString()),
-      supabase.from('transactions').select('amount').eq('type', 'commission').gte('created_at', previousStartDate.toISOString()).lt('created_at', startDate.toISOString()),
+      currentRevenueQuery,
+      lastRevenueQuery,
+      currentUserGrowthQuery,
+      lastUserGrowthQuery,
+      currentCommissionsQuery,
+      lastCommissionsQuery,
       supabase.from('marketplace_config').select('commission_rate').eq('id', 1).single(),
-      supabase.from('orders').select('amount, order_date').eq('status', 'Concluído').gte('order_date', startDate.toISOString())
+      chartRawDataQuery
     ]);
 
     const platformRate = config?.commission_rate || 12;
@@ -1656,9 +1703,11 @@ export const businessRules = {
     const values: number[] = [];
     const monthsNames = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
 
+    const targetEnd = customEndDate ? new Date(customEndDate) : now;
+
     if (groupBy === 'day') {
       for (let i = days - 1; i >= 0; i--) {
-        const d = new Date(now.getTime() - i * 24 * 60 * 60 * 1000);
+        const d = new Date(targetEnd.getTime() - i * 24 * 60 * 60 * 1000);
         const label = `${d.getDate()}/${d.getMonth() + 1}`;
         labels.push(label);
         
@@ -1670,9 +1719,9 @@ export const businessRules = {
         values.push(dayTotal);
       }
     } else {
-      const numMonths = range === '6 meses' ? 6 : 12;
+      const numMonths = range === '6 meses' ? 6 : range === '1 ano' ? 12 : Math.max(1, Math.ceil(days / 30));
       for (let i = numMonths - 1; i >= 0; i--) {
-        const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+        const d = new Date(targetEnd.getFullYear(), targetEnd.getMonth() - i, 1);
         labels.push(monthsNames[d.getMonth()]);
 
         const monthTotal = chartRawData?.filter(o => {

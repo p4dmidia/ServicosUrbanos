@@ -9,7 +9,17 @@ DECLARE
     mmn_pay_type TEXT;
     commission_record RECORD;
     commission_val NUMERIC;
-    part_val NUMERIC;
+    
+    -- Pesos globais
+    w_mensal NUMERIC;
+    w_digital NUMERIC;
+    w_anual NUMERIC;
+    w_total NUMERIC;
+    
+    -- Valores calculados das partes
+    v_mensal NUMERIC;
+    v_digital NUMERIC;
+    v_anual NUMERIC;
 BEGIN
     -- [CONDIÇÃO DE DISPARO]
     -- Só processa se o novo status for 'Pago, Aguardando Retirada' ou 'Concluído'
@@ -30,8 +40,21 @@ BEGIN
             RETURN NEW;
         END IF;
 
-        -- Pegar configurações de MMN
-        SELECT depth, payment_type INTO mmn_depth, mmn_pay_type FROM public.mmn_config WHERE id = 1;
+        -- Pegar configurações de MMN incluindo os pesos de cashback
+        SELECT depth, payment_type, cashback_mensal, cashback_digital, cashback_anual 
+        INTO mmn_depth, mmn_pay_type, w_mensal, w_digital, w_anual 
+        FROM public.mmn_config 
+        WHERE id = 1;
+        
+        -- Garante fallbacks para evitar nulos ou divisão por zero
+        w_mensal := COALESCE(w_mensal, 2.75);
+        w_digital := COALESCE(w_digital, 1.00);
+        w_anual := COALESCE(w_anual, 0.75);
+        
+        w_total := w_mensal + w_digital + w_anual;
+        IF w_total = 0 THEN
+            w_total := 4.5;
+        END IF;
         
         -- Percorrer a cadeia de patrocinadores e gerar comissões
         FOR commission_record IN 
@@ -46,36 +69,39 @@ BEGIN
                 commission_val := commission_record.value;
             END IF;
             
-            -- Dividir em 3 partes conforme PRD (Tri-Split)
-            part_val := ROUND(commission_val / 3, 2);
+            -- Dividir proporcionalmente baseado nos pesos configurados
+            v_mensal := ROUND((commission_val * w_mensal / w_total), 2);
+            v_digital := ROUND((commission_val * w_digital / w_total), 2);
+            -- O residual fica no Anual para garantir o fechamento exato dos centavos
+            v_anual := commission_val - (v_mensal + v_digital);
             
-            -- 1. Bônus Mensal (33.33%)
+            -- 1. Bônus Mensal
             INSERT INTO public.transactions (profile_id, type, description, amount, status)
             VALUES (
                 commission_record.upline_id, 
                 'commission', 
-                'Comissão MMN (Mensal) - Pedido #' || NEW.id || ' (Nível ' || commission_record.level || ')', 
-                part_val, 
+                'Cashback Mensal - Pedido #' || NEW.id || ' (Nível ' || commission_record.level || ')', 
+                v_mensal, 
                 'completed'
             );
 
-            -- 2. Bônus Anual (33.33%)
+            -- 2. Bônus Anual
             INSERT INTO public.transactions (profile_id, type, description, amount, status)
             VALUES (
                 commission_record.upline_id, 
                 'commission', 
-                'Comissão MMN (Anual) - Pedido #' || NEW.id || ' (Nível ' || commission_record.level || ')', 
-                part_val, 
+                'Cashback Anual - Pedido #' || NEW.id || ' (Nível ' || commission_record.level || ')', 
+                v_anual, 
                 'completed'
             );
 
-            -- 3. Bônus Carteira Digital (CD) (Resíduo para fechar o total)
+            -- 3. Bônus Carteira Digital (CD)
             INSERT INTO public.transactions (profile_id, type, description, amount, status)
             VALUES (
                 commission_record.upline_id, 
                 'commission', 
-                'Comissão MMN (CD) - Pedido #' || NEW.id || ' (Nível ' || commission_record.level || ')', 
-                commission_val - (2 * part_val), 
+                'Cashback Digital - Pedido #' || NEW.id || ' (Nível ' || commission_record.level || ')', 
+                v_digital, 
                 'completed'
             );
         END LOOP;
@@ -88,6 +114,7 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 -- 2. Limpar gatilhos antigos para garantir que não haja conflitos
 DROP TRIGGER IF EXISTS on_order_completed ON public.orders;
 DROP TRIGGER IF EXISTS on_order_paid ON public.orders;
+DROP TRIGGER IF EXISTS on_order_commission_payment ON public.orders;
 
 -- 3. Criar o novo gatilho único
 CREATE TRIGGER on_order_commission_payment

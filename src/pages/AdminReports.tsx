@@ -26,7 +26,13 @@ import FinancialReportTable, { FinancialRecord } from '../components/FinancialRe
 import BIInsightsModal from '../components/BIInsightsModal';
 
 export default function AdminReports() {
-  const [dateRange, setDateRange] = useState('30 dias');
+  const todayStr = new Date().toISOString().split('T')[0];
+  const thirtyDaysAgo = new Date();
+  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+  const thirtyDaysAgoStr = thirtyDaysAgo.toISOString().split('T')[0];
+
+  const [startDate, setStartDate] = useState(thirtyDaysAgoStr);
+  const [endDate, setEndDate] = useState(todayStr);
   const [loading, setLoading] = useState(true);
   const [reportData, setReportData] = useState<any>(null);
   const [orders, setOrders] = useState<any[]>([]);
@@ -41,7 +47,7 @@ export default function AdminReports() {
     setLoading(true);
     try {
       const [reports, ordersData, extrasData, affiliatePayoutsData, marketConfig] = await Promise.all([
-        businessRules.getAdminReportsData(dateRange),
+        businessRules.getAdminReportsData('custom', startDate, endDate),
         businessRules.getAllOrders(),
         businessRules.getAllOrderExtras(),
         businessRules.getAffiliatePayouts(),
@@ -78,7 +84,7 @@ export default function AdminReports() {
 
   useEffect(() => {
     loadData();
-  }, [dateRange]);
+  }, [startDate, endDate]);
 
   const handleExport = () => {
     if (!reportData) return;
@@ -98,7 +104,7 @@ export default function AdminReports() {
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
     link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `relatorio_urbashop_${dateRange.replace(' ', '_')}_${new Date().getTime()}.csv`);
+    link.setAttribute("download", `relatorio_urbashop_${startDate}_a_${endDate}_${new Date().getTime()}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -179,20 +185,27 @@ export default function AdminReports() {
            </div>
            
            <div className="flex items-center gap-4">
-              <div className="flex bg-white/5 p-1.5 rounded-2xl border border-white/10">
-                 {['7 dias', '15 dias', '30 dias', '6 meses'].map((range) => (
-                   <button
-                     key={range}
-                     onClick={() => setDateRange(range)}
-                     className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
-                       dateRange === range 
-                         ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20' 
-                         : 'text-slate-400 hover:text-white'
-                     }`}
-                   >
-                     {range}
-                   </button>
-                 ))}
+              <div className="flex flex-wrap items-center gap-3 bg-white/5 px-4 py-2.5 rounded-2xl border border-white/10">
+                <Calendar size={14} className="text-indigo-400 shrink-0" />
+                <div className="flex items-center gap-2">
+                  <span className="text-[8px] font-bold text-slate-500 uppercase tracking-wider">De</span>
+                  <input 
+                    type="date" 
+                    value={startDate}
+                    onChange={(e) => setStartDate(e.target.value)}
+                    className="bg-transparent text-[10px] font-black text-white outline-none border-none [color-scheme:dark]"
+                  />
+                </div>
+                <div className="h-4 w-px bg-white/10 hidden sm:block" />
+                <div className="flex items-center gap-2">
+                  <span className="text-[8px] font-bold text-slate-500 uppercase tracking-wider">Até</span>
+                  <input 
+                    type="date" 
+                    value={endDate}
+                    onChange={(e) => setEndDate(e.target.value)}
+                    className="bg-transparent text-[10px] font-black text-white outline-none border-none [color-scheme:dark]"
+                  />
+                </div>
               </div>
               <button 
                 onClick={handleExport}

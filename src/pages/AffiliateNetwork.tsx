@@ -61,8 +61,8 @@ export default function AffiliateNetwork() {
           businessRules.getMMNConfig()
         ]);
         
-        // Filter levels based on depth
-        const filteredLevels = levelsConfig.filter(l => l.level <= mmnConfigData.depth);
+        // Filter levels based on depth, excluding G6
+        const filteredLevels = levelsConfig.filter(l => l.level <= mmnConfigData.depth && l.level !== 6);
         
         setNetwork(networkData);
         setTreeData(treeInfo);

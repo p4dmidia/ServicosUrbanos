@@ -242,7 +242,7 @@ export default function AffiliateDashboard() {
                  {[
                    { label: 'Indicações G1', value: stats.networkSummary.g1, max: 100, color: 'bg-emerald-500' },
                    { label: 'Rede Indireta', value: stats.networkSummary.total - stats.networkSummary.g1, max: 500, color: 'bg-primary-blue' },
-                   { label: 'Alcance G4', value: stats.networkSummary.g4, max: 1000, color: 'bg-purple-500' },
+                   { label: 'Alcance G5', value: stats.networkSummary.g5 || 0, max: 1000, color: 'bg-purple-500' },
                  ].map((item, i) => (
                    <div key={i} className="space-y-2">
                      <div className="flex justify-between text-xs font-bold uppercase tracking-widest">

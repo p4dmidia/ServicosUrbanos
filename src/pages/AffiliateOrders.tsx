@@ -128,15 +128,15 @@ export default function AffiliateOrders() {
       userTotalCashback = g1Value;
     }
 
-    // Distribuição Proporcional baseada nos pesos ATUAIS
-    const vMensal = userTotalCashback * (pMensal / totalRatios);
-    const vDigital = userTotalCashback * (pDigital / totalRatios);
-    const vAnual = userTotalCashback * (pAnual / totalRatios);
+    // Distribuição Proporcional baseada nos pesos ATUAIS (com compensação de resíduo no Cashback Anual)
+    const vMensal = Number((userTotalCashback * (pMensal / totalRatios)).toFixed(2));
+    const vDigital = Number((userTotalCashback * (pDigital / totalRatios)).toFixed(2));
+    const vAnual = Number((userTotalCashback - (vMensal + vDigital)).toFixed(2));
     
     return {
-      mensal: Number(vMensal.toFixed(2)),
-      digital: Number(vDigital.toFixed(2)),
-      anual: Number(vAnual.toFixed(2)),
+      mensal: vMensal,
+      digital: vDigital,
+      anual: vAnual,
       total: Number(userTotalCashback.toFixed(2))
     };
   };

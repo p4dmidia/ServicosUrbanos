@@ -36,8 +36,8 @@ export default function GanheDinheiro() {
 
     const simulationData = [
         { level: "G1 (Pessoal)", bonus: "Percentual de Cashback Corrente" },
-        { level: "G2 (10 pessoas)", bonus: "Bônus de Grupo Nível 2" },
-        { level: "G3 (100 pessoas)", bonus: "Bônus de Grupo Nível 3" },
+        { level: "G2 (10 pessoas)", bonus: "Bônus de Grupo Nível 1" },
+        { level: "G3 (100 pessoas)", bonus: "Bônus de Grupo Nível 2" },
         { level: "G4 (1.000 pessoas)", bonus: "Renda Recorrente Vitalícia" }
     ];
 
@@ -127,7 +127,7 @@ export default function GanheDinheiro() {
                                             <TrendingUp size={24} />
                                         </div>
                                         <div>
-                                            <p className="text-xs text-slate-500 uppercase font-black">Meta Nível 4</p>
+                                            <p className="text-xs text-slate-500 uppercase font-black">Meta Nível 3</p>
                                             <p className="text-2xl font-black text-white">Independência Financeira</p>
                                         </div>
                                     </div>

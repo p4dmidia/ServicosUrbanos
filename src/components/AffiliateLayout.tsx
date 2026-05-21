@@ -86,7 +86,7 @@ export default function AffiliateLayout({ children, title }: AffiliateLayoutProp
 
   const menuItems = [
     { path: '/afiliado/dashboard', icon: LayoutGrid, label: 'Dashboard' },
-    { path: '/afiliado/rede', icon: Users, label: 'Minha Rede' },
+    { path: '/afiliado/rede', icon: Users, label: 'Cashback' },
     { path: '/afiliado/financeiro', icon: Wallet, label: 'Financeiro' },
     { path: '/afiliado/pedidos', icon: ShoppingBag, label: 'Meus Pedidos' },
     { path: '/afiliado/ecossistema', icon: Globe, label: 'Ecossistema' },
@@ -169,7 +169,7 @@ export default function AffiliateLayout({ children, title }: AffiliateLayoutProp
           <div className="flex items-center gap-6">
             {/* Saldo Rápido Real do Banco de Dados */}
             <div className="hidden md:flex flex-col items-end">
-              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Saldo Disponível</p>
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Saldo Disponível em Carteira Digital</p>
               <div className="flex items-center gap-2">
                  <span className="text-lg font-black text-emerald-600 tracking-tighter">
                    {stats ? `R$ ${stats.availableBalance.toFixed(2)}` : 'R$ 0,00'}

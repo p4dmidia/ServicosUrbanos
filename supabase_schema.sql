@@ -237,7 +237,7 @@ BEGIN
             VALUES (
                 commission_record.upline_id, 
                 'commission', 
-                'Cashback Mensal - Pedido #' || NEW.id || ' (Nível ' || commission_record.level || ')', 
+                'Cashback Mensal - Pedido #' || NEW.id || ' (Nível ' || (commission_record.level - 1) || ')', 
                 v_mensal, 
                 'completed'
             );
@@ -247,7 +247,7 @@ BEGIN
             VALUES (
                 commission_record.upline_id, 
                 'commission', 
-                'Cashback Anual - Pedido #' || NEW.id || ' (Nível ' || commission_record.level || ')', 
+                'Cashback Anual - Pedido #' || NEW.id || ' (Nível ' || (commission_record.level - 1) || ')', 
                 v_anual, 
                 'completed'
             );
@@ -257,7 +257,7 @@ BEGIN
             VALUES (
                 commission_record.upline_id, 
                 'commission', 
-                'Cashback Digital - Pedido #' || NEW.id || ' (Nível ' || commission_record.level || ')', 
+                'Cashback Digital - Pedido #' || NEW.id || ' (Nível ' || (commission_record.level - 1) || ')', 
                 v_digital, 
                 'completed'
             );

@@ -102,17 +102,79 @@ export default function FinancialReportTable({
     fetchCommissions();
   }, [viewingOrder?.orderId]);
 
+  type GroupedCommission = {
+    key: string;
+    level: number;
+    generation: number;
+    affiliateId: string;
+    affiliateName: string;
+    orderId: string;
+    mensal: number;
+    digital: number;
+    anual: number;
+    total: number;
+  };
+
+  const addCommissionAmount = (row: GroupedCommission, description: string, amount: number) => {
+    const desc = description || '';
+    if (desc.includes('Mensal')) row.mensal += amount;
+    else if (desc.includes('Digital')) row.digital += amount;
+    else if (desc.includes('Anual')) row.anual += amount;
+    else row.mensal += amount;
+    row.total = row.mensal + row.digital + row.anual;
+  };
+
+  const groupedCommissions: GroupedCommission[] = React.useMemo(() => {
+    const map = new Map<string, GroupedCommission>();
+    orderCommissions.forEach((comm) => {
+      const level = Number(comm.level) || 1;
+      const affiliateId = comm.affiliate_id || comm.affiliateId || 'unknown';
+      const key = `${level}-${affiliateId}`;
+      if (!map.has(key)) {
+        map.set(key, {
+          key,
+          level,
+          generation: Math.max(level - 1, 0),
+          affiliateId,
+          affiliateName: comm.affiliateName || 'Desconhecido',
+          orderId: comm.order_id || viewingOrder?.orderId || '',
+          mensal: 0,
+          digital: 0,
+          anual: 0,
+          total: 0,
+        });
+      }
+      const row = map.get(key)!;
+      addCommissionAmount(row, comm.description, Number(comm.amount) || 0);
+    });
+    return Array.from(map.values()).sort((a, b) => a.level - b.level);
+  }, [orderCommissions, viewingOrder?.orderId]);
+
+  const totals = React.useMemo(() => {
+    let mensal = 0;
+    let digital = 0;
+    let anual = 0;
+    groupedCommissions.forEach((row) => {
+      mensal += row.mensal;
+      digital += row.digital;
+      anual += row.anual;
+    });
+    return { mensal, digital, anual, total: mensal + digital + anual };
+  }, [groupedCommissions]);
+
   const filteredData = (mode === 'merchants' ? data : affiliateData).filter((record: any) => {
     const term = searchTerm.toLowerCase();
     const nameMatch = mode === 'merchants' 
       ? (record.payeeName || '').toLowerCase().includes(term) || (record.orderId || '').toLowerCase().includes(term)
-      : (record.name || '').toLowerCase().includes(term) || (record.cpf || '').toLowerCase().includes(term);
+      : (record.name || record.payeeName || '').toLowerCase().includes(term) || 
+        (record.cpf || record.payeeCpf || '').toLowerCase().includes(term) ||
+        (record.pix_key || record.payeePixKey || '').toLowerCase().includes(term);
     
     if (!nameMatch) return false;
 
     // Date filtering
     if (startDate || endDate) {
-      const recordDateStr = mode === 'merchants' ? record.saleDate : record.payDate;
+      const recordDateStr = mode === 'merchants' ? record.saleDate : (record.payDate || record.saleDate);
       if (!recordDateStr) return false;
       
       // Assume DD/MM/YYYY format
@@ -159,23 +221,41 @@ export default function FinancialReportTable({
           record.payeeName,
           record.orderStatus,
           record.saleDate,
-          `R$ ${record.amount.toFixed(2)}`,
-          `R$ ${record.repasse.toFixed(2)}`
+          `R$ ${(record.amount || 0).toFixed(2)}`,
+          `R$ ${(record.repasse || 0).toFixed(2)}`
         ];
       } else {
-        return [
-          record.name,
-          `R$ ${record.mensal.toFixed(2)}`,
-          `R$ ${record.digital.toFixed(2)}`,
-          `R$ ${record.anual.toFixed(2)}`,
-          record.pix_key
-        ];
+        const name = record.name || record.payeeName || 'Afiliado';
+        const pixKey = record.pix_key || record.payeePixKey || '---';
+        const displayTotal = hideReceiptButton ? (record.mensal || 0) : (record.amount || record.repasse || 0);
+        
+        if (hideReceiptButton) {
+          return [
+            name,
+            `R$ ${(record.mensal || 0).toFixed(2)}`,
+            `R$ ${(record.digital || 0).toFixed(2)}`,
+            `R$ ${(record.anual || 0).toFixed(2)}`,
+            pixKey
+          ];
+        } else {
+          return [
+            name,
+            `R$ ${(record.mensal || 0).toFixed(2)}`,
+            `R$ ${(record.digital || 0).toFixed(2)}`,
+            `R$ ${(record.anual || 0).toFixed(2)}`,
+            `R$ ${displayTotal.toFixed(2)}`,
+            pixKey,
+            record.payDate || '---'
+          ];
+        }
       }
     });
 
     const head = mode === 'merchants' 
       ? [['ID', 'Lojista', 'Status', 'Data', 'Bruto', 'Líquido']]
-      : [['Afiliado', 'Mensal', 'Digital', 'Anual', 'Chave PIX']];
+      : hideReceiptButton
+        ? [['Afiliado', 'Mensal', 'Digital', 'Anual', 'Chave PIX']]
+        : [['Afiliado', 'Mensal', 'Digital', 'Anual', 'Total Pago', 'Chave PIX', 'Data Pagamento']];
 
     autoTable(doc, {
       head: head,
@@ -187,12 +267,19 @@ export default function FinancialReportTable({
     });
 
     // Summary
-    const totalAmount = filteredData.reduce((acc: number, curr: any) => acc + (mode === 'merchants' ? curr.repasse : curr.mensal), 0);
+    const totalAmount = filteredData.reduce((acc: number, curr: any) => {
+      if (mode === 'merchants') {
+        return acc + (curr.repasse || 0);
+      } else {
+        return acc + (hideReceiptButton ? (curr.mensal || 0) : (curr.amount || curr.repasse || 0));
+      }
+    }, 0);
     const finalY = (doc as any).lastAutoTable.finalY || 50;
     
     doc.setFontSize(12);
     doc.setTextColor(20, 20, 40);
-    doc.text(`TOTAL LÍQUIDO: R$ ${totalAmount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, 14, finalY + 15);
+    const summaryLabel = (mode === 'affiliates' && !hideReceiptButton) ? 'TOTAL PAGO' : 'TOTAL LÍQUIDO';
+    doc.text(`${summaryLabel}: R$ ${totalAmount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, 14, finalY + 15);
 
     doc.save(`Relatorio_${mode}_${format(new Date(), 'yyyyMMdd')}.pdf`);
   };
@@ -271,7 +358,7 @@ export default function FinancialReportTable({
             </button>
           )}
 
-          {isAdmin && selectedRecords.length > 0 && (
+          {isAdmin && onGeneratePayments && selectedRecords.length > 0 && (
             <motion.button 
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
@@ -290,7 +377,7 @@ export default function FinancialReportTable({
         <table className="w-full text-left border-collapse">
           <thead>
             <tr className="bg-slate-50/50">
-              {isAdmin && (
+              {isAdmin && onGeneratePayments && (
                 <th className="p-6 w-12">
                   <button onClick={toggleSelectAll} className="text-slate-400 hover:text-indigo-600 transition-colors">
                     {selectedRecords.length === filteredData.length && filteredData.length > 0 
@@ -316,8 +403,17 @@ export default function FinancialReportTable({
                   <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Cashback Mensal <br/><span className="text-[7px] text-emerald-500">(PAGO TODO MÊS)</span></th>
                   <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Cashback Digital <br/><span className="text-[7px] text-blue-500">(CARTEIRA)</span></th>
                   <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Cashback Anual <br/><span className="text-[7px] text-indigo-500">(PAGO 10/DEZ)</span></th>
-                  <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right bg-slate-50/50">Total Líquido <br/><span className="text-[7px] text-slate-500">(A PAGAR AGORA)</span></th>
+                  <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right bg-slate-50/50">
+                    {hideReceiptButton ? (
+                      <>Total Líquido <br/><span className="text-[7px] text-slate-500">(A PAGAR AGORA)</span></>
+                    ) : (
+                      <>Total Pago <br/><span className="text-[7px] text-emerald-500">(CONCLUÍDO)</span></>
+                    )}
+                  </th>
                   <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Chave PIX</th>
+                  {!hideReceiptButton && (
+                    <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Data Pagamento</th>
+                  )}
                 </>
               )}
             </tr>
@@ -328,7 +424,7 @@ export default function FinancialReportTable({
                 key={mode === 'merchants' ? record.orderId : `aff-${idx}`} 
                 className={`border-b border-slate-50 hover:bg-slate-50/80 transition-colors ${selectedRecords.includes(record.orderId) ? 'bg-indigo-50/40' : ''}`}
               >
-                {isAdmin && (
+                {isAdmin && onGeneratePayments && (
                   <td className="p-6">
                     <button onClick={() => toggleSelect(mode === 'merchants' ? record.orderId : record.id)} className="text-slate-300 hover:text-indigo-600 transition-colors">
                       {selectedRecords.includes(mode === 'merchants' ? record.orderId : record.id) 
@@ -396,40 +492,48 @@ export default function FinancialReportTable({
                       )}
                     </div>
                   </td>
-                  </>
-                ) : (
-                  <>
-                    <td className="p-6">
+                </>
+              ) : (
+                <>
+                  <td className="p-6">
                       <div className="flex items-center gap-3">
                         <div className="size-8 bg-purple-50 rounded-lg flex items-center justify-center text-purple-600 shrink-0">
                            <User size={16} />
                         </div>
                         <div className="flex flex-col">
-                          <span className="text-xs font-black text-midnight uppercase tracking-tight">{record.name}</span>
-                          <span className="text-[9px] text-slate-400 font-bold">CPF: {record.cpf}</span>
+                           <span className="text-xs font-black text-midnight uppercase tracking-tight">{record.name || record.payeeName}</span>
+                           <span className="text-[9px] text-slate-400 font-bold">CPF: {record.cpf}</span>
                         </div>
                       </div>
                     </td>
-                    <td className="p-6 text-right text-xs font-black text-emerald-600 italic tracking-tighter">R$ {record.mensal.toFixed(2).replace('.', ',')}</td>
-                    <td className="p-6 text-right text-xs font-bold text-blue-500 tracking-tighter">R$ {record.digital.toFixed(2).replace('.', ',')}</td>
-                    <td className="p-6 text-right text-xs font-bold text-indigo-500 tracking-tighter">R$ {record.anual.toFixed(2).replace('.', ',')}</td>
+                    <td className="p-6 text-right text-xs font-black text-emerald-600 italic tracking-tighter">R$ {(record.mensal || 0).toFixed(2).replace('.', ',')}</td>
+                    <td className="p-6 text-right text-xs font-bold text-blue-500 tracking-tighter">R$ {(record.digital || 0).toFixed(2).replace('.', ',')}</td>
+                    <td className="p-6 text-right text-xs font-bold text-indigo-500 tracking-tighter">R$ {(record.anual || 0).toFixed(2).replace('.', ',')}</td>
                     <td className="p-6 text-right bg-slate-50/50">
-                      <span className="text-sm font-black text-primary-blue italic">R$ {record.mensal.toFixed(2).replace('.', ',')}</span>
+                      <span className="text-sm font-black text-primary-blue italic">
+                        R$ {((hideReceiptButton ? (record.mensal || 0) : (record.amount || record.repasse || 0))).toFixed(2).replace('.', ',')}
+                      </span>
                     </td>
                     <td className="p-6 text-center">
                       <div className="flex flex-col items-center">
-                         <span className="text-[10px] font-black text-slate-700 italic tracking-tighter">{record.pix_key}</span>
-                         <span className="text-[8px] text-slate-400 font-bold uppercase tracking-widest mt-1">{record.pix_type}</span>
-                         {!hideReceiptButton && (
-                           <button 
-                             onClick={() => setViewingReceipt(record)}
-                             className="mt-2 flex items-center gap-1.5 bg-indigo-50 text-indigo-600 px-3 py-1.5 rounded-lg border border-indigo-100 hover:bg-indigo-100 transition-all text-[9px] font-black uppercase tracking-tighter"
-                           >
-                             <FileText size={10} /> Comprovante
-                           </button>
-                         )}
+                         <span className="text-[10px] font-black text-slate-700 italic tracking-tighter">{record.pix_key || record.payeePixKey || '---'}</span>
+                         <span className="text-[8px] text-slate-400 font-bold uppercase tracking-widest mt-1">{record.pix_type || '---'}</span>
                       </div>
                     </td>
+                    {!hideReceiptButton && (
+                      <td className="p-6 text-center">
+                        <div className="flex flex-col items-center">
+                          <span className="text-[10px] font-black text-indigo-600 italic tracking-tighter underline">{record.payDate}</span>
+                          <span className="text-[8px] text-slate-300 font-bold uppercase tracking-widest mt-1">Liquidado</span>
+                          <button 
+                            onClick={() => setViewingReceipt(record)}
+                            className="mt-2 flex items-center gap-1.5 bg-emerald-50 text-emerald-600 px-3 py-1.5 rounded-lg border border-emerald-100 hover:bg-emerald-100 transition-all text-[9px] font-black uppercase tracking-tighter"
+                          >
+                            <FileText size={10} /> Comprovante
+                          </button>
+                        </div>
+                      </td>
+                    )}
                   </>
                 )}
               </tr>
@@ -559,48 +663,82 @@ export default function FinancialReportTable({
 
                  {/* Commissions List */}
                  <div className="space-y-4">
-                    <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest px-4">Participação nas Comissões (MMN)</p>
-                    <div className="bg-slate-50 rounded-[2.5rem] border border-slate-100 overflow-hidden">
-                       {loadingCommissions ? (
-                         <div className="p-8 flex flex-col items-center justify-center gap-2">
-                           <Loader2 size={24} className="text-indigo-500 animate-spin opacity-40" />
-                           <p className="text-[9px] text-slate-400 font-black uppercase tracking-widest">Buscando rede...</p>
-                         </div>
-                       ) : orderCommissions.length > 0 ? (
-                         <div className="divide-y divide-slate-100">
-                            {orderCommissions.map((comm, idx) => (
-                              <div key={idx} className="p-5 flex items-center justify-between hover:bg-white transition-all">
-                                 <div className="flex items-center gap-3">
-                                    <div className="size-8 bg-white rounded-lg flex items-center justify-center text-indigo-600 border border-slate-100 shadow-sm text-[10px] font-black">
-                                       L{comm.level}
+                     <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest px-4">Participação nas Comissões (MMN)</p>
+                     <div className="bg-slate-50 rounded-[2.5rem] border border-slate-100 overflow-hidden shadow-sm">
+                        {loadingCommissions ? (
+                          <div className="p-8 flex flex-col items-center justify-center gap-2">
+                            <Loader2 size={24} className="text-indigo-500 animate-spin opacity-40" />
+                            <p className="text-[9px] text-slate-400 font-black uppercase tracking-widest">Buscando rede...</p>
+                          </div>
+                        ) : groupedCommissions.length > 0 ? (
+                          <>
+                            <div className="divide-y divide-slate-100">
+                               {groupedCommissions.map((row) => (
+                                 <div key={row.key} className="p-5 hover:bg-white transition-all space-y-3">
+                                    <div className="flex items-center justify-between gap-3">
+                                       <div className="flex items-center gap-3 min-w-0">
+                                          <div className="size-8 bg-white rounded-lg flex items-center justify-center text-indigo-600 border border-slate-100 shadow-sm text-[10px] font-black shrink-0">
+                                             G{row.generation}
+                                          </div>
+                                          <div className="flex flex-col min-w-0">
+                                             <span className="text-xs font-black text-midnight uppercase leading-none mb-1 truncate">{row.affiliateName}</span>
+                                             <div className="flex items-center gap-2 flex-wrap">
+                                                <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">Geração G{row.generation}</span>
+                                                <span className="text-slate-200">•</span>
+                                                <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">Pedido #{row.orderId}</span>
+                                             </div>
+                                          </div>
+                                       </div>
+                                       <div className="text-right shrink-0">
+                                          <span className="text-sm font-black text-indigo-600 italic tracking-tighter">R$ {row.total.toFixed(2).replace('.', ',')}</span>
+                                       </div>
                                     </div>
-                                    <div className="flex flex-col">
-                                       <span className="text-xs font-black text-midnight uppercase leading-none mb-1">{comm.affiliateName}</span>
-                                       <div className="flex items-center gap-2">
-                                          <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">Nível {comm.level}</span>
-                                          <span className="text-slate-200">•</span>
-                                          <span className={`text-[8px] font-black uppercase ${
-                                             comm.status === 'paid' ? 'text-emerald-500' : 
-                                             comm.status === 'released' ? 'text-indigo-500' : 'text-amber-500'
-                                          }`}>
-                                             {comm.status === 'paid' ? 'Pago' : comm.status === 'released' ? 'Disponível' : 'Pendente'}
-                                          </span>
+                                    <div className="grid grid-cols-3 gap-2 pl-11">
+                                       <div className="bg-white rounded-xl px-3 py-2 border border-slate-100">
+                                          <p className="text-[8px] text-slate-400 font-black uppercase tracking-widest">Mensal</p>
+                                          <p className="text-[11px] font-black text-emerald-600">R$ {row.mensal.toFixed(2).replace('.', ',')}</p>
+                                       </div>
+                                       <div className="bg-white rounded-xl px-3 py-2 border border-slate-100">
+                                          <p className="text-[8px] text-slate-400 font-black uppercase tracking-widest">Digital</p>
+                                          <p className="text-[11px] font-black text-blue-500">R$ {row.digital.toFixed(2).replace('.', ',')}</p>
+                                       </div>
+                                       <div className="bg-white rounded-xl px-3 py-2 border border-slate-100">
+                                          <p className="text-[8px] text-slate-400 font-black uppercase tracking-widest">Anual</p>
+                                          <p className="text-[11px] font-black text-indigo-500">R$ {row.anual.toFixed(2).replace('.', ',')}</p>
                                        </div>
                                     </div>
                                  </div>
-                                 <div className="text-right">
-                                    <span className="text-sm font-black text-indigo-600 italic tracking-tighter">R$ {comm.amount.toFixed(2).replace('.', ',')}</span>
-                                 </div>
-                              </div>
-                            ))}
-                         </div>
-                       ) : (
-                         <div className="p-8 text-center">
-                            <p className="text-[10px] text-slate-300 font-black uppercase italic">Nenhuma comissão de rede vinculada</p>
-                         </div>
-                       )}
-                    </div>
-                 </div>
+                               ))}
+                            </div>
+                            {/* Summary footer based on the spreadsheet distribution */}
+                            <div className="bg-indigo-50/50 p-4 px-6 border-t border-slate-100 flex items-center justify-between text-[10px] font-black text-slate-500 uppercase tracking-wider flex-wrap gap-3">
+                               <div className="flex items-center gap-1">
+                                  <span>Mensal:</span>
+                                  <span className="text-indigo-600 font-black">R$ {totals.mensal.toFixed(2).replace('.', ',')}</span>
+                               </div>
+                               <div className="hidden sm:inline text-slate-300">|</div>
+                               <div className="flex items-center gap-1">
+                                  <span>Digital:</span>
+                                  <span className="text-indigo-600 font-black">R$ {totals.digital.toFixed(2).replace('.', ',')}</span>
+                               </div>
+                               <div className="hidden sm:inline text-slate-300">|</div>
+                               <div className="flex items-center gap-1">
+                                  <span>Anual:</span>
+                                  <span className="text-indigo-600 font-black">R$ {totals.anual.toFixed(2).replace('.', ',')}</span>
+                               </div>
+                               <div className="hidden sm:inline text-slate-300">|</div>
+                               <div className="bg-indigo-600 text-white px-2 py-1 rounded-lg shadow-sm">
+                                  Total: R$ {totals.total.toFixed(2).replace('.', ',')}
+                                </div>
+                            </div>
+                          </>
+                        ) : (
+                          <div className="p-8 text-center">
+                             <p className="text-[10px] text-slate-300 font-black uppercase italic">Nenhuma comissão de rede vinculada</p>
+                          </div>
+                        )}
+                     </div>
+                  </div>
 
                 {/* Product Items List */}
                 <div className="space-y-4">

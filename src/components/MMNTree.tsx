@@ -176,7 +176,9 @@ export default function MMNTree({ treeData }: { treeData: any }) {
                       </div>
                       <div>
                         <h3 className="text-2xl font-black text-midnight tracking-tighter italic uppercase">{selectedMember.name}</h3>
-                        <p className="text-xs font-black text-primary-blue uppercase tracking-widest">Nível {selectedMember.level} na Rede</p>
+                        <p className="text-xs font-black text-primary-blue uppercase tracking-widest">
+                          {selectedMember.level === 0 ? 'G0 - Você' : `G${selectedMember.level} - Nível ${selectedMember.level}`}
+                        </p>
                       </div>
                    </div>
 

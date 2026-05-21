@@ -48,12 +48,12 @@ BEGIN
             -- Dividir em 3 partes conforme PRD (Tri-Split)
             part_val := ROUND(commission_val / 3, 2);
             
-            -- 1. Bônus Mensal (33.33%)
+             -- 1. Bônus Mensal (33.33%)
             INSERT INTO public.transactions (profile_id, type, description, amount, status)
             VALUES (
                 commission_record.upline_id, 
                 'commission', 
-                'Cashback Mensal - Pedido #' || NEW.id || ' (Nível ' || commission_record.level || ')', 
+                'Cashback Mensal - Pedido #' || NEW.id || ' (Nível ' || (commission_record.level - 1) || ')', 
                 part_val, 
                 'completed'
             );
@@ -63,7 +63,7 @@ BEGIN
             VALUES (
                 commission_record.upline_id, 
                 'commission', 
-                'Cashback Anual - Pedido #' || NEW.id || ' (Nível ' || commission_record.level || ')', 
+                'Cashback Anual - Pedido #' || NEW.id || ' (Nível ' || (commission_record.level - 1) || ')', 
                 part_val, 
                 'completed'
             );
@@ -73,7 +73,7 @@ BEGIN
             VALUES (
                 commission_record.upline_id, 
                 'commission', 
-                'Cashback Digital - Pedido #' || NEW.id || ' (Nível ' || commission_record.level || ')', 
+                'Cashback Digital - Pedido #' || NEW.id || ' (Nível ' || (commission_record.level - 1) || ')', 
                 commission_val - (2 * part_val), 
                 'completed'
             );

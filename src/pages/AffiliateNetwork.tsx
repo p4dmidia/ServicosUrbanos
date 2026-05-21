@@ -64,7 +64,20 @@ export default function AffiliateNetwork() {
         // Filter levels based on depth, excluding G6
         const filteredLevels = levelsConfig.filter(l => l.level <= mmnConfigData.depth && l.level !== 6);
         
-        setNetwork(networkData);
+        // Add G0 (Você) to the network list
+        const g0User = {
+          id: user.id,
+          name: profile?.full_name || 'Você',
+          referralCode: profile?.referral_code || '',
+          whatsapp: profile?.whatsapp || '',
+          level: 0,
+          joinedDate: profile?.created_at ? new Date(profile.created_at).toLocaleDateString('pt-BR') : '---',
+          status: 'Ativo',
+          earnings: statsData.totalEarnings || 0,
+          spillover: false
+        };
+
+        setNetwork([g0User, ...networkData]);
         setTreeData(treeInfo);
         setStats(statsData);
         setMmnConfig(filteredLevels);
@@ -76,11 +89,11 @@ export default function AffiliateNetwork() {
     }
 
     loadNetworkData();
-  }, [user]);
+  }, [user, profile]);
 
   if (loading || !stats) {
     return (
-      <AffiliateLayout title="Minha Rede MMN">
+      <AffiliateLayout title="Cashback">
         <div className="min-h-[60vh] flex items-center justify-center">
           <Loader2 className="size-12 text-primary-blue animate-spin" />
         </div>
@@ -92,7 +105,8 @@ export default function AffiliateNetwork() {
     const matchesSearch = item.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       (item.referralCode || item.id).toLowerCase().includes(searchTerm.toLowerCase());
     
-    const matchesLevel = levelFilter === 0 || Number(item.level) === levelFilter;
+    const matchesLevel = levelFilter === 0 || 
+      (levelFilter === -1 ? item.level === 0 : Number(item.level) === levelFilter);
     
     return matchesSearch && matchesLevel;
   });
@@ -132,7 +146,7 @@ export default function AffiliateNetwork() {
   ];
 
   return (
-    <AffiliateLayout title="Minha Rede MMN">
+    <AffiliateLayout title="Cashback">
       <div className="p-8 lg:p-12 space-y-10">
         
         {/* Header Summary */}
@@ -223,6 +237,7 @@ export default function AffiliateNetwork() {
                      className="appearance-none flex items-center gap-2 bg-slate-50 border border-slate-100 px-6 py-4 rounded-2xl text-xs font-black text-slate-500 hover:text-midnight transition-all uppercase tracking-widest cursor-pointer pr-10 focus:outline-none focus:border-primary-blue focus:ring-4 focus:ring-primary-blue/5"
                    >
                       <option value={0}>Todos os Níveis</option>
+                      <option value={-1}>G0 ( AFILIADO PRINCIPAL )</option>
                       {mmnConfig.filter(l => l.level >= 1).map((l) => (
                         <option key={l.level} value={l.level}>
                           G{l.level} ( {l.level === 1 ? 'DIRETOS' : 'INDIRETOS'} )
@@ -278,9 +293,9 @@ export default function AffiliateNetwork() {
                             </td>
                             <td className="py-6">
                               <span className={`inline-flex items-center px-3 py-1 rounded-full text-[10px] font-black uppercase ${
-                                item.level === 1 ? 'bg-emerald-50 text-emerald-600' : 'bg-blue-50 text-blue-600'
+                                item.level === 0 ? 'bg-indigo-50 text-indigo-600' : item.level === 1 ? 'bg-emerald-50 text-emerald-600' : 'bg-blue-50 text-blue-600'
                               }`}>
-                                Nível {item.level}
+                                {item.level === 0 ? 'G0 - Você' : `G${item.level} - Nível ${item.level}`}
                               </span>
                             </td>
                             <td className="py-6 text-sm font-bold text-slate-500">

@@ -40,6 +40,20 @@ export default function PaymentModal({ isOpen, onClose, selectedRecords, onConfi
   const [manualPixKey, setManualPixKey] = useState('');
   const [editingPix, setEditingPix] = useState(false);
 
+  // Reinicia o índice quando o modal é aberto
+  useEffect(() => {
+    if (isOpen) {
+      setCurrentIndex(0);
+    }
+  }, [isOpen]);
+
+  // Ajusta o índice se ele estiver fora dos limites (quando um item é removido no pai)
+  useEffect(() => {
+    if (currentIndex >= selectedRecords.length && selectedRecords.length > 0) {
+      setCurrentIndex(selectedRecords.length - 1);
+    }
+  }, [selectedRecords.length, currentIndex]);
+
   // Removido o agrupamento por destinatário para mostrar registros individuais conforme pedido
   const currentRecord = selectedRecords[currentIndex];
 
@@ -101,12 +115,8 @@ export default function PaymentModal({ isOpen, onClose, selectedRecords, onConfi
         totalAmount: currentRecord.repasse,
         orders: [currentRecord]
       });
-
-      if (currentIndex < selectedRecords.length - 1) {
-        handleNext();
-      } else {
-        onClose();
-      }
+    } catch (error) {
+      console.error(error);
     } finally {
       setIsProcessing(false);
     }

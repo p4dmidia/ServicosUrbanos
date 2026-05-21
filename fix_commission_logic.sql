@@ -1,5 +1,14 @@
--- MIGRATION: CORREÇÃO DA LÓGICA DE COMISSIONAMENTO (EVITAR DUPLICIDADE)
--- OBJETIVO: Pagar comissão apenas UMA VEZ quando o pedido for marcado como pago.
+-- =========================================================================
+-- MIGRATION: TRIGGER handle_order_payment (com order_id)
+-- OBJETIVO: Pagar comissão uma vez ao marcar pedido pago; gravar order_id nas transações
+--
+-- PRÉ-REQUISITO: Executar fix_commissions_view.sql antes deste arquivo
+-- COMO EXECUTAR: Supabase Dashboard > SQL Editor > colar e executar
+-- =========================================================================
+
+-- Garantir coluna order_id (idempotente se fix_commissions_view já rodou)
+ALTER TABLE public.transactions
+  ADD COLUMN IF NOT EXISTS order_id TEXT REFERENCES public.orders(id) ON DELETE SET NULL;
 
 -- 1. Atualizar a função principal com trava de segurança (Idempotência)
 CREATE OR REPLACE FUNCTION public.handle_order_payment()
@@ -76,33 +85,36 @@ BEGIN
             v_anual := commission_val - (v_mensal + v_digital);
             
             -- 1. Bônus Mensal
-            INSERT INTO public.transactions (profile_id, type, description, amount, status)
+            INSERT INTO public.transactions (profile_id, type, description, amount, status, order_id)
             VALUES (
                 commission_record.upline_id, 
                 'commission', 
-                'Cashback Mensal - Pedido #' || NEW.id || ' (Nível ' || commission_record.level || ')', 
+                'Cashback Mensal - Pedido #' || NEW.id || ' (Nível ' || (commission_record.level - 1) || ')', 
                 v_mensal, 
-                'completed'
+                'completed',
+                NEW.id
             );
 
             -- 2. Bônus Anual
-            INSERT INTO public.transactions (profile_id, type, description, amount, status)
+            INSERT INTO public.transactions (profile_id, type, description, amount, status, order_id)
             VALUES (
                 commission_record.upline_id, 
                 'commission', 
-                'Cashback Anual - Pedido #' || NEW.id || ' (Nível ' || commission_record.level || ')', 
+                'Cashback Anual - Pedido #' || NEW.id || ' (Nível ' || (commission_record.level - 1) || ')', 
                 v_anual, 
-                'completed'
+                'completed',
+                NEW.id
             );
 
             -- 3. Bônus Carteira Digital (CD)
-            INSERT INTO public.transactions (profile_id, type, description, amount, status)
+            INSERT INTO public.transactions (profile_id, type, description, amount, status, order_id)
             VALUES (
                 commission_record.upline_id, 
                 'commission', 
-                'Cashback Digital - Pedido #' || NEW.id || ' (Nível ' || commission_record.level || ')', 
+                'Cashback Digital - Pedido #' || NEW.id || ' (Nível ' || (commission_record.level - 1) || ')', 
                 v_digital, 
-                'completed'
+                'completed',
+                NEW.id
             );
         END LOOP;
         

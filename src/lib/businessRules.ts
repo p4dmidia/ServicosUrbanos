@@ -1057,18 +1057,22 @@ export const businessRules = {
         // Determinar o nível
         let level = '0';
         if (order?.customer_id && levelMap.has(order.customer_id)) {
-          level = String(levelMap.get(order.customer_id));
+          level = String(Math.max(0, levelMap.get(order.customer_id) - 1));
         } else {
           const todosNumeros = t.description?.match(/\d+/g) || [];
           const nivelEncontrado = todosNumeros.find(n => n !== orderId && n.length < 3);
-          level = nivelEncontrado || (t.type === 'commission' ? '0' : '---');
+          level = nivelEncontrado ? String(Math.max(0, parseInt(nivelEncontrado, 10) - 1)) : (t.type === 'commission' ? '0' : '---');
         }
 
         let mappedDescription = t.description || '';
         mappedDescription = mappedDescription
           .replace(/Comiss[aã]o MMN\s*\(Mensal\)/gi, 'Cashback Mensal')
           .replace(/Comiss[aã]o MMN\s*\(Anual\)/gi, 'Cashback Anual')
-          .replace(/Comiss[aã]o MMN\s*\(CD\)/gi, 'Cashback Digital');
+          .replace(/Comiss[aã]o MMN\s*\(CD\)/gi, 'Cashback Digital')
+          .replace(/(N[íi]vel\s+)(\d+)/gi, (match, p1, p2) => {
+            const levelNum = parseInt(p2, 10);
+            return `${p1}${levelNum - 1}`;
+          });
 
         return {
           id: t.id,
@@ -1753,19 +1757,20 @@ export const businessRules = {
 
   getAffiliateCashbackReport: async (startDate: string, endDate: string) => {
     try {
-      // 1. Busca as comissões registradas
-      const { data: commissions, error: commError } = await supabase
-        .from('commissions')
-        .select('id, affiliate_id, amount, created_at, status')
-        .eq('status', 'released')
+      // 1. Busca as comissões e saques/pagamentos do período
+      const { data: transactions, error: txError } = await supabase
+        .from('transactions')
+        .select('id, profile_id, amount, created_at, status, type, description')
+        .in('status', ['completed', 'pago'])
+        .in('type', ['commission', 'withdrawal'])
         .gte('created_at', startDate)
         .lte('created_at', endDate);
 
-      if (commError) throw commError;
-      if (!commissions || commissions.length === 0) return [];
+      if (txError) throw txError;
+      if (!transactions || transactions.length === 0) return [];
 
       // 2. Coleta IDs únicos de afiliados
-      const affiliateIds = [...new Set(commissions.map(c => c.affiliate_id).filter(Boolean))];
+      const affiliateIds = [...new Set(transactions.map(t => t.profile_id).filter(Boolean))];
 
       // 3. Busca os perfis (tabela 'profiles')
       const { data: profiles, error: profError } = await supabase
@@ -1785,8 +1790,8 @@ export const businessRules = {
       // 4. Agrupa e une os dados
       const report: Record<string, any> = {};
 
-      commissions.forEach(c => {
-        const affiliateId = c.affiliate_id;
+      transactions.forEach(t => {
+        const affiliateId = t.profile_id;
         if (!affiliateId) return;
 
         const profile = profilesMap[String(affiliateId)];
@@ -1805,12 +1810,38 @@ export const businessRules = {
           };
         }
 
-        const amount = Number(c.amount);
-        
-        // Como a tabela commissions não tem descrição, colocamos em 'digital' por padrão (ou total)
-        // No futuro podemos separar por tipo se adicionarmos essa coluna
-        report[affiliateId].digital += amount;
-        report[affiliateId].total += amount;
+        const amount = Number(t.amount);
+        const desc = t.description || '';
+
+        if (t.type === 'commission') {
+          if (desc.includes('Mensal')) {
+            report[affiliateId].mensal += amount;
+          } else if (desc.includes('Anual')) {
+            report[affiliateId].anual += amount;
+          } else if (desc.includes('Digital') || desc.includes('(CD)')) {
+            report[affiliateId].digital += amount;
+          } else {
+            report[affiliateId].digital += amount;
+          }
+        } else if (t.type === 'withdrawal') {
+          // Os saques/pagamentos são registrados com valores negativos na tabela transactions
+          // e devem ser deduzidos de seus respectivos saldos.
+          if (desc.includes('Mensal')) {
+            report[affiliateId].mensal += amount; // soma valor negativo (subtrai)
+          } else if (desc.includes('Anual')) {
+            report[affiliateId].anual += amount;
+          } else {
+            report[affiliateId].digital += amount;
+          }
+        }
+      });
+
+      // Calcular o total e remover saldos negativos
+      Object.values(report).forEach((r: any) => {
+        r.mensal = Math.max(0, Math.round(r.mensal * 100) / 100);
+        r.anual = Math.max(0, Math.round(r.anual * 100) / 100);
+        r.digital = Math.max(0, Math.round(r.digital * 100) / 100);
+        r.total = Math.round((r.mensal + r.anual + r.digital) * 100) / 100;
       });
 
       return Object.values(report).sort((a: any, b: any) => b.total - a.total);
@@ -2818,28 +2849,75 @@ export const businessRules = {
   },
 
   getOrderCommissions: async (orderId: string | number) => {
+    const orderIdStr = String(orderId);
+
+    const mapRows = (rows: any[], nameById: Record<string, string>) =>
+      rows.map((c: any) => ({
+        ...c,
+        affiliate_id: c.affiliate_id,
+        affiliateName: nameById[c.affiliate_id] || 'Desconhecido',
+      }));
+
+    const fetchAffiliateNames = async (affiliateIds: string[]) => {
+      const unique = [...new Set(affiliateIds.filter(Boolean))];
+      if (unique.length === 0) return {} as Record<string, string>;
+      const { data: profiles } = await supabase
+        .from('profiles')
+        .select('id, full_name')
+        .in('id', unique);
+      return Object.fromEntries(
+        (profiles || []).map((p: any) => [p.id, p.full_name || 'Desconhecido'])
+      );
+    };
+
     try {
       const { data, error } = await supabase
         .from('commissions')
-        .select(`
-          amount,
-          level,
-          status,
-          profiles (
-            full_name
-          )
-        `)
-        .eq('order_id', orderId)
+        .select('id, affiliate_id, amount, level, status, description, order_id')
+        .eq('order_id', orderIdStr)
         .order('level', { ascending: true });
 
+      if (!error && data && data.length > 0) {
+        const names = await fetchAffiliateNames(data.map((c: any) => c.affiliate_id));
+        return mapRows(data, names);
+      }
+
       if (error) {
-        console.error('Error fetching order commissions:', error);
+        console.warn('commissions view query failed, falling back to transactions:', error.message);
+      }
+
+      // Fallback: transações de comissão (caso a view ainda não exista no projeto Supabase)
+      const { data: txRows, error: txError } = await supabase
+        .from('transactions')
+        .select('id, profile_id, amount, status, description, order_id')
+        .eq('type', 'commission')
+        .or(`order_id.eq.${orderIdStr},description.ilike.%Pedido #${orderIdStr}%`);
+
+      if (txError) {
+        console.error('Error fetching order commissions:', txError);
         return [];
       }
-      return (data || []).map((c: any) => ({
-        ...c,
-        affiliateName: c.profiles?.full_name || 'Desconhecido'
-      }));
+
+      const normalized = (txRows || []).map((t: any) => {
+        const desc = t.description || '';
+        const levelMatch = desc.match(/Nível\s+(\d+)/i);
+        const levelNum = levelMatch ? parseInt(levelMatch[1], 10) : 0;
+        const level = desc.includes('Comissão MMN')
+          ? Math.max(levelNum, 1)
+          : Math.max(levelNum + 1, 1);
+        return {
+          id: t.id,
+          affiliate_id: t.profile_id,
+          amount: t.amount,
+          status: t.status,
+          description: desc,
+          order_id: t.order_id || orderIdStr,
+          level,
+        };
+      });
+
+      const names = await fetchAffiliateNames(normalized.map((c) => c.affiliate_id));
+      return mapRows(normalized, names);
     } catch (error) {
       console.error('Error in getOrderCommissions:', error);
       return [];

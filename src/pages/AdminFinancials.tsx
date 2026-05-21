@@ -35,6 +35,7 @@ export default function AdminFinancials() {
   // Payment Flow State
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [selectedForPayment, setSelectedForPayment] = useState<FinancialRecord[]>([]);
+  const [tableRefreshKey, setTableRefreshKey] = useState(0);
   
   // View State
   const [viewType, setViewType] = useState<'merchants' | 'affiliates'>('merchants');
@@ -44,9 +45,9 @@ export default function AdminFinancials() {
   });
   const [affiliateReport, setAffiliateReport] = useState<any[]>([]);
 
-  async function loadAdminData() {
+  async function loadAdminData(silent = false) {
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
       const [ordersData, extrasData, settingsData, affiliateData, marketConfig] = await Promise.all([
         businessRules.getAllOrders(),
         businessRules.getAllOrderExtras(),
@@ -65,10 +66,10 @@ export default function AdminFinancials() {
       // Somente pedidos com repasse pendente
       const pendingOrders = ordersData.filter(o => o.payoutStatus === 'pending');
       
-      // Coletar todos os IDs de destinatários (IDs numéricos)
+      // Coletar todos os IDs de destinatários (IDs de usuários/UUIDs)
       const potentialPayeeIds = [...new Set(
         pendingOrders.map(o => o.affiliateId || o.userId).filter(Boolean)
-      )].map(id => Number(id));
+      )].map(id => String(id));
       
       if (potentialPayeeIds.length > 0) {
         const payeesData = await businessRules.getPayeeDetails(potentialPayeeIds);
@@ -205,25 +206,38 @@ export default function AdminFinancials() {
           pix_key: payeeGroup.payeePixKey
         });
 
-        // 2. Mudamos o status das transações para 'paid' (IGUAL AO LOJISTA)
-        const { error: updateError } = await supabase
-          .from('commissions')
-          .update({ status: 'paid' })
-          .eq('affiliate_id', payeeGroup.payeeId)
-          .eq('status', 'released');
+        // 2. Registramos uma transação de saque/saída na tabela transactions para abater do saldo
+        const { error: txInsertError } = await supabase
+          .from('transactions')
+          .insert([{
+            profile_id: payeeGroup.payeeId,
+            type: 'withdrawal',
+            amount: -Math.abs(payeeGroup.totalAmount),
+            description: `Pagamento Cashback Mensal - Ref CASH-${payeeGroup.payeeId.substring(0, 5)}`,
+            status: 'completed'
+          }]);
 
-        if (updateError) throw updateError;
+        if (txInsertError) throw txInsertError;
         
-        toast.success(`Pagamento de R$ ${payeeGroup.totalAmount.toFixed(2)} para ${payeeGroup.payeeName} liquidado.`);
-        
-        // 3. Recarrega os dados
-        await loadAdminData();
+        // 3. Recarrega os dados silenciosamente
+        await loadAdminData(true);
       }
-      
-      toast.success('Pagamento processado com sucesso!');
+
+      // Remove o registro recém-pago da lista de selecionados (fila)
+      const orderIdsToRemove = payeeGroup.orders.map((o: any) => o.orderId);
+      setSelectedForPayment(prev => {
+        const nextList = prev.filter(r => !orderIdsToRemove.includes(r.orderId));
+        if (nextList.length === 0) {
+          setIsPaymentModalOpen(false);
+          setTableRefreshKey(prevKey => prevKey + 1);
+          toast.success('Todos os pagamentos foram finalizados com sucesso!');
+        } else {
+          toast.success(`Pagamento de R$ ${payeeGroup.totalAmount.toFixed(2)} para ${payeeGroup.payeeName} liquidado.`);
+        }
+        return nextList;
+      });
     } catch (error: any) {
       console.error('Erro detalhado ao confirmar pagamento:', error);
-      // Mostra o erro real do banco para sabermos o que está faltando
       const errorMsg = error.message || error.details || 'Falha ao atualizar status no banco.';
       toast.error(`Erro no Banco: ${errorMsg}`);
     }
@@ -344,7 +358,7 @@ export default function AdminFinancials() {
         </div>
 
         {/* Tabela de Relatórios */}
-        <div className="bg-white rounded-[3rem] overflow-hidden shadow-2xl border border-slate-100">
+        <div key={`${viewType}-${tableRefreshKey}`} className="bg-white rounded-[3rem] overflow-hidden shadow-2xl border border-slate-100">
             <FinancialReportTable 
               data={viewType === 'merchants' ? reportData : []} 
               affiliateData={viewType === 'affiliates' ? filteredAffiliateData : []}

@@ -20,7 +20,8 @@ import {
   Wallet,
   Shield,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  Calendar
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import jsPDF from 'jspdf';
@@ -29,6 +30,7 @@ import { format } from 'date-fns';
 import PaymentReceipt from './PaymentReceipt';
 import { businessRules } from '../lib/businessRules';
 import { Loader2 } from 'lucide-react';
+import { toast } from 'react-hot-toast';
 
 export interface FinancialRecord {
   orderId: string;
@@ -284,6 +286,60 @@ export default function FinancialReportTable({
     doc.save(`Relatorio_${mode}_${format(new Date(), 'yyyyMMdd')}.pdf`);
   };
 
+  const exportToCSV = () => {
+    // Determinar quais registros exportar (selecionados ou todos os filtrados)
+    const recordsToExport = selectedRecords.length > 0
+      ? (mode === 'merchants' ? data : affiliateData).filter((r: any) => selectedRecords.includes(mode === 'merchants' ? r.orderId : r.id))
+      : filteredData;
+
+    if (recordsToExport.length === 0) {
+      toast.error('Nenhum registro encontrado para exportar.');
+      return;
+    }
+
+    // Gerar o cabeçalho do CSV
+    // Nome, Chave Pix, Valor a Pagar, Data de Pagamento
+    const headers = ['Nome', 'Chave Pix', 'Valor a Pagar (R$)', 'Data de Pagamento'];
+    
+    // Gerar as linhas
+    const rows = recordsToExport.map((record: any) => {
+      if (mode === 'merchants') {
+        return [
+          record.payeeName || 'Lojista',
+          record.payeePixKey || '---',
+          (record.repasse || 0).toFixed(2),
+          record.payDate || '---'
+        ];
+      } else {
+        const name = record.name || record.payeeName || 'Afiliado';
+        const pixKey = record.pix_key || record.payeePixKey || '---';
+        const valorAPagar = record.mensal || 0; // O repasse para afiliado pendente é o mensal
+        const payDate = record.payDate || new Date().toLocaleDateString('pt-BR');
+        return [
+          name,
+          pixKey,
+          valorAPagar.toFixed(2),
+          payDate
+        ];
+      }
+    });
+
+    // Construir o conteúdo do CSV (com BOM para codificação correta de caracteres especiais no Excel)
+    const csvContent = "\uFEFF" + [headers.join(';'), ...rows.map(e => e.map(val => `"${String(val).replace(/"/g, '""')}"`).join(';'))].join('\n');
+    
+    // Criar download
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    const fileName = `pagamentos_${mode}_${new Date().toISOString().split('T')[0]}.csv`;
+    link.setAttribute("download", fileName);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    toast.success(`${recordsToExport.length} registros exportados para CSV.`);
+  };
+
   const toggleSelectAll = () => {
     if (selectedRecords.length === filteredData.length) {
       setSelectedRecords([]);
@@ -358,6 +414,16 @@ export default function FinancialReportTable({
             </button>
           )}
 
+          {isAdmin && (
+            <button 
+              onClick={exportToCSV}
+              className="flex items-center gap-2 bg-emerald-600 text-white px-6 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-emerald-700 transition-all shadow-xl shadow-emerald-600/20 active:scale-95"
+            >
+              <FileText size={18} />
+              CSV {selectedRecords.length > 0 ? `(${selectedRecords.length})` : ''}
+            </button>
+          )}
+
           {isAdmin && onGeneratePayments && selectedRecords.length > 0 && (
             <motion.button 
               initial={{ scale: 0.9, opacity: 0 }}
@@ -411,9 +477,7 @@ export default function FinancialReportTable({
                     )}
                   </th>
                   <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Chave PIX</th>
-                  {!hideReceiptButton && (
-                    <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Data Pagamento</th>
-                  )}
+                  <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Data Pagamento</th>
                 </>
               )}
             </tr>
@@ -520,20 +584,22 @@ export default function FinancialReportTable({
                          <span className="text-[8px] text-slate-400 font-bold uppercase tracking-widest mt-1">{record.pix_type || '---'}</span>
                       </div>
                     </td>
-                    {!hideReceiptButton && (
-                      <td className="p-6 text-center">
-                        <div className="flex flex-col items-center">
-                          <span className="text-[10px] font-black text-indigo-600 italic tracking-tighter underline">{record.payDate}</span>
-                          <span className="text-[8px] text-slate-300 font-bold uppercase tracking-widest mt-1">Liquidado</span>
+                    <td className="p-6 text-center">
+                      <div className="flex flex-col items-center">
+                        <span className="text-[10px] font-black text-indigo-600 italic tracking-tighter underline">{record.payDate || '---'}</span>
+                        <span className="text-[8px] text-slate-300 font-bold uppercase tracking-widest mt-1">
+                          {hideReceiptButton ? 'Previsto' : 'Liquidado'}
+                        </span>
+                        {!hideReceiptButton && (
                           <button 
                             onClick={() => setViewingReceipt(record)}
                             className="mt-2 flex items-center gap-1.5 bg-emerald-50 text-emerald-600 px-3 py-1.5 rounded-lg border border-emerald-100 hover:bg-emerald-100 transition-all text-[9px] font-black uppercase tracking-tighter"
                           >
                             <FileText size={10} /> Comprovante
                           </button>
-                        </div>
-                      </td>
-                    )}
+                        )}
+                      </div>
+                    </td>
                   </>
                 )}
               </tr>
@@ -651,15 +717,24 @@ export default function FinancialReportTable({
                       </div>
                    </div>
                    <div className="bg-slate-50 p-6 rounded-[2rem] border border-slate-100 flex items-center gap-4">
-                      <div className="size-10 bg-white rounded-xl flex items-center justify-center text-emerald-500 shadow-sm">
-                         <CreditCard size={20} />
-                      </div>
-                      <div>
-                         <p className="text-[9px] text-slate-400 font-black uppercase tracking-widest mb-0.5">Forma de Pagamento</p>
-                         <p className="text-sm font-black text-midnight uppercase">{viewingOrder.paymentMethod || 'Não Informado'}</p>
-                      </div>
-                   </div>
-                </div>
+                       <div className="size-10 bg-white rounded-xl flex items-center justify-center text-emerald-500 shadow-sm">
+                          <CreditCard size={20} />
+                       </div>
+                       <div>
+                          <p className="text-[9px] text-slate-400 font-black uppercase tracking-widest mb-0.5">Forma de Pagamento</p>
+                          <p className="text-sm font-black text-midnight uppercase">{viewingOrder.paymentMethod || 'Não Informado'}</p>
+                       </div>
+                    </div>
+                    <div className="bg-slate-50 p-6 rounded-[2rem] border border-slate-100 flex items-center gap-4">
+                       <div className="size-10 bg-white rounded-xl flex items-center justify-center text-indigo-600 shadow-sm">
+                          <Calendar size={20} />
+                       </div>
+                       <div>
+                          <p className="text-[9px] text-slate-400 font-black uppercase tracking-widest mb-0.5">Data da Compra</p>
+                          <p className="text-sm font-black text-midnight uppercase">{viewingOrder.saleDate || 'Não Informada'}</p>
+                       </div>
+                    </div>
+                 </div>
 
                  {/* Commissions List */}
                  <div className="space-y-4">

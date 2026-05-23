@@ -145,10 +145,29 @@ export default function AdminFinancials() {
     return mapped;
   }, [orders, extras, payees, profile, matrixPixKey, matrixCpf, dynamicPlatformRate]);
 
-  // Filtro para mostrar apenas afiliados com saldo pendente
+  // Filtro para mostrar apenas afiliados com saldo pendente e define a data prevista de pagamento (hoje)
   const filteredAffiliateData = useMemo(() => {
-    return affiliateReport.filter(r => (r.mensal + r.digital + r.anual) > 0.01);
+    const todayStr = new Date().toLocaleDateString('pt-BR');
+    return affiliateReport
+      .filter(r => (r.mensal + r.digital + r.anual) > 0.01)
+      .map(r => ({
+        ...r,
+        payDate: todayStr
+      }));
   }, [affiliateReport]);
+
+  // Soma dos repasses para lojistas que vencem hoje (payDate === hoje)
+  const totalLojistasHoje = useMemo(() => {
+    const todayStr = new Date().toLocaleDateString('pt-BR');
+    return reportData
+      .filter(r => r.payDate === todayStr)
+      .reduce((a, b) => a + b.repasse, 0);
+  }, [reportData]);
+
+  // Soma dos cashbacks mensais de afiliados a pagar hoje (mensal de todos os afiliados pendentes)
+  const totalAfiliadosHoje = useMemo(() => {
+    return filteredAffiliateData.reduce((a, b) => a + (b.mensal || 0), 0);
+  }, [filteredAffiliateData]);
 
   const handleGeneratePayments = (selectedItems: any[]) => {
     if (selectedItems.length === 0) {
@@ -256,8 +275,6 @@ export default function AdminFinancials() {
     );
   }
 
-  const pendingPayoutTotal = reportData.reduce((a, b) => a + b.repasse, 0);
-
   return (
     <AdminLayout title="Gestão de Pagamentos PIX [Sincronizado]" subtitle="Auditoria global de repasses para lojistas e parceiros">
       <div className="p-8 lg:p-12 space-y-12">
@@ -341,20 +358,22 @@ export default function AdminFinancials() {
               </div>
            </div>
 
-           <div className="bg-indigo-600 p-8 rounded-[2.5rem] shadow-2xl shadow-indigo-600/20 group relative overflow-hidden flex flex-col justify-between">
-               <div className="absolute top-0 right-0 p-6 opacity-10">
-                  <QrCode size={100} className="text-white" />
-               </div>
-               <div>
-                 <p className="text-[10px] text-indigo-100 font-bold uppercase tracking-widest mb-1">Total a Pagar Hoje</p>
-                 <h3 className="text-4xl font-black text-white tracking-tighter italic leading-none">
-                    R$ {pendingPayoutTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                 </h3>
-               </div>
-               <div className="mt-4">
-                  <span className="text-[9px] text-indigo-100 font-black uppercase tracking-[0.2em] border border-white/20 px-4 py-2 rounded-full backdrop-blur-sm">Sistema PIX Pronto</span>
-               </div>
-           </div>
+            <div className="bg-indigo-600 p-8 rounded-[2.5rem] shadow-2xl shadow-indigo-600/20 group relative overflow-hidden flex flex-col justify-between">
+                <div className="absolute top-0 right-0 p-6 opacity-10">
+                   <QrCode size={100} className="text-white" />
+                </div>
+                <div>
+                  <p className="text-[10px] text-indigo-100 font-bold uppercase tracking-widest mb-1">
+                    {viewType === 'merchants' ? 'Total a Pagar Lojistas Hoje' : 'Total a Pagar Afiliados Hoje'}
+                  </p>
+                  <h3 className="text-4xl font-black text-white tracking-tighter italic leading-none">
+                     R$ {(viewType === 'merchants' ? totalLojistasHoje : totalAfiliadosHoje).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                  </h3>
+                </div>
+                <div className="mt-4">
+                   <span className="text-[9px] text-indigo-100 font-black uppercase tracking-[0.2em] border border-white/20 px-4 py-2 rounded-full backdrop-blur-sm">Sistema PIX Pronto</span>
+                </div>
+            </div>
         </div>
 
         {/* Tabela de Relatórios */}

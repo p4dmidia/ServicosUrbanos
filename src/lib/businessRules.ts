@@ -797,7 +797,7 @@ export const businessRules = {
     try {
       // 1. Buscar profundidade real no banco
       const { data: config } = await supabase.from('mmn_config').select('depth').single();
-      const depth = config?.depth || 4; // Fallback para 4 se não achar
+      const depth = Math.min(config?.depth || 4, 5); // Fallback para 4 se não achar, limita em 5 para excluir G6 (nível 6)
 
       // 2. Buscar todos os níveis dinamicamente
       const levels: { [key: string]: number } = {};
@@ -931,7 +931,7 @@ export const businessRules = {
 
       // 1. Buscar profundidade
       const { data: config } = await supabase.from('mmn_config').select('depth').single();
-      const depth = config?.depth || 4;
+      const depth = Math.min(config?.depth || 4, 5); // Limita em 5 para excluir G6 (nível 6)
 
       const fullNetwork: any[] = [];
       let currentParentIds = [userId];
@@ -1045,34 +1045,43 @@ export const businessRules = {
         console.error("Erro no cálculo de níveis:", err);
       }
 
-      return transactions.map(t => {
+      const activity = transactions.map(t => {
         const orderMatch = t.description?.match(/Pedido\s*#\s*([A-Z0-9-]+)/i);
         const orderId = orderMatch ? orderMatch[1].trim() : null;
         const order = orderId ? ordersMap.get(orderId) : null;
 
-        const typeMatch = t.description?.match(/(Mensal|Anual|Digital|CD)/i);
-        let cashbackType = typeMatch ? typeMatch[1] : 'Outros';
-        if (cashbackType === 'CD') cashbackType = 'Digital';
+        // Classificar saques como 'Digital' para conciliar com o saldo disponível
+        let cashbackType = 'Outros';
+        if (t.type === 'withdrawal') {
+          cashbackType = 'Digital';
+        } else {
+          const typeMatch = t.description?.match(/(Mensal|Anual|Digital|CD)/i);
+          cashbackType = typeMatch ? typeMatch[1] : 'Outros';
+          if (cashbackType === 'CD') cashbackType = 'Digital';
+        }
 
-        // Determinar o nível
-        let level = '0';
-        if (order?.customer_id && levelMap.has(order.customer_id)) {
-          level = String(Math.max(0, levelMap.get(order.customer_id) - 1));
+        // Determinar o nível, extraindo primeiramente da descrição (Nível X) se disponível
+        let level = '---';
+        const levelMatch = t.description?.match(/\(N[íi]vel\s*(\d+)\)/i);
+        if (levelMatch) {
+          level = levelMatch[1];
+        } else if (order?.customer_id) {
+          if (order.customer_id === userId) {
+            level = '0';
+          } else if (levelMap.has(order.customer_id)) {
+            level = String(levelMap.get(order.customer_id));
+          }
         } else {
           const todosNumeros = t.description?.match(/\d+/g) || [];
           const nivelEncontrado = todosNumeros.find(n => n !== orderId && n.length < 3);
-          level = nivelEncontrado ? String(Math.max(0, parseInt(nivelEncontrado, 10) - 1)) : (t.type === 'commission' ? '0' : '---');
+          level = nivelEncontrado ? String(parseInt(nivelEncontrado, 10)) : (t.type === 'commission' ? '0' : '---');
         }
 
         let mappedDescription = t.description || '';
         mappedDescription = mappedDescription
           .replace(/Comiss[aã]o MMN\s*\(Mensal\)/gi, 'Cashback Mensal')
           .replace(/Comiss[aã]o MMN\s*\(Anual\)/gi, 'Cashback Anual')
-          .replace(/Comiss[aã]o MMN\s*\(CD\)/gi, 'Cashback Digital')
-          .replace(/(N[íi]vel\s+)(\d+)/gi, (match, p1, p2) => {
-            const levelNum = parseInt(p2, 10);
-            return `${p1}${levelNum - 1}`;
-          });
+          .replace(/Comiss[aã]o MMN\s*\(CD\)/gi, 'Cashback Digital');
 
         return {
           id: t.id,
@@ -1087,6 +1096,14 @@ export const businessRules = {
           description: mappedDescription
         };
       });
+
+      // Filtrar comissões de afiliados que não pertencem à rede (não mapeadas)
+      return activity.filter(item => {
+        if (item.originalType === 'commission' && item.orderId !== '---') {
+          if (item.level === '---') return false;
+        }
+        return true;
+      });
     } catch (error) {
       console.error("Activity Fetch Error:", error);
       return [];
@@ -1096,7 +1113,7 @@ export const businessRules = {
   getAffiliateTree: async (userId: string) => {
     try {
       const { data: config } = await supabase.from('mmn_config').select('depth').single();
-      const depth = config?.depth || 4;
+      const depth = Math.min(config?.depth || 4, 5); // Limita em 5 para excluir G6 (nível 6)
 
       // Buscar todos os perfis da rede de uma vez para construir a árvore na memória
       // (Mais eficiente do que múltiplas chamadas recursivas ao banco)
@@ -1108,7 +1125,7 @@ export const businessRules = {
 
       const buildTree = (currentId: string, currentLevel: number): any => {
         const profile = allMembers.find(p => p.id === currentId);
-        if (!profile || currentLevel > depth + 1) return null;
+        if (!profile || currentLevel > depth) return null; // Limita o nível da árvore ao depth (5)
 
         const children = allMembers
           .filter(p => p.referred_by === currentId)

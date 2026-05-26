@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, Download, Share, PlusSquare, Smartphone, ChevronDown, ChevronUp } from 'lucide-react';
+import { X, Download, Share, PlusSquare, Smartphone, ChevronDown, ChevronUp, MoreVertical } from 'lucide-react';
 
 export default function PwaInstallPopup() {
   const [showPopup, setShowPopup] = useState(false);
@@ -9,6 +9,7 @@ export default function PwaInstallPopup() {
   const [isStandalone, setIsStandalone] = useState(false);
   const [isInstalled, setIsInstalled] = useState(false);
   const [showInstructions, setShowInstructions] = useState(false);
+  const [showAndroidInstructions, setShowAndroidInstructions] = useState(false);
   const [isMobileOrTablet, setIsMobileOrTablet] = useState(false);
 
   useEffect(() => {
@@ -49,15 +50,13 @@ export default function PwaInstallPopup() {
     };
     window.addEventListener('appinstalled', handleAppInstalled);
 
-    // Show popup if mobile/tablet, not in standalone mode, not recently dismissed, and prompt is ready (or iOS Safari)
+    // Show popup if mobile/tablet, not in standalone mode, not recently dismissed, and not installed
     const shouldShow = mobileOrTablet && !standalone && !isDismissed && !isInstalled;
     
-    // Set a tiny timeout to let pages load fully before sliding up
+    // Set a tiny timeout to let pages load fully before sliding up (forced display on mobile/tablet)
     if (shouldShow) {
       const timer = setTimeout(() => {
-        if (ios || (window as any).deferredPrompt || deferredPrompt) {
-          setShowPopup(true);
-        }
+        setShowPopup(true);
       }, 2500);
       return () => {
         clearTimeout(timer);
@@ -70,33 +69,35 @@ export default function PwaInstallPopup() {
       window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
       window.removeEventListener('appinstalled', handleAppInstalled);
     };
-  }, [deferredPrompt, isInstalled]);
+  }, [isInstalled]);
 
-  // Handle beforeinstallprompt update
+  // Handle beforeinstallprompt update (just keep state in sync)
   useEffect(() => {
-    if (deferredPrompt && !isStandalone && isMobileOrTablet) {
-      const dismissedTime = localStorage.getItem('pwa-admin-install-dismissed');
-      const isDismissed = dismissedTime && (Date.now() - parseInt(dismissedTime, 10) < 7 * 24 * 60 * 60 * 1000);
-      if (!isDismissed) {
-        setShowPopup(true);
-      }
+    if ((window as any).deferredPrompt) {
+      setDeferredPrompt((window as any).deferredPrompt);
     }
-  }, [deferredPrompt, isStandalone, isMobileOrTablet]);
+  }, [showPopup]);
 
   const handleInstallClick = async () => {
-    if (!deferredPrompt) return;
-
-    deferredPrompt.prompt();
-
-    const { outcome } = await deferredPrompt.userChoice;
-    console.log(`User response to install prompt: ${outcome}`);
-
-    if (outcome === 'accepted') {
-      setIsInstalled(true);
-      setDeferredPrompt(null);
-      (window as any).deferredPrompt = null;
+    if (deferredPrompt) {
+      try {
+        deferredPrompt.prompt();
+        const { outcome } = await deferredPrompt.userChoice;
+        console.log(`User response to install prompt: ${outcome}`);
+        if (outcome === 'accepted') {
+          setIsInstalled(true);
+          setDeferredPrompt(null);
+          (window as any).deferredPrompt = null;
+          setShowPopup(false);
+        }
+      } catch (err) {
+        console.error(err);
+        setShowAndroidInstructions(!showAndroidInstructions);
+      }
+    } else {
+      // Toggle manual instructions if native prompt is not available
+      setShowAndroidInstructions(!showAndroidInstructions);
     }
-    setShowPopup(false);
   };
 
   const handleDismiss = (dontShowAgain: boolean) => {
@@ -181,6 +182,34 @@ export default function PwaInstallPopup() {
             </motion.div>
           )}
 
+          {/* Content area: Android Instructions (if expanded/deferredPrompt missing) */}
+          {!isIOS && showAndroidInstructions && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: 'auto', opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              className="mt-3 bg-white/5 border border-white/5 rounded-xl p-3 space-y-2.5 overflow-hidden"
+            >
+              <p className="text-[9px] font-black text-indigo-400 uppercase tracking-wider">
+                Como instalar no Android:
+              </p>
+              <ol className="space-y-2 text-[10px] text-slate-300">
+                <li className="flex items-start gap-2">
+                  <span className="flex items-center justify-center size-4 bg-indigo-500/10 border border-indigo-500/20 rounded-full text-[8px] font-black text-indigo-400 shrink-0">1</span>
+                  <span>
+                    Toque no menu do navegador <MoreVertical size={10} className="inline text-indigo-400 mx-0.5 align-middle" /> (três pontinhos) no canto superior direito.
+                  </span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="flex items-center justify-center size-4 bg-indigo-500/10 border border-indigo-500/20 rounded-full text-[8px] font-black text-indigo-400 shrink-0">2</span>
+                  <span>
+                    Selecione <strong>Adicionar à Tela inicial</strong> ou <strong>Instalar aplicativo</strong>.
+                  </span>
+                </li>
+              </ol>
+            </motion.div>
+          )}
+
           {/* Action Row */}
           <div className="flex flex-col gap-2 mt-4">
             {isIOS ? (
@@ -205,8 +234,17 @@ export default function PwaInstallPopup() {
                 onClick={handleInstallClick}
                 className="w-full bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white py-2.5 rounded-xl font-black text-[10px] uppercase tracking-widest shadow-md shadow-indigo-600/10 transition-all active:scale-[0.98] flex items-center justify-center gap-1.5"
               >
-                <Download size={12} className="shrink-0" />
-                Baixar Aplicativo
+                {showAndroidInstructions ? (
+                  <>
+                    Esconder Instruções
+                    <ChevronUp size={12} />
+                  </>
+                ) : (
+                  <>
+                    <Download size={12} className="shrink-0" />
+                    Baixar Aplicativo
+                  </>
+                )}
               </button>
             )}
 

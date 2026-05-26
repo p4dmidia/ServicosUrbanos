@@ -282,11 +282,9 @@ export default function Checkout() {
 
         // 2. Se for retirada, criar o registro de código de retirada
         if (shippingMethod === 'pickup') {
-          // Formato: [ID do pedido]/[mês]/[ano]
-          const now = new Date();
-          const month = String(now.getMonth() + 1).padStart(2, '0');
-          const year = now.getFullYear();
-          const withdrawalCode = `${orderId}/${month}/${year}`;
+          // Formato: [ID do pedido]/[3 letras e números aleatórios]
+          const randomSuffix = Array.from({ length: 3 }, () => 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'[Math.floor(Math.random() * 36)]).join('');
+          const withdrawalCode = `${orderId}/${randomSuffix}`;
           
           await supabase
             .from('order_extras')
@@ -358,11 +356,9 @@ export default function Checkout() {
 
         // 3. Se for retirada, criar o registro de código de retirada antecipadamente
         if (shippingMethod === 'pickup') {
-          // Formato: [ID do pedido]/[mês]/[ano]
-          const now = new Date();
-          const month = String(now.getMonth() + 1).padStart(2, '0');
-          const year = now.getFullYear();
-          const withdrawalCode = `${currentOrderId}/${month}/${year}`;
+          // Formato: [ID do pedido]/[3 letras e números aleatórios]
+          const randomSuffix = Array.from({ length: 3 }, () => 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'[Math.floor(Math.random() * 36)]).join('');
+          const withdrawalCode = `${currentOrderId}/${randomSuffix}`;
 
           await supabase
             .from('order_extras')

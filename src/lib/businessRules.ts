@@ -664,7 +664,7 @@ export const businessRules = {
       .from('order_extras')
       .upsert({
         id: orderId,
-        withdrawal_code: extra.withdrawalCode || `${orderId}/${String(new Date().getMonth() + 1).padStart(2, '0')}/${new Date().getFullYear()}`,
+        withdrawal_code: extra.withdrawalCode || `${orderId}/${Array.from({ length: 3 }, () => 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'[Math.floor(Math.random() * 36)]).join('')}`,
         status: extra.status || 'Pendente'
       });
 
@@ -894,8 +894,11 @@ export const businessRules = {
       const totalEarnings = monthlyBonus + annualBonus + walletBonus;
       
       // O Saldo Disponível conforme o PRD é o da Carteira Digital (CD)
+      // Exclui resgates/pagamentos de Cashback Mensal e Anual para manter as carteiras independentes
       const totalWithdrawn = transactions
-        .filter(t => t.type === 'withdrawal')
+        .filter(t => t.type === 'withdrawal' && 
+                 !t.description?.includes('Mensal') && 
+                 !t.description?.includes('Anual'))
         .reduce((acc, t) => acc + Math.abs(Number(t.amount)), 0);
 
       const availableBalance = walletBonus - totalWithdrawn;
@@ -1050,10 +1053,12 @@ export const businessRules = {
         const orderId = orderMatch ? orderMatch[1].trim() : null;
         const order = orderId ? ordersMap.get(orderId) : null;
 
-        // Classificar saques como 'Digital' para conciliar com o saldo disponível
+        // Classificar saques como 'Digital' por padrão, mas respeitar a descrição se for Mensal/Anual
         let cashbackType = 'Outros';
         if (t.type === 'withdrawal') {
-          cashbackType = 'Digital';
+          const typeMatch = t.description?.match(/(Mensal|Anual|Digital|CD)/i);
+          cashbackType = typeMatch ? typeMatch[1] : 'Digital';
+          if (cashbackType === 'CD') cashbackType = 'Digital';
         } else {
           const typeMatch = t.description?.match(/(Mensal|Anual|Digital|CD)/i);
           cashbackType = typeMatch ? typeMatch[1] : 'Outros';
@@ -2353,11 +2358,11 @@ export const businessRules = {
       const userTransactions = transactions.filter(t => t.profile_id === profile.id);
       
       const monthlyBonus = userTransactions
-        .filter(t => t.description?.includes('(Mensal)'))
+        .filter(t => t.type === 'commission' && t.description?.includes('Mensal'))
         .reduce((acc, t) => acc + Number(t.amount), 0);
 
       const annualBonus = userTransactions
-        .filter(t => t.description?.includes('(Anual)'))
+        .filter(t => t.type === 'commission' && t.description?.includes('Anual'))
         .reduce((acc, t) => acc + Number(t.amount), 0);
 
       // Subtrair pagamentos já realizados (withdrawals com descrição de pagamento)
@@ -2455,8 +2460,6 @@ export const businessRules = {
     let newOrdersQuery = supabase.from('orders').select('id', { count: 'exact', head: true }).eq('status', 'Pendente').gte('order_date', firstDayCurrentMonth.toISOString());
     let lastNewOrdersQuery = supabase.from('orders').select('id', { count: 'exact', head: true }).eq('status', 'Pendente').gte('order_date', firstDayLastMonth.toISOString()).lte('order_date', lastDayLastMonth.toISOString());
     let activeProductsQuery = supabase.from('products').select('id', { count: 'exact', head: true }).eq('status', 'Ativo').eq('merchant_id', merchantId);
-    let currentCashbackQuery = supabase.from('orders').select('cashback_amount').eq('status', 'Concluído').gte('order_date', firstDayCurrentMonth.toISOString());
-    let lastCashbackQuery = supabase.from('orders').select('cashback_amount').eq('status', 'Concluído').gte('order_date', firstDayLastMonth.toISOString()).lte('order_date', lastDayLastMonth.toISOString());
 
     if (branchId) {
       // Filtro específico de filial
@@ -2465,8 +2468,6 @@ export const businessRules = {
       newOrdersQuery = newOrdersQuery.eq('branch_id', branchId);
       lastNewOrdersQuery = lastNewOrdersQuery.eq('branch_id', branchId);
       activeProductsQuery = activeProductsQuery.eq('branch_id', branchId);
-      currentCashbackQuery = currentCashbackQuery.eq('branch_id', branchId);
-      lastCashbackQuery = lastCashbackQuery.eq('branch_id', branchId);
     } else {
       // Filtro global do lojista (Matriz + todas as filiais)
       const ids = [...branchIds];
@@ -2478,8 +2479,6 @@ export const businessRules = {
       lastSalesQuery = lastSalesQuery.or(filter);
       newOrdersQuery = newOrdersQuery.or(filter);
       lastNewOrdersQuery = lastNewOrdersQuery.or(filter);
-      currentCashbackQuery = currentCashbackQuery.or(filter);
-      lastCashbackQuery = lastCashbackQuery.or(filter);
     }
 
     const [
@@ -2488,22 +2487,22 @@ export const businessRules = {
       { count: newOrders },
       { count: lastNewOrders },
       { count: activeProducts },
-      { data: currentCashback },
-      { data: lastCashback }
+      marketConfig
     ] = await Promise.all([
       currentSalesQuery,
       lastSalesQuery,
       newOrdersQuery,
       lastNewOrdersQuery,
       activeProductsQuery,
-      currentCashbackQuery,
-      lastCashbackQuery
+      businessRules.getMarketplaceConfig()
     ]);
 
     const totalSales = currentSales?.reduce((acc, o) => acc + Number(o.amount), 0) || 0;
     const lastTotalSales = lastSales?.reduce((acc, o) => acc + Number(o.amount), 0) || 0;
-    const totalCashback = currentCashback?.reduce((acc, o) => acc + Number(o.cashback_amount), 0) || 0;
-    const lastTotalCashback = lastCashback?.reduce((acc, o) => acc + Number(o.cashback_amount), 0) || 0;
+
+    const platformRate = marketConfig?.commissionRate || 12;
+    const merchantCommission = totalSales * (1 - (platformRate / 100));
+    const lastMerchantCommission = lastTotalSales * (1 - (platformRate / 100));
 
     const calculateTrend = (current: number, last: number) => {
       if (last <= 0) return current > 0 ? 100 : 0;
@@ -2514,7 +2513,7 @@ export const businessRules = {
       { title: 'Vendas Totais', value: new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalSales), change: `${calculateTrend(totalSales, lastTotalSales).toFixed(1)}%`, isPositive: totalSales >= lastTotalSales, icon: 'TrendingUp' },
       { title: 'Novos Pedidos', value: (newOrders || 0).toString(), change: `${(newOrders || 0) - (lastNewOrders || 0)}`, isPositive: (newOrders || 0) >= (lastNewOrders || 0), icon: 'ShoppingBag' },
       { title: 'Produtos Ativos', value: (activeProducts || 0).toString(), change: '0', isPositive: true, icon: 'Package' },
-      { title: 'Cashback Distribuído', value: new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalCashback), change: `${calculateTrend(totalCashback, lastTotalCashback).toFixed(1)}%`, isPositive: totalCashback >= lastTotalCashback, icon: 'DollarSign' },
+      { title: 'Comissões a Receber', value: new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(merchantCommission), change: `${calculateTrend(merchantCommission, lastMerchantCommission).toFixed(1)}%`, isPositive: merchantCommission >= lastMerchantCommission, icon: 'DollarSign' },
     ];
   },
 

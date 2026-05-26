@@ -21,7 +21,14 @@ import FinancialReportTable, { FinancialRecord } from '../components/FinancialRe
 
 export default function MerchantReports() {
   const { profile } = useAuth();
-  const [period, setPeriod] = useState('30d');
+  const [startDateStr, setStartDateStr] = useState(() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 30);
+    return d.toISOString().split('T')[0];
+  });
+  const [endDateStr, setEndDateStr] = useState(() => {
+    return new Date().toISOString().split('T')[0];
+  });
   const [loading, setLoading] = useState(true);
   const [reportsData, setReportsData] = useState<any>(null);
   const [orders, setOrders] = useState<any[]>([]);
@@ -41,7 +48,7 @@ export default function MerchantReports() {
         if (!mId) return;
 
         const [data, ordersData, branches] = await Promise.all([
-          businessRules.getMerchantDetailedReports(mId, period, profile?.branch_id),
+          businessRules.getMerchantDetailedReports(mId, '30d', profile?.branch_id),
           businessRules.getMerchantOrders(mId, profile?.branch_id),
           businessRules.getBranches(mId)
         ]);
@@ -69,17 +76,14 @@ export default function MerchantReports() {
     if (profile) {
       loadReports();
     }
-  }, [profile, period]);
+  }, [profile]);
 
   const { financialReportData, kpis, chart } = useMemo(() => {
-    const now = new Date();
-    let startDate = new Date();
-    switch (period) {
-      case '7d': startDate.setDate(now.getDate() - 7); break;
-      case '15d': startDate.setDate(now.getDate() - 15); break;
-      case '30d': startDate.setDate(now.getDate() - 30); break;
-      case 'ytd': startDate = new Date(now.getFullYear(), 0, 1); break;
-    }
+    const start = new Date(startDateStr);
+    start.setHours(0, 0, 0, 0);
+    
+    const end = new Date(endDateStr);
+    end.setHours(23, 59, 59, 999);
 
     const reportRecords = orders.map(o => {
       const extra = extras.find(e => e.id === o.id);
@@ -106,7 +110,10 @@ export default function MerchantReports() {
       };
     });
 
-    const filteredRecords = reportRecords.filter(r => r.orderDateRaw >= startDate);
+    const filteredRecords = reportRecords.filter(r => {
+      const orderDate = r.orderDateRaw;
+      return orderDate >= start && orderDate <= end;
+    });
     
     // KPIs
     const totalCommissions = filteredRecords.reduce((acc, r) => acc + r.repasse, 0);
@@ -126,11 +133,16 @@ export default function MerchantReports() {
     // Chart Data (simplified day grouping)
     const chartLabels: string[] = [];
     const chartValues: number[] = [];
-    const days = period === '7d' ? 7 : period === '15d' ? 15 : 30;
+    
+    // Calcular a diferença de dias
+    const diffTime = Math.abs(end.getTime() - start.getTime());
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    // Limita o gráfico a no máximo 30 dias para evitar quebra de layout na tela
+    const days = Math.min(diffDays, 30);
     
     for (let i = days; i >= 0; i--) {
-      const d = new Date();
-      d.setDate(now.getDate() - i);
+      const d = new Date(end);
+      d.setDate(d.getDate() - i);
       const label = d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
       chartLabels.push(label);
       
@@ -141,11 +153,11 @@ export default function MerchantReports() {
     }
 
     return { 
-      financialReportData: reportRecords, // All records for the table
+      financialReportData: filteredRecords, // Registros filtrados para a tabela
       kpis: kpiList,
       chart: { labels: chartLabels, values: chartValues }
     };
-  }, [orders, extras, team, period]);
+  }, [orders, extras, team, startDateStr, endDateStr]);
 
   if (loading) {
     return (
@@ -176,25 +188,30 @@ export default function MerchantReports() {
       <div className="p-8 lg:p-12 space-y-12">
         
         {/* Header Actions */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6">
-          <div className="flex items-center gap-4 bg-white p-2 rounded-2xl border border-slate-100 shadow-sm w-fit">
-            {['7d', '15d', '30d', 'ytd'].map(p => (
-              <button 
-                key={p} 
-                onClick={() => setPeriod(p)}
-                className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${period === p ? 'bg-midnight text-white shadow-xl shadow-midnight/20' : 'text-slate-400 hover:bg-slate-50'}`}
-              >
-                {p === '7d' ? '7 Dias' : p === '15d' ? '15 Dias' : p === '30d' ? '30 Dias' : 'Este Ano'}
-              </button>
-            ))}
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+          <div className="flex flex-wrap items-center gap-4 bg-white p-3 rounded-3xl border border-slate-100 shadow-sm w-fit">
+            <div className="flex items-center gap-2 bg-slate-50 px-4 py-2.5 rounded-2xl border border-slate-100">
+              <span className="text-[10px] text-slate-400 font-black uppercase tracking-widest">De:</span>
+              <input 
+                type="date" 
+                value={startDateStr}
+                onChange={(e) => setStartDateStr(e.target.value)}
+                className="bg-transparent border-none text-[10px] font-black text-slate-700 focus:outline-none"
+              />
+            </div>
+            <div className="flex items-center gap-2 bg-slate-50 px-4 py-2.5 rounded-2xl border border-slate-100">
+              <span className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Até:</span>
+              <input 
+                type="date" 
+                value={endDateStr}
+                onChange={(e) => setEndDateStr(e.target.value)}
+                className="bg-transparent border-none text-[10px] font-black text-slate-700 focus:outline-none"
+              />
+            </div>
           </div>
 
           <div className="flex flex-wrap gap-4">
-            <button className="flex items-center gap-2 px-6 py-3 bg-white border border-slate-200 rounded-2xl text-xs font-black text-midnight uppercase tracking-widest hover:bg-slate-50 transition-all shadow-sm">
-              <Calendar size={16} className="text-primary-blue" />
-              Personalizado
-            </button>
-            <button className="flex items-center gap-2 px-6 py-3 bg-primary-blue hover:bg-blue-600 text-white rounded-2xl text-xs font-black uppercase tracking-widest transition-all shadow-lg shadow-primary-blue/20">
+            <button className="flex items-center gap-2 px-6 py-4 bg-primary-blue hover:bg-blue-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all shadow-lg shadow-primary-blue/20">
               <Download size={16} />
               Exportar
             </button>

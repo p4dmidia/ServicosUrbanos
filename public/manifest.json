@@ -3,6 +3,7 @@
   "short_name": "SU Admin",
   "description": "Painel Administrativo do Ecossistema Serviços Urbanos.",
   "start_url": "/admin/login",
+  "scope": "/",
   "display": "standalone",
   "background_color": "#05070a",
   "theme_color": "#4f46e5",

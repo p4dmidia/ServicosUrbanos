@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { X, Download, Share, PlusSquare, Smartphone, ChevronDown, ChevronUp } from 'lucide-react';
+import { toast } from 'react-hot-toast';
 
 export default function PwaInstallPopup() {
   const [showPopup, setShowPopup] = useState(false);
@@ -52,8 +53,8 @@ export default function PwaInstallPopup() {
     // Show popup if mobile/tablet, not in standalone mode, not recently dismissed, and not installed
     const shouldShow = mobileOrTablet && !standalone && !isDismissed && !isInstalled;
     
-    // For iOS, show it after a small timeout
-    if (shouldShow && ios) {
+    // Show it after a small timeout for BOTH Android and iOS!
+    if (shouldShow) {
       const timer = setTimeout(() => {
         setShowPopup(true);
       }, 2500);
@@ -64,43 +65,41 @@ export default function PwaInstallPopup() {
       };
     }
 
-    // For Android, show it if deferredPrompt is already available
-    if (shouldShow && !ios && ((window as any).deferredPrompt || deferredPrompt)) {
-      setShowPopup(true);
-    }
-
     return () => {
       window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
       window.removeEventListener('appinstalled', handleAppInstalled);
     };
-  }, [isInstalled, deferredPrompt]);
+  }, [isInstalled]);
 
-  // Handle beforeinstallprompt update (show Android banner immediately when the event fires)
+  // Keep deferredPrompt state in sync when popup mounts or change occurs
   useEffect(() => {
-    if (deferredPrompt && !isStandalone && isMobileOrTablet && !isIOS) {
-      const dismissedTime = localStorage.getItem('pwa-admin-install-dismissed');
-      const isDismissed = dismissedTime && (Date.now() - parseInt(dismissedTime, 10) < 7 * 24 * 60 * 60 * 1000);
-      if (!isDismissed) {
-        setShowPopup(true);
-      }
+    if (showPopup && (window as any).deferredPrompt) {
+      setDeferredPrompt((window as any).deferredPrompt);
     }
-  }, [deferredPrompt, isStandalone, isMobileOrTablet, isIOS]);
+  }, [showPopup]);
 
   const handleInstallClick = async () => {
-    if (!deferredPrompt) return;
+    // Check global window state first just in case
+    const promptToUse = deferredPrompt || (window as any).deferredPrompt;
 
-    try {
-      deferredPrompt.prompt();
-      const { outcome } = await deferredPrompt.userChoice;
-      console.log(`User response to install prompt: ${outcome}`);
-      if (outcome === 'accepted') {
-        setIsInstalled(true);
-        setDeferredPrompt(null);
-        (window as any).deferredPrompt = null;
-        setShowPopup(false);
+    if (promptToUse) {
+      try {
+        promptToUse.prompt();
+        const { outcome } = await promptToUse.userChoice;
+        console.log(`User response to install prompt: ${outcome}`);
+        if (outcome === 'accepted') {
+          setIsInstalled(true);
+          setDeferredPrompt(null);
+          (window as any).deferredPrompt = null;
+          setShowPopup(false);
+        }
+      } catch (err) {
+        console.error('Error running install prompt:', err);
+        toast.error('Erro ao abrir o instalador. Tente recarregar a página.');
       }
-    } catch (err) {
-      console.error('Error running install prompt:', err);
+    } else {
+      // If prompt is not ready yet, show a polite toast alert
+      toast.error('O instalador do app está sendo carregado pelo navegador. Aguarde alguns segundos e clique novamente, ou certifique-se de usar o Google Chrome.');
     }
   };
 

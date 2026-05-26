@@ -1,11 +1,11 @@
 {
-  "name": "Serv Urbanos",
-  "short_name": "Serv Urbanos",
-  "description": "Tudo o que sua cidade oferece em um único ecossistema.",
-  "start_url": "/",
+  "name": "Serviços Urbanos Admin",
+  "short_name": "SU Admin",
+  "description": "Painel Administrativo do Ecossistema Serviços Urbanos.",
+  "start_url": "/admin/login",
   "display": "standalone",
-  "background_color": "#0f172a",
-  "theme_color": "#2563eb",
+  "background_color": "#05070a",
+  "theme_color": "#4f46e5",
   "icons": [
     {
       "src": "icon-192.png",

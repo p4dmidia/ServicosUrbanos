@@ -12,6 +12,7 @@ import {
 import { useNavigate, Link } from 'react-router-dom';
 import { motion } from 'motion/react';
 import { supabase } from '../lib/supabase';
+import PwaInstallPopup from '../components/PwaInstallPopup';
 
 export default function AdminLogin() {
   const [showPassword, setShowPassword] = useState(false);
@@ -173,6 +174,7 @@ export default function AdminLogin() {
           </p>
         </div>
       </motion.div>
+      <PwaInstallPopup />
     </div>
   );
 }

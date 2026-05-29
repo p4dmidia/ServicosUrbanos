@@ -73,6 +73,9 @@ export default function Marketplace() {
   useEffect(() => {
     localStorage.setItem('urbashop_cart', JSON.stringify(cartItems));
   }, [cartItems]);
+
+
+
   const [selectedCategory, setSelectedCategory] = useState('Todos');
   const [showWaitlist, setShowWaitlist] = useState(false);
   const [waitlistForm, setWaitlistForm] = useState({ fullName: '', email: '', phone: '', businessName: '' });
@@ -118,6 +121,8 @@ export default function Marketplace() {
             category_id,
             stock,
             sales,
+            branch_id,
+            merchant_id,
             product_reviews(rating)
           `)
           .eq('status', 'Ativo');
@@ -129,7 +134,7 @@ export default function Marketplace() {
           const price = Number(p.price) || 0;
           // Map category name from the categories table using category_id
           const categoryFromTable = baseCategories.find(c => c.id === p.category_id);
-          const categoryName = categoryFromTable?.name || p.category || 'Geral';
+          const categoryName = categoryFromTable?.name || (p as any).category || 'Geral';
           
           return {
             id: p.id,
@@ -143,7 +148,9 @@ export default function Marketplace() {
             sales: Number(p.sales) || 0,
             category: categoryName,
             cashback: Number(p.cashback) || 5,
-            stock: Number(p.stock) || 0
+            stock: Number(p.stock) || 0,
+            branchId: (p as any).branch_id,
+            merchantId: (p as any).merchant_id
           };
         });
 
@@ -640,16 +647,16 @@ export default function Marketplace() {
                           <div className="flex items-center bg-white border border-slate-200 rounded-xl px-2 py-1 gap-3">
                             <button 
                               onClick={() => updateQuantity(item.id, -1)}
-                              className="size-6 rounded-lg hover:bg-slate-50 flex items-center justify-center lg:transition-colors text-slate-400"
+                              className="size-6 rounded-lg hover:bg-slate-50 flex items-center justify-center lg:transition-colors text-slate-800 hover:text-midnight"
                             >
-                              <Minus size={14} />
+                              <Minus size={14} strokeWidth={3} />
                             </button>
-                            <span className="text-xs font-black w-4 text-center">{item.quantity}</span>
+                            <span className="text-xs font-black w-4 text-center text-slate-800">{item.quantity}</span>
                             <button 
                               onClick={() => updateQuantity(item.id, 1)}
-                              className="size-6 rounded-lg hover:bg-slate-50 flex items-center justify-center lg:transition-colors text-midnight"
+                              className="size-6 rounded-lg hover:bg-slate-50 flex items-center justify-center lg:transition-colors text-slate-800 hover:text-midnight"
                             >
-                              <Plus size={14} />
+                              <Plus size={14} strokeWidth={3} />
                             </button>
                           </div>
                           <button 
@@ -709,8 +716,13 @@ export default function Marketplace() {
                       <span className="text-2xl font-black text-midnight tracking-tighter">R$ {subtotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
                     </div>
                   </div>
-                  <button onClick={() => navigate('/checkout')} className="w-full bg-midnight hover:bg-slate-800 text-white py-5 rounded-2xl font-black text-lg transition-all shadow-xl shadow-midnight/20 active:scale-[0.98] uppercase tracking-tighter">
-                    Finalizar Pedido
+                  <button 
+                    onClick={() => {
+                      navigate('/checkout');
+                    }}
+                    className="w-full py-5 rounded-2xl font-black text-lg transition-all uppercase tracking-tighter shadow-xl bg-midnight hover:bg-slate-800 text-white shadow-midnight/20 active:scale-[0.98]"
+                  >
+                    Ir para o Checkout
                   </button>
                   <p className="text-center text-[10px] text-slate-400 font-bold uppercase mt-4 tracking-widest flex items-center justify-center gap-2">
                     <ShieldCheck size={12} /> Compra 100% segura e garantida
@@ -780,40 +792,7 @@ export default function Marketplace() {
       </AnimatePresence>
 
       <main className="flex-1 max-w-7xl mx-auto w-full px-6 lg:px-20 py-8">
-        {/* Main Banner */}
-        <section className="mb-12">
-          <motion.div 
-            initial={{ opacity: 0, scale: 0.98 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="relative bg-gradient-to-r from-primary-blue to-midnight rounded-[2rem] p-10 lg:p-16 overflow-hidden shadow-2xl"
-          >
-            <div className="absolute top-0 right-0 w-1/2 h-full opacity-20 pointer-events-none">
-              <div className="absolute top-10 right-10 size-40 bg-white/10 rounded-3xl rotate-12"></div>
-              <div className="absolute bottom-10 right-40 size-32 bg-white/5 rounded-3xl -rotate-12"></div>
-            </div>
-            
-            <div className="max-w-lg relative z-10">
-              <div className="flex items-center gap-2 mb-4">
-                <span className="bg-orange-500 text-white text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full shadow-lg shadow-orange-500/20">
-                  Exclusivo UrbaShop
-                </span>
-                <span className="bg-emerald-500 text-white text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full shadow-lg shadow-emerald-500/20">
-                  Retirada Grátis
-                </span>
-              </div>
-              <h2 className="text-3xl lg:text-5xl font-black text-white leading-tight mb-6 tracking-tighter italic">
-                Sua cidade em um só clique.
-              </h2>
-              <p className="text-slate-300 text-lg mb-8 leading-relaxed">
-                Segurança total com cashback em todas as compras. O único marketplace que te devolve dinheiro real via Pix.
-              </p>
-              <Link to="/loja" className="inline-flex bg-white text-midnight px-10 py-4 rounded-2xl font-black hover:bg-slate-100 transition-all items-center gap-3 shadow-xl active:scale-95 group">
-                Explorar Ofertas <ArrowRight size={20} className="group-hover:translate-x-1 transition-transform" />
-              </Link>
-            </div>
-          </motion.div>
-        </section>
-
+        {/* Categories */}
         <div className="flex gap-4 overflow-x-auto pb-8 no-scrollbar scroll-smooth">
           <button 
             onClick={() => setSelectedCategory('Todos')}
@@ -832,33 +811,7 @@ export default function Marketplace() {
           ))}
         </div>
 
-        <section className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-16">
-          <Link to="/loja" className="bg-white p-8 rounded-[2rem] shadow-sm border border-slate-200 flex items-center justify-between group hover:border-orange-500/30 hover:shadow-xl transition-all cursor-pointer">
-            <div>
-              <p className="text-xs font-black text-orange-500 uppercase tracking-widest mb-2">Seleção Especial</p>
-              <h3 className="text-2xl font-black text-midnight mb-4 tracking-tighter">Ver Ofertas do Dia</h3>
-              <p className="text-slate-500 text-sm font-medium">Os melhores preços com cashback dobrado.</p>
-            </div>
-            <div className="size-16 bg-orange-50 rounded-3xl flex items-center justify-center text-orange-500 group-hover:bg-orange-500 group-hover:text-white transition-all transform group-hover:-rotate-12 shadow-sm">
-              <Tag size={32} />
-            </div>
-          </Link>
-
-          <div 
-            onClick={() => setShowWaitlist(true)}
-            className="bg-midnight p-8 rounded-[2rem] shadow-xl flex items-center justify-center text-center relative overflow-hidden group cursor-pointer border border-white/5"
-          >
-            <div className="absolute inset-0 bg-primary-blue/10 opacity-0 group-hover:opacity-100 transition-opacity"></div>
-            <div className="relative z-10">
-              <h3 className="text-2xl font-black text-white mb-2 tracking-tighter uppercase italic"><span className="text-primary-blue">Lista de Espera:</span> Venda aqui</h3>
-              <p className="text-slate-400 text-sm mb-6 font-medium">Cadastre-se para ser um dos primeiros lojistas da rede.</p>
-              <button className="bg-primary-blue hover:bg-blue-600 text-white px-8 py-3 rounded-xl font-black transition-all text-xs uppercase tracking-widest shadow-xl shadow-primary-blue/20">
-                Entrar na Lista
-              </button>
-            </div>
-          </div>
-        </section>
-
+        {/* Product Grid */}
         <section className="mb-20">
           <div className="flex items-center justify-between mb-8 px-2">
             <h2 className="text-2xl font-black text-midnight uppercase tracking-tighter border-l-4 border-emerald-500 pl-4 italic">
@@ -995,6 +948,68 @@ export default function Marketplace() {
               <button onClick={() => setSearch('')} className="mt-10 px-8 py-3 bg-midnight text-white rounded-xl font-black text-xs uppercase tracking-widest hover:bg-slate-800 transition-all shadow-xl shadow-midnight/20">Limpar filtros</button>
             </div>
           )}
+        </section>
+
+        {/* Main Banner */}
+        <section className="mb-16">
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.98 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="relative bg-gradient-to-r from-primary-blue to-midnight rounded-[2rem] p-10 lg:p-16 overflow-hidden shadow-2xl"
+          >
+            <div className="absolute top-0 right-0 w-1/2 h-full opacity-20 pointer-events-none">
+              <div className="absolute top-10 right-10 size-40 bg-white/10 rounded-3xl rotate-12"></div>
+              <div className="absolute bottom-10 right-40 size-32 bg-white/5 rounded-3xl -rotate-12"></div>
+            </div>
+            
+            <div className="max-w-lg relative z-10">
+              <div className="flex items-center gap-2 mb-4">
+                <span className="bg-orange-500 text-white text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full shadow-lg shadow-orange-500/20">
+                  Exclusivo UrbaShop
+                </span>
+                <span className="bg-emerald-500 text-white text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full shadow-lg shadow-emerald-500/20">
+                  Retirada Grátis
+                </span>
+              </div>
+              <h2 className="text-3xl lg:text-5xl font-black text-white leading-tight mb-6 tracking-tighter italic">
+                Sua cidade em um só clique.
+              </h2>
+              <p className="text-slate-300 text-lg mb-8 leading-relaxed">
+                Segurança total com cashback em todas as compras. O único marketplace que te devolve dinheiro real via Pix.
+              </p>
+              <Link to="/loja" className="inline-flex bg-white text-midnight px-10 py-4 rounded-2xl font-black hover:bg-slate-100 transition-all items-center gap-3 shadow-xl active:scale-95 group">
+                Explorar Ofertas <ArrowRight size={20} className="group-hover:translate-x-1 transition-transform" />
+              </Link>
+            </div>
+          </motion.div>
+        </section>
+
+        {/* Promo Grid */}
+        <section className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-16">
+          <Link to="/loja" className="bg-white p-8 rounded-[2rem] shadow-sm border border-slate-200 flex items-center justify-between group hover:border-orange-500/30 hover:shadow-xl transition-all cursor-pointer">
+            <div>
+              <p className="text-xs font-black text-orange-500 uppercase tracking-widest mb-2">Seleção Especial</p>
+              <h3 className="text-2xl font-black text-midnight mb-4 tracking-tighter">Ver Ofertas do Dia</h3>
+              <p className="text-slate-500 text-sm font-medium">Os melhores preços com cashback dobrado.</p>
+            </div>
+            <div className="size-16 bg-orange-50 rounded-3xl flex items-center justify-center text-orange-500 group-hover:bg-orange-500 group-hover:text-white transition-all transform group-hover:-rotate-12 shadow-sm">
+              <Tag size={32} />
+            </div>
+          </Link>
+
+          <div 
+            onClick={() => setShowWaitlist(true)}
+            className="bg-midnight p-8 rounded-[2rem] shadow-xl flex items-center justify-center text-center relative overflow-hidden group cursor-pointer border border-white/5"
+          >
+            <div className="absolute inset-0 bg-primary-blue/10 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+            <div className="relative z-10">
+              <h3 className="text-2xl font-black text-white mb-2 tracking-tighter uppercase italic"><span className="text-primary-blue">Lista de Espera:</span> Venda aqui</h3>
+              <p className="text-slate-400 text-sm mb-6 font-medium">Cadastre-se para ser um dos primeiros lojistas da rede.</p>
+              <button className="bg-primary-blue hover:bg-blue-600 text-white px-8 py-3 rounded-xl font-black transition-all text-xs uppercase tracking-widest shadow-xl shadow-primary-blue/20">
+                Entrar na Lista
+              </button>
+            </div>
+          </div>
         </section>
 
         {/* Seção de Confiança */}

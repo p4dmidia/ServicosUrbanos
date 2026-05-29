@@ -64,6 +64,7 @@ export interface MerchantProduct {
   width?: number;
   length?: number;
   description?: string;
+  branchStocks?: { branch_id: string, stock: number }[];
 }
 
 export interface Category {
@@ -592,8 +593,27 @@ export const businessRules = {
     return data;
   },
 
-  decrementStock: async (productId: string, quantity: number) => {
-    // Busca estoque atual
+  decrementStock: async (productId: string, quantity: number, branchId?: string | null) => {
+    // 1. Se tiver branchId, atualizar o estoque da filial em product_stocks
+    if (branchId) {
+      const { data: stockRecord } = await supabase
+        .from('product_stocks')
+        .select('stock')
+        .eq('product_id', productId)
+        .eq('branch_id', branchId)
+        .maybeSingle();
+
+      if (stockRecord) {
+        const newBranchStock = Math.max(0, (stockRecord.stock || 0) - quantity);
+        await supabase
+          .from('product_stocks')
+          .update({ stock: newBranchStock })
+          .eq('product_id', productId)
+          .eq('branch_id', branchId);
+      }
+    }
+
+    // 2. Busca estoque atual do anúncio principal e atualiza
     const { data: product, error: fetchError } = await supabase
       .from('products')
       .select('stock, sales')
@@ -617,6 +637,50 @@ export const businessRules = {
       console.error('ERRO CRÍTICO AO ATUALIZAR ESTOQUE:', updateError.message, updateError.details);
     } else {
       console.log(`Estoque atualizado com sucesso para o produto ${productId}. Novo saldo: ${newStock}`);
+    }
+  },
+
+  getProductStocks: async (productId: string): Promise<{ branch_id: string, stock: number }[]> => {
+    const { data, error } = await supabase
+      .from('product_stocks')
+      .select('branch_id, stock')
+      .eq('product_id', productId);
+
+    if (error) {
+      console.error('Erro ao buscar estoques por filial:', error.message);
+      return [];
+    }
+    return data || [];
+  },
+
+  saveProductStocks: async (productId: string, stocks: { branchId: string, stock: number }[]) => {
+    // 1. Limpar estoques anteriores para este produto
+    const { error: deleteError } = await supabase
+      .from('product_stocks')
+      .delete()
+      .eq('product_id', productId);
+
+    if (deleteError) {
+      console.error('Erro ao limpar estoques anteriores:', deleteError.message);
+      throw deleteError;
+    }
+
+    if (stocks.length === 0) return;
+
+    // 2. Inserir os novos estoques
+    const inserts = stocks.map(s => ({
+      product_id: productId,
+      branch_id: s.branchId,
+      stock: s.stock
+    }));
+
+    const { error: insertError } = await supabase
+      .from('product_stocks')
+      .insert(inserts);
+
+    if (insertError) {
+      console.error('Erro ao salvar estoques por filial:', insertError.message);
+      throw insertError;
     }
   },
 
@@ -2011,6 +2075,7 @@ export const businessRules = {
       cashbackAmount: o.cashback_amount,
       shippingAddress: o.shipping_address || 'Retirada na Loja',
       paymentMethod: o.payment_method || 'Não informado',
+      orderDate: o.order_date,
       date: new Date(o.order_date).toLocaleString('pt-BR', { 
         day: '2-digit', 
         month: '2-digit', 
@@ -2038,39 +2103,66 @@ export const businessRules = {
 
   // Lojista Products
   getBranchProducts: async (branchId?: string) => {
-    let query = supabase
+    if (!branchId) return [];
+
+    // 1. Obter o merchant_id da filial para buscar todos os produtos da organização
+    const { data: branchData } = await supabase
+      .from('branches')
+      .select('merchant_id')
+      .eq('id', branchId)
+      .maybeSingle();
+
+    if (!branchData) return [];
+    const merchantId = branchData.merchant_id;
+
+    // 2. Buscar todos os produtos deste merchant
+    const { data: productsData, error: productsError } = await supabase
       .from('products')
       .select('*')
+      .eq('merchant_id', merchantId)
       .order('name');
 
-    if (branchId) {
-      query = query.eq('branch_id', branchId);
-    }
+    if (productsError) throw productsError;
 
-    const { data, error } = await query;
-    
-    if (error) throw error;
-    
-    return data.map(p => ({
-      id: p.id,
-      name: p.name,
-      category: p.category,
-      categoryId: p.category_id,
-      price: Number(p.price),
-      stock: p.stock,
-      sales: p.sales,
-      cashback: Number(p.cashback),
-      status: p.status as 'Ativo' | 'Inativo',
-      image: p.image,
-      mainImage: p.main_image,
-      gallery: p.gallery,
-      branchId: p.branch_id,
-      weight: Number(p.weight),
-      height: Number(p.height),
-      width: Number(p.width),
-      length: Number(p.length),
-      description: p.description
-    }));
+    // 3. Buscar estoques específicos desta filial
+    const { data: stocksData, error: stocksError } = await supabase
+      .from('product_stocks')
+      .select('product_id, stock')
+      .eq('branch_id', branchId);
+
+    if (stocksError) throw stocksError;
+
+    const stocksMap = new Map<string, number>(stocksData?.map(s => [s.product_id, s.stock]) || []);
+
+    return productsData.map(p => {
+      let branchStock = 0;
+      if (p.branch_id === branchId) {
+        branchStock = p.stock || 0;
+      } else if (p.branch_id === null) {
+        branchStock = stocksMap.get(p.id) || 0;
+      }
+
+      return {
+        id: p.id,
+        name: p.name,
+        category: p.category,
+        categoryId: p.category_id,
+        price: Number(p.price),
+        stock: branchStock,
+        sales: p.sales || 0,
+        cashback: Number(p.cashback),
+        status: p.status as 'Ativo' | 'Inativo',
+        image: p.image,
+        mainImage: p.main_image,
+        gallery: p.gallery,
+        branchId: p.branch_id,
+        weight: Number(p.weight),
+        height: Number(p.height),
+        width: Number(p.width),
+        length: Number(p.length),
+        description: p.description
+      };
+    });
   },
 
   createProduct: async (product: any) => {
@@ -2181,15 +2273,33 @@ export const businessRules = {
   },
 
   getMerchantProducts: async (merchantId: string) => {
-    const { data, error } = await supabase
+    const { data: productsData, error: productsError } = await supabase
       .from('products')
       .select('*')
       .eq('merchant_id', merchantId)
       .order('name');
     
-    if (error) throw error;
+    if (productsError) throw productsError;
+
+    // Buscar estoques para todos esses produtos de uma vez só
+    const productIds = productsData.map(p => p.id);
+    if (productIds.length === 0) return [];
+
+    const { data: stocksData, error: stocksError } = await supabase
+      .from('product_stocks')
+      .select('*')
+      .in('product_id', productIds);
+
+    const stocksMap = new Map<string, { branch_id: string, stock: number }[]>();
+    if (!stocksError && stocksData) {
+      stocksData.forEach(s => {
+        const list = stocksMap.get(s.product_id) || [];
+        list.push({ branch_id: s.branch_id, stock: s.stock });
+        stocksMap.set(s.product_id, list);
+      });
+    }
     
-    return data.map(p => ({
+    return productsData.map(p => ({
       id: p.id,
       name: p.name,
       category: p.category,
@@ -2207,7 +2317,8 @@ export const businessRules = {
       height: Number(p.height),
       width: Number(p.width),
       length: Number(p.length),
-      description: p.description
+      description: p.description,
+      branchStocks: stocksMap.get(p.id) || []
     }));
   },
 
@@ -2348,8 +2459,7 @@ export const businessRules = {
     // 2. Buscar todas as transações para calcular saldos de cashback
     const { data: transactions, error: tError } = await supabase
       .from('transactions')
-      .select('*')
-      .eq('status', 'completed');
+      .select('*');
     
     if (tError) throw tError;
 
@@ -2358,21 +2468,34 @@ export const businessRules = {
       const userTransactions = transactions.filter(t => t.profile_id === profile.id);
       
       const monthlyBonus = userTransactions
-        .filter(t => t.type === 'commission' && t.description?.includes('Mensal'))
-        .reduce((acc, t) => acc + Number(t.amount), 0);
+        .filter(t => t.type === 'commission' && t.description?.includes('Mensal') && (t.status === 'completed' || t.status === 'pago'))
+        .reduce((acc, t) => acc + Number(t.amount || 0), 0);
 
       const annualBonus = userTransactions
-        .filter(t => t.type === 'commission' && t.description?.includes('Anual'))
-        .reduce((acc, t) => acc + Number(t.amount), 0);
+        .filter(t => t.type === 'commission' && t.description?.includes('Anual') && (t.status === 'completed' || t.status === 'pago'))
+        .reduce((acc, t) => acc + Number(t.amount || 0), 0);
+
+      const walletBonus = userTransactions
+        .filter(t => (t.description?.includes('Digital') || t.description?.includes('(CD)')) && (t.status === 'completed' || t.status === 'pago'))
+        .reduce((acc, t) => acc + Number(t.amount || 0), 0);
 
       // Subtrair pagamentos já realizados (withdrawals com descrição de pagamento)
       const monthlyPaid = userTransactions
-        .filter(t => t.type === 'withdrawal' && t.description?.includes('Pagamento Cashback Mensal'))
-        .reduce((acc, t) => acc + Math.abs(Number(t.amount)), 0);
+        .filter(t => t.type === 'withdrawal' && t.description?.includes('Pagamento Cashback Mensal') && (t.status === 'completed' || t.status === 'pago'))
+        .reduce((acc, t) => acc + Math.abs(Number(t.amount || 0)), 0);
 
       const annualPaid = userTransactions
-        .filter(t => t.type === 'withdrawal' && t.description?.includes('Pagamento Cashback Anual'))
-        .reduce((acc, t) => acc + Math.abs(Number(t.amount)), 0);
+        .filter(t => t.type === 'withdrawal' && t.description?.includes('Pagamento Cashback Anual') && (t.status === 'completed' || t.status === 'pago'))
+        .reduce((acc, t) => acc + Math.abs(Number(t.amount || 0)), 0);
+
+      // O total retirado da carteira digital inclui saques (withdrawal) que NÃO são Mensal/Anual
+      const totalWithdrawn = userTransactions
+        .filter(t => t.type === 'withdrawal' && !t.description?.includes('Mensal') && !t.description?.includes('Anual'))
+        .reduce((acc, t) => acc + Math.abs(Number(t.amount || 0)), 0);
+
+      const monthlyPending = Math.max(0, monthlyBonus - monthlyPaid);
+      const annualPending = Math.max(0, annualBonus - annualPaid);
+      const digitalPending = Math.max(0, walletBonus - totalWithdrawn);
 
       return {
         profileId: profile.id,
@@ -2380,10 +2503,11 @@ export const businessRules = {
         userEmail: profile.email || 'N/A',
         pixKey: profile.pix_key || 'Não informado',
         bankDetails: profile.bank_name ? `${profile.bank_name} / Ag: ${profile.bank_branch} / CC: ${profile.bank_account}` : 'Apenas PIX',
-        monthlyPending: monthlyBonus - monthlyPaid,
-        annualPending: annualBonus - annualPaid,
+        monthlyPending,
+        annualPending,
+        digitalPending
       };
-    }).filter(p => p.monthlyPending > 0 || p.annualPending > 0);
+    }).filter(p => p.monthlyPending > 0 || p.annualPending > 0 || p.digitalPending > 0);
 
     return payableList;
   },
@@ -2406,8 +2530,13 @@ export const businessRules = {
     return data.publicUrl;
   },
 
-  processPayout: async (profileId: string, amount: number, type: 'mensal' | 'anual', receiptUrl: string) => {
-    const description = `Pagamento Cashback ${type === 'mensal' ? 'Mensal' : 'Anual'} - ${new Date().toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}`;
+  processPayout: async (profileId: string, amount: number, type: 'mensal' | 'anual' | 'digital', receiptUrl: string) => {
+    let displayType = '';
+    if (type === 'mensal') displayType = 'Mensal';
+    else if (type === 'anual') displayType = 'Anual';
+    else displayType = 'Digital';
+
+    const description = `Pagamento Cashback ${displayType} - ${new Date().toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}`;
     
     const { error } = await supabase
       .from('transactions')

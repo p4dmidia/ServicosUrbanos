@@ -75,6 +75,9 @@ export default function Loja() {
   useEffect(() => {
     localStorage.setItem('urbashop_cart', JSON.stringify(cartItems));
   }, [cartItems]);
+
+
+
   const [loading, setLoading] = useState(true);
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -101,7 +104,7 @@ export default function Loja() {
         // Fetch Products
         const { data: prodData, error: prodError } = await supabase
           .from('products')
-          .select('id, name, price, image, main_image, category, sales, cashback, stock, product_reviews(rating)')
+          .select('id, name, price, image, main_image, category, sales, cashback, stock, branch_id, merchant_id, product_reviews(rating)')
           .eq('status', 'Ativo');
 
         if (prodError) throw prodError;
@@ -120,7 +123,9 @@ export default function Loja() {
           category: p.category || 'Geral',
           cashback: Number(p.cashback) || 5,
           condition: 'Novo',
-          stock: Number(p.stock) || 0
+          stock: Number(p.stock) || 0,
+          branchId: p.branch_id,
+          merchantId: p.merchant_id
         }));
 
         // Merge categories from products and the categories table
@@ -727,9 +732,19 @@ export default function Loja() {
                         <div className="flex items-center justify-between mt-auto">
                           <p className="text-sm font-black text-midnight">R$ {item.price.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
                           <div className="flex items-center bg-white border border-slate-200 rounded-xl px-2 py-1 gap-3">
-                            <button onClick={() => updateQuantity(item.id, -1)} className="size-6 text-slate-400"><Minus size={14} /></button>
-                            <span className="text-xs font-black">{item.quantity}</span>
-                            <button onClick={() => updateQuantity(item.id, 1)} className="size-6 text-midnight"><Plus size={14} /></button>
+                            <button 
+                              onClick={() => updateQuantity(item.id, -1)}
+                              className="size-6 rounded-lg hover:bg-slate-50 flex items-center justify-center lg:transition-colors text-slate-800 hover:text-midnight"
+                            >
+                              <Minus size={14} strokeWidth={3} />
+                            </button>
+                            <span className="text-xs font-black w-4 text-center text-slate-800">{item.quantity}</span>
+                            <button 
+                              onClick={() => updateQuantity(item.id, 1)}
+                              className="size-6 rounded-lg hover:bg-slate-50 flex items-center justify-center lg:transition-colors text-slate-800 hover:text-midnight"
+                            >
+                              <Plus size={14} strokeWidth={3} />
+                            </button>
                           </div>
                           <button onClick={() => removeFromCart(item.id)} className="text-slate-300 hover:text-red-500 transition-colors"><Trash2 size={16} /></button>
                         </div>
@@ -777,8 +792,13 @@ export default function Loja() {
                       <span className="text-2xl font-black text-midnight tracking-tighter">R$ {subtotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
                     </div>
                   </div>
-                  <button onClick={() => navigate('/checkout')} className="w-full bg-midnight text-white py-5 rounded-2xl font-black text-lg transition-all shadow-xl hover:bg-slate-800 uppercase tracking-tighter">
-                    Finalizar Pedido
+                  <button 
+                    onClick={() => {
+                      navigate('/checkout');
+                    }}
+                    className="w-full py-5 rounded-2xl font-black text-lg transition-all uppercase tracking-tighter shadow-xl bg-midnight hover:bg-slate-800 text-white shadow-midnight/20 active:scale-[0.98]"
+                  >
+                    Ir para o Checkout
                   </button>
                 </div>
               )}

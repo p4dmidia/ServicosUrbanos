@@ -10,7 +10,8 @@ import {
   ArrowUpRight,
   ArrowDownRight,
   Loader2,
-  DollarSign
+  DollarSign,
+  Package
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import MerchantLayout from '../components/MerchantLayout';
@@ -34,6 +35,7 @@ export default function MerchantReports() {
   const [orders, setOrders] = useState<any[]>([]);
   const [extras, setExtras] = useState<any[]>([]);
   const [team, setTeam] = useState<any[]>([]);
+  const [branches, setBranches] = useState<any[]>([]);
 
   useEffect(() => {
     async function loadReports() {
@@ -65,6 +67,7 @@ export default function MerchantReports() {
         setOrders(ordersData);
         setExtras(extrasData.filter(Boolean));
         setTeam(teamData);
+        setBranches(branches);
       } catch (error) {
         console.error('Erro ao carregar relatórios:', error);
         toast.error('Erro ao carregar dados analíticos');
@@ -88,7 +91,7 @@ export default function MerchantReports() {
     const reportRecords = orders.map(o => {
       const extra = extras.find(e => e.id === o.id);
       const manager = team.find(m => m.branchId === o.branch_id && m.role === 'manager');
-      const saleDate = new Date(o.order_date);
+      const saleDate = o.orderDate ? new Date(o.orderDate) : new Date();
       
       const payDate = new Date(saleDate);
       payDate.setDate(payDate.getDate() + 1);
@@ -96,9 +99,16 @@ export default function MerchantReports() {
       const commissionRate = manager?.commissionRate || 0;
       const commissionAmount = (Number(o.amount) * commissionRate) / 100;
 
+      const branch = branches.find(b => b.id === o.branchId);
+      const payeeName = branch ? branch.name : (profile?.store_name || profile?.full_name || 'Lojista Beneficiário');
+
       return {
         orderId: o.id,
         buyerName: o.customerName || 'Cliente',
+        payeeName,
+        payeeCpf: profile?.cnpj || profile?.cpf || '',
+        payeePixKey: profile?.pix_key || '',
+        paymentMethod: o.paymentMethod || 'Não informado',
         orderStatus: o.status === 'Concluído' ? 'Pago' : o.status,
         deliveryStatus: extra?.status || 'Pendente',
         saleDate: saleDate.toLocaleDateString('pt-BR'),
@@ -157,7 +167,7 @@ export default function MerchantReports() {
       kpis: kpiList,
       chart: { labels: chartLabels, values: chartValues }
     };
-  }, [orders, extras, team, startDateStr, endDateStr]);
+  }, [orders, extras, team, startDateStr, endDateStr, branches, profile]);
 
   if (loading) {
     return (
@@ -375,6 +385,75 @@ export default function MerchantReports() {
           </div>
           
           <FinancialReportTable data={financialReportData} title="Relatório de Repasses Detalhado" />
+        </div>
+
+        {/* Stock Output Report Section */}
+        <div className="space-y-6">
+          <div className="flex items-center gap-3">
+            <div className="size-10 bg-indigo-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-indigo-600/20">
+              <Package size={20} />
+            </div>
+            <div>
+              <h3 className="text-xl font-black text-midnight tracking-tighter uppercase italic leading-none">Saída de Estoque por Pedido</h3>
+              <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">Unidades e produtos vendidos por cada pedido</p>
+            </div>
+          </div>
+          
+          <div className="bg-white rounded-[2.5rem] p-8 border border-slate-100 shadow-sm overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="bg-slate-50/50">
+                    <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">ID do Pedido</th>
+                    <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Data</th>
+                    <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Cliente</th>
+                    <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Produtos / Quantidade</th>
+                    <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Total de Unidades</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {financialReportData.map((record) => {
+                    const originalOrder = orders.find(o => String(o.id) === String(record.orderId));
+                    const items = originalOrder?.items || [];
+                    const totalUnits = items.reduce((acc: number, item: any) => acc + (Number(item.quantity) || 1), 0);
+
+                    return (
+                      <tr key={record.orderId} className="hover:bg-slate-50/50 transition-colors">
+                        <td className="p-6 text-xs font-bold text-slate-500 whitespace-nowrap">
+                          #{record.orderId}
+                        </td>
+                        <td className="p-6 text-xs font-bold text-slate-500 whitespace-nowrap">
+                          {record.saleDate}
+                        </td>
+                        <td className="p-6 text-xs font-bold text-midnight uppercase whitespace-nowrap">
+                          {record.buyerName}
+                        </td>
+                        <td className="p-6 text-xs text-slate-600 font-medium max-w-md">
+                          <div className="flex flex-wrap gap-2">
+                            {items.map((item: any, idx: number) => (
+                              <span key={idx} className="bg-slate-100 text-slate-800 text-[10px] font-semibold px-2.5 py-1 rounded-lg">
+                                {item.name || 'Produto'} <strong className="text-indigo-600 ml-1">x{item.quantity || 1}</strong>
+                              </span>
+                            ))}
+                          </div>
+                        </td>
+                        <td className="p-6 text-xs font-black text-midnight text-center">
+                          {totalUnits}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {financialReportData.length === 0 && (
+                    <tr>
+                      <td colSpan={5} className="p-12 text-center text-xs font-black text-slate-400 uppercase tracking-widest">
+                        Nenhum pedido encontrado no período
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
         </div>
 
       </div>

@@ -49,6 +49,7 @@ interface MerchantProduct {
   width?: number;
   length?: number;
   description?: string;
+  branchStocks?: { branch_id: string, stock: number }[];
 }
 
 interface Category {
@@ -71,6 +72,7 @@ export default function MerchantProducts() {
   const [isEditing, setIsEditing] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [productToDelete, setProductToDelete] = useState<string | null>(null);
+  const [branchStocksInput, setBranchStocksInput] = useState<{ [branchId: string]: number }>({});
 
   const [products, setProducts] = useState<MerchantProduct[]>([]);
   const [categoriesList, setCategoriesList] = useState<Category[]>([]);
@@ -143,8 +145,12 @@ export default function MerchantProducts() {
     const matchesCategory = filterCategory === 'Todos' || p.category === filterCategory;
     const matchesStatus = filterStatus === 'Todos' || p.status === filterStatus;
     const matchesBranch = profile?.role === 'owner' 
-      ? (filterBranch === 'Todos' || p.branchId === filterBranch)
-      : p.branchId === profile?.branch_id;
+      ? (
+          filterBranch === 'Todos' || 
+          p.branchId === filterBranch ||
+          (p.branchStocks && p.branchStocks.some(bs => bs.branch_id === filterBranch))
+        )
+      : true; // Para gerentes, os produtos já vêm mapeados de getBranchProducts com o estoque correto
     return matchesSearch && matchesCategory && matchesStatus && matchesBranch;
   });
 
@@ -199,19 +205,35 @@ export default function MerchantProducts() {
     try {
       setSaving(true);
       
+      const selectedStocks = Object.entries(branchStocksInput) as [string, number][];
+      if (selectedStocks.length === 0) {
+        toast.error('Selecione pelo menos um local de estoque.');
+        setSaving(false);
+        return;
+      }
+
+      const totalStock = selectedStocks.reduce((acc, [_, qty]) => acc + qty, 0);
+      
+      const branchStocksToSave = selectedStocks
+        .filter(([branchId]) => branchId !== 'matriz')
+        .map(([branchId, qty]) => ({
+          branchId,
+          stock: qty
+        }));
+
       const mId = await businessRules.getMerchantId(profile!.id);
       
       const productData = {
         name: newProduct.name || 'Novo Produto',
         category: newProduct.category || categoriesList.find(c => c.id === newProduct.categoryId)?.name || 'Outros',
         price: Number(newProduct.price) || 0,
-        stock: Number(newProduct.stock) || 0,
+        stock: totalStock,
         cashback: Number(newProduct.cashback) || 0,
         status: (newProduct.status || 'Ativo') as 'Ativo' | 'Inativo',
         image: newProduct.mainImage || '📦',
         main_image: newProduct.mainImage,
         gallery: newProduct.gallery || [],
-        branch_id: newProduct.branchId === 'matriz' || !newProduct.branchId ? null : newProduct.branchId,
+        branch_id: null, // O anúncio passa a ser multi-filial (nulo no produto principal)
         category_id: newProduct.categoryId || null,
         merchant_id: mId,
         weight: Number(newProduct.weight) || 0,
@@ -223,12 +245,14 @@ export default function MerchantProducts() {
       
       if (isEditing && editingId) {
         await businessRules.updateProduct(editingId, productData);
+        await businessRules.saveProductStocks(editingId, branchStocksToSave);
+        
         setProducts(prev => prev.map(p => p.id === editingId ? {
           ...p,
           ...productData,
           category: productData.category,
           categoryId: productData.category_id,
-          branchId: productData.branch_id,
+          branchId: null as any,
           mainImage: productData.main_image,
           image: productData.image,
           gallery: productData.gallery,
@@ -236,18 +260,22 @@ export default function MerchantProducts() {
           height: productData.height,
           width: productData.width,
           length: productData.length,
-          description: productData.description
+          description: productData.description,
+          stock: totalStock,
+          branchStocks: branchStocksToSave.map(bs => ({ branch_id: bs.branchId, stock: bs.stock }))
         } : p));
         toast.success('Produto atualizado com sucesso!');
       } else {
         const created = await businessRules.createProduct(productData);
+        await businessRules.saveProductStocks(created.id, branchStocksToSave);
+        
         const mappedCreated: MerchantProduct = {
           id: created.id,
           name: created.name,
           category: created.category,
           categoryId: created.category_id,
           price: Number(created.price),
-          stock: created.stock,
+          stock: totalStock,
           sales: created.sales || 0,
           cashback: Number(created.cashback),
           status: created.status,
@@ -259,7 +287,8 @@ export default function MerchantProducts() {
           height: Number(created.height),
           width: Number(created.width),
           length: Number(created.length),
-          description: created.description
+          description: created.description,
+          branchStocks: branchStocksToSave.map(bs => ({ branch_id: bs.branchId, stock: bs.stock }))
         };
         setProducts(prev => [mappedCreated, ...prev]);
         toast.success('Produto cadastrado com sucesso!');
@@ -278,6 +307,7 @@ export default function MerchantProducts() {
     setShowAddModal(false);
     setIsEditing(false);
     setEditingId(null);
+    setBranchStocksInput({});
     setNewProduct({
       name: '',
       category: '',
@@ -298,7 +328,7 @@ export default function MerchantProducts() {
     });
   };
 
-  const handleEdit = (p: MerchantProduct) => {
+  const handleEdit = async (p: MerchantProduct) => {
     setIsEditing(true);
     setEditingId(p.id);
     setNewProduct({
@@ -319,6 +349,26 @@ export default function MerchantProducts() {
       length: p.length || 0,
       description: p.description || ''
     });
+
+    try {
+      const stocks = await businessRules.getProductStocks(p.id);
+      const stockMap: { [key: string]: number } = {};
+      
+      let branchesTotal = 0;
+      stocks.forEach(s => {
+        stockMap[s.branch_id] = s.stock;
+        branchesTotal += s.stock;
+      });
+      
+      const matrizStock = Math.max(0, p.stock - branchesTotal);
+      stockMap['matriz'] = matrizStock;
+      
+      setBranchStocksInput(stockMap);
+    } catch (err) {
+      console.error('Erro ao buscar estoques do produto:', err);
+      setBranchStocksInput({ 'matriz': p.stock });
+    }
+
     setShowAddModal(true);
   };
 
@@ -353,7 +403,7 @@ export default function MerchantProducts() {
     try {
       setUploading(true);
       if (isGallery) {
-        const uploadPromises = Array.from(files).map(file => businessRules.uploadProductImage(file));
+        const uploadPromises = Array.from(files).map(file => businessRules.uploadProductImage(file as File));
         const urls = await Promise.all(uploadPromises);
         setNewProduct(prev => ({
           ...prev,
@@ -605,20 +655,6 @@ export default function MerchantProducts() {
                     </div>
 
                     <div className="space-y-2">
-                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Local do Estoque</label>
-                      <select 
-                        required 
-                        disabled={profile?.role === 'manager'}
-                        value={newProduct.branchId || 'matriz'} 
-                        onChange={e => setNewProduct({...newProduct, branchId: e.target.value})} 
-                        className="w-full bg-slate-50 border border-slate-100 px-6 py-4 rounded-2xl font-bold text-midnight appearance-none cursor-pointer disabled:opacity-50"
-                      >
-                        <option value="matriz">LOJA MATRIZ (Sede)</option>
-                        {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
-                      </select>
-                    </div>
-
-                    <div className="space-y-2">
                       <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 flex justify-between items-center">
                         Categoria
                         {profile?.role === 'owner' && (
@@ -678,13 +714,91 @@ export default function MerchantProducts() {
                     </div>
 
                     <div className="space-y-2">
-                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Estoque</label>
-                      <input type="number" required min="0" value={newProduct.stock || ''} onChange={e => setNewProduct({...newProduct, stock: parseInt(e.target.value)})} className="w-full bg-slate-50 border border-primary-blue/30 px-6 py-4 rounded-2xl font-black text-midnight focus:ring-4 focus:ring-primary-blue/10" />
-                    </div>
-
-                    <div className="space-y-2">
                       <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Cashback (%)</label>
                       <input type="number" required disabled={profile?.role === 'manager'} min="0" max="100" value={newProduct.cashback || ''} onChange={e => setNewProduct({...newProduct, cashback: parseFloat(e.target.value)})} className="w-full bg-slate-50 border border-slate-100 px-6 py-4 rounded-2xl font-bold text-midnight disabled:opacity-50" />
+                    </div>
+
+                    {/* Estoque por Filial / Local de Retirada */}
+                    <div className="space-y-4 md:col-span-2 pt-4 border-t border-slate-100">
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
+                        Estoque por Filial / Local de Retirada
+                      </label>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        {/* LOJA MATRIZ */}
+                        {(profile?.role === 'owner' || !profile?.branch_id) && (
+                          <div className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                            <label className="flex items-center gap-3 cursor-pointer">
+                              <input 
+                                type="checkbox"
+                                checked={branchStocksInput['matriz'] !== undefined}
+                                onChange={(e) => {
+                                  if (e.target.checked) {
+                                    setBranchStocksInput(prev => ({ ...prev, 'matriz': 0 }));
+                                  } else {
+                                    setBranchStocksInput(prev => {
+                                      const next = { ...prev };
+                                      delete next['matriz'];
+                                      return next;
+                                    });
+                                  }
+                                }}
+                                className="size-4 rounded border-slate-300 text-primary-blue focus:ring-primary-blue"
+                              />
+                              <span className="font-bold text-midnight">LOJA MATRIZ (Sede)</span>
+                            </label>
+                            {branchStocksInput['matriz'] !== undefined && (
+                              <input 
+                                type="number"
+                                required
+                                min="0"
+                                placeholder="Qtd"
+                                value={branchStocksInput['matriz']}
+                                onChange={e => setBranchStocksInput(prev => ({ ...prev, 'matriz': parseInt(e.target.value) || 0 }))}
+                                className="w-20 bg-white border border-slate-200 px-3 py-1.5 rounded-xl font-bold text-midnight text-right"
+                              />
+                            )}
+                          </div>
+                        )}
+
+                        {/* Filiais */}
+                        {branches
+                          .filter(b => profile?.role === 'owner' || profile?.branch_id === b.id)
+                          .map(b => (
+                            <div key={b.id} className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                              <label className="flex items-center gap-3 cursor-pointer">
+                                <input 
+                                  type="checkbox"
+                                  disabled={profile?.role === 'manager'}
+                                  checked={branchStocksInput[b.id] !== undefined}
+                                  onChange={(e) => {
+                                    if (e.target.checked) {
+                                      setBranchStocksInput(prev => ({ ...prev, [b.id]: 0 }));
+                                    } else {
+                                      setBranchStocksInput(prev => {
+                                        const next = { ...prev };
+                                        delete next[b.id];
+                                        return next;
+                                      });
+                                    }
+                                  }}
+                                  className="size-4 rounded border-slate-300 text-primary-blue focus:ring-primary-blue"
+                                />
+                                <span className="font-bold text-midnight truncate max-w-[120px]" title={b.name}>{b.name}</span>
+                              </label>
+                              {branchStocksInput[b.id] !== undefined && (
+                                <input 
+                                  type="number"
+                                  required
+                                  min="0"
+                                  placeholder="Qtd"
+                                  value={branchStocksInput[b.id]}
+                                  onChange={e => setBranchStocksInput(prev => ({ ...prev, [b.id]: parseInt(e.target.value) || 0 }))}
+                                  className="w-20 bg-white border border-slate-200 px-3 py-1.5 rounded-xl font-bold text-midnight text-right"
+                                />
+                              )}
+                            </div>
+                        ))}
+                      </div>
                     </div>
 
                     {/* Logística */}

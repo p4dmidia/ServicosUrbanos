@@ -41,7 +41,7 @@ export default function AdminReports() {
   const [isBIModalOpen, setIsBIModalOpen] = useState(false);
   const [viewType, setViewType] = useState<'merchants' | 'affiliates'>('merchants');
   const [affiliatePayouts, setAffiliatePayouts] = useState<any[]>([]);
-  const [platformRate, setPlatformRate] = useState(20);
+  const [platformRate, setPlatformRate] = useState(18);
 
   const loadData = async () => {
     setLoading(true);
@@ -137,7 +137,9 @@ export default function AdminReports() {
             payDate: payDate.toLocaleDateString('pt-BR'),
             payeeId: String(payeeId || 'unknown'),
             payeeName: payee?.full_name || (payeeId ? 'Destinatário não identificado' : 'Sem vínculo (Admin)'),
-            payeePixKey: payee?.pix_key || ''
+            payeePixKey: payee?.pix_key || '',
+            payeeCpf: payee?.cpf || '',
+            paymentMethod: o.paymentMethod || 'PIX'
           };
         });
     } else {

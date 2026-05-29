@@ -70,7 +70,7 @@ export default function FinancialReportTable({
   onGeneratePayments,
   hideReceiptButton = false,
   hidePdfButton = false,
-  platformRate = 20
+  platformRate = 18
 }: FinancialReportTableProps) {
   const [searchTerm, setSearchTerm] = useState("");
   const [startDate, setStartDate] = useState("");
@@ -698,7 +698,7 @@ export default function FinancialReportTable({
                       </div>
                       <div className="flex-1">
                          <p className="text-[9px] text-slate-400 font-black uppercase tracking-widest mb-0.5">Lojista / Beneficiário</p>
-                         <p className="text-sm font-black text-midnight uppercase">{viewingOrder.payeeName}</p>
+                         <p className="text-sm font-black text-midnight uppercase">{viewingOrder.payeeName || 'Não Informado'}</p>
                          {viewingOrder.payeeCpf && (
                            <div className="flex items-center gap-1 mt-1">
                               <Shield size={10} className="text-slate-300" />
@@ -722,7 +722,7 @@ export default function FinancialReportTable({
                        </div>
                        <div>
                           <p className="text-[9px] text-slate-400 font-black uppercase tracking-widest mb-0.5">Forma de Pagamento</p>
-                          <p className="text-sm font-black text-midnight uppercase">{viewingOrder.paymentMethod || 'Não Informado'}</p>
+                          <p className="text-sm font-black text-midnight uppercase">{viewingOrder.paymentMethod || (viewingOrder as any).payment_method || 'Não Informado'}</p>
                        </div>
                     </div>
                     <div className="bg-slate-50 p-6 rounded-[2rem] border border-slate-100 flex items-center gap-4">
@@ -731,7 +731,9 @@ export default function FinancialReportTable({
                        </div>
                        <div>
                           <p className="text-[9px] text-slate-400 font-black uppercase tracking-widest mb-0.5">Data da Compra</p>
-                          <p className="text-sm font-black text-midnight uppercase">{viewingOrder.saleDate || 'Não Informada'}</p>
+                          <p className="text-sm font-black text-midnight uppercase">
+                            {!viewingOrder.saleDate || viewingOrder.saleDate === 'Invalid Date' ? 'Não Informada' : viewingOrder.saleDate}
+                          </p>
                        </div>
                     </div>
                  </div>

@@ -151,7 +151,7 @@ export default function ProductDetail() {
         setLoading(true);
         const { data, error } = await supabase
           .from('products')
-          .select('id, name, price, description, category, image, main_image, gallery, cashback, sales, stock, category_id')
+          .select('id, name, price, description, category, image, main_image, gallery, cashback, sales, stock, category_id, branch_id, merchant_id')
           .eq('id', id)
           .single();
 
@@ -177,7 +177,9 @@ export default function ProductDetail() {
           stock: Number(data.stock) || 0,
           category: categoryName,
           image: data.image || '📦',
-          gallery: data.gallery || []
+          gallery: data.gallery || [],
+          branchId: data.branch_id,
+          merchantId: data.merchant_id
         };
         
         setProduct(formattedProduct);
@@ -775,7 +777,7 @@ export default function ProductDetail() {
                     </div>
                   </div>
                   <button onClick={() => navigate('/checkout')} className="w-full bg-midnight hover:bg-slate-800 text-white py-5 rounded-2xl font-black text-lg transition-all shadow-xl shadow-midnight/20 active:scale-[0.98] uppercase tracking-tighter">
-                    Finalizar Pedido
+                    Ir para o Checkout
                   </button>
                   <p className="text-center text-[10px] text-slate-400 font-bold uppercase mt-4 tracking-widest flex items-center justify-center gap-2">
                     <ShieldCheck size={12} /> Compra 100% segura e garantida

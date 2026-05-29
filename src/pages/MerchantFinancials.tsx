@@ -22,7 +22,7 @@ export default function MerchantFinancials() {
   const [financials, setFinancials] = useState<any>(null);
   const [orders, setOrders] = useState<any[]>([]);
   const [extras, setExtras] = useState<any[]>([]);
-  const [platformRate, setPlatformRate] = useState(20);
+  const [platformRate, setPlatformRate] = useState(18);
   const [loading, setLoading] = useState(true);
 
   async function loadAppData() {
@@ -69,15 +69,22 @@ export default function MerchantFinancials() {
   const reportData: FinancialRecord[] = useMemo(() => {
     return orders.map(o => {
       const extra = extras.find(e => e.id === o.id);
-      const saleDate = new Date(o.date);
+      const saleDate = o.orderDate ? new Date(o.orderDate) : new Date();
       
       // Regra de Pagamento: Próximo dia às 17h (se quitado/entregue até as 17h do dia anterior)
       const payDate = new Date(saleDate);
       payDate.setDate(payDate.getDate() + 1);
 
+      const branch = branches.find(b => b.id === o.branchId);
+      const payeeName = branch ? branch.name : (profile?.store_name || profile?.full_name || 'Lojista Beneficiário');
+
       return {
         orderId: o.id,
         buyerName: o.customerName || 'Cliente',
+        payeeName,
+        payeeCpf: profile?.cnpj || profile?.cpf || '',
+        payeePixKey: profile?.pix_key || '',
+        paymentMethod: o.paymentMethod || 'Não informado',
         orderStatus: o.status === 'Concluído' ? 'Pago' : o.status,
         deliveryStatus: extra?.status || 'Pendente',
         saleDate: saleDate.toLocaleDateString('pt-BR'),
@@ -86,7 +93,7 @@ export default function MerchantFinancials() {
         payDate: payDate.toLocaleDateString('pt-BR')
       };
     });
-  }, [orders, extras, platformRate]);
+  }, [orders, extras, platformRate, branches, profile]);
 
   if (authLoading || loading) {
     return (

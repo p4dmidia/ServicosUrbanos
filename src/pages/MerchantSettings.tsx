@@ -467,8 +467,26 @@ export default function MerchantSettings() {
     );
   }
 
+  if (profile?.role === 'manager') {
+    return (
+      <MerchantLayout title="Portal do Lojista" subtitle="Acesso Restrito">
+        <div className="p-8 lg:p-12 text-center max-w-lg mx-auto">
+          <div className="bg-white rounded-[2.5rem] border border-slate-100 shadow-xl p-12 space-y-4">
+            <div className="inline-flex p-4 rounded-3xl bg-red-50 text-red-500">
+              <Shield size={48} />
+            </div>
+            <h1 className="text-2xl font-black text-midnight uppercase italic">Acesso Restrito</h1>
+            <p className="text-slate-500 text-sm font-medium leading-relaxed">
+              Gerentes de filial não possuem permissão para acessar ou alterar as configurações gerais da loja.
+            </p>
+          </div>
+        </div>
+      </MerchantLayout>
+    );
+  }
+
   if (isAffiliateOnly) {
-    const isAuthorized = profile?.email && AUTHORIZED_EMAILS.includes(profile.email.toLowerCase());
+    const isAuthorized = true;
 
     return (
       <MerchantLayout title="Portal do Lojista" subtitle={isAuthorized ? "Ative sua loja" : "Lista de Espera"}>

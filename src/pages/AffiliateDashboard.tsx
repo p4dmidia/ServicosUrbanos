@@ -99,7 +99,7 @@ export default function AffiliateDashboard() {
             className="inline-flex items-center gap-3 bg-midnight text-white px-6 py-3 rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl shadow-midnight/10 hover:bg-slate-800 transition-all group"
           >
             <ShoppingBag size={18} className="group-hover:scale-110 transition-transform" />
-            Visitar Marketplace
+            Loja de Produtos
           </Link>
         </div>
         

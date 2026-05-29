@@ -78,53 +78,186 @@ export default function Checkout() {
   const [shippingCost, setShippingCost] = useState(0);
   const [pickupAddress, setPickupAddress] = useState('Buscando endereço da loja...');
   const [isProcessing, setIsProcessing] = useState(false);
-  const [paymentMethod, setPaymentMethod] = useState<'mercadopago' | 'wallet'>('mercadopago');
+  const [paymentMethod, setPaymentMethod] = useState<'mercadopago' | 'wallet' | 'mixed'>('mercadopago');
   const [walletBalance, setWalletBalance] = useState(0);
   const [walletLoading, setWalletLoading] = useState(false);
   const [isEligibleForWallet, setIsEligibleForWallet] = useState(false);
+  const [mixedWalletAmount, setMixedWalletAmount] = useState(0);
   const [pixData, setPixData] = useState<{ id: string; qr_code: string; qr_code_base64: string } | null>(null);
   const [showPixModal, setShowPixModal] = useState(false);
   const [orderId, setOrderId] = useState<string | null>(null);
   const [paymentConfirmed, setPaymentConfirmed] = useState(false);
   const [isCopying, setIsCopying] = useState(false);
 
+  const [availableLocations, setAvailableLocations] = useState<any[]>([]);
+  const [selectedLocationId, setSelectedLocationId] = useState<string>('');
+  const [locationsLoading, setLocationsLoading] = useState(false);
+
+  const handleLocationChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const locId = e.target.value;
+    setSelectedLocationId(locId);
+    const loc = availableLocations.find(l => l.id === locId);
+    if (loc) {
+      setPickupAddress(loc.address);
+    }
+  };
+
   useEffect(() => {
-    async function fetchPickupAddress() {
+    async function loadPickupLocations() {
       if (cartItems.length === 0) return;
       try {
+        setLocationsLoading(true);
         const productId = cartItems[0].id;
-        // 1. Obter o merchant_id do produto
+        
+        // 1. Obter merchant_id do produto
         const { data: productData } = await supabase
           .from('products')
           .select('merchant_id')
           .eq('id', productId)
           .single();
 
-        if (productData?.merchant_id) {
-          // 2. Obter a primeira filial/loja desse merchant
-          const { data: branchData } = await supabase
-            .from('branches')
-            .select('address, city, state')
-            .eq('merchant_id', productData.merchant_id)
-            .limit(1)
-            .single();
+        if (!productData?.merchant_id) {
+          setAvailableLocations([]);
+          setLocationsLoading(false);
+          return;
+        }
+        const mId = productData.merchant_id;
 
-          if (branchData && branchData.address) {
-            setPickupAddress(`${branchData.address}, ${branchData.city} - ${branchData.state}`);
-          } else {
-            setPickupAddress('Endereço da loja indisponível.');
+        // 2. Buscar perfil do lojista (endereço da matriz)
+        const { data: merchantProfile } = await supabase
+          .from('profiles')
+          .select('store_name, address, number, city, state, zip_code')
+          .eq('id', mId)
+          .single();
+
+        // 3. Buscar filiais
+        const { data: branchesData } = await supabase
+          .from('branches')
+          .select('*')
+          .eq('merchant_id', mId);
+
+        // 4. Buscar detalhes dos produtos do carrinho
+        const productIds = cartItems.map(item => item.id);
+        const { data: productsDetails } = await supabase
+          .from('products')
+          .select('id, stock, branch_id')
+          .in('id', productIds);
+
+        // 5. Buscar estoques de filiais
+        const { data: stocksData } = await supabase
+          .from('product_stocks')
+          .select('*')
+          .in('product_id', productIds);
+
+        const stocksMap = new Map<string, { branch_id: string, stock: number }[]>();
+        if (stocksData) {
+          stocksData.forEach(s => {
+            const list = stocksMap.get(s.product_id) || [];
+            list.push({ branch_id: s.branch_id, stock: s.stock });
+            stocksMap.set(s.product_id, list);
+          });
+        }
+
+        const candidateLocations: any[] = [];
+
+        // Adicionar Matriz como opção de retirada se tiver estoque para todos os produtos
+        let matrizAvailable = true;
+        for (const item of cartItems) {
+          const detail = productsDetails?.find(p => p.id === item.id);
+          if (!detail) {
+            matrizAvailable = false;
+            break;
           }
+          
+          // Se for produto legado associado a uma filial específica, não está na matriz
+          if (detail.branch_id !== null) {
+            matrizAvailable = false;
+            break;
+          }
+
+          // Se for multi-filial, matriz stock = total_stock - sum(branch_stocks)
+          const bStocks = stocksMap.get(item.id) || [];
+          const branchesSum = bStocks.reduce((acc, bs) => acc + bs.stock, 0);
+          const matrizStock = Math.max(0, (detail.stock || 0) - branchesSum);
+          
+          if (matrizStock < item.quantity) {
+            matrizAvailable = false;
+            break;
+          }
+        }
+
+        if (matrizAvailable && merchantProfile) {
+          candidateLocations.push({
+            id: 'matriz',
+            name: `${merchantProfile.store_name || 'Loja Principal'} (Matriz)`,
+            address: `${merchantProfile.address || ''}, ${merchantProfile.number || ''} - ${merchantProfile.city || ''}/${merchantProfile.state || ''}`
+          });
+        }
+
+        // Adicionar filiais que possuem estoque para todos os produtos
+        if (branchesData) {
+          for (const branch of branchesData) {
+            let branchAvailable = true;
+            for (const item of cartItems) {
+              const detail = productsDetails?.find(p => p.id === item.id);
+              if (!detail) {
+                branchAvailable = false;
+                break;
+              }
+
+              // Se for legado associado a esta filial
+              if (detail.branch_id === branch.id) {
+                if ((detail.stock || 0) < item.quantity) {
+                  branchAvailable = false;
+                }
+                continue;
+              }
+
+              // Se for legado associado a outra filial/matriz
+              if (detail.branch_id !== null && detail.branch_id !== branch.id) {
+                branchAvailable = false;
+                break;
+              }
+
+              // Se for multi-filial, buscar estoque em product_stocks
+              const bStocks = stocksMap.get(item.id) || [];
+              const bStock = bStocks.find(bs => bs.branch_id === branch.id);
+              if (!bStock || bStock.stock < item.quantity) {
+                branchAvailable = false;
+                break;
+              }
+            }
+
+            if (branchAvailable) {
+              candidateLocations.push({
+                id: branch.id,
+                name: branch.name,
+                address: `${branch.address || ''}, ${branch.city || ''}/${branch.state || ''}`
+              });
+            }
+          }
+        }
+
+        setAvailableLocations(candidateLocations);
+        if (candidateLocations.length > 0) {
+          // Pré-selecionar o primeiro disponível
+          setSelectedLocationId(candidateLocations[0].id);
+          setPickupAddress(candidateLocations[0].address);
         } else {
-          setPickupAddress('Endereço da loja indisponível.');
+          setSelectedLocationId('');
+          setPickupAddress('Não há locais com estoque disponível para retirada.');
         }
       } catch (err) {
-        console.error('Erro ao buscar endereço de retirada:', err);
-        setPickupAddress('Erro ao carregar endereço da loja.');
+        console.error('Erro ao processar locais de retirada:', err);
+      } finally {
+        setLocationsLoading(false);
       }
     }
 
-    fetchPickupAddress();
-  }, [cartItems]);
+    if (shippingMethod === 'pickup') {
+      loadPickupLocations();
+    }
+  }, [cartItems, shippingMethod]);
 
   useEffect(() => {
     if (profile && !address.cep && !address.logradouro) {
@@ -216,6 +349,14 @@ export default function Checkout() {
     setShippingMethod('pickup');
   }, []);
 
+  useEffect(() => {
+    if (walletBalance > 0 && total > 0) {
+      setMixedWalletAmount(Number(Math.min(walletBalance, total - 0.01).toFixed(2)));
+    } else {
+      setMixedWalletAmount(0);
+    }
+  }, [walletBalance, total]);
+
   // Reset payment state when cart changes to avoid inconsistencies
   useEffect(() => {
     if (orderId) {
@@ -228,6 +369,11 @@ export default function Checkout() {
   const handleCheckout = async () => {
     if (!shippingMethod) {
       toast.error('Selecione um método de envio ou retirada.');
+      return;
+    }
+
+    if (shippingMethod === 'pickup' && !selectedLocationId) {
+      toast.error('Selecione um local para retirada.');
       return;
     }
 
@@ -268,9 +414,13 @@ export default function Checkout() {
             amount: total,
             status: 'Aguardando Pagamento',
             items: cartItems,
-            branch_id: cartItems[0].branchId || cartItems[0].merchant_id || null, 
+            branch_id: shippingMethod === 'pickup' 
+              ? (selectedLocationId === 'matriz' ? null : selectedLocationId)
+              : null, 
             cashback_amount: userTotalCashbackAmount,
-            shipping_address: shippingMethod === 'pickup' ? 'Retirada na Loja' : `${address.logradouro}, ${address.numero} - ${address.cidade}/${address.estado}`,
+            shipping_address: shippingMethod === 'pickup' 
+              ? `Retirada na Loja: ${pickupAddress}` 
+              : `${address.logradouro}, ${address.numero} - ${address.cidade}/${address.estado}`,
             payment_method: 'Carteira Digital'
           }])
           .select()
@@ -279,6 +429,15 @@ export default function Checkout() {
         if (orderError) throw orderError;
 
         const orderId = order.id;
+
+        // 1.1 Dar baixa automática: atualizar status do pedido para 'Pago, Aguardando Retirada'
+        // Isso dispara a trigger de comissões do banco de dados automaticamente!
+        const { error: updateStatusError } = await supabase
+          .from('orders')
+          .update({ status: 'Pago, Aguardando Retirada' })
+          .eq('id', orderId);
+
+        if (updateStatusError) throw updateStatusError;
 
         // 2. Se for retirada, criar o registro de código de retirada
         if (shippingMethod === 'pickup') {
@@ -310,7 +469,7 @@ export default function Checkout() {
         
         // 4. Dar baixa no estoque de cada produto
         await Promise.all(cartItems.map(item => 
-          businessRules.decrementStock(item.id, item.quantity)
+          businessRules.decrementStock(item.id, item.quantity, selectedLocationId === 'matriz' ? null : selectedLocationId)
         ));
 
         toast.dismiss(loadingToast);
@@ -337,10 +496,12 @@ export default function Checkout() {
             amount: total,
             status: 'Aguardando Pagamento',
             items: cartItems,
-            branch_id: cartItems[0].branchId || cartItems[0].merchant_id || null, 
+            branch_id: shippingMethod === 'pickup' 
+              ? (selectedLocationId === 'matriz' ? null : selectedLocationId)
+              : null, 
             cashback_amount: userTotalCashbackAmount,
             shipping_address: `RETIRADA NA LOJA: ${pickupAddress}`,
-            payment_method: paymentMethod === 'wallet' ? 'Saldo de Carteira Virtual' : 'Pix'
+            payment_method: paymentMethod === 'wallet' ? 'Saldo de Carteira Virtual' : paymentMethod === 'mixed' ? 'Saldo de Carteira + Pix' : 'Pix'
           }])
           .select()
           .single();
@@ -349,9 +510,24 @@ export default function Checkout() {
         currentOrderId = orderData.id;
         setOrderId(currentOrderId);
 
+        // Se for pagamento misto, debitar imediatamente a parte da carteira
+        if (paymentMethod === 'mixed') {
+          const { error: transError } = await supabase
+            .from('transactions')
+            .insert([{
+              profile_id: authUser.id,
+              type: 'withdrawal',
+              amount: -mixedWalletAmount,
+              description: `Pagamento Parcial (Carteira) - Pedido #${currentOrderId.substring(0, 8)}`,
+              status: 'completed'
+            }]);
+
+          if (transError) throw transError;
+        }
+
         // 2. Dar baixa no estoque de cada produto (apenas se for pedido novo)
         await Promise.all(cartItems.map(item => 
-          businessRules.decrementStock(item.id, item.quantity)
+          businessRules.decrementStock(item.id, item.quantity, selectedLocationId === 'matriz' ? null : selectedLocationId)
         ));
 
         // 3. Se for retirada, criar o registro de código de retirada antecipadamente
@@ -385,7 +561,9 @@ export default function Checkout() {
           unit_price: item.price
         })),
         payer,
-        shippingCost: shippingMethod === 'pickup' ? 0 : shippingCost,
+        shippingCost: paymentMethod === 'mixed' 
+          ? (shippingMethod === 'pickup' ? 0 : shippingCost) - mixedWalletAmount 
+          : (shippingMethod === 'pickup' ? 0 : shippingCost),
         method: 'pix',
         origin: window.location.origin
       };
@@ -790,13 +968,36 @@ export default function Checkout() {
               </div>
 
               <div className="p-6 bg-blue-50/50 rounded-2xl border-2 border-primary-blue">
-                  <div className="flex items-start gap-4">
-                    <div className="mt-1 size-5 rounded-full border-2 border-primary-blue flex items-center justify-center">
+                  <div className="flex items-start gap-4 w-full">
+                    <div className="mt-1 size-5 rounded-full border-2 border-primary-blue flex items-center justify-center shrink-0">
                       <div className="size-2.5 bg-primary-blue rounded-full" />
                     </div>
-                    <div>
+                    <div className="flex-1 min-w-0 space-y-3">
                       <p className="font-black text-midnight uppercase italic tracking-tighter">Retirada na Loja</p>
-                      <p className="text-sm text-slate-600 font-bold mt-1">{pickupAddress}</p>
+
+                      {locationsLoading ? (
+                        <p className="text-xs text-slate-400 font-bold">Carregando locais disponíveis...</p>
+                      ) : availableLocations.length > 0 ? (
+                        <div className="space-y-2">
+                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">
+                            Selecione o local para retirada:
+                          </label>
+                          <select 
+                            value={selectedLocationId}
+                            onChange={handleLocationChange}
+                            className="w-full bg-white border border-slate-200 px-4 py-3 rounded-xl font-bold text-xs text-midnight cursor-pointer focus:ring-2 focus:ring-primary-blue/20"
+                          >
+                            {availableLocations.map(loc => (
+                              <option key={loc.id} value={loc.id}>
+                                {loc.name} - {loc.address}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      ) : (
+                        <p className="text-sm text-red-500 font-bold">Nenhuma loja com estoque disponível para os itens do carrinho.</p>
+                      )}
+
                       <div className="mt-4 inline-flex items-center gap-2 text-[10px] bg-white text-primary-blue font-black px-3 py-1.5 rounded-lg uppercase tracking-widest border border-primary-blue/10 shadow-sm">
                         <AlertCircle size={12} /> Você receberá um código de retirada após o pagamento
                       </div>
@@ -880,6 +1081,77 @@ export default function Checkout() {
                     onChange={() => setPaymentMethod('wallet')} 
                   />
                 </label>
+
+                <label className={`flex items-center justify-between p-4 rounded-xl border-2 cursor-pointer transition-all ${paymentMethod === 'mixed' ? 'border-primary-blue bg-blue-50/50' : 'border-slate-100 hover:border-slate-200'} ${(!authUser || walletBalance <= 0 || !isEligibleForWallet) ? 'opacity-50 grayscale cursor-not-allowed' : ''}`}>
+                  <div className="flex items-center gap-4">
+                    <div className={`size-5 rounded-full border-2 flex items-center justify-center ${paymentMethod === 'mixed' ? 'border-primary-blue' : 'border-slate-300'}`}>
+                      {paymentMethod === 'mixed' && <div className="size-2.5 bg-primary-blue rounded-full" />}
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <div className="size-8 bg-purple-100 rounded-lg flex items-center justify-center text-purple-600">
+                        <Plus size={20} />
+                      </div>
+                      <div>
+                        <p className="font-black text-midnight uppercase tracking-tight">Pagamento Misto (Carteira + PIX)</p>
+                        <p className="text-[10px] text-slate-400 font-bold uppercase">Pague parte com saldo e o restante via PIX</p>
+                      </div>
+                    </div>
+                  </div>
+                  {!authUser ? (
+                    <span className="text-[10px] font-bold text-amber-500 uppercase">Faça login</span>
+                  ) : !isEligibleForWallet ? (
+                    <span className="text-[10px] font-bold text-red-500 uppercase">Conta Inativa</span>
+                  ) : walletBalance <= 0 ? (
+                    <span className="text-[10px] font-bold text-red-500 uppercase">Sem Saldo</span>
+                  ) : (
+                    <span className="text-[10px] font-black text-purple-600 uppercase">Disponível</span>
+                  )}
+                  <input 
+                    type="radio" 
+                    name="payment" 
+                    className="hidden" 
+                    disabled={!authUser || walletBalance <= 0 || !isEligibleForWallet}
+                    checked={paymentMethod === 'mixed'} 
+                    onChange={() => setPaymentMethod('mixed')} 
+                  />
+                </label>
+
+                {paymentMethod === 'mixed' && (
+                  <motion.div 
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    className="p-5 bg-purple-50/30 rounded-2xl border border-purple-100 space-y-3"
+                  >
+                    <label className="text-[10px] font-black text-purple-700 uppercase tracking-widest block">
+                      Valor a pagar com saldo da carteira (Máximo: R$ {Math.min(walletBalance, total - 0.01).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}):
+                    </label>
+                    <div className="relative">
+                      <span className="absolute left-4 top-1/2 -translate-y-1/2 text-xs font-black text-slate-400">R$</span>
+                      <input 
+                        type="number"
+                        step="0.01"
+                        min="0.01"
+                        max={Math.min(walletBalance, total - 0.01)}
+                        value={mixedWalletAmount}
+                        onChange={(e) => {
+                          const val = Number(e.target.value);
+                          const maxVal = Number(Math.min(walletBalance, total - 0.01).toFixed(2));
+                          if (val > maxVal) {
+                            setMixedWalletAmount(maxVal);
+                          } else if (val < 0) {
+                            setMixedWalletAmount(0);
+                          } else {
+                            setMixedWalletAmount(val);
+                          }
+                        }}
+                        className="w-full bg-white border border-slate-200 rounded-xl py-3 pl-10 pr-4 text-xs font-bold text-midnight focus:outline-none focus:ring-2 focus:ring-purple-500/20"
+                      />
+                    </div>
+                    <p className="text-[10px] text-slate-500 font-bold">
+                      Restante a ser pago via PIX: <span className="text-midnight font-black">R$ {Number(Math.max(0, total - mixedWalletAmount).toFixed(2)).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                    </p>
+                  </motion.div>
+                )}
               </div>
             </motion.section>
           </div>
@@ -958,7 +1230,7 @@ export default function Checkout() {
 
               <button 
                 onClick={handleCheckout}
-                disabled={isProcessing || !shippingMethod}
+                disabled={isProcessing || !shippingMethod || (shippingMethod === 'pickup' && !selectedLocationId)}
                 className="w-full bg-primary-blue hover:bg-blue-600 text-white py-4 rounded-xl font-black text-sm uppercase tracking-widest transition-all shadow-lg shadow-primary-blue/30 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
               >
                 {isProcessing ? 'Processando...' : paymentMethod === 'wallet' ? 'Pagar com Carteira Digital' : 'Finalizar Pedido / Pagar'}
@@ -1086,16 +1358,16 @@ export default function Checkout() {
                           <div className="flex items-center bg-white border border-slate-200 rounded-xl px-2 py-1 gap-3">
                             <button 
                               onClick={() => updateQuantity(item.id, -1)}
-                              className="size-6 rounded-lg hover:bg-slate-50 flex items-center justify-center lg:transition-colors text-slate-400"
+                              className="size-6 rounded-lg hover:bg-slate-50 flex items-center justify-center lg:transition-colors text-slate-800 hover:text-midnight"
                             >
-                              <Minus size={14} />
+                              <Minus size={14} strokeWidth={3} />
                             </button>
-                            <span className="text-xs font-black w-4 text-center text-midnight">{item.quantity}</span>
+                            <span className="text-xs font-black w-4 text-center text-slate-800">{item.quantity}</span>
                             <button 
                               onClick={() => updateQuantity(item.id, 1)}
-                              className="size-6 rounded-lg hover:bg-slate-50 flex items-center justify-center lg:transition-colors text-midnight"
+                              className="size-6 rounded-lg hover:bg-slate-50 flex items-center justify-center lg:transition-colors text-slate-800 hover:text-midnight"
                             >
-                              <Plus size={14} />
+                              <Plus size={14} strokeWidth={3} />
                             </button>
                           </div>
                           <button 

@@ -46,8 +46,8 @@ export default function MerchantLayout({ children, title, subtitle }: MerchantLa
 
   const isActive = (path: string) => location.pathname === path;
 
-  // Gerentes não podem ver configurações gerais
-  const canSeeSettings = profile?.role === 'owner';
+  // Gerentes não podem ver configurações gerais, outros papéis têm acesso
+  const canSeeSettings = profile?.role !== 'manager';
 
   return (
     <div className="min-h-screen bg-[#f8fafc] flex font-sans">

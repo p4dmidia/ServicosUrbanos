@@ -46,6 +46,7 @@ export default function MerchantOrders() {
   const { profile } = useAuth();
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState('Todos');
+  const [filterBranch, setFilterBranch] = useState('Todos');
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [withdrawalInput, setWithdrawalInput] = useState('');
   const [error, setError] = useState('');
@@ -56,6 +57,7 @@ export default function MerchantOrders() {
 
   const [orders, setOrders] = useState<Order[]>([]);
   const [extras, setExtras] = useState<Record<string, OrderWithCode>>({});
+  const [branches, setBranches] = useState<any[]>([]);
 
   useEffect(() => {
     if (profile) {
@@ -73,8 +75,12 @@ export default function MerchantOrders() {
       const mId = await businessRules.getMerchantId(profile!.id);
       if (!mId) return;
 
-      const allOrders = await businessRules.getMerchantOrders(mId, branchId);
+      const [allOrders, merchantBranches] = await Promise.all([
+        businessRules.getMerchantOrders(mId, branchId),
+        businessRules.getBranches(mId)
+      ]);
       setOrders(allOrders);
+      setBranches(merchantBranches);
       
       const extrasMap: Record<string, OrderWithCode> = {};
       // Carregamos os extras apenas se necessário ou em lote
@@ -106,11 +112,18 @@ export default function MerchantOrders() {
     }
   }
 
+  const getBranchName = (branchId?: string) => {
+    if (!branchId) return 'Loja Geral';
+    const branch = branches.find(b => b.id === branchId);
+    return branch ? branch.name : 'Loja Geral';
+  };
+
   const filteredOrders = orders.filter(o => {
     const matchesSearch = o.id.toLowerCase().includes(search.toLowerCase()) || 
                           o.customerName.toLowerCase().includes(search.toLowerCase());
     const matchesStatus = filterStatus === 'Todos' || o.status === filterStatus;
-    return matchesSearch && matchesStatus;
+    const matchesBranch = filterBranch === 'Todos' || o.branchId === filterBranch;
+    return matchesSearch && matchesStatus && matchesBranch;
   });
 
   const handleConfirmWithdrawal = async (e: React.FormEvent) => {
@@ -245,6 +258,19 @@ export default function MerchantOrders() {
               <option value="Concluído">Concluídos</option>
               <option value="Cancelado">Cancelados</option>
             </select>
+
+            {branches.length > 1 && (
+              <select 
+                value={filterBranch}
+                onChange={(e) => setFilterBranch(e.target.value)}
+                className="bg-white border border-slate-200 px-6 py-3 rounded-2xl text-xs font-black uppercase tracking-widest focus:outline-none focus:ring-2 focus:ring-primary-blue/20 transition-all cursor-pointer text-midnight"
+              >
+                <option value="Todos">Todas as Lojas</option>
+                {branches.map(b => (
+                  <option key={b.id} value={b.id}>{b.name}</option>
+                ))}
+              </select>
+            )}
           </div>
         </div>
 
@@ -257,6 +283,9 @@ export default function MerchantOrders() {
                     <th className="px-1 py-5 text-[9px] font-black text-slate-400 uppercase tracking-wider whitespace-nowrap">ID</th>
                     <th className="px-1 py-5 text-[9px] font-black text-slate-400 uppercase tracking-wider whitespace-nowrap">Cliente</th>
                     <th className="px-1 py-5 text-[9px] font-black text-slate-400 uppercase tracking-wider whitespace-nowrap">Data</th>
+                    {branches.length > 1 && (
+                      <th className="px-1 py-5 text-[9px] font-black text-slate-400 uppercase tracking-wider whitespace-nowrap">Loja de Retirada</th>
+                    )}
                     <th className="px-1 py-5 text-[9px] font-black text-slate-400 uppercase tracking-wider whitespace-nowrap text-center">Valor</th>
                     <th className="px-1 py-5 text-[9px] font-black text-slate-400 uppercase tracking-wider whitespace-nowrap text-center">Status</th>
                     <th className="px-1 py-5 text-[9px] font-black text-slate-400 uppercase tracking-wider text-right whitespace-nowrap">Ações</th>
@@ -286,6 +315,13 @@ export default function MerchantOrders() {
                             </div>
                           </td>
                           <td className="px-1 py-5 text-[10px] font-bold text-slate-400 whitespace-nowrap">{o.date.split(',')[0]}</td>
+                          {branches.length > 1 && (
+                            <td className="px-1 py-5">
+                              <span className="text-[10px] font-black text-slate-600 bg-slate-100 px-2.5 py-1 rounded-xl uppercase tracking-wider">
+                                {getBranchName(o.branchId)}
+                              </span>
+                            </td>
+                          )}
                           <td className="px-1 py-5 text-center">
                             <span className="font-black text-midnight tracking-tighter text-xs whitespace-nowrap">R$ {o.amount.toFixed(2).replace('.', ',')}</span>
                           </td>
@@ -489,8 +525,8 @@ export default function MerchantOrders() {
                   </div>
                 </div>
 
-                {/* Pagamento */}
-                <div className="grid grid-cols-1 gap-4">
+                {/* Pagamento e Retirada */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                    <div className="p-6 bg-slate-50 rounded-3xl border border-slate-100">
                       <div className="flex items-center gap-3 mb-3">
                          <CreditCard size={16} className="text-emerald-500" />
@@ -498,6 +534,15 @@ export default function MerchantOrders() {
                       </div>
                       <p className="text-xs font-bold text-midnight uppercase tracking-widest">
                         {selectedOrder.paymentMethod || 'Não informado'}
+                      </p>
+                   </div>
+                   <div className="p-6 bg-slate-50 rounded-3xl border border-slate-100">
+                      <div className="flex items-center gap-3 mb-3">
+                         <MapPin size={16} className="text-primary-blue" />
+                         <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Loja de Retirada</span>
+                      </div>
+                      <p className="text-xs font-bold text-midnight uppercase tracking-widest">
+                        {getBranchName(selectedOrder.branchId)}
                       </p>
                    </div>
                 </div>

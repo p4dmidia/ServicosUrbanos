@@ -12,7 +12,11 @@ import {
   Smartphone,
   Upload,
   FileText,
-  Calendar
+  Calendar,
+  TrendingUp,
+  Wallet,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import AdminLayout from '../components/AdminLayout';
@@ -46,7 +50,7 @@ export default function AdminWithdrawals() {
     loadBalances();
   }, []);
 
-  const handleProcessPayout = async (type: 'mensal' | 'anual') => {
+  const handleProcessPayout = async (type: 'mensal' | 'anual' | 'digital') => {
     if (!selectedPayout || !receiptFile) {
       toast.error('Selecione o comprovante de pagamento.');
       return;
@@ -60,10 +64,19 @@ export default function AdminWithdrawals() {
       const receiptUrl = await businessRules.uploadReceipt(receiptFile);
       
       // 2. Registrar o pagamento
-      const amount = type === 'mensal' ? selectedPayout.monthlyPending : selectedPayout.annualPending;
+      const amount = type === 'mensal' 
+        ? selectedPayout.monthlyPending 
+        : type === 'anual' 
+          ? selectedPayout.annualPending 
+          : selectedPayout.digitalPending;
       await businessRules.processPayout(selectedPayout.profileId, amount, type, receiptUrl);
       
-      toast.success(`Pagamento ${type === 'mensal' ? 'Mensal' : 'Anual'} processado com sucesso!`);
+      let displayType = '';
+      if (type === 'mensal') displayType = 'Mensal';
+      else if (type === 'anual') displayType = 'Anual';
+      else displayType = 'Digital';
+
+      toast.success(`Pagamento ${displayType} processado com sucesso!`);
       setSelectedPayout(null);
       setReceiptFile(null);
       loadBalances();
@@ -81,28 +94,133 @@ export default function AdminWithdrawals() {
     toast.success(`${label} copiado!`);
   };
 
+  const handleExportCSV = () => {
+    if (payableBalances.length === 0) {
+      toast.error('Nenhum dado disponível para exportação.');
+      return;
+    }
+
+    const csvContent = [];
+    
+    // Header
+    csvContent.push(`Relatorio de Saldos de Cashback Pendentes - Gerado em ${new Date().toLocaleString('pt-BR')}`);
+    csvContent.push('');
+    
+    // Totais Gerais
+    csvContent.push('Total Geral Pendente;Pendente Mensal;Pendente Digital;Pendente Anual');
+    csvContent.push([
+      `R$ ${totalPending.toFixed(2).replace('.', ',')}`,
+      `R$ ${totalMonthlyPending.toFixed(2).replace('.', ',')}`,
+      `R$ ${totalDigitalPending.toFixed(2).replace('.', ',')}`,
+      `R$ ${totalAnnualPending.toFixed(2).replace('.', ',')}`
+    ].join(';'));
+    csvContent.push('');
+    
+    // Detalhado
+    csvContent.push('Nome;Email;Chave PIX;Dados Bancarios;Pendente Mensal;Pendente Digital;Pendente Anual;Pendente Total');
+    
+    payableBalances.forEach(w => {
+      const userTotal = (w.monthlyPending || 0) + (w.digitalPending || 0) + (w.annualPending || 0);
+      csvContent.push([
+        w.userName,
+        w.userEmail,
+        `"${w.pixKey}"`,
+        `"${w.bankDetails}"`,
+        `R$ ${(w.monthlyPending || 0).toFixed(2).replace('.', ',')}`,
+        `R$ ${(w.digitalPending || 0).toFixed(2).replace('.', ',')}`,
+        `R$ ${(w.annualPending || 0).toFixed(2).replace('.', ',')}`,
+        `R$ ${userTotal.toFixed(2).replace('.', ',')}`
+      ].join(';'));
+    });
+
+    const csvString = csvContent.join('\n');
+    const blob = new Blob([new Uint8Array([0xEF, 0xBB, 0xBF]), csvString], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `relatorio_cashback_pendente_${Date.now()}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    toast.success('Relatório CSV baixado com sucesso!');
+  };
+
   const filteredBalances = payableBalances.filter(w => 
     w.userName.toLowerCase().includes(searchTerm.toLowerCase()) ||
     w.userEmail.toLowerCase().includes(searchTerm.toLowerCase()) ||
     w.pixKey.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const totalPending = payableBalances.reduce((acc, curr) => acc + curr.monthlyPending + curr.annualPending, 0);
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm]);
+
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const paginatedBalances = filteredBalances.slice(startIndex, startIndex + itemsPerPage);
+  const totalPages = Math.ceil(filteredBalances.length / itemsPerPage);
+
+  const totalMonthlyPending = payableBalances.reduce((acc, curr) => acc + (curr.monthlyPending || 0), 0);
+  const totalAnnualPending = payableBalances.reduce((acc, curr) => acc + (curr.annualPending || 0), 0);
+  const totalDigitalPending = payableBalances.reduce((acc, curr) => acc + (curr.digitalPending || 0), 0);
+  const totalPending = totalMonthlyPending + totalAnnualPending + totalDigitalPending;
 
   return (
     <AdminLayout title="Gestão de Pagamentos" subtitle="Central de pagamentos manuais de cashback">
       <div className="p-8 lg:p-12 space-y-10">
         
         {/* Stats Header */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-8">
-          <div className="flex items-center gap-6 bg-[#0a0e17] p-8 rounded-[2.5rem] border border-white/5 shadow-2xl pr-12">
-             <div className="size-16 bg-indigo-500/20 text-indigo-400 rounded-3xl flex items-center justify-center shadow-lg shadow-indigo-500/10">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+          {/* Card 1: Total Geral */}
+          <div className="flex items-center gap-6 bg-[#0a0e17] p-8 rounded-[2.5rem] border border-white/5 shadow-2xl relative overflow-hidden group">
+             <div className="size-16 bg-indigo-500/20 text-indigo-400 rounded-3xl flex items-center justify-center shadow-lg shadow-indigo-500/10 shrink-0">
                 <DollarSign size={32} />
              </div>
              <div>
                 <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest leading-none mb-2">Total Geral Pendente</p>
-                <p className="text-4xl font-black text-white tracking-tighter italic">
+                <p className="text-3xl font-black text-white tracking-tighter italic">
                   R$ {totalPending.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                </p>
+             </div>
+          </div>
+
+          {/* Card 2: Mensal */}
+          <div className="flex items-center gap-6 bg-[#0a0e17] p-8 rounded-[2.5rem] border border-white/5 shadow-2xl relative overflow-hidden group">
+             <div className="size-16 bg-emerald-500/20 text-emerald-400 rounded-3xl flex items-center justify-center shadow-lg shadow-emerald-500/10 shrink-0">
+                <TrendingUp size={32} />
+             </div>
+             <div>
+                <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest leading-none mb-2">Pendente Mensal</p>
+                <p className="text-3xl font-black text-white tracking-tighter italic">
+                  R$ {totalMonthlyPending.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                </p>
+             </div>
+          </div>
+
+          {/* Card 3: Digital */}
+          <div className="flex items-center gap-6 bg-[#0a0e17] p-8 rounded-[2.5rem] border border-white/5 shadow-2xl relative overflow-hidden group">
+             <div className="size-16 bg-purple-500/20 text-purple-400 rounded-3xl flex items-center justify-center shadow-lg shadow-purple-500/10 shrink-0">
+                <Wallet size={32} />
+             </div>
+             <div>
+                <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest leading-none mb-2">Pendente Digital</p>
+                <p className="text-3xl font-black text-white tracking-tighter italic">
+                  R$ {totalDigitalPending.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                </p>
+             </div>
+          </div>
+
+          {/* Card 4: Anual */}
+          <div className="flex items-center gap-6 bg-[#0a0e17] p-8 rounded-[2.5rem] border border-white/5 shadow-2xl relative overflow-hidden group">
+             <div className="size-16 bg-blue-500/20 text-blue-400 rounded-3xl flex items-center justify-center shadow-lg shadow-blue-500/10 shrink-0">
+                <Calendar size={32} />
+             </div>
+             <div>
+                <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest leading-none mb-2">Pendente Anual</p>
+                <p className="text-3xl font-black text-white tracking-tighter italic">
+                  R$ {totalAnnualPending.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                 </p>
              </div>
           </div>
@@ -120,6 +238,13 @@ export default function AdminWithdrawals() {
               className="w-full bg-white/5 border border-white/5 rounded-2xl py-5 pl-16 pr-8 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-white text-sm font-bold placeholder:text-slate-600 transition-all"
             />
           </div>
+          <button 
+            onClick={handleExportCSV}
+            className="w-full md:w-auto px-8 py-5 bg-white/5 hover:bg-white/10 border border-white/5 hover:border-white/10 text-white rounded-2xl font-black text-xs uppercase tracking-widest transition-all flex items-center justify-center gap-3 shrink-0"
+          >
+            <FileText size={18} className="text-slate-400" />
+            Relatório CSV
+          </button>
         </div>
 
         {/* Withdrawals List */}
@@ -136,8 +261,9 @@ export default function AdminWithdrawals() {
               <p className="text-slate-500 font-bold uppercase text-[10px] tracking-widest">Todos os usuários estão com os pagamentos em dia.</p>
             </div>
           ) : (
-            <AnimatePresence mode='popLayout'>
-              {filteredBalances.map((w, i) => (
+            <>
+              <AnimatePresence mode='popLayout'>
+                {paginatedBalances.map((w, i) => (
                 <motion.div
                   key={w.profileId}
                   initial={{ opacity: 0, y: 20 }}
@@ -172,6 +298,18 @@ export default function AdminWithdrawals() {
                            <button 
                              onClick={() => setSelectedPayout({ ...w, currentType: 'mensal' })}
                              className="mt-2 text-[8px] font-black uppercase text-emerald-400 hover:text-white transition-colors"
+                           >
+                             Dar Baixa
+                           </button>
+                        </div>
+                        <div className="text-center md:text-left border-r border-white/10 pr-8">
+                           <p className="text-[10px] font-black text-purple-400 uppercase tracking-widest mb-1">Digital</p>
+                           <p className="text-2xl font-black text-white tracking-tighter italic">
+                             R$ {(w.digitalPending || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                           </p>
+                           <button 
+                             onClick={() => setSelectedPayout({ ...w, currentType: 'digital' })}
+                             className="mt-2 text-[8px] font-black uppercase text-purple-400 hover:text-white transition-colors"
                            >
                              Dar Baixa
                            </button>
@@ -218,6 +356,47 @@ export default function AdminWithdrawals() {
                 </motion.div>
               ))}
             </AnimatePresence>
+            
+            {/* Pagination Controls */}
+            {totalPages > 1 && (
+              <div className="mt-12 flex items-center justify-between border-t border-white/5 pt-8">
+                <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
+                  Mostrando {startIndex + 1}-{Math.min(startIndex + itemsPerPage, filteredBalances.length)} de {filteredBalances.length}
+                </p>
+                <div className="flex items-center gap-2">
+                  <button 
+                    disabled={currentPage === 1}
+                    onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                    className="p-3 bg-white/5 hover:bg-white/10 border border-white/5 rounded-xl disabled:opacity-30 disabled:hover:bg-white/5 text-slate-400 hover:text-white transition-colors flex items-center justify-center"
+                  >
+                    <ChevronLeft size={18} />
+                  </button>
+                  <div className="flex items-center gap-1">
+                    {[...Array(totalPages)].map((_, i) => (
+                      <button
+                        key={i}
+                        onClick={() => setCurrentPage(i + 1)}
+                        className={`size-10 rounded-xl text-xs font-black transition-all ${
+                          currentPage === i + 1 
+                            ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20' 
+                            : 'bg-white/5 border border-white/5 text-slate-400 hover:bg-white/10 hover:text-white'
+                        }`}
+                      >
+                        {i + 1}
+                      </button>
+                    )).slice(Math.max(0, currentPage - 3), Math.min(totalPages, currentPage + 2))}
+                  </div>
+                  <button 
+                    disabled={currentPage === totalPages}
+                    onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                    className="p-3 bg-white/5 hover:bg-white/10 border border-white/5 rounded-xl disabled:opacity-30 disabled:hover:bg-white/5 text-slate-400 hover:text-white transition-colors flex items-center justify-center"
+                  >
+                    <ChevronRight size={18} />
+                  </button>
+                </div>
+              </div>
+            )}
+            </>
           )}
         </div>
 
@@ -251,14 +430,20 @@ export default function AdminWithdrawals() {
                     </div>
                     <h3 className="text-3xl font-black text-white tracking-tighter uppercase italic">Confirmar Pagamento</h3>
                     <p className="text-slate-400 font-bold uppercase text-[10px] tracking-widest mt-2">
-                      {selectedPayout.userName} • {selectedPayout.currentType === 'mensal' ? 'Cashback Mensal' : 'Cashback Anual'}
+                      {selectedPayout.userName} • {selectedPayout.currentType === 'mensal' ? 'Cashback Mensal' : selectedPayout.currentType === 'anual' ? 'Cashback Anual' : 'Cashback Digital'}
                     </p>
                   </div>
 
                   <div className="bg-white/5 rounded-3xl p-8 border border-white/10 text-center">
                     <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">Valor a Pagar</p>
                     <p className="text-5xl font-black text-white tracking-tighter italic">
-                      R$ {(selectedPayout.currentType === 'mensal' ? selectedPayout.monthlyPending : selectedPayout.annualPending).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                      R$ {(
+                        selectedPayout.currentType === 'mensal' 
+                          ? selectedPayout.monthlyPending 
+                          : selectedPayout.currentType === 'anual' 
+                            ? selectedPayout.annualPending 
+                            : selectedPayout.digitalPending
+                      ).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                     </p>
                   </div>
 

@@ -29,7 +29,7 @@ export default function AdminFinancials() {
   const [payees, setPayees] = useState<Record<string, any>>({});
   const [matrixPixKey, setMatrixPixKey] = useState('31998007412');
   const [matrixCpf, setMatrixCpf] = useState('123.456.789-00');
-  const [dynamicPlatformRate, setDynamicPlatformRate] = useState(20);
+  const [dynamicPlatformRate, setDynamicPlatformRate] = useState(18);
   const [loading, setLoading] = useState(true);
   
   // Payment Flow State

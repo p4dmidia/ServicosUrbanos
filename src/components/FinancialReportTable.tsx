@@ -184,11 +184,12 @@ export default function FinancialReportTable({
       const date = new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]));
       
       if (startDate) {
-        const start = new Date(startDate);
+        const start = new Date(startDate.replace(/-/g, '/'));
         if (date < start) return false;
       }
       if (endDate) {
-        const end = new Date(endDate);
+        const end = new Date(endDate.replace(/-/g, '/'));
+        end.setHours(23, 59, 59, 999);
         if (date > end) return false;
       }
     }

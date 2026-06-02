@@ -82,22 +82,22 @@ export default function MerchantReports() {
   }, [profile]);
 
   const { financialReportData, kpis, chart } = useMemo(() => {
-    const start = new Date(startDateStr);
+    const start = new Date(startDateStr.replace(/-/g, '/'));
     start.setHours(0, 0, 0, 0);
     
-    const end = new Date(endDateStr);
+    const end = new Date(endDateStr.replace(/-/g, '/'));
     end.setHours(23, 59, 59, 999);
 
     const reportRecords = orders.map(o => {
       const extra = extras.find(e => e.id === o.id);
-      const manager = team.find(m => m.branchId === o.branch_id && m.role === 'manager');
+      const manager = team.find(m => m.branchId === o.branchId && m.role === 'manager');
       const saleDate = o.orderDate ? new Date(o.orderDate) : new Date();
       
       const payDate = new Date(saleDate);
       payDate.setDate(payDate.getDate() + 1);
 
       const commissionRate = manager?.commissionRate || 0;
-      const commissionAmount = (Number(o.amount) * commissionRate) / 100;
+      const commissionAmount = o.status === 'Cancelado' ? 0 : (Number(o.amount) * commissionRate) / 100;
 
       const branch = branches.find(b => b.id === o.branchId);
       const payeeName = branch ? branch.name : (profile?.store_name || profile?.full_name || 'Lojista Beneficiário');
@@ -112,6 +112,9 @@ export default function MerchantReports() {
         orderStatus: o.status === 'Concluído' ? 'Pago' : o.status,
         deliveryStatus: extra?.status || 'Pendente',
         saleDate: saleDate.toLocaleDateString('pt-BR'),
+        completedDate: o.completedAt 
+          ? new Date(o.completedAt).toLocaleDateString('pt-BR') 
+          : (o.status === 'Concluído' ? saleDate.toLocaleDateString('pt-BR') : '---'),
         orderDateRaw: saleDate,
         amount: Number(o.amount),
         repasse: commissionAmount,
@@ -126,11 +129,12 @@ export default function MerchantReports() {
     });
     
     // KPIs
-    const totalCommissions = filteredRecords.reduce((acc, r) => acc + r.repasse, 0);
-    const totalSales = filteredRecords.reduce((acc, r) => acc + r.amount, 0);
-    const avgCommission = filteredRecords.length > 0 ? totalCommissions / filteredRecords.length : 0;
-    const pendingCommissions = filteredRecords
-      .filter(r => r.orderStatus !== 'Pago' || r.deliveryStatus !== 'Entregue')
+    const activeRecords = filteredRecords.filter(r => r.orderStatus !== 'Cancelado');
+    const totalCommissions = activeRecords.reduce((acc, r) => acc + r.repasse, 0);
+    const totalSales = activeRecords.reduce((acc, r) => acc + r.amount, 0);
+    const avgCommission = activeRecords.length > 0 ? totalCommissions / activeRecords.length : 0;
+    const pendingCommissions = activeRecords
+      .filter(r => r.orderStatus !== 'Pago')
       .reduce((acc, r) => acc + r.repasse, 0);
 
     const kpiList = [
@@ -156,7 +160,7 @@ export default function MerchantReports() {
       const label = d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
       chartLabels.push(label);
       
-      const dayTotal = filteredRecords
+      const dayTotal = activeRecords
         .filter(r => r.orderDateRaw.toDateString() === d.toDateString())
         .reduce((acc, r) => acc + r.repasse, 0);
       chartValues.push(dayTotal);
@@ -313,10 +317,7 @@ export default function MerchantReports() {
 
               <div className="space-y-6 relative z-10">
                 {team.filter(m => m.role === 'manager').length > 0 ? team.filter(m => m.role === 'manager').map((mgr: any, i: number) => {
-                  const mgrTotal = financialReportData
-                    .filter(r => r.managerName === mgr.name)
-                    .reduce((acc, r) => acc + r.repasse, 0);
-                  const percent = kpis[0].value > 0 ? (mgrTotal / kpis[0].value) * 100 : 0;
+                  const percent = mgr.commissionRate || 0;
                   const colors = ['bg-blue-500', 'bg-emerald-500', 'bg-purple-500', 'bg-amber-500'];
 
                   return (
@@ -395,7 +396,7 @@ export default function MerchantReports() {
             </div>
             <div>
               <h3 className="text-xl font-black text-midnight tracking-tighter uppercase italic leading-none">Saída de Estoque por Pedido</h3>
-              <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">Unidades e produtos vendidos por cada pedido</p>
+              <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">entradas e saida de estoque por pedido</p>
             </div>
           </div>
           
@@ -404,8 +405,9 @@ export default function MerchantReports() {
               <table className="w-full text-left border-collapse">
                 <thead>
                   <tr className="bg-slate-50/50">
+                    <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Entrada</th>
                     <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">ID do Pedido</th>
-                    <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Data</th>
+                    <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Data de Saída</th>
                     <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Cliente</th>
                     <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Produtos / Quantidade</th>
                     <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Total de Unidades</th>
@@ -420,10 +422,13 @@ export default function MerchantReports() {
                     return (
                       <tr key={record.orderId} className="hover:bg-slate-50/50 transition-colors">
                         <td className="p-6 text-xs font-bold text-slate-500 whitespace-nowrap">
+                          {record.saleDate}
+                        </td>
+                        <td className="p-6 text-xs font-bold text-slate-500 whitespace-nowrap">
                           #{record.orderId}
                         </td>
                         <td className="p-6 text-xs font-bold text-slate-500 whitespace-nowrap">
-                          {record.saleDate}
+                          {record.completedDate}
                         </td>
                         <td className="p-6 text-xs font-bold text-midnight uppercase whitespace-nowrap">
                           {record.buyerName}
@@ -445,7 +450,7 @@ export default function MerchantReports() {
                   })}
                   {financialReportData.length === 0 && (
                     <tr>
-                      <td colSpan={5} className="p-12 text-center text-xs font-black text-slate-400 uppercase tracking-widest">
+                      <td colSpan={6} className="p-12 text-center text-xs font-black text-slate-400 uppercase tracking-widest">
                         Nenhum pedido encontrado no período
                       </td>
                     </tr>

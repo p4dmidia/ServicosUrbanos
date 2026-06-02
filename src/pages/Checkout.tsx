@@ -462,7 +462,8 @@ export default function Checkout() {
             type: 'withdrawal',
             amount: -total,
             description: `Pagamento de Pedido #${order.id.substring(0, 8)}`,
-            status: 'completed'
+            status: 'completed',
+            order_id: order.id
           }]);
 
         if (transError) throw transError;
@@ -519,7 +520,8 @@ export default function Checkout() {
               type: 'withdrawal',
               amount: -mixedWalletAmount,
               description: `Pagamento Parcial (Carteira) - Pedido #${currentOrderId.substring(0, 8)}`,
-              status: 'completed'
+              status: 'completed',
+              order_id: currentOrderId
             }]);
 
           if (transError) throw transError;

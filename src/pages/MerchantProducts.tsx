@@ -520,7 +520,7 @@ export default function MerchantProducts() {
                     <th className="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Estoque</th>
                     <th className="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Cashback</th>
                     <th className="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Status</th>
-                    <th className="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Ações</th>
+                    {profile?.role === 'owner' && <th className="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Ações</th>}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-50">
@@ -581,28 +581,28 @@ export default function MerchantProducts() {
                             {p.status}
                           </button>
                         </td>
-                        <td className="px-8 py-6 text-right">
-                          <div className="flex items-center justify-end gap-2 text-[10px]">
-                            <button 
-                              onClick={() => handleEdit(p)}
-                              className="size-10 bg-slate-50 hover:bg-primary-blue hover:text-white rounded-xl flex items-center justify-center text-slate-400 transition-all font-black uppercase"
-                            >
-                              <Edit3 size={16} />
-                            </button>
-                            {profile?.role === 'owner' && (
+                        {profile?.role === 'owner' && (
+                          <td className="px-8 py-6 text-right">
+                            <div className="flex items-center justify-end gap-2 text-[10px]">
+                              <button 
+                                onClick={() => handleEdit(p)}
+                                className="size-10 bg-slate-50 hover:bg-primary-blue hover:text-white rounded-xl flex items-center justify-center text-slate-400 transition-all font-black uppercase"
+                              >
+                                <Edit3 size={16} />
+                              </button>
                               <button 
                                 onClick={() => deleteProduct(p.id)}
                                 className="size-10 bg-slate-50 hover:bg-red-500 hover:text-white rounded-xl flex items-center justify-center text-slate-400 transition-all font-black uppercase"
                               >
                                 <Trash2 size={16} />
                               </button>
-                            )}
-                          </div>
-                        </td>
+                            </div>
+                          </td>
+                        )}
                       </motion.tr>
                     )) : (
                       <tr>
-                        <td colSpan={profile?.role === 'owner' ? 7 : 6} className="px-8 py-20 text-center">
+                        <td colSpan={profile?.role === 'owner' ? 7 : 5} className="px-8 py-20 text-center">
                           <div className="flex flex-col items-center gap-4 opacity-50">
                             <Package size={48} className="text-slate-200" />
                             <p className="text-sm font-black text-slate-400 uppercase italic">Nenhum produto cadastrado</p>

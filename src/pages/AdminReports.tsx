@@ -21,6 +21,7 @@ import {
 import { motion } from 'motion/react';
 import AdminLayout from '../components/AdminLayout';
 import { businessRules } from '../lib/businessRules';
+import { supabase } from '../lib/supabase';
 import { toast } from 'react-hot-toast';
 import FinancialReportTable, { FinancialRecord } from '../components/FinancialReportTable';
 import BIInsightsModal from '../components/BIInsightsModal';
@@ -38,6 +39,7 @@ export default function AdminReports() {
   const [orders, setOrders] = useState<any[]>([]);
   const [extras, setExtras] = useState<any[]>([]);
   const [payees, setPayees] = useState<Record<string, any>>({});
+  const [branches, setBranches] = useState<any[]>([]);
   const [isBIModalOpen, setIsBIModalOpen] = useState(false);
   const [viewType, setViewType] = useState<'merchants' | 'affiliates'>('merchants');
   const [affiliatePayouts, setAffiliatePayouts] = useState<any[]>([]);
@@ -46,23 +48,32 @@ export default function AdminReports() {
   const loadData = async () => {
     setLoading(true);
     try {
-      const [reports, ordersData, extrasData, affiliatePayoutsData, marketConfig] = await Promise.all([
+      const [reports, ordersData, extrasData, affiliatePayoutsData, marketConfig, branchesRes] = await Promise.all([
         businessRules.getAdminReportsData('custom', startDate, endDate),
         businessRules.getAllOrders(),
         businessRules.getAllOrderExtras(),
         businessRules.getAffiliatePayouts(),
-        businessRules.getMarketplaceConfig()
+        businessRules.getMarketplaceConfig(),
+        supabase.from('branches').select('id, name, merchant_id')
       ]);
       
+      const branchesList = branchesRes.data || [];
+      setBranches(branchesList);
+
       setAffiliatePayouts(affiliatePayoutsData);
       // Somente pedidos com repasse pago
       const paidOrders = ordersData.filter(o => o.payoutStatus === 'paid');
       
-      // Coletar todos os IDs de afiliados (destinatários)
-      const affiliateIds = [...new Set(paidOrders.map(o => o.affiliateId).filter(Boolean))] as string[];
+      // Coletar todos os IDs de proprietários de filiais associados a estes pedidos pagos
+      const merchantOwnerIds = paidOrders.map(o => {
+        const branch = branchesList.find(b => b.id === o.branchId);
+        return branch ? branch.merchant_id : null;
+      }).filter(Boolean);
       
-      if (affiliateIds.length > 0) {
-        const payeesData = await businessRules.getPayeeDetails(affiliateIds);
+      const potentialPayeeIds = [...new Set(merchantOwnerIds)].map(id => String(id));
+      
+      if (potentialPayeeIds.length > 0) {
+        const payeesData = await businessRules.getPayeeDetails(potentialPayeeIds);
         const payeesMap: Record<string, any> = {};
         payeesData.forEach((p: any) => {
           payeesMap[p.id] = p;
@@ -115,7 +126,7 @@ export default function AdminReports() {
     if (viewType === 'merchants') {
       // No Relatório, mostramos apenas o que JÁ FOI PAGO (Lojistas)
       return orders
-        .filter(o => o.payoutStatus === 'paid')
+        .filter(o => o.payoutStatus === 'paid' && o.status !== 'Cancelado')
         .map(o => {
           const extra = extras.find(e => e.id === o.id);
           const saleDate = new Date(o.date || o.created_at);
@@ -123,8 +134,9 @@ export default function AdminReports() {
           const payDate = o.payoutDate ? new Date(o.payoutDate) : new Date(saleDate);
           if (!o.payoutDate) payDate.setDate(payDate.getDate() + 1);
 
-          const payeeId = o.affiliateId || o.userId;
-          const payee = payeeId ? payees[String(payeeId)] : null;
+          const branch = branches.find(b => b.id === o.branchId);
+          const payeeId = branch ? branch.merchant_id : 'matriz';
+          const payee = payeeId !== 'matriz' ? payees[String(payeeId)] : null;
 
           return {
             orderId: String(o.id),
@@ -135,8 +147,8 @@ export default function AdminReports() {
             amount: o.amount,
             repasse: o.amount * (1 - (platformRate / 100)),
             payDate: payDate.toLocaleDateString('pt-BR'),
-            payeeId: String(payeeId || 'unknown'),
-            payeeName: payee?.full_name || (payeeId ? 'Destinatário não identificado' : 'Sem vínculo (Admin)'),
+            payeeId: String(payeeId),
+            payeeName: branch ? branch.name : 'Lojista Matriz',
             payeePixKey: payee?.pix_key || '',
             payeeCpf: payee?.cpf || '',
             paymentMethod: o.paymentMethod || 'PIX'
@@ -163,7 +175,7 @@ export default function AdminReports() {
         cpf: p.profiles?.cpf || '---'
       }));
     }
-  }, [orders, extras, payees, viewType, affiliatePayouts, platformRate]);
+  }, [orders, extras, payees, viewType, affiliatePayouts, platformRate, branches]);
 
   if (loading) {
     return (

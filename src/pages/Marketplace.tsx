@@ -985,7 +985,7 @@ export default function Marketplace() {
         </section>
 
         {/* Promo Grid */}
-        <section className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-16">
+        <section className="mb-16">
           <Link to="/loja" className="bg-white p-8 rounded-[2rem] shadow-sm border border-slate-200 flex items-center justify-between group hover:border-orange-500/30 hover:shadow-xl transition-all cursor-pointer">
             <div>
               <p className="text-xs font-black text-orange-500 uppercase tracking-widest mb-2">Seleção Especial</p>
@@ -996,20 +996,6 @@ export default function Marketplace() {
               <Tag size={32} />
             </div>
           </Link>
-
-          <div 
-            onClick={() => setShowWaitlist(true)}
-            className="bg-midnight p-8 rounded-[2rem] shadow-xl flex items-center justify-center text-center relative overflow-hidden group cursor-pointer border border-white/5"
-          >
-            <div className="absolute inset-0 bg-primary-blue/10 opacity-0 group-hover:opacity-100 transition-opacity"></div>
-            <div className="relative z-10">
-              <h3 className="text-2xl font-black text-white mb-2 tracking-tighter uppercase italic"><span className="text-primary-blue">Lista de Espera:</span> Venda aqui</h3>
-              <p className="text-slate-400 text-sm mb-6 font-medium">Cadastre-se para ser um dos primeiros lojistas da rede.</p>
-              <button className="bg-primary-blue hover:bg-blue-600 text-white px-8 py-3 rounded-xl font-black transition-all text-xs uppercase tracking-widest shadow-xl shadow-primary-blue/20">
-                Entrar na Lista
-              </button>
-            </div>
-          </div>
         </section>
 
         {/* Seção de Confiança */}

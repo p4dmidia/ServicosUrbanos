@@ -26,6 +26,7 @@ export default function AdminFinancials() {
   const { profile, loading: authLoading } = useAuth();
   const [orders, setOrders] = useState<any[]>([]);
   const [extras, setExtras] = useState<any[]>([]);
+  const [branches, setBranches] = useState<any[]>([]);
   const [payees, setPayees] = useState<Record<string, any>>({});
   const [matrixPixKey, setMatrixPixKey] = useState('31998007412');
   const [matrixCpf, setMatrixCpf] = useState('123.456.789-00');
@@ -48,12 +49,13 @@ export default function AdminFinancials() {
   async function loadAdminData(silent = false) {
     try {
       if (!silent) setLoading(true);
-      const [ordersData, extrasData, settingsData, affiliateData, marketConfig] = await Promise.all([
+      const [ordersData, extrasData, settingsData, affiliateData, marketConfig, branchesRes] = await Promise.all([
         businessRules.getAllOrders(),
         businessRules.getAllOrderExtras(),
         supabase.from('system_settings').select('key, value').in('key', ['matrix_pix_key', 'matrix_cpf']),
         businessRules.getAffiliateCashbackReport(dateRange.start, `${dateRange.end}T23:59:59`),
-        businessRules.getMarketplaceConfig()
+        businessRules.getMarketplaceConfig(),
+        supabase.from('branches').select('id, name, merchant_id')
       ]);
 
       if (settingsData.data) {
@@ -63,13 +65,19 @@ export default function AdminFinancials() {
         setMatrixCpf(cpf);
       }
 
+      const branchesList = branchesRes.data || [];
+      setBranches(branchesList);
+
       // Somente pedidos com repasse pendente
       const pendingOrders = ordersData.filter(o => o.payoutStatus === 'pending');
       
-      // Coletar todos os IDs de destinatários (IDs de usuários/UUIDs)
-      const potentialPayeeIds = [...new Set(
-        pendingOrders.map(o => o.affiliateId || o.userId).filter(Boolean)
-      )].map(id => String(id));
+      // Coletar todos os IDs de proprietários de filiais associados a estes pedidos
+      const merchantOwnerIds = pendingOrders.map(o => {
+        const branch = branchesList.find(b => b.id === o.branchId);
+        return branch ? branch.merchant_id : null;
+      }).filter(Boolean);
+      
+      const potentialPayeeIds = [...new Set(merchantOwnerIds)].map(id => String(id));
       
       if (potentialPayeeIds.length > 0) {
         const payeesData = await businessRules.getPayeeDetails(potentialPayeeIds);
@@ -104,7 +112,7 @@ export default function AdminFinancials() {
     console.log('[DEBUG-FINANCEIRO] Profile Atual:', profile);
     
     const mapped = orders
-      .filter(o => o.payoutStatus === 'pending')
+      .filter(o => o.payoutStatus === 'pending' && o.status !== 'Cancelado')
       .map(o => {
         const extra = extras.find(e => e.id === o.id);
         const saleDate = new Date(o.date || o.created_at);
@@ -112,38 +120,33 @@ export default function AdminFinancials() {
         const payDate = new Date(saleDate);
         payDate.setDate(payDate.getDate() + 1);
 
-        const affiliateId = o.affiliateId;
-        const payeeId = affiliateId || null; 
-        const payeeKey = payeeId ? String(payeeId) : null;
-        const payee = payeeKey ? payees[payeeKey] : null;
+        const branch = branches.find(b => b.id === o.branchId);
+        const payeeId = branch ? branch.merchant_id : 'matriz';
+        const payee = payeeId !== 'matriz' ? payees[String(payeeId)] : null;
 
         const record = {
           orderId: String(o.id),
           buyerName: o.customerName || 'Cliente',
-          payeeName: payee?.full_name || (payeeId ? `ID ${payeeId} (Pendente)` : 'Lojista Matriz'),
+          payeeName: branch ? branch.name : 'Lojista Matriz',
           orderStatus: o.status === 'Concluído' || o.status === 'Pago' ? 'Pago' : o.status,
           deliveryStatus: (extra?.status as any) || 'Pendente',
           saleDate: saleDate.toLocaleDateString('pt-BR'),
           amount: o.amount,
           repasse: o.amount * (1 - (dynamicPlatformRate / 100)),
           payDate: payDate.toLocaleDateString('pt-BR'),
-          payeeId: String(payeeId || 'matriz'),
-          payeePixKey: payee?.pix_key || (!payeeId ? profile?.pix_key || matrixPixKey || '' : ''),
-          payeeCpf: payee?.cpf || (!payeeId ? profile?.cpf || matrixCpf || '' : ''),
+          payeeId: String(payeeId),
+          payeePixKey: payee?.pix_key || (payeeId === 'matriz' ? profile?.pix_key || matrixPixKey || '' : ''),
+          payeeCpf: payee?.cpf || (payeeId === 'matriz' ? profile?.cpf || matrixCpf || '' : ''),
           paymentMethod: o.paymentMethod || 'PIX',
           items: o.items || []
         };
-        
-        if (record.payeeId === 'matriz') {
-          // Log discreto para confirmação se necessário
-        }
         
         return record;
       });
 
     console.log('[DEBUG-FINANCEIRO] Dados Mapeados:', mapped);
     return mapped;
-  }, [orders, extras, payees, profile, matrixPixKey, matrixCpf, dynamicPlatformRate]);
+  }, [orders, extras, payees, profile, matrixPixKey, matrixCpf, dynamicPlatformRate, branches]);
 
   // Filtro para mostrar apenas afiliados com saldo pendente e define a data prevista de pagamento (hoje)
   const filteredAffiliateData = useMemo(() => {

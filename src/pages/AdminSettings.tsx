@@ -402,12 +402,12 @@ export default function AdminSettings() {
 
                     <div className="space-y-6">
                       <div className="space-y-2">
-                        <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Taxa de Cashback da Plataforma</label>
+                        <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Taxa de Cashback das Filiais</label>
                         <div className="flex items-center gap-6 p-6 bg-white/5 rounded-3xl border border-white/5">
                           <input 
                             type="range" 
                             min="1" 
-                            max="30" 
+                            max="90" 
                             value={marketplaceCommission}
                             onChange={(e) => setMarketplaceCommission(parseInt(e.target.value))}
                             className="flex-1 accent-indigo-500"

@@ -929,13 +929,15 @@ export const businessRules = {
         throw new Error('ID de usuário inválido.');
       }
 
-      const [tResult, nSummary, oResult] = await Promise.all([
-        supabase.from('transactions').select('amount, type, description, status').eq('profile_id', userId),
+      const [tResult, nSummary, oResult, allOrdersResult] = await Promise.all([
+        supabase.from('transactions').select('amount, type, description, status, order_id').eq('profile_id', userId),
         businessRules.getNetworkSummary(userId),
-        supabase.from('orders').select('id').eq('customer_id', userId).eq('status', 'Concluído')
+        supabase.from('orders').select('id').eq('customer_id', userId).in('status', ['Pago, Aguardando Retirada', 'Concluído']),
+        supabase.from('orders').select('id, status')
       ]);
 
-      const transactions = tResult.data || [];
+      const ordersMap = new Map(allOrdersResult.data?.map(o => [o.id, o.status]) || []);
+      const transactions = (tResult.data || []).filter(t => ordersMap.get(t.order_id) !== 'Cancelado');
       const consumptionCount = oResult.data?.length || 0;
 
       // Cálculo Real baseado no PRD (Divisão Tripla)
@@ -1326,8 +1328,8 @@ export const businessRules = {
       { count: totalUserCount },
       { count: currentMonthUserCount },
       { count: lastMonthUserCount },
-      { count: currentBranchCount },
-      { count: lastBranchCount },
+      { count: totalBranchCount },
+      { count: currentMonthBranchCount },
       { data: currentCommissions },
       { data: lastCommissions },
       { count: blockedUserCount },
@@ -1343,12 +1345,12 @@ export const businessRules = {
       supabase.from('profiles').select('*', { count: 'exact', head: true }).gte('created_at', firstDayLastMonth.toISOString()).lte('created_at', lastDayLastMonth.toISOString()), // Novos mês passado
       
       // Lojistas
-      supabase.from('branches').select('*', { count: 'exact', head: true }).gte('created_at', firstDayCurrentMonth.toISOString()),
-      supabase.from('branches').select('*', { count: 'exact', head: true }).lte('created_at', lastDayLastMonth.toISOString()),
+      supabase.from('branches').select('*', { count: 'exact', head: true }), // Total
+      supabase.from('branches').select('*', { count: 'exact', head: true }).gte('created_at', firstDayCurrentMonth.toISOString()), // Novos este mês
       
       // Commissions
-      supabase.from('transactions').select('amount').eq('type', 'commission').gte('created_at', firstDayCurrentMonth.toISOString()),
-      supabase.from('transactions').select('amount').eq('type', 'commission').gte('created_at', firstDayLastMonth.toISOString()).lte('created_at', lastDayLastMonth.toISOString()),
+      supabase.from('transactions').select('amount, description, order_id').eq('type', 'commission').gte('created_at', firstDayCurrentMonth.toISOString()),
+      supabase.from('transactions').select('amount, description, order_id').eq('type', 'commission').gte('created_at', firstDayLastMonth.toISOString()).lte('created_at', lastDayLastMonth.toISOString()),
 
       // Blocked Users
       supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('status', 'blocked'),
@@ -1358,13 +1360,19 @@ export const businessRules = {
     ]);
 
     // Totais Atuais (Gerais)
-    const { data: allOrders } = await supabase.from('orders').select('amount').eq('status', 'Concluído');
+    const { data: allOrders } = await supabase.from('orders').select('id, amount, status');
+    const ordersMap = new Map(allOrders?.map(o => [o.id, o.status]) || []);
+    
     const currentTotalRevenue = currentRevenue?.reduce((acc, o) => acc + Number(o.amount), 0) || 0;
     const lastTotalRevenue = lastRevenue?.reduce((acc, o) => acc + Number(o.amount), 0) || 0;
 
     const { data: allCommissions } = await supabase.from('transactions').select('amount').eq('type', 'commission');
-    const currentTotalCommissions = currentCommissions?.reduce((acc, t) => acc + Number(t.amount), 0) || 0;
-    const lastTotalCommissions = lastCommissions?.reduce((acc, t) => acc + Number(t.amount), 0) || 0;
+    const currentTotalCommissions = currentCommissions
+      ?.filter(t => !t.description?.includes('Estorno') && ordersMap.get(t.order_id) !== 'Cancelado')
+      ?.reduce((acc, t) => acc + Number(t.amount), 0) || 0;
+    const lastTotalCommissions = lastCommissions
+      ?.filter(t => !t.description?.includes('Estorno') && ordersMap.get(t.order_id) !== 'Cancelado')
+      ?.reduce((acc, t) => acc + Number(t.amount), 0) || 0;
 
     // Cálculos de Tendência
     const calculateTrend = (current: number, last: number) => {
@@ -1375,13 +1383,16 @@ export const businessRules = {
     const usersCurrent = totalUserCount || 0;
     const usersLast = (totalUserCount || 0) - (currentMonthUserCount || 0);
 
+    const branchesCurrent = totalBranchCount || 0;
+    const branchesLast = (totalBranchCount || 0) - (currentMonthBranchCount || 0);
+
     return {
       revenueTotal: currentTotalRevenue,
       revenueTrend: calculateTrend(currentTotalRevenue, lastTotalRevenue),
       userCount: totalUserCount || 0,
       userTrend: calculateTrend(usersCurrent, usersLast),
-      branchCount: currentBranchCount || 0,
-      branchTrend: calculateTrend(currentBranchCount || 0, lastBranchCount || 0),
+      branchCount: totalBranchCount || 0,
+      branchTrend: calculateTrend(branchesCurrent, branchesLast),
       commissionTotal: currentTotalCommissions,
       commissionTrend: calculateTrend(currentTotalCommissions, lastTotalCommissions),
       blockedUserCount: blockedUserCount || 0,
@@ -1410,6 +1421,7 @@ export const businessRules = {
       payoutDate: o.payout_date || o.payoutDate,
       payoutReceiptUrl: o.payout_receipt_url || o.payoutReceiptUrl,
       paymentMethod: o.payment_method || o.paymentMethod || 'PIX',
+      completedAt: o.completed_at,
       items: o.items || []
     }));
   },
@@ -1626,7 +1638,7 @@ export const businessRules = {
       .from('branches')
       .select(`
         *,
-        products:products(count),
+        products:products!products_branch_id_fkey(count),
         orders:orders(amount, status)
       `);
 
@@ -1746,8 +1758,8 @@ export const businessRules = {
     let lastRevenueQuery = supabase.from('orders').select('amount').eq('status', 'Concluído').gte('order_date', previousStartDate.toISOString()).lt('order_date', startDate.toISOString());
     let currentUserGrowthQuery = supabase.from('profiles').select('*', { count: 'exact', head: true }).gte('created_at', startDate.toISOString());
     let lastUserGrowthQuery = supabase.from('profiles').select('*', { count: 'exact', head: true }).gte('created_at', previousStartDate.toISOString()).lt('created_at', startDate.toISOString());
-    let currentCommissionsQuery = supabase.from('transactions').select('amount').eq('type', 'commission').gte('created_at', startDate.toISOString());
-    let lastCommissionsQuery = supabase.from('transactions').select('amount').eq('type', 'commission').gte('created_at', previousStartDate.toISOString()).lt('created_at', startDate.toISOString());
+    let currentCommissionsQuery = supabase.from('transactions').select('amount, description, order_id').eq('type', 'commission').gte('created_at', startDate.toISOString());
+    let lastCommissionsQuery = supabase.from('transactions').select('amount, description, order_id').eq('type', 'commission').gte('created_at', previousStartDate.toISOString()).lt('created_at', startDate.toISOString());
     let chartRawDataQuery = supabase.from('orders').select('amount, order_date').eq('status', 'Concluído').gte('order_date', startDate.toISOString());
 
     if (customStartDate && customEndDate) {
@@ -1765,7 +1777,8 @@ export const businessRules = {
       { data: currentCommissions },
       { data: lastCommissions },
       { data: config },
-      { data: chartRawData }
+      { data: chartRawData },
+      allOrdersResult
     ] = await Promise.all([
       currentRevenueQuery,
       lastRevenueQuery,
@@ -1774,14 +1787,21 @@ export const businessRules = {
       currentCommissionsQuery,
       lastCommissionsQuery,
       supabase.from('marketplace_config').select('commission_rate').eq('id', 1).single(),
-      chartRawDataQuery
+      chartRawDataQuery,
+      supabase.from('orders').select('id, status')
     ]);
+
+    const ordersMap = new Map(allOrdersResult.data?.map(o => [o.id, o.status]) || []);
 
     const platformRate = config?.commission_rate || 12;
     const currentGMVTotal = currentRevenue?.reduce((acc, o) => acc + Number(o.amount), 0) || 0;
     const lastGMVTotal = lastRevenue?.reduce((acc, o) => acc + Number(o.amount), 0) || 0;
-    const currentPayout = currentCommissions?.reduce((acc, t) => acc + Number(t.amount), 0) || 0;
-    const lastPayout = lastCommissions?.reduce((acc, t) => acc + Number(t.amount), 0) || 0;
+    const currentPayout = currentCommissions
+      ?.filter(t => !t.description?.includes('Estorno') && ordersMap.get(t.order_id) !== 'Cancelado')
+      ?.reduce((acc, t) => acc + Number(t.amount), 0) || 0;
+    const lastPayout = lastCommissions
+      ?.filter(t => !t.description?.includes('Estorno') && ordersMap.get(t.order_id) !== 'Cancelado')
+      ?.reduce((acc, t) => acc + Number(t.amount), 0) || 0;
 
     const calculateTrend = (current: number, last: number) => {
       if (last <= 0) return current > 0 ? 100 : 0;
@@ -2076,6 +2096,7 @@ export const businessRules = {
       shippingAddress: o.shipping_address || 'Retirada na Loja',
       paymentMethod: o.payment_method || 'Não informado',
       orderDate: o.order_date,
+      completedAt: o.completed_at,
       date: new Date(o.order_date).toLocaleString('pt-BR', { 
         day: '2-digit', 
         month: '2-digit', 
@@ -2087,9 +2108,13 @@ export const businessRules = {
   },
 
   updateOrderStatus: async (orderId: string, status: string) => {
+    const updatePayload: any = { status };
+    if (status === 'Cancelado') {
+      updatePayload.payout_status = 'cancelled';
+    }
     const { error } = await supabase
       .from('orders')
-      .update({ status })
+      .update(updatePayload)
       .eq('id', orderId);
     
     if (error) throw error;

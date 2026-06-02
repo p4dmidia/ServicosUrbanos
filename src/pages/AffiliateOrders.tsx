@@ -92,6 +92,7 @@ export default function AffiliateOrders() {
 
   const calculateCashbackBreakdown = (order: any) => {
     if (!mmnConfig || !mmnLevels.length || !order) return { mensal: 0, digital: 0, anual: 0, total: 0 };
+    if (order.status === 'Cancelado') return { mensal: 0, digital: 0, anual: 0, total: 0 };
     
     const isPaid = order.status === 'Concluído' || order.status === 'Pago, Aguardando Retirada' || order.status === 'Enviado' || order.status === 'Entregue';
     const totalOrderAmount = Number(order.amount) || 0;

@@ -61,7 +61,9 @@ export default function AffiliateWallet() {
   }, [transactions, activeFilter, searchQuery]);
 
   const totalPending = useMemo(() => {
-    return filteredTransactions.reduce((acc, t) => acc + Number(t.amount), 0);
+    return filteredTransactions
+      .filter(t => t.status !== 'Cancelado')
+      .reduce((acc, t) => acc + Number(t.amount), 0);
   }, [filteredTransactions]);
 
   useEffect(() => {

@@ -89,7 +89,7 @@ export default function MerchantFinancials() {
         deliveryStatus: extra?.status || 'Pendente',
         saleDate: saleDate.toLocaleDateString('pt-BR'),
         amount: o.amount,
-        repasse: o.amount * (1 - (platformRate / 100)),
+        repasse: o.status === 'Cancelado' ? 0 : o.amount * (1 - (platformRate / 100)),
         payDate: payDate.toLocaleDateString('pt-BR')
       };
     });
@@ -116,7 +116,7 @@ export default function MerchantFinancials() {
            {[
              { title: 'Saldo Disponível', value: financials?.balance, icon: Wallet, color: 'emerald' },
              { title: 'Total Faturado', value: financials?.totalBilled, icon: TrendingUp, color: 'blue' },
-             { title: 'A Receber', value: reportData.filter(r => r.orderStatus !== 'Pago' || r.deliveryStatus !== 'Entregue').reduce((a, b) => a + b.repasse, 0), icon: Clock, color: 'purple' },
+             { title: 'A Receber', value: reportData.filter(r => r.orderStatus !== 'Pago' && r.orderStatus !== 'Cancelado').reduce((a, b) => a + b.repasse, 0), icon: Clock, color: 'purple' },
              { title: 'Taxa Plataforma', value: `${platformRate}%`, icon: Percent, color: 'slate' }
            ].map((stat, i) => (
              <div key={i} className="bg-white p-8 rounded-[2rem] border border-slate-100 shadow-sm group">

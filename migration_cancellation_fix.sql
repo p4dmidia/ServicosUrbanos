@@ -21,6 +21,7 @@ DECLARE
     item_prod_id uuid;
     item_qty integer;
     refund_exists boolean;
+    wallet_used numeric;
 BEGIN
     -- Só processa se o novo status for 'Cancelado' e o anterior não era 'Cancelado'
     IF NEW.status = 'Cancelado' AND (OLD.status IS NULL OR OLD.status <> 'Cancelado') THEN
@@ -65,17 +66,26 @@ BEGIN
                 AND description = 'Estorno Digital - Pedido #' || NEW.id
             ) INTO refund_exists;
 
-            -- Insere a transação de estorno (crédito) na carteira digital do comprador
+            -- Insere a transação de estorno (crédito) na carteira digital do comprador apenas do valor realmente usado
             IF NOT refund_exists THEN
-                INSERT INTO public.transactions (profile_id, type, description, amount, status, order_id)
-                VALUES (
-                    NEW.customer_id,
-                    'commission',
-                    'Estorno Digital - Pedido #' || NEW.id,
-                    NEW.amount,
-                    'completed',
-                    NEW.id
-                );
+                -- Calcula o valor total utilizado da carteira digital
+                SELECT COALESCE(ABS(SUM(amount)), 0) INTO wallet_used
+                FROM public.transactions
+                WHERE order_id = NEW.id
+                  AND type = 'withdrawal'
+                  AND status = 'completed';
+
+                IF wallet_used > 0 THEN
+                    INSERT INTO public.transactions (profile_id, type, description, amount, status, order_id)
+                    VALUES (
+                        NEW.customer_id,
+                        'commission',
+                        'Estorno Digital - Pedido #' || NEW.id,
+                        wallet_used,
+                        'completed',
+                        NEW.id
+                    );
+                END IF;
             END IF;
         END IF;
 

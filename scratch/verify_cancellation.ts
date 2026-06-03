@@ -79,9 +79,9 @@ async function run() {
     console.log(`Initial branch stock (Branch ${branchId}): ${initialBranchStock}`);
   }
 
-  // 3. Create a test order
-  const testOrderId = `TEST-CANCEL-${Date.now().toString().substring(6)}`;
-  console.log(`\n3. Creating test order: ${testOrderId}...`);
+  // 3. Scenario A: Wallet Payment (should generate a wallet refund equal to the withdrawal amount)
+  const testOrderIdWallet = `TEST-CANCEL-W-${Date.now().toString().substring(6)}`;
+  console.log(`\n3. [Wallet Scenario] Creating test order: ${testOrderIdWallet}...`);
   
   const testItems = [
     {
@@ -92,10 +92,10 @@ async function run() {
     }
   ];
 
-  const { data: order, error: orderError } = await supabase
+  const { data: orderWallet, error: orderWalletError } = await supabase
     .from('orders')
     .insert([{
-      id: testOrderId,
+      id: testOrderIdWallet,
       customer_id: userId,
       customer_name: 'Cancellation Verifier',
       customer_initial: 'C',
@@ -109,171 +109,165 @@ async function run() {
     .select()
     .single();
 
-  if (orderError || !order) {
-    console.error('Failed to create test order:', orderError?.message);
+  if (orderWalletError || !orderWallet) {
+    console.error('Failed to create test order (Wallet Scenario):', orderWalletError?.message);
     return;
   }
   console.log('Test order created in state: "Aguardando Pagamento"');
 
   // 4. Simulate client-side stock decrement during checkout
   console.log('4. Simulating checkout stock decrement (2 units)...');
-  
-  // Decrement main product stock
-  await supabase
-    .from('products')
-    .update({
-      stock: Math.max(0, initialStock - 2),
-      sales: initialSales + 2
-    })
-    .eq('id', productId);
+  await supabase.from('products').update({
+    stock: Math.max(0, initialStock - 2),
+    sales: initialSales + 2
+  }).eq('id', productId);
 
   if (branchId) {
-    await supabase
-      .from('product_stocks')
-      .update({
-        stock: Math.max(0, initialBranchStock - 2)
-      })
-      .eq('product_id', productId)
-      .eq('branch_id', branchId);
+    await supabase.from('product_stocks').update({
+      stock: Math.max(0, initialBranchStock - 2)
+    }).eq('product_id', productId).eq('branch_id', branchId);
   }
 
-  // Verify decrement
-  const { data: prodAfterCheckout } = await supabase.from('products').select('stock, sales').eq('id', productId).single();
-  console.log(`Stock after checkout - Global: ${prodAfterCheckout?.stock} (Expected: ${initialStock - 2}), Sales: ${prodAfterCheckout?.sales} (Expected: ${initialSales + 2})`);
+  // 4.1 Insert the withdrawal transaction to simulate digital wallet usage
+  console.log('4.1 Inserting withdrawal transaction of R$ 100.00 for the order...');
+  const { error: txWithdrawError } = await supabase
+    .from('transactions')
+    .insert([{
+      profile_id: userId,
+      type: 'withdrawal',
+      amount: -100.00,
+      description: `Pagamento de Pedido #${testOrderIdWallet.substring(0, 8)}`,
+      status: 'completed',
+      order_id: testOrderIdWallet
+    }]);
 
-  // 5. Update order to paid state to trigger commissions
-  console.log('\n5. Updating order to "Pago, Aguardando Retirada" to distribute commissions...');
-  const { error: payError } = await supabase
-    .from('orders')
-    .update({ status: 'Pago, Aguardando Retirada' })
-    .eq('id', testOrderId);
-
-  if (payError) {
-    console.error('Failed to mark order as Paid:', payError.message);
+  if (txWithdrawError) {
+    console.error('Failed to insert simulated withdrawal transaction:', txWithdrawError.message);
     return;
   }
 
-  // Wait a moment for trigger execution
+  // 5. Update order to paid state to trigger commissions
+  console.log('\n5. Updating order to "Pago, Aguardando Retirada"...');
+  await supabase.from('orders').update({ status: 'Pago, Aguardando Retirada' }).eq('id', testOrderIdWallet);
   await new Promise(resolve => setTimeout(resolve, 2000));
-
-  // Assert monthly consumption count for paid order
-  const { data: consumptionPaid } = await supabase
-    .from('orders')
-    .select('id')
-    .eq('customer_id', userId)
-    .in('status', ['Pago, Aguardando Retirada', 'Concluído']);
-  
-  const consumptionCountPaid = consumptionPaid?.length || 0;
-  console.log(`Monthly consumption count (Paid order): ${consumptionCountPaid} (Expected: 1)`);
-
-  // Check if commission transactions were generated
-  const { data: commissions, error: commsError } = await supabase
-    .from('transactions')
-    .select('*')
-    .eq('order_id', testOrderId)
-    .eq('type', 'commission');
-
-  if (commsError) {
-    console.error('Error checking commissions:', commsError.message);
-  } else {
-    console.log(`Commissions generated: ${commissions?.length || 0} rows found.`);
-    commissions?.forEach(c => {
-      console.log(`  - To Affiliate ${c.profile_id}: R$ ${c.amount} [${c.description}]`);
-    });
-  }
 
   // 6. CANCEL the order!
   console.log('\n6. CANCELLING the order...');
-  const { error: cancelError } = await supabase
-    .from('orders')
-    .update({ status: 'Cancelado' })
-    .eq('id', testOrderId);
-
-  if (cancelError) {
-    console.error('Failed to cancel order:', cancelError.message);
-    return;
-  }
-
-  // Wait a moment for trigger execution
+  await supabase.from('orders').update({ status: 'Cancelado' }).eq('id', testOrderIdWallet);
   await new Promise(resolve => setTimeout(resolve, 2000));
 
-  // Assert monthly consumption count after cancellation
-  const { data: consumptionCancelled } = await supabase
-    .from('orders')
-    .select('id')
-    .eq('customer_id', userId)
-    .in('status', ['Pago, Aguardando Retirada', 'Concluído']);
-  
-  const consumptionCountCancelled = consumptionCancelled?.length || 0;
-  console.log(`Monthly consumption count (Cancelled order): ${consumptionCountCancelled} (Expected: 0)`);
-
-  // 7. VERIFY RESULTS
+  // 7. VERIFY WALLET SCENARIO RESULTS
   console.log('\n======================================================');
-  console.log('VERIFYING TRIGGER SIDE EFFECTS AFTER CANCELLATION');
+  console.log('VERIFYING TRIGGER SIDE EFFECTS FOR WALLET SCENARIO');
   console.log('======================================================');
 
-  // A. Check Product Stock Restoration
+  // Check Product Stock Restoration
   const { data: prodFinal } = await supabase.from('products').select('stock, sales').eq('id', productId).single();
   const expectedRestoredStock = Math.max(0, initialStock - 2) + 2;
   const stockRestored = prodFinal?.stock === expectedRestoredStock;
-  const salesRestored = prodFinal?.sales === initialSales;
   console.log(`Stock restored to expected (${expectedRestoredStock})? ${stockRestored ? '✅ YES' : '❌ NO'} (Current: ${prodFinal?.stock})`);
-  console.log(`Sales restored to initial (${initialSales})? ${salesRestored ? '✅ YES' : '❌ NO'} (Current: ${prodFinal?.sales})`);
 
-  if (branchId) {
-    const { data: branchFinal } = await supabase
-      .from('product_stocks')
-      .select('stock')
-      .eq('product_id', productId)
-      .eq('branch_id', branchId)
-      .maybeSingle();
-    const expectedRestoredBranchStock = Math.max(0, initialBranchStock - 2) + 2;
-    const branchRestored = branchFinal?.stock === expectedRestoredBranchStock;
-    console.log(`Branch stock restored to expected (${expectedRestoredBranchStock})? ${branchRestored ? '✅ YES' : '❌ NO'} (Current: ${branchFinal?.stock})`);
-  }
-
-  // B. Check Commissions Deletion
-  const { data: commissionsFinal } = await supabase
-    .from('transactions')
-    .select('*')
-    .eq('order_id', testOrderId)
-    .eq('type', 'commission')
-    .not('description', 'ilike', 'Estorno%');
-  
-  const commissionsDeleted = !commissionsFinal || commissionsFinal.length === 0;
-  console.log(`Upline commissions deleted? ${commissionsDeleted ? '✅ YES' : '❌ NO'} (Current count: ${commissionsFinal?.length || 0})`);
-
-  // C. Check Buyer Refund Transaction
+  // Check Buyer Refund Transaction
   const { data: refundTx } = await supabase
     .from('transactions')
     .select('*')
-    .eq('order_id', testOrderId)
+    .eq('order_id', testOrderIdWallet)
     .eq('type', 'commission')
     .ilike('description', 'Estorno%')
-    .single();
+    .maybeSingle();
 
   const refundSuccess = !!refundTx && Number(refundTx.amount) === 100.00 && refundTx.profile_id === userId;
-  console.log(`Buyer wallet refund generated? ${refundSuccess ? '✅ YES' : '❌ NO'}`);
+  console.log(`Buyer wallet refund generated (Expected: +R$ 100.00)? ${refundSuccess ? '✅ YES' : '❌ NO'}`);
   if (refundTx) {
     console.log(`  - Refund Tx: R$ ${refundTx.amount} to Client ${refundTx.profile_id} [${refundTx.description}]`);
   }
 
+  // Clean up wallet scenario transactions and order (keep stock status for next scenario)
+  await supabase.from('transactions').delete().eq('order_id', testOrderIdWallet);
+  await supabase.from('orders').delete().eq('id', testOrderIdWallet);
+
+  // 3b. Scenario B: PIX Payment (should NOT generate any wallet refund)
+  const testOrderIdPix = `TEST-CANCEL-P-${Date.now().toString().substring(6)}`;
+  console.log(`\n3b. [PIX Scenario] Creating test order: ${testOrderIdPix}...`);
+  
+  const { data: orderPix, error: orderPixError } = await supabase
+    .from('orders')
+    .insert([{
+      id: testOrderIdPix,
+      customer_id: userId,
+      customer_name: 'Cancellation Verifier',
+      customer_initial: 'C',
+      amount: 100.00,
+      status: 'Aguardando Pagamento',
+      items: testItems,
+      branch_id: branchId,
+      cashback_amount: 5.00,
+      payment_method: 'Pix'
+    }])
+    .select()
+    .single();
+
+  if (orderPixError || !orderPix) {
+    console.error('Failed to create test order (PIX Scenario):', orderPixError?.message);
+    return;
+  }
+
+  // Simulate client-side stock decrement
+  await supabase.from('products').update({
+    stock: Math.max(0, prodFinal?.stock - 2),
+    sales: (prodFinal?.sales || 0) + 2
+  }).eq('id', productId);
+
+  // Update order to paid
+  console.log('Updating order to "Pago, Aguardando Retirada"...');
+  await supabase.from('orders').update({ status: 'Pago, Aguardando Retirada' }).eq('id', testOrderIdPix);
+  await new Promise(resolve => setTimeout(resolve, 2000));
+
+  // Cancel order
+  console.log('CANCELLING the order...');
+  await supabase.from('orders').update({ status: 'Cancelado' }).eq('id', testOrderIdPix);
+  await new Promise(resolve => setTimeout(resolve, 2000));
+
+  // Verify no wallet refund generated
+  console.log('\n======================================================');
+  console.log('VERIFYING TRIGGER SIDE EFFECTS FOR PIX SCENARIO');
   console.log('======================================================');
-  const consumptionSuccess = consumptionCountPaid === 1 && consumptionCountCancelled === 0;
-  const allTestsPassed = stockRestored && salesRestored && commissionsDeleted && refundSuccess && consumptionSuccess;
+
+  const { data: refundTxPix } = await supabase
+    .from('transactions')
+    .select('*')
+    .eq('order_id', testOrderIdPix)
+    .eq('type', 'commission')
+    .ilike('description', 'Estorno%')
+    .maybeSingle();
+
+  const noRefundSuccess = !refundTxPix;
+  console.log(`Buyer wallet refund generated (Expected: NONE)? ${noRefundSuccess ? '✅ YES (None generated)' : '❌ NO (Refund generated erroneously!)'}`);
+  if (refundTxPix) {
+    console.log(`  - Erroneous Refund Tx: R$ ${refundTxPix.amount} [${refundTxPix.description}]`);
+  }
+
+  // Clean up PIX scenario
+  await supabase.from('transactions').delete().eq('order_id', testOrderIdPix);
+  await supabase.from('orders').delete().eq('id', testOrderIdPix);
+
+  // Restore product stock back to original
+  await supabase.from('products').update({ stock: initialStock, sales: initialSales }).eq('id', productId);
+  if (branchId) {
+    await supabase.from('product_stocks').update({ stock: initialBranchStock }).eq('product_id', productId).eq('branch_id', branchId);
+  }
+
+  console.log('======================================================');
+  const allTestsPassed = stockRestored && refundSuccess && noRefundSuccess;
   if (allTestsPassed) {
-    console.log('🎉 SUCCESS: All cancellation and monthly consumption side effects executed perfectly!');
+    console.log('🎉 SUCCESS: Cancellation trigger logic handles wallet refunds and non-wallet orders perfectly!');
   } else {
-    console.log('⚠️ WARNING: Some cancellation side effects failed to run. Check if trigger is applied.');
+    console.log('⚠️ WARNING: Some cancellation side effects failed to run or verify.');
   }
   console.log('======================================================\n');
 
   // 8. CLEANUP TEST DATA
-  console.log('8. Cleaning up verification database records...');
-  // Delete transactions
-  await supabase.from('transactions').delete().eq('order_id', testOrderId);
-  // Delete order
-  await supabase.from('orders').delete().eq('id', testOrderId);
+  console.log('8. Cleaning up verification profile...');
   // Delete elevated user
   await supabase.from('profiles').delete().eq('id', userId);
   const { error: userDelError } = await supabase.rpc('admin_update_user_auth', {

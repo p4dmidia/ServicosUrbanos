@@ -1336,8 +1336,8 @@ export const businessRules = {
       { count: pendingWithdrawalCount }
     ] = await Promise.all([
       // Revenue
-      supabase.from('orders').select('amount').eq('status', 'Concluído').gte('order_date', firstDayCurrentMonth.toISOString()),
-      supabase.from('orders').select('amount').eq('status', 'Concluído').gte('order_date', firstDayLastMonth.toISOString()).lte('order_date', lastDayLastMonth.toISOString()),
+      supabase.from('orders').select('amount').in('status', ['Pago, Aguardando Retirada', 'Concluído']).gte('order_date', firstDayCurrentMonth.toISOString()),
+      supabase.from('orders').select('amount').in('status', ['Pago, Aguardando Retirada', 'Concluído']).gte('order_date', firstDayLastMonth.toISOString()).lte('order_date', lastDayLastMonth.toISOString()),
       
       // Users
       supabase.from('profiles').select('*', { count: 'exact', head: true }), // Total
@@ -1539,7 +1539,7 @@ export const businessRules = {
         { data: orders }
       ] = await Promise.all([
         supabase.from('profiles').select('*', { count: 'exact', head: true }),
-        supabase.from('orders').select('amount').eq('status', 'Concluído')
+        supabase.from('orders').select('amount').in('status', ['Pago, Aguardando Retirada', 'Concluído'])
       ]);
 
       const totalRevenue = orders?.reduce((acc, o) => acc + Number(o.amount), 0) || 0;
@@ -1609,8 +1609,8 @@ export const businessRules = {
       { count: activeMerchants },
       { count: activeProducts }
     ] = await Promise.all([
-      supabase.from('orders').select('amount').eq('status', 'Concluído').gte('order_date', thirtyDaysAgo.toISOString()),
-      supabase.from('orders').select('amount').eq('status', 'Concluído').lt('order_date', thirtyDaysAgo.toISOString()).gte('order_date', new Date(thirtyDaysAgo.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString()),
+      supabase.from('orders').select('amount').in('status', ['Pago, Aguardando Retirada', 'Concluído']).gte('order_date', thirtyDaysAgo.toISOString()),
+      supabase.from('orders').select('amount').in('status', ['Pago, Aguardando Retirada', 'Concluído']).lt('order_date', thirtyDaysAgo.toISOString()).gte('order_date', new Date(thirtyDaysAgo.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString()),
       supabase.from('branches').select('*', { count: 'exact', head: true }).eq('status', 'active'),
       supabase.from('products').select('*', { count: 'exact', head: true }).eq('status', 'Ativo')
     ]);
@@ -1645,7 +1645,7 @@ export const businessRules = {
     if (error) throw error;
 
     return merchants.map(m => {
-      const successfulOrders = m.orders?.filter((o: any) => o.status === 'Concluído') || [];
+      const successfulOrders = m.orders?.filter((o: any) => ['Pago, Aguardando Retirada', 'Concluído'].includes(o.status)) || [];
       const totalSales = successfulOrders.reduce((acc: number, o: any) => acc + Number(o.amount), 0);
       
       return {
@@ -1754,13 +1754,13 @@ export const businessRules = {
     }
 
     // Queries construídas dinamicamente
-    let currentRevenueQuery = supabase.from('orders').select('amount, order_date').eq('status', 'Concluído').gte('order_date', startDate.toISOString());
-    let lastRevenueQuery = supabase.from('orders').select('amount').eq('status', 'Concluído').gte('order_date', previousStartDate.toISOString()).lt('order_date', startDate.toISOString());
+    let currentRevenueQuery = supabase.from('orders').select('amount, order_date').in('status', ['Pago, Aguardando Retirada', 'Concluído']).gte('order_date', startDate.toISOString());
+    let lastRevenueQuery = supabase.from('orders').select('amount').in('status', ['Pago, Aguardando Retirada', 'Concluído']).gte('order_date', previousStartDate.toISOString()).lt('order_date', startDate.toISOString());
     let currentUserGrowthQuery = supabase.from('profiles').select('*', { count: 'exact', head: true }).gte('created_at', startDate.toISOString());
     let lastUserGrowthQuery = supabase.from('profiles').select('*', { count: 'exact', head: true }).gte('created_at', previousStartDate.toISOString()).lt('created_at', startDate.toISOString());
     let currentCommissionsQuery = supabase.from('transactions').select('amount, description, order_id').eq('type', 'commission').gte('created_at', startDate.toISOString());
     let lastCommissionsQuery = supabase.from('transactions').select('amount, description, order_id').eq('type', 'commission').gte('created_at', previousStartDate.toISOString()).lt('created_at', startDate.toISOString());
-    let chartRawDataQuery = supabase.from('orders').select('amount, order_date').eq('status', 'Concluído').gte('order_date', startDate.toISOString());
+    let chartRawDataQuery = supabase.from('orders').select('amount, order_date').in('status', ['Pago, Aguardando Retirada', 'Concluído']).gte('order_date', startDate.toISOString());
 
     if (customStartDate && customEndDate) {
       currentRevenueQuery = currentRevenueQuery.lte('order_date', endDate.toISOString());
@@ -2097,6 +2097,7 @@ export const businessRules = {
       paymentMethod: o.payment_method || 'Não informado',
       orderDate: o.order_date,
       completedAt: o.completed_at,
+      payoutStatus: o.payout_status || 'pending',
       date: new Date(o.order_date).toLocaleString('pt-BR', { 
         day: '2-digit', 
         month: '2-digit', 
@@ -2383,7 +2384,7 @@ export const businessRules = {
       .reduce((acc, t) => acc + Number(t.amount), 0) || 0;
 
     // Buscar faturamento bruto e cashback (da filial ou de todas se for owner)
-    let ordersQuery = supabase.from('orders').select('amount, cashback_amount').eq('status', 'Concluído');
+    let ordersQuery = supabase.from('orders').select('amount, cashback_amount').in('status', ['Pago, Aguardando Retirada', 'Concluído']);
     
     if (role !== 'owner' && branchId) {
       ordersQuery = ordersQuery.eq('branch_id', branchId);
@@ -2609,8 +2610,8 @@ export const businessRules = {
     const branchIds = branches.map(b => b.id);
 
     // Queries base
-    let currentSalesQuery = supabase.from('orders').select('amount').eq('status', 'Concluído').gte('order_date', firstDayCurrentMonth.toISOString());
-    let lastSalesQuery = supabase.from('orders').select('amount').eq('status', 'Concluído').gte('order_date', firstDayLastMonth.toISOString()).lte('order_date', lastDayLastMonth.toISOString());
+    let currentSalesQuery = supabase.from('orders').select('amount').in('status', ['Pago, Aguardando Retirada', 'Concluído']).gte('order_date', firstDayCurrentMonth.toISOString());
+    let lastSalesQuery = supabase.from('orders').select('amount').in('status', ['Pago, Aguardando Retirada', 'Concluído']).gte('order_date', firstDayLastMonth.toISOString()).lte('order_date', lastDayLastMonth.toISOString());
     let newOrdersQuery = supabase.from('orders').select('id', { count: 'exact', head: true }).eq('status', 'Pendente').gte('order_date', firstDayCurrentMonth.toISOString());
     let lastNewOrdersQuery = supabase.from('orders').select('id', { count: 'exact', head: true }).eq('status', 'Pendente').gte('order_date', firstDayLastMonth.toISOString()).lte('order_date', lastDayLastMonth.toISOString());
     let activeProductsQuery = supabase.from('products').select('id', { count: 'exact', head: true }).eq('status', 'Ativo').eq('merchant_id', merchantId);
@@ -2739,7 +2740,7 @@ export const businessRules = {
     let query = supabase
       .from('orders')
       .select('amount, order_date')
-      .eq('status', 'Concluído')
+      .in('status', ['Pago, Aguardando Retirada', 'Concluído'])
       .gte('order_date', thirtyDaysAgo.toISOString());
 
     if (branchId) {
@@ -2790,7 +2791,7 @@ export const businessRules = {
     let query = supabase
       .from('orders')
       .select('customer_id, customer_name, customer_initial, amount, order_date')
-      .eq('status', 'Concluído');
+      .in('status', ['Pago, Aguardando Retirada', 'Concluído']);
 
     if (branchId) {
       query = query.eq('branch_id', branchId);
@@ -2896,12 +2897,12 @@ export const businessRules = {
 
     let currentOrdersQuery = supabase.from('orders')
       .select('amount, order_date, items')
-      .eq('status', 'Concluído')
+      .in('status', ['Pago, Aguardando Retirada', 'Concluído'])
       .gte('order_date', startDate.toISOString());
     
     let previousOrdersQuery = supabase.from('orders')
       .select('amount')
-      .eq('status', 'Concluído')
+      .in('status', ['Pago, Aguardando Retirada', 'Concluído'])
       .lt('order_date', startDate.toISOString())
       .gte('order_date', previousStartDate.toISOString());
     

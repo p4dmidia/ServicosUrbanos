@@ -36,6 +36,7 @@ export default function MerchantReports() {
   const [extras, setExtras] = useState<any[]>([]);
   const [team, setTeam] = useState<any[]>([]);
   const [branches, setBranches] = useState<any[]>([]);
+  const [platformRate, setPlatformRate] = useState(18);
 
   useEffect(() => {
     async function loadReports() {
@@ -49,10 +50,11 @@ export default function MerchantReports() {
         const mId = await businessRules.getMerchantId(profile!.id);
         if (!mId) return;
 
-        const [data, ordersData, branches] = await Promise.all([
+        const [data, ordersData, branches, marketConfig] = await Promise.all([
           businessRules.getMerchantDetailedReports(mId, '30d', profile?.branch_id),
           businessRules.getMerchantOrders(mId, profile?.branch_id),
-          businessRules.getBranches(mId)
+          businessRules.getBranches(mId),
+          businessRules.getMarketplaceConfig()
         ]);
 
         const branchIds = branches.map(b => b.id);
@@ -68,6 +70,7 @@ export default function MerchantReports() {
         setExtras(extrasData.filter(Boolean));
         setTeam(teamData);
         setBranches(branches);
+        setPlatformRate(marketConfig?.commissionRate || 20);
       } catch (error) {
         console.error('Erro ao carregar relatórios:', error);
         toast.error('Erro ao carregar dados analíticos');
@@ -96,8 +99,16 @@ export default function MerchantReports() {
       const payDate = new Date(saleDate);
       payDate.setDate(payDate.getDate() + 1);
 
-      const commissionRate = manager?.commissionRate || 0;
-      const commissionAmount = o.status === 'Cancelado' ? 0 : (Number(o.amount) * commissionRate) / 100;
+      // Se for dono (owner), o repasse é o valor líquido do lojista (100% - platformRate%)
+      // Se for gerente (manager), o repasse é a comissão dele
+      const isOwner = profile?.role === 'owner';
+      const commissionRate = isOwner 
+        ? (100 - platformRate) 
+        : (manager?.commissionRate || 0);
+
+      const commissionAmount = o.status === 'Cancelado' 
+        ? 0 
+        : (Number(o.amount) * commissionRate) / 100;
 
       const branch = branches.find(b => b.id === o.branchId);
       const payeeName = branch ? branch.name : (profile?.store_name || profile?.full_name || 'Lojista Beneficiário');
@@ -119,6 +130,7 @@ export default function MerchantReports() {
         amount: Number(o.amount),
         repasse: commissionAmount,
         payDate: payDate.toLocaleDateString('pt-BR'),
+        payoutStatus: o.payoutStatus,
         managerName: manager?.name || 'N/A'
       };
     });
@@ -132,15 +144,15 @@ export default function MerchantReports() {
     const activeRecords = filteredRecords.filter(r => r.orderStatus !== 'Cancelado');
     const totalCommissions = activeRecords.reduce((acc, r) => acc + r.repasse, 0);
     const totalSales = activeRecords.reduce((acc, r) => acc + r.amount, 0);
-    const avgCommission = activeRecords.length > 0 ? totalCommissions / activeRecords.length : 0;
+    const avgOrderValue = activeRecords.length > 0 ? totalSales / activeRecords.length : 0;
     const pendingCommissions = activeRecords
-      .filter(r => r.orderStatus !== 'Pago')
+      .filter(r => (r.payoutStatus || 'pending') === 'pending')
       .reduce((acc, r) => acc + r.repasse, 0);
 
     const kpiList = [
       { title: 'Total Cashbacks', value: totalCommissions, trend: 0, isPositive: true },
       { title: 'Volume de Vendas', value: totalSales, trend: 0, isPositive: true },
-      { title: 'Média por Pedido', value: avgCommission, trend: 0, isPositive: true },
+      { title: 'Média por Pedido', value: avgOrderValue, trend: 0, isPositive: true },
       { title: 'Pendentes Liberação', value: pendingCommissions, trend: 0, isPositive: false }
     ];
 
@@ -171,7 +183,7 @@ export default function MerchantReports() {
       kpis: kpiList,
       chart: { labels: chartLabels, values: chartValues }
     };
-  }, [orders, extras, team, startDateStr, endDateStr, branches, profile]);
+  }, [orders, extras, team, startDateStr, endDateStr, branches, profile, platformRate]);
 
   if (loading) {
     return (
@@ -198,7 +210,7 @@ export default function MerchantReports() {
   }
 
   return (
-    <MerchantLayout title="Relatórios de Cashbacks" subtitle="Controle de pagamentos para gerentes de filiais">
+    <MerchantLayout title="Relatórios de Cashbacks" subtitle="Controle de pagamentos para parceiros comerciais">
       <div className="p-8 lg:p-12 space-y-12">
         
         {/* Header Actions */}

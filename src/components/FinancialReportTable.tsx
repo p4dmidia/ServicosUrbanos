@@ -47,6 +47,7 @@ export interface FinancialRecord {
   payeeCpf?: string;
   paymentMethod?: string;
   items?: any[];
+  payoutStatus?: string;
 }
 
 interface FinancialReportTableProps {
@@ -341,15 +342,28 @@ export default function FinancialReportTable({
     toast.success(`${recordsToExport.length} registros exportados para CSV.`);
   };
 
+  const isEligibleForPayment = (record: any) => {
+    if (mode === 'merchants') {
+      return record.deliveryStatus === 'Concluído';
+    }
+    return true;
+  };
+
   const toggleSelectAll = () => {
-    if (selectedRecords.length === filteredData.length) {
-      setSelectedRecords([]);
+    const eligibleFiltered = filteredData.filter(isEligibleForPayment);
+    const eligibleIds = eligibleFiltered.map(r => mode === 'merchants' ? r.orderId : r.id);
+    const allEligibleSelected = eligibleIds.length > 0 && eligibleIds.every(id => selectedRecords.includes(id));
+
+    if (allEligibleSelected) {
+      setSelectedRecords(prev => prev.filter(id => !eligibleIds.includes(id)));
     } else {
-      setSelectedRecords(filteredData.map(r => mode === 'merchants' ? r.orderId : r.id));
+      setSelectedRecords(prev => Array.from(new Set([...prev, ...eligibleIds])));
     }
   };
 
-  const toggleSelect = (id: string) => {
+  const toggleSelect = (record: any) => {
+    if (!isEligibleForPayment(record)) return;
+    const id = mode === 'merchants' ? record.orderId : record.id;
     if (selectedRecords.includes(id)) {
       setSelectedRecords(prev => prev.filter(item => item !== id));
     } else {
@@ -359,9 +373,10 @@ export default function FinancialReportTable({
 
   const handleGenerateClick = () => {
     if (onGeneratePayments) {
-      const selectedItems = mode === 'merchants'
+      const selectedItems = (mode === 'merchants'
         ? data.filter(r => selectedRecords.includes(r.orderId))
-        : affiliateData.filter(r => selectedRecords.includes(r.id));
+        : affiliateData.filter(r => selectedRecords.includes(r.id))
+      ).filter(isEligibleForPayment);
       onGeneratePayments(selectedItems);
     }
   };
@@ -446,8 +461,13 @@ export default function FinancialReportTable({
             <tr className="bg-slate-50/50">
               {isAdmin && onGeneratePayments && (
                 <th className="p-6 w-12">
-                  <button onClick={toggleSelectAll} className="text-slate-400 hover:text-indigo-600 transition-colors">
-                    {selectedRecords.length === filteredData.length && filteredData.length > 0 
+                  <button 
+                    onClick={toggleSelectAll} 
+                    disabled={filteredData.filter(isEligibleForPayment).length === 0}
+                    className="text-slate-400 hover:text-indigo-600 disabled:opacity-30 disabled:pointer-events-none transition-colors"
+                  >
+                    {filteredData.filter(isEligibleForPayment).length > 0 && 
+                     filteredData.filter(isEligibleForPayment).every(r => selectedRecords.includes(mode === 'merchants' ? r.orderId : r.id))
                       ? <CheckSquare size={22} className="text-indigo-600" /> 
                       : <Square size={22} />
                     }
@@ -491,12 +511,25 @@ export default function FinancialReportTable({
               >
                 {isAdmin && onGeneratePayments && (
                   <td className="p-6">
-                    <button onClick={() => toggleSelect(mode === 'merchants' ? record.orderId : record.id)} className="text-slate-300 hover:text-indigo-600 transition-colors">
-                      {selectedRecords.includes(mode === 'merchants' ? record.orderId : record.id) 
-                        ? <CheckSquare size={22} className="text-indigo-600" /> 
-                        : <Square size={22} />
-                      }
-                    </button>
+                    {isEligibleForPayment(record) ? (
+                      <button 
+                        onClick={() => toggleSelect(record)} 
+                        className="text-slate-300 hover:text-indigo-600 transition-colors"
+                      >
+                        {selectedRecords.includes(mode === 'merchants' ? record.orderId : record.id) 
+                          ? <CheckSquare size={22} className="text-indigo-600" /> 
+                          : <Square size={22} />
+                        }
+                      </button>
+                    ) : (
+                      <div 
+                        className="text-slate-200 cursor-not-allowed opacity-40 flex items-center justify-center mx-auto"
+                        title="Pagamento pendente: aguardando retirada do pedido"
+                        style={{ width: 22, height: 22 }}
+                      >
+                        <Square size={22} />
+                      </div>
+                    )}
                   </td>
                 )}
                 

@@ -90,10 +90,29 @@ export default function MerchantFinancials() {
         saleDate: saleDate.toLocaleDateString('pt-BR'),
         amount: o.amount,
         repasse: o.status === 'Cancelado' ? 0 : o.amount * (1 - (platformRate / 100)),
-        payDate: payDate.toLocaleDateString('pt-BR')
+        payDate: payDate.toLocaleDateString('pt-BR'),
+        payoutStatus: o.payoutStatus
       };
     });
   }, [orders, extras, platformRate, branches, profile]);
+
+  const saldoDisponivel = useMemo(() => {
+    return reportData
+      .filter(r => (r.payoutStatus || 'pending') === 'pending' && r.deliveryStatus === 'Concluído' && r.orderStatus !== 'Cancelado')
+      .reduce((acc, r) => acc + r.repasse, 0);
+  }, [reportData]);
+
+  const aReceber = useMemo(() => {
+    return reportData
+      .filter(r => (r.payoutStatus || 'pending') === 'pending' && r.deliveryStatus !== 'Concluído' && r.orderStatus !== 'Cancelado')
+      .reduce((acc, r) => acc + r.repasse, 0);
+  }, [reportData]);
+
+  const totalFaturado = useMemo(() => {
+    return reportData
+      .filter(r => r.orderStatus !== 'Cancelado' && r.orderStatus !== 'Aguardando Pagamento' && r.orderStatus !== 'Pendente')
+      .reduce((acc, r) => acc + r.amount, 0);
+  }, [reportData]);
 
   if (authLoading || loading) {
     return (
@@ -114,9 +133,9 @@ export default function MerchantFinancials() {
         {/* Stats Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-8">
            {[
-             { title: 'Saldo Disponível', value: financials?.balance, icon: Wallet, color: 'emerald' },
-             { title: 'Total Faturado', value: financials?.totalBilled, icon: TrendingUp, color: 'blue' },
-             { title: 'A Receber', value: reportData.filter(r => r.orderStatus !== 'Pago' && r.orderStatus !== 'Cancelado').reduce((a, b) => a + b.repasse, 0), icon: Clock, color: 'purple' },
+             { title: 'Saldo Disponível', value: saldoDisponivel, icon: Wallet, color: 'emerald' },
+             { title: 'Total Faturado', value: totalFaturado, icon: TrendingUp, color: 'blue' },
+             { title: 'A Receber', value: aReceber, icon: Clock, color: 'purple' },
              { title: 'Taxa Plataforma', value: `${platformRate}%`, icon: Percent, color: 'slate' }
            ].map((stat, i) => (
              <div key={i} className="bg-white p-8 rounded-[2rem] border border-slate-100 shadow-sm group">

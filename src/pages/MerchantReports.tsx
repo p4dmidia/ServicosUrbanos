@@ -397,7 +397,7 @@ export default function MerchantReports() {
             </div>
           </div>
           
-          <FinancialReportTable data={financialReportData} title="Relatório de Repasses Detalhado" />
+          <FinancialReportTable data={financialReportData} title="Relatório de Repasses Detalhado" platformRate={platformRate} />
         </div>
 
         {/* Stock Output Report Section */}

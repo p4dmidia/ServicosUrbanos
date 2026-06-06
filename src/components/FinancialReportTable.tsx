@@ -225,8 +225,8 @@ export default function FinancialReportTable({
           record.payeeName,
           record.orderStatus,
           record.saleDate,
-          `R$ ${(record.amount || 0).toFixed(2)}`,
-          `R$ ${(record.repasse || 0).toFixed(2)}`
+          `R$ ${(record.amount || 0).toFixed(2).replace('.', ',')}`,
+          `R$ ${(record.repasse || 0).toFixed(2).replace('.', ',')}`
         ];
       } else {
         const name = record.name || record.payeeName || 'Afiliado';
@@ -236,18 +236,18 @@ export default function FinancialReportTable({
         if (hideReceiptButton) {
           return [
             name,
-            `R$ ${(record.mensal || 0).toFixed(2)}`,
-            `R$ ${(record.digital || 0).toFixed(2)}`,
-            `R$ ${(record.anual || 0).toFixed(2)}`,
+            `R$ ${(record.mensal || 0).toFixed(2).replace('.', ',')}`,
+            `R$ ${(record.digital || 0).toFixed(2).replace('.', ',')}`,
+            `R$ ${(record.anual || 0).toFixed(2).replace('.', ',')}`,
             pixKey
           ];
         } else {
           return [
             name,
-            `R$ ${(record.mensal || 0).toFixed(2)}`,
-            `R$ ${(record.digital || 0).toFixed(2)}`,
-            `R$ ${(record.anual || 0).toFixed(2)}`,
-            `R$ ${displayTotal.toFixed(2)}`,
+            `R$ ${(record.mensal || 0).toFixed(2).replace('.', ',')}`,
+            `R$ ${(record.digital || 0).toFixed(2).replace('.', ',')}`,
+            `R$ ${(record.anual || 0).toFixed(2).replace('.', ',')}`,
+            `R$ ${(displayTotal || 0).toFixed(2).replace('.', ',')}`,
             pixKey,
             record.payDate || '---'
           ];
@@ -301,7 +301,7 @@ export default function FinancialReportTable({
 
     // Gerar o cabeçalho do CSV
     // Nome, Chave Pix, Valor a Pagar, Data de Pagamento
-    const headers = ['Nome', 'Chave Pix', 'Valor a Pagar (R$)', 'Data de Pagamento'];
+    const headers = ['Nome', 'Chave Pix', 'Valor a Pagar', 'Data de Pagamento'];
     
     // Gerar as linhas
     const rows = recordsToExport.map((record: any) => {
@@ -309,7 +309,7 @@ export default function FinancialReportTable({
         return [
           record.payeeName || 'Lojista',
           record.payeePixKey || '---',
-          (record.repasse || 0).toFixed(2),
+          `R$ ${(record.repasse || 0).toFixed(2).replace('.', ',')}`,
           record.payDate || '---'
         ];
       } else {
@@ -320,7 +320,7 @@ export default function FinancialReportTable({
         return [
           name,
           pixKey,
-          valorAPagar.toFixed(2),
+          `R$ ${(valorAPagar || 0).toFixed(2).replace('.', ',')}`,
           payDate
         ];
       }
@@ -344,7 +344,9 @@ export default function FinancialReportTable({
 
   const isEligibleForPayment = (record: any) => {
     if (mode === 'merchants') {
-      return record.deliveryStatus === 'Concluído';
+      const isPaid = record.orderStatus === 'Pago' || record.orderStatus === 'Concluído';
+      const isDelivered = record.deliveryStatus === 'Concluído';
+      return isPaid && isDelivered;
     }
     return true;
   };
@@ -521,15 +523,7 @@ export default function FinancialReportTable({
                           : <Square size={22} />
                         }
                       </button>
-                    ) : (
-                      <div 
-                        className="text-slate-200 cursor-not-allowed opacity-40 flex items-center justify-center mx-auto"
-                        title="Pagamento pendente: aguardando retirada do pedido"
-                        style={{ width: 22, height: 22 }}
-                      >
-                        <Square size={22} />
-                      </div>
-                    )}
+                    ) : null}
                   </td>
                 )}
                 

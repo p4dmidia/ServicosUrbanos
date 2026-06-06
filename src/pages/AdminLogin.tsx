@@ -170,7 +170,7 @@ export default function AdminLogin() {
             SISTEMA DE MONITORAMENTO DE ALTA SEGURANÇA
           </p>
           <p className="text-[9px] text-slate-700 lowercase font-medium tracking-normal text-center opacity-40">
-            Desenvolvido por <a href="https://p4dmidia.com.br" target="_blank" rel="noopener noreferrer" className="hover:text-primary-blue transition-colors underline decoration-primary-blue/30">P4D Mídia</a>
+            Desenvolvido por <a href="https://p4dmidia.com.br" target="_blank" rel="noopener noreferrer" className="hover:text-primary-blue transition-colors underline decoration-primary-blue/30">P4D Mídia</a> | <Link to="/termos-uso" className="hover:text-primary-blue transition-colors">Termos de Uso</Link> | <Link to="/termos-privacidade" className="hover:text-primary-blue transition-colors">Termos de Privacidade</Link> | <Link to="/politica-cookies" className="hover:text-primary-blue transition-colors">Política de Cookies</Link>
           </p>
         </div>
       </motion.div>

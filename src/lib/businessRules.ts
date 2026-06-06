@@ -186,6 +186,36 @@ export const businessRules = {
     return null;
   },
 
+  // Verifica se o usuário tem permissão temporária de acesso à área de lojista
+  checkMerchantAccess: async (userId: string, userEmail?: string): Promise<boolean> => {
+    let emailNormalized = userEmail?.trim().toLowerCase();
+    
+    // Buscar perfil do usuário atual
+    const profile = await businessRules.getProfileById(userId);
+    if (!profile) return false;
+
+    if (!emailNormalized) {
+      emailNormalized = profile.email?.trim().toLowerCase();
+    }
+
+    if (emailNormalized === 'xipsdapraia23@gmail.com') {
+      return true;
+    }
+
+    // Se for gerente, verifica se o dono da filial é o lojista autorizado
+    if (profile.role === 'manager') {
+      const ownerId = await businessRules.getMerchantId(userId);
+      if (ownerId) {
+        const ownerProfile = await businessRules.getProfileById(ownerId);
+        if (ownerProfile && ownerProfile.email?.trim().toLowerCase() === 'xipsdapraia23@gmail.com') {
+          return true;
+        }
+      }
+    }
+
+    return false;
+  },
+
   // Ativa o lado lojista de uma conta já existente (Afiliado -> Lojista)
   activateMerchantAccount: async (userId: string, data: { storeName: string; cnpj: string }) => {
     const { error } = await supabase

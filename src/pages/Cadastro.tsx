@@ -18,7 +18,8 @@ import {
     LayoutGrid,
     ShieldCheck,
     Info,
-    AlertTriangle
+    AlertTriangle,
+    X
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Link, useNavigate } from 'react-router-dom';
@@ -32,6 +33,8 @@ export default function Cadastro() {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [success, setSuccess] = useState(false);
+    const [termsAccepted, setTermsAccepted] = useState(false);
+    const [showTermsModal, setShowTermsModal] = useState(false);
 
     // Form States
     const [fullName, setFullName] = useState('');
@@ -71,9 +74,9 @@ export default function Cadastro() {
                     .select('id, full_name')
                     .eq('referral_code', codeOrId.toUpperCase())
                     .limit(1);
-                
+
                 const byCode = results && results.length > 0 ? results[0] : null;
-                
+
                 if (byCode) {
                     setReferrerName(byCode.full_name);
                     setReferrerId(byCode.id);
@@ -92,7 +95,7 @@ export default function Cadastro() {
                     .select('id, full_name')
                     .eq('id', codeOrId)
                     .single();
-                
+
                 if (byId) {
                     setReferrerName(byId.full_name);
                     setReferrerId(byId.id);
@@ -111,7 +114,7 @@ export default function Cadastro() {
             setIsSearching(false);
         }
     };
-    
+
     // Address States
     const [zipCode, setZipCode] = useState('');
     const [address, setAddress] = useState('');
@@ -119,6 +122,65 @@ export default function Cadastro() {
     const [neighborhood, setNeighborhood] = useState('');
     const [city, setCity] = useState('');
     const [state, setState] = useState('');
+
+    const handleZipCodeChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const val = e.target.value;
+        const numeric = val.replace(/\D/g, '');
+
+        let formatted = numeric;
+        if (numeric.length > 5) {
+            formatted = `${numeric.slice(0, 5)}-${numeric.slice(5, 8)}`;
+        }
+
+        setZipCode(formatted);
+
+        if (numeric.length === 8) {
+            const loadingToast = toast.loading('Buscando CEP...', {
+                style: {
+                    borderRadius: '16px',
+                    background: '#0a0e17',
+                    color: '#fff',
+                    fontWeight: 'bold',
+                    fontSize: '12px'
+                }
+            });
+            try {
+                const response = await fetch(`https://viacep.com.br/ws/${numeric}/json/`);
+                const data = await response.json();
+
+                if (data && !data.erro) {
+                    setAddress(data.logradouro || '');
+                    setNeighborhood(data.bairro || '');
+                    setCity(data.localidade || '');
+                    setState(data.uf || '');
+
+                    toast.success('Endereço preenchido automaticamente!', {
+                        id: loadingToast,
+                        style: {
+                            borderRadius: '16px',
+                            background: '#0a0e17',
+                            color: '#fff',
+                            fontWeight: 'bold',
+                            fontSize: '12px'
+                        }
+                    });
+
+                    // Focus number input
+                    setTimeout(() => {
+                        const numInput = document.getElementById('numero');
+                        if (numInput) {
+                            numInput.focus();
+                        }
+                    }, 50);
+                } else {
+                    toast.error('CEP não encontrado.', { id: loadingToast });
+                }
+            } catch (err) {
+                console.error("Erro ao buscar CEP:", err);
+                toast.error('Falha ao conectar com o serviço de busca de CEP.', { id: loadingToast });
+            }
+        }
+    };
 
     // UI States
     const [showPassword, setShowPassword] = useState(false);
@@ -128,7 +190,7 @@ export default function Cadastro() {
     const benefits = [
         "Acesso a todos os apps",
         "Participe do programa de Cashback",
-        "Saques automáticos via PIX"
+        "Atualização automática dos seus Cashbacks"
     ];
 
     const checkPasswordStrength = (pass: string) => {
@@ -180,6 +242,12 @@ export default function Cadastro() {
         setLoading(true);
         setError(null);
 
+        if (!termsAccepted) {
+            setError("Você precisa aceitar os Termos de Uso e Políticas de Privacidade.");
+            setLoading(false);
+            return;
+        }
+
         if (password !== confirmPassword) {
             setError("As senhas não coincidem.");
             setLoading(false);
@@ -218,9 +286,9 @@ export default function Cadastro() {
             }
 
             if (data?.user?.identities?.length === 0) {
-              setError("Este e-mail já está cadastrado ou não é válido.");
-              setLoading(false);
-              return;
+                setError("Este e-mail já está cadastrado ou não é válido.");
+                setLoading(false);
+                return;
             }
 
             toast.success('Conta criada com sucesso!', {
@@ -237,9 +305,9 @@ export default function Cadastro() {
             navigate('/login');
         } catch (err: any) {
             console.error("Erro no Supabase Auth:", err);
-            
+
             let userMessage = "Ocorreu um erro inesperado ao salvar os dados.";
-            
+
             if (err.message === "Database error saving new user") {
                 userMessage = "Erro no banco de dados. Por favor, tente novamente mais tarde.";
             } else if (err.message.includes("User already registered")) {
@@ -272,7 +340,7 @@ export default function Cadastro() {
     if (success) {
         return (
             <div className="min-h-screen flex flex-col items-center justify-center bg-white p-6">
-                <motion.div 
+                <motion.div
                     initial={{ scale: 0.9, opacity: 0 }}
                     animate={{ scale: 1, opacity: 1 }}
                     className="text-center space-y-6 max-w-md"
@@ -316,8 +384,8 @@ export default function Cadastro() {
 
                         <div className="space-y-6 mb-16">
                             {benefits.map((benefit, i) => (
-                                <motion.div 
-                                    key={i} 
+                                <motion.div
+                                    key={i}
                                     initial={{ opacity: 0, y: 10 }}
                                     animate={{ opacity: 1, y: 0 }}
                                     transition={{ delay: i * 0.1 }}
@@ -382,7 +450,7 @@ export default function Cadastro() {
                                     <div className="size-1.5 rounded-full bg-emerald-500" />
                                     <h3 className="text-[11px] font-black uppercase tracking-widest text-midnight">01. Identificação Pessoal</h3>
                                 </div>
-                                
+
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                     <div className="flex flex-col gap-2">
                                         <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Nome Completo</label>
@@ -456,8 +524,9 @@ export default function Cadastro() {
                                         <input
                                             required
                                             type="text"
+                                            id="cep"
                                             value={zipCode}
-                                            onChange={(e) => setZipCode(e.target.value)}
+                                            onChange={handleZipCodeChange}
                                             placeholder="00000-000"
                                             className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500/50 transition-all font-bold text-midnight"
                                         />
@@ -469,6 +538,7 @@ export default function Cadastro() {
                                             <input
                                                 required
                                                 type="text"
+                                                id="logradouro"
                                                 value={address}
                                                 onChange={(e) => setAddress(e.target.value)}
                                                 placeholder="Rua, Av, Travessa..."
@@ -481,6 +551,7 @@ export default function Cadastro() {
                                         <input
                                             required
                                             type="text"
+                                            id="numero"
                                             value={number}
                                             onChange={(e) => setNumber(e.target.value)}
                                             placeholder="123"
@@ -492,6 +563,7 @@ export default function Cadastro() {
                                         <input
                                             required
                                             type="text"
+                                            id="bairro"
                                             value={neighborhood}
                                             onChange={(e) => setNeighborhood(e.target.value)}
                                             placeholder="Ex: Centro"
@@ -503,6 +575,7 @@ export default function Cadastro() {
                                         <input
                                             required
                                             type="text"
+                                            id="cidade_uf"
                                             value={`${city}${state ? ' / ' + state : ''}`}
                                             onChange={(e) => {
                                                 const [c, s] = e.target.value.split(' / ');
@@ -541,7 +614,7 @@ export default function Cadastro() {
                                                 placeholder="Pelo menos 8 caracteres"
                                                 className="w-full pl-12 pr-12 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500/50 transition-all font-bold text-midnight"
                                             />
-                                            <button 
+                                            <button
                                                 type="button"
                                                 onClick={() => setShowPassword(!showPassword)}
                                                 className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-300 hover:text-midnight transition-colors"
@@ -549,10 +622,10 @@ export default function Cadastro() {
                                                 {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                                             </button>
                                         </div>
-                                        
+
                                         {/* Password Strength Meter */}
                                         <div className="flex gap-1 h-1 w-full rounded-full bg-slate-100 overflow-hidden mt-1">
-                                            <motion.div 
+                                            <motion.div
                                                 initial={{ width: 0 }}
                                                 animate={{ width: `${passwordStrength}%` }}
                                                 className={`h-full ${getStrengthColor()} transition-all duration-500`}
@@ -562,7 +635,7 @@ export default function Cadastro() {
                                         {/* Security Tips */}
                                         <AnimatePresence>
                                             {passwordTips.length > 0 && (
-                                                <motion.div 
+                                                <motion.div
                                                     initial={{ opacity: 0, height: 0 }}
                                                     animate={{ opacity: 1, height: 'auto' }}
                                                     exit={{ opacity: 0, height: 0 }}
@@ -620,7 +693,7 @@ export default function Cadastro() {
                                     />
                                 </div>
                                 {referrerName ? (
-                                    <motion.div 
+                                    <motion.div
                                         initial={{ opacity: 0, y: -10 }}
                                         animate={{ opacity: 1, y: 0 }}
                                         className="mt-3 ml-1 p-4 bg-emerald-500/5 border border-emerald-500/10 rounded-2xl flex items-center gap-4 group"
@@ -648,7 +721,7 @@ export default function Cadastro() {
                             {/* Mensagem de Erro */}
                             <AnimatePresence>
                                 {error && (
-                                    <motion.div 
+                                    <motion.div
                                         initial={{ opacity: 0, y: -10 }}
                                         animate={{ opacity: 1, y: 0 }}
                                         exit={{ opacity: 0, scale: 0.95 }}
@@ -671,10 +744,18 @@ export default function Cadastro() {
                                         required
                                         type="checkbox"
                                         id="terms"
+                                        checked={termsAccepted}
+                                        onChange={() => {
+                                            if (!termsAccepted) {
+                                                setShowTermsModal(true);
+                                            } else {
+                                                setTermsAccepted(false);
+                                            }
+                                        }}
                                         className="mt-1 size-6 rounded-lg border-slate-200 text-emerald-500 focus:ring-emerald-500/20 cursor-pointer transition-all"
                                     />
                                     <label htmlFor="terms" className="text-xs text-slate-500 leading-normal cursor-pointer font-medium">
-                                        Li e aceito os <span className="text-midnight font-black underline hover:text-emerald-600 transition-colors">Termos de Uso</span>, as diretrizes do ecossistema e as políticas de privacidade da <span className="font-black">Services Urbanos S.A.</span>
+                                        Li e aceito os <Link to="/termos-uso" onClick={(e) => e.stopPropagation()} className="text-midnight font-black underline hover:text-emerald-600 transition-colors">Termos de Uso</Link>, as diretrizes do ecossistema e as <Link to="/termos-privacidade" onClick={(e) => e.stopPropagation()} className="text-midnight font-black underline hover:text-emerald-600 transition-colors">políticas de privacidade</Link> da <span className="font-black">Services Urbanos S.A.</span>
                                     </label>
                                 </div>
 
@@ -692,7 +773,7 @@ export default function Cadastro() {
                                         </>
                                     )}
                                 </button>
-                                
+
                                 <p className="text-center text-slate-500 font-bold uppercase text-[10px] tracking-widest">
                                     Já possui acesso? <Link to="/login" className="text-emerald-600 hover:text-emerald-500 transition-colors border-b-2 border-emerald-600/20">Faça login agora</Link>
                                 </p>
@@ -714,7 +795,7 @@ export default function Cadastro() {
 
                     <div className="flex flex-col items-center gap-1">
                         <p className="text-[10px] uppercase tracking-widest font-bold">© 2026 Serviços Urbanos Tecnologia S.A.</p>
-                        <p className="opacity-50 text-[9px] lowercase font-medium tracking-normal">Desenvolvido por <a href="https://p4dmidia.com.br" target="_blank" rel="noopener noreferrer" className="hover:text-emerald-500 transition-colors">P4D Mídia</a></p>
+                        <p className="opacity-50 text-[9px] lowercase font-medium tracking-normal">Desenvolvido por <a href="https://p4dmidia.com.br" target="_blank" rel="noopener noreferrer" className="hover:text-emerald-500 transition-colors">P4D Mídia</a> | <Link to="/termos-uso" className="hover:text-emerald-500 transition-colors">Termos de Uso</Link> | <Link to="/termos-privacidade" className="hover:text-emerald-500 transition-colors">Termos de Privacidade</Link> | <Link to="/politica-cookies" className="hover:text-emerald-500 transition-colors">Política de Cookies</Link></p>
                     </div>
 
                     <div className="flex gap-6">
@@ -724,6 +805,163 @@ export default function Cadastro() {
                     </div>
                 </div>
             </footer>
+
+            {/* Modal de Resumo dos Termos */}
+            <AnimatePresence>
+                {showTermsModal && (
+                    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+                        {/* Backdrop */}
+                        <motion.div
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            onClick={() => setShowTermsModal(false)}
+                            className="fixed inset-0 bg-midnight/90 backdrop-blur-sm"
+                        />
+
+                        {/* Modal Container */}
+                        <motion.div
+                            initial={{ scale: 0.95, opacity: 0, y: 20 }}
+                            animate={{ scale: 1, opacity: 1, y: 0 }}
+                            exit={{ scale: 0.95, opacity: 0, y: 20 }}
+                            className="relative w-full max-w-2xl bg-white rounded-[2.5rem] shadow-2xl flex flex-col overflow-hidden max-h-[90vh] z-10 border border-slate-100"
+                        >
+                            {/* Header */}
+                            <div className="p-8 border-b border-slate-100 flex items-center justify-between bg-slate-50">
+                                <div className="flex items-center gap-3">
+                                    <div className="size-10 rounded-xl bg-emerald-500 text-midnight flex items-center justify-center shadow-lg shadow-emerald-500/20">
+                                        <ShieldCheck size={22} />
+                                    </div>
+                                    <div>
+                                        <h3 className="text-lg font-black text-midnight uppercase italic tracking-tight">
+                                            Resumo dos Termos
+                                        </h3>
+                                        <p className="text-[9px] text-slate-400 font-black uppercase tracking-widest">
+                                            Plataforma Serviços Urbanos
+                                        </p>
+                                    </div>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => setShowTermsModal(false)}
+                                    className="p-2 hover:bg-slate-200/50 rounded-xl transition-colors text-slate-400 hover:text-midnight"
+                                >
+                                    <X size={20} />
+                                </button>
+                            </div>
+
+                            {/* Content */}
+                            <div className="p-8 overflow-y-auto space-y-6 text-sm text-slate-600 leading-relaxed max-h-[50vh]">
+                                <ul className="space-y-4">
+                                    <li className="flex gap-3 items-start">
+                                        <div className="size-2 rounded-full bg-emerald-500 mt-2 shrink-0 animate-pulse" />
+                                        <span>
+                                            <strong className="text-midnight font-bold">Uso da Plataforma:</strong> O usuário (AFILIADO) deve fornecer dados verdadeiros, manter login e senha em sigilo e utilizar a plataforma de forma ética e lícita.
+                                        </span>
+                                    </li>
+                                    <li className="flex gap-3 items-start">
+                                        <div className="size-2 rounded-full bg-emerald-500 mt-2 shrink-0" />
+                                        <span>
+                                            <strong className="text-midnight font-bold">Compras e Pagamentos:</strong> Só são válidas compras feitas via PIX no site oficial.
+                                        </span>
+                                    </li>
+                                    <li className="flex gap-3 items-start">
+                                        <div className="size-2 rounded-full bg-emerald-500 mt-2 shrink-0" />
+                                        <div className="flex flex-col gap-1 w-full">
+                                            <span>
+                                                <strong className="text-midnight font-bold">Cashback:</strong>
+                                            </span>
+                                            <ul className="pl-6 space-y-2 list-disc text-slate-500">
+                                                <li><strong className="text-midnight font-bold">Mensal:</strong> 2% sobre compras até a 5ª geração.</li>
+                                                <li><strong className="text-midnight font-bold">Digital:</strong> 0,5% para uso dentro da plataforma (mínimo R$ 10).</li>
+                                                <li><strong className="text-midnight font-bold">Anual:</strong> 0,5% pago em dezembro.</li>
+                                                <li><strong className="text-midnight font-bold">Condição:</strong> realizar ao menos uma compra mensal e confirmar retirada/serviço.</li>
+                                            </ul>
+                                        </div>
+                                    </li>
+                                    <li className="flex gap-3 items-start">
+                                        <div className="size-2 rounded-full bg-emerald-500 mt-2 shrink-0" />
+                                        <span>
+                                            <strong className="text-midnight font-bold">Penalidades:</strong> Inatividade gera perda parcial ou total dos valores acumulados.
+                                        </span>
+                                    </li>
+                                    <li className="flex gap-3 items-start">
+                                        <div className="size-2 rounded-full bg-emerald-500 mt-2 shrink-0" />
+                                        <span>
+                                            <strong className="text-midnight font-bold">Taxas e Impostos:</strong> Cashback sofre taxa administrativa de 10% e retenção de IRRF quando aplicável.
+                                        </span>
+                                    </li>
+                                    <li className="flex gap-3 items-start">
+                                        <div className="size-2 rounded-full bg-emerald-500 mt-2 shrink-0" />
+                                        <span>
+                                            <strong className="text-midnight font-bold">Indicações:</strong> Válidas até a 5ª geração. Fraudes resultam em suspensão ou exclusão da conta.
+                                        </span>
+                                    </li>
+                                    <li className="flex gap-3 items-start">
+                                        <div className="size-2 rounded-full bg-emerald-500 mt-2 shrink-0" />
+                                        <span>
+                                            <strong className="text-midnight font-bold">Privacidade:</strong> Dados pessoais são tratados conforme a LGPD, usados apenas para funcionamento da plataforma e não são vendidos a terceiros.
+                                        </span>
+                                    </li>
+                                    <li className="flex gap-3 items-start">
+                                        <div className="size-2 rounded-full bg-emerald-500 mt-2 shrink-0" />
+                                        <span>
+                                            <strong className="text-midnight font-bold">Cookies:</strong> Utilizamos cookies para segurança, personalização e análise de desempenho. O usuário pode gerenciá-los no navegador, mas a desativação pode limitar funcionalidades.
+                                        </span>
+                                    </li>
+                                    <li className="flex gap-3 items-start">
+                                        <div className="size-2 rounded-full bg-emerald-500 mt-2 shrink-0" />
+                                        <span>
+                                            <strong className="text-midnight font-bold">Alterações:</strong> Os termos podem ser modificados mediante aviso prévio. O uso contínuo implica concordância.
+                                        </span>
+                                    </li>
+                                    <li className="flex gap-3 items-start">
+                                        <div className="size-2 rounded-full bg-emerald-500 mt-2 shrink-0" />
+                                        <span>
+                                            <strong className="text-midnight font-bold">Foro:</strong> Salvador/BA é o foro eleito para resolução de conflitos.
+                                        </span>
+                                    </li>
+                                </ul>
+                            </div>
+
+                            {/* Footer */}
+                            <div className="p-8 border-t border-slate-100 bg-slate-50 flex flex-col gap-4">
+                                <p className="text-[11px] font-bold text-slate-500 text-center uppercase tracking-wide">
+                                    Ao aceitar digitalmente, o AFILIADO declara estar ciente e concorda com todas as condições acima.
+                                </p>
+                                <div className="flex gap-4">
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowTermsModal(false)}
+                                        className="flex-1 bg-slate-200 hover:bg-slate-300 text-midnight py-4 rounded-2xl font-black text-xs uppercase tracking-widest transition-all active:scale-[0.98]"
+                                    >
+                                        Recusar
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setTermsAccepted(true);
+                                            setShowTermsModal(false);
+                                            toast.success('Termos aceitos!', {
+                                                style: {
+                                                    borderRadius: '16px',
+                                                    background: '#0a0e17',
+                                                    color: '#fff',
+                                                    fontWeight: 'bold',
+                                                    fontSize: '12px'
+                                                }
+                                            });
+                                        }}
+                                        className="flex-1 bg-emerald-500 hover:bg-emerald-400 text-midnight py-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg shadow-emerald-500/20 transition-all active:scale-[0.98]"
+                                    >
+                                        Aceitar e Confirmar
+                                    </button>
+                                </div>
+                            </div>
+                        </motion.div>
+                    </div>
+                )}
+            </AnimatePresence>
         </div>
     );
 }

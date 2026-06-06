@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Building2, 
   ArrowRight, 
@@ -11,11 +11,12 @@ import {
   EyeOff
 } from 'lucide-react';
 import { motion } from 'motion/react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { toast } from 'react-hot-toast';
 import WaitlistModal from '../components/WaitlistModal';
+import { businessRules } from '../lib/businessRules';
 
 export default function MerchantLogin() {
   const [email, setEmail] = useState('');
@@ -23,9 +24,27 @@ export default function MerchantLogin() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
-  const { refreshProfile } = useAuth();
+  const location = useLocation();
+  const { user, signOut, refreshProfile, isMerchantAuthorized } = useAuth();
   const [showWaitlist, setShowWaitlist] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+ 
+  useEffect(() => {
+    const searchParams = new URLSearchParams(location.search);
+    if (searchParams.get('restricted') === 'true') {
+      setError('Esta área é restrita ao lojista e em breve abriremos vagas para novos lojistas se cadastrarem.');
+      if (user) {
+        signOut();
+      }
+    } else if (user) {
+      if (isMerchantAuthorized) {
+        navigate('/lojista/dashboard');
+      } else {
+        setError('Esta área é restrita ao lojista e em breve abriremos vagas para novos lojistas se cadastrarem.');
+        signOut();
+      }
+    }
+  }, [location.search, user, isMerchantAuthorized, navigate, signOut]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -54,6 +73,13 @@ export default function MerchantLogin() {
       if (profile.status === 'blocked') {
         await supabase.auth.signOut();
         throw new Error('Sua conta está bloqueada. Entre em contato com o suporte.');
+      }
+
+      // Verificar permissão temporária de acesso ao portal do lojista
+      const isAuth = await businessRules.checkMerchantAccess(data.user.id, email);
+      if (!isAuth) {
+        await supabase.auth.signOut();
+        throw new Error('Esta área é restrita ao lojista e em breve abriremos vagas para novos lojistas se cadastrarem.');
       }
 
       await refreshProfile();
@@ -219,7 +245,7 @@ export default function MerchantLogin() {
             © 2026 Serviços Urbanos S.A. • merchant center v2.0
           </p>
           <p className="text-[8px] text-slate-400 lowercase font-medium tracking-normal text-center">
-            Desenvolvido por <a href="https://p4dmidia.com.br" target="_blank" rel="noopener noreferrer" className="hover:text-primary-blue transition-colors underline decoration-primary-blue/30">P4D Mídia</a>
+            Desenvolvido por <a href="https://p4dmidia.com.br" target="_blank" rel="noopener noreferrer" className="hover:text-primary-blue transition-colors underline decoration-primary-blue/30">P4D Mídia</a> | <Link to="/termos-uso" className="hover:text-primary-blue transition-colors">Termos de Uso</Link> | <Link to="/termos-privacidade" className="hover:text-primary-blue transition-colors">Termos de Privacidade</Link> | <Link to="/politica-cookies" className="hover:text-primary-blue transition-colors">Política de Cookies</Link>
           </p>
         </div>
       </div>

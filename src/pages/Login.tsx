@@ -217,7 +217,7 @@ export default function Login() {
                 <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-6">
                     <div className="flex flex-col items-center md:items-start gap-1">
                         <p className="text-[10px] text-slate-600 uppercase font-black tracking-widest">© 2026 Serviços Urbanos Tecnologia S.A.</p>
-                        <p className="opacity-40 text-[9px] lowercase font-medium tracking-normal">Desenvolvido por <a href="https://p4dmidia.com.br" target="_blank" rel="noopener noreferrer" className="hover:text-emerald-500 transition-colors">P4D Mídia</a></p>
+                        <p className="opacity-40 text-[9px] lowercase font-medium tracking-normal">Desenvolvido por <a href="https://p4dmidia.com.br" target="_blank" rel="noopener noreferrer" className="hover:text-emerald-500 transition-colors">P4D Mídia</a> | <Link to="/termos-uso" className="hover:text-emerald-500 transition-colors">Termos de Uso</Link> | <Link to="/termos-privacidade" className="hover:text-emerald-500 transition-colors">Termos de Privacidade</Link> | <Link to="/politica-cookies" className="hover:text-emerald-500 transition-colors">Política de Cookies</Link></p>
                     </div>
                     <div className="flex gap-6 opacity-40 hover:opacity-100 transition-opacity">
                         <a href="#" className="hover:text-emerald-500"><Instagram size={18} /></a>

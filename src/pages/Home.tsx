@@ -446,12 +446,12 @@ export default function Home() {
               </ul>
             </div>
 
-            <div>
+             <div>
               <h4 className="text-white font-bold mb-6">Legal</h4>
               <ul className="flex flex-col gap-4 text-sm">
-                <li><a href="#" className="hover:text-white transition-colors">Termos de Uso</a></li>
-                <li><a href="#" className="hover:text-white transition-colors">Privacidade</a></li>
-                <li><a href="#" className="hover:text-white transition-colors">Cookies</a></li>
+                <li><Link to="/termos-uso" className="hover:text-white transition-colors">Termos de Uso</Link></li>
+                <li><Link to="/termos-privacidade" className="hover:text-white transition-colors">Privacidade</Link></li>
+                <li><Link to="/politica-cookies" className="hover:text-white transition-colors">Cookies</Link></li>
               </ul>
             </div>
           </div>

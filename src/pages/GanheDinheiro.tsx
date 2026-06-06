@@ -1,3 +1,4 @@
+import React, { useState } from 'react';
 import {
     LayoutGrid,
     CheckCircle,
@@ -30,16 +31,42 @@ export default function GanheDinheiro() {
         {
             icon: <Wallet className="text-emerald-500" size={32} />,
             title: "Receba em PIX",
-            description: "Ganhe percentuais sobre tudo que sua rede G1 a G4 consumir."
+            description: "Ganhe percentuais sobre tudo que sua rede G0 a G5 consumir."
         }
     ];
 
-    const simulationData = [
-        { level: "G1 (Pessoal)", bonus: "Percentual de Cashback Corrente" },
-        { level: "G2 (10 pessoas)", bonus: "Bônus de Grupo Nível 1" },
-        { level: "G3 (100 pessoas)", bonus: "Bônus de Grupo Nível 2" },
-        { level: "G4 (1.000 pessoas)", bonus: "Renda Recorrente Vitalícia" }
-    ];
+    const [indicadosStr, setIndicadosStr] = useState("");
+    const [precoStr, setPrecoStr] = useState("");
+    const [quantidadeStr, setQuantidadeStr] = useState("");
+
+    const parseDecimal = (val: string) => {
+        if (!val) return 0;
+        const normalized = val.replace(',', '.');
+        const num = Number(normalized);
+        return isNaN(num) ? 0 : num;
+    };
+
+    const indicados = Number(indicadosStr) || 0;
+    const preco = parseDecimal(precoStr);
+    const quantidade = Number(quantidadeStr) || 0;
+
+    // MMN Network Growth Math
+    const g0 = 1; // G0 - Você
+    const g2 = indicados; // G1
+    const g3 = indicados * indicados; // G2
+    const g4 = indicados * indicados * indicados; // G3
+    const g5 = indicados * indicados * indicados * indicados; // G4
+    const g6 = indicados * indicados * indicados * indicados * indicados; // G5
+
+    const totalRede = g2 + g3 + g4 + g5 + g6; // Apenas indicados
+    const totalPessoas = totalRede + g0; // Com G0 (Você)
+    const totalCompras = totalPessoas * quantidade;
+    const arrecadacao = totalCompras * preco;
+
+    const cashMensal = arrecadacao * 0.0275;
+    const cashDigital = arrecadacao * 0.0100;
+    const cashAnual = arrecadacao * 0.0075;
+    const cashTotal = cashMensal + cashDigital + cashAnual;
 
     return (
         <div className="min-h-screen flex flex-col font-sans bg-midnight">
@@ -100,44 +127,188 @@ export default function GanheDinheiro() {
                 {/* Simulação de Ganhos - Fundo Azul Escuro */}
                 <section className="py-24 bg-midnight text-white border-y border-slate-800">
                     <div className="max-w-7xl mx-auto px-6 lg:px-20">
-                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
-                            <div>
-                                <h2 className="text-3xl md:text-5xl font-black mb-6 uppercase tracking-tighter leading-none">
-                                    Simulação de <br />
-                                    <span className="text-emerald-500">Ganhos em Rede</span>
-                                </h2>
-                                <p className="text-slate-400 text-lg mb-8">
-                                    O nosso programa de Cashback recompensa seu empenho em expandir nossa rede. Quanto maior seu grupo, maiores seus bônus diretos no PIX.
-                                </p>
-                                <div className="space-y-4">
-                                    {simulationData.map((item, idx) => (
-                                        <div key={idx} className="bg-slate-900/50 p-6 rounded-2xl border border-white/5 flex items-center justify-between group hover:border-emerald-500/50 transition-colors">
-                                            <span className="font-bold text-slate-300">{item.level}</span>
-                                            <span className="font-black text-emerald-500">{item.bonus}</span>
+                        <div className="text-center mb-16">
+                            <h2 className="text-3xl md:text-5xl font-black mb-4 uppercase tracking-tighter leading-none">
+                                Simulador de <span className="text-emerald-500">Ganhos em Rede</span>
+                            </h2>
+                            <p className="text-slate-400 text-sm md:text-base max-w-2xl mx-auto font-medium">
+                                Ajuste os parâmetros abaixo para calcular em tempo real quanto você pode acumular de cashback mensal, digital e anual através do consumo da sua rede.
+                            </p>
+                        </div>
+
+                        <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-start">
+                            {/* Inputs & Parameters */}
+                            <div className="lg:col-span-7 space-y-8">
+                                <div className="bg-slate-900/40 p-8 rounded-[2rem] border border-white/5 space-y-6">
+                                    <h3 className="text-lg font-black text-white uppercase tracking-wider mb-2">Simulador de Ganhos</h3>
+
+                                    {/* Indicados input */}
+                                    <div className="space-y-2">
+                                        <label className="block text-slate-400 font-bold uppercase tracking-wider text-[11px]">Indicados por pessoa (G1 a G5)</label>
+                                        <input
+                                            type="text"
+                                            inputMode="numeric"
+                                            pattern="[0-9]*"
+                                            placeholder="Ex: 5"
+                                            value={indicadosStr}
+                                            onChange={(e) => setIndicadosStr(e.target.value.replace(/\D/g, ''))}
+                                            className="w-full bg-slate-950/80 border border-white/10 rounded-2xl py-4 px-6 text-sm font-black text-white focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/10 placeholder:text-slate-700 transition-all"
+                                        />
+                                        <p className="text-[12px] text-slate-500 font-medium italic">Insira a quantidade média de pessoas que cada membro indicará.</p>
+                                    </div>
+
+                                    {/* Consumo input */}
+                                    <div className="space-y-2">
+                                        <label className="block text-slate-400 font-bold uppercase tracking-wider text-[11px]">Unidades compradas por pessoa / mês</label>
+                                        <input
+                                            type="text"
+                                            inputMode="numeric"
+                                            pattern="[0-9]*"
+                                            placeholder="Ex: 4"
+                                            value={quantidadeStr}
+                                            onChange={(e) => setQuantidadeStr(e.target.value.replace(/\D/g, ''))}
+                                            className="w-full bg-slate-950/80 border border-white/10 rounded-2xl py-4 px-6 text-sm font-black text-white focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/10 placeholder:text-slate-700 transition-all"
+                                        />
+                                        <p className="text-[12px] text-slate-500 font-medium italic">Insira a quantidade de unidades compradas mensalmente por cada membro.</p>
+                                    </div>
+
+                                    {/* Preço input */}
+                                    <div className="space-y-2">
+                                        <label className="block text-slate-400 font-bold uppercase tracking-wider text-[11px]">Preço Unitário do Produto</label>
+                                        <div className="relative flex items-center">
+                                            <span className="absolute left-6 font-black text-slate-500 text-sm">R$</span>
+                                            <input
+                                                type="text"
+                                                inputMode="decimal"
+                                                placeholder="Ex: 7,00"
+                                                value={precoStr}
+                                                onChange={(e) => {
+                                                    const val = e.target.value.replace(/[^0-9.,]/g, '');
+                                                    setPrecoStr(val);
+                                                }}
+                                                className="w-full bg-slate-950/80 border border-white/10 rounded-2xl py-4 pl-14 pr-6 text-sm font-black text-white focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/10 placeholder:text-slate-700 transition-all"
+                                            />
                                         </div>
-                                    ))}
+                                        <p className="text-[12px] text-slate-500 font-medium italic">Insira o preço unitário do produto ou serviço simulado.</p>
+                                    </div>
+                                </div>
+
+                                {/* Rede População por Geração */}
+                                <div className="bg-slate-900/40 p-8 rounded-[2rem] border border-white/5 space-y-4">
+                                    <h3 className="text-sm font-black text-white uppercase tracking-wider">Crescimento de Membros por Nível</h3>
+                                    <div className="grid grid-cols-6 gap-2">
+                                        {[
+                                            { label: 'G0 (Você)', val: g0 },
+                                            { label: 'G1 (Direto)', val: g2 },
+                                            { label: 'G2 (Ind.)', val: g3 },
+                                            { label: 'G3 (Ind.)', val: g4 },
+                                            { label: 'G4 (Ind.)', val: g5 },
+                                            { label: 'G5 (Ind.)', val: g6 }
+                                        ].map((g, idx) => (
+                                            <div key={idx} className="bg-slate-950 p-3 rounded-2xl border border-white/5 flex flex-col items-center justify-center text-center">
+                                                <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest leading-none mb-1.5">{g.label}</span>
+                                                <span className="text-xs font-black text-white">{g.val.toLocaleString('pt-BR')}</span>
+                                                <span className="text-[9px] text-slate-600 font-bold uppercase tracking-tighter mt-1">Afiliado(s)</span>
+                                            </div>
+                                        ))}
+                                    </div>
                                 </div>
                             </div>
 
-                            <div className="relative">
-                                <div className="absolute inset-0 bg-emerald-500/20 rounded-full blur-[100px]"></div>
-                                <div className="relative bg-slate-900 p-10 rounded-[3rem] border border-white/10 shadow-2xl">
-                                    <div className="flex items-center gap-4 mb-8">
-                                        <div className="size-12 rounded-full bg-emerald-500 flex items-center justify-center text-midnight">
+                            {/* Results Display */}
+                            <div className="lg:col-span-5 relative h-full">
+                                <div className="absolute inset-0 bg-emerald-500/10 rounded-full blur-[120px] pointer-events-none"></div>
+                                <div className="relative bg-gradient-to-br from-slate-950 via-slate-900/90 to-slate-950 p-8 md:p-10 rounded-[3rem] border border-white/10 shadow-2xl space-y-8">
+
+                                    <div className="flex items-center gap-4">
+                                        <div className="size-12 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 shrink-0">
                                             <TrendingUp size={24} />
                                         </div>
                                         <div>
-                                            <p className="text-xs text-slate-500 uppercase font-black">Meta Nível 3</p>
-                                            <p className="text-2xl font-black text-white">Independência Financeira</p>
+                                            <p className="text-[10px] text-slate-500 uppercase font-black tracking-widest leading-none mb-1">Simulação Ativa</p>
+                                            <h4 className="text-xl font-black text-white italic uppercase tracking-tighter leading-none">Resultados Estimados</h4>
                                         </div>
                                     </div>
-                                    <div className="space-y-6">
-                                        <div className="h-4 bg-slate-800 rounded-full overflow-hidden">
-                                            <div className="h-full w-3/4 bg-emerald-500 rounded-full"></div>
+
+                                    {/* Stats grid */}
+                                    <div className="grid grid-cols-2 gap-4 pb-6 border-b border-white/5">
+                                        <div className="bg-white/5 p-4 rounded-2xl border border-white/5">
+                                            <p className="text-[8px] font-black text-slate-500 uppercase tracking-widest leading-none mb-1.5">Rede Total (com você)</p>
+                                            <p className="text-xl font-black text-white tracking-tighter">{totalPessoas.toLocaleString('pt-BR')} <span className="text-[10px] text-slate-500 font-bold uppercase">Membros</span></p>
                                         </div>
-                                        <p className="text-sm text-slate-400 font-medium">
-                                            Com 1.000 pessoas consumindo em sua rede, você atinge o topo do programa de Cashback com rendimentos crescentes e vitalícios.
-                                        </p>
+                                        <div className="bg-white/5 p-4 rounded-2xl border border-white/5">
+                                            <p className="text-[8px] font-black text-slate-500 uppercase tracking-widest leading-none mb-1.5">Arrecadação Rede</p>
+                                            <p className="text-xl font-black text-emerald-400 tracking-tighter">R$ {arrecadacao.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                                        </div>
+                                    </div>
+
+                                    {/* Main Profit display */}
+                                    <div className="bg-gradient-to-r from-emerald-600 to-teal-700 p-8 rounded-3xl text-midnight shadow-xl relative overflow-hidden group">
+                                        <div className="absolute top-0 right-0 p-4 opacity-10">
+                                            <Wallet size={80} />
+                                        </div>
+                                        <p className="text-[10px] font-black uppercase tracking-[0.2em] mb-1.5 text-emerald-100">Rendimento Mensal Estimado</p>
+                                        <h2 className="text-4xl font-black italic tracking-tighter leading-none text-white">
+                                            R$ {(cashMensal + cashDigital).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                        </h2>
+                                        <p className="text-[8px] font-bold text-emerald-200 uppercase tracking-wider mt-3">Soma do Cashback Mensal (PIX) + Cashback Digital (Carteira)</p>
+                                    </div>
+
+                                    {/* Detailed breakdown list */}
+                                    <div className="space-y-3">
+                                        <div className="flex justify-between items-center p-4 bg-white/5 rounded-2xl border border-white/5">
+                                            <div>
+                                                <p className="text-xs font-black text-white">Cashback Mensal (2,75%)</p>
+                                                <p className="text-[9px] text-slate-500 font-bold uppercase tracking-wide">Depósito automático via PIX</p>
+                                            </div>
+                                            <span className="text-sm font-black text-white">R$ {cashMensal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                        </div>
+
+                                        <div className="flex justify-between items-center p-4 bg-white/5 rounded-2xl border border-white/5">
+                                            <div>
+                                                <p className="text-xs font-black text-white">Cashback Digital (1,00%)</p>
+                                                <p className="text-[9px] text-slate-500 font-bold uppercase tracking-wide">Saldo livre na carteira virtual</p>
+                                            </div>
+                                            <span className="text-sm font-black text-white">R$ {cashDigital.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                        </div>
+
+                                        <div className="flex justify-between items-center p-4 bg-white/5 rounded-2xl border border-white/5">
+                                            <div>
+                                                <p className="text-xs font-black text-white">Cashback Anual (0,75%)</p>
+                                                <p className="text-[9px] text-slate-500 font-bold uppercase tracking-wide">Acúmulo pago em 10 de Dezembro</p>
+                                            </div>
+                                            <span className="text-sm font-black text-indigo-400">R$ {cashAnual.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                        </div>
+                                    </div>
+
+                                    {/* Goal progress */}
+                                    <div className="space-y-3 pt-4 border-t border-white/5">
+                                        {(() => {
+                                            const progress = Math.min(100, (totalPessoas / 1000) * 100);
+                                            const isGoalAchieved = totalPessoas >= 1000;
+                                            return (
+                                                <>
+                                                    <div className="flex justify-between items-center text-xs">
+                                                        <span className="text-slate-400 font-bold uppercase tracking-wider text-[9px]">Progresso para Independência (G5)</span>
+                                                        <span className="font-black text-white">{progress.toFixed(0)}%</span>
+                                                    </div>
+                                                    <div className="h-3 bg-slate-800 rounded-full overflow-hidden border border-white/5">
+                                                        <motion.div
+                                                            initial={{ width: 0 }}
+                                                            animate={{ width: `${progress}%` }}
+                                                            transition={{ duration: 0.8 }}
+                                                            className={`h-full rounded-full ${isGoalAchieved ? 'bg-gradient-to-r from-emerald-500 to-teal-500' : 'bg-emerald-500'}`}
+                                                        />
+                                                    </div>
+                                                    <p className="text-[15px] text-slate-400 font-medium leading-relaxed">
+                                                        {isGoalAchieved
+                                                            ? 'Parabéns! Sua rede ultrapassou 1.000 membros, atingindo o topo da meta de independência financeira.'
+                                                            : `Com ${totalPessoas.toLocaleString('pt-BR')} pessoas consumindo na sua rede, você está no caminho da meta de Independência Financeira (1.000 membros).`
+                                                        }
+                                                    </p>
+                                                </>
+                                            );
+                                        })()}
                                     </div>
                                 </div>
                             </div>
@@ -177,6 +348,9 @@ export default function GanheDinheiro() {
                         <div className="flex gap-8 items-center">
                             <Link to="/marketplace" className="text-xs font-bold hover:text-white transition-colors">Marketplace</Link>
                             <Link to="/ecossistema" className="text-xs font-bold hover:text-white transition-colors">Ecossistema</Link>
+                            <Link to="/termos-uso" className="text-xs font-bold hover:text-white transition-colors">Termos de Uso</Link>
+                            <Link to="/termos-privacidade" className="text-xs font-bold hover:text-white transition-colors">Privacidade</Link>
+                            <Link to="/politica-cookies" className="text-xs font-bold hover:text-white transition-colors">Cookies</Link>
                             <div className="flex gap-6 border-l border-slate-800 pl-6">
                                 <a href="#" className="hover:text-emerald-500 transition-colors"><Instagram size={20} /></a>
                                 <a href="#" className="hover:text-emerald-500 transition-colors"><Twitter size={20} /></a>
@@ -188,7 +362,7 @@ export default function GanheDinheiro() {
                     <div className="pt-8 border-t border-slate-900 flex flex-col md:flex-row justify-between items-center gap-4 text-[10px] uppercase tracking-widest font-bold">
                         <div className="flex flex-col items-center md:items-start gap-1">
                             <p>© 2026 Serviços Urbanos Tecnologia S.A. Todos os direitos reservados.</p>
-                            <p className="opacity-50 lowercase font-medium tracking-normal">Desenvolvido por <a href="https://p4dmidia.com.br" target="_blank" rel="noopener noreferrer" className="hover:text-emerald-500 transition-colors">P4D Mídia</a></p>
+                            <p className="opacity-50 lowercase font-medium tracking-normal">Desenvolvido por <a href="https://p4dmidia.com.br" target="_blank" rel="noopener noreferrer" className="hover:text-emerald-500 transition-colors">P4D Mídia</a> | <Link to="/termos-uso" className="hover:text-emerald-500 transition-colors">Termos de Uso</Link> | <Link to="/termos-privacidade" className="hover:text-emerald-500 transition-colors">Termos de Privacidade</Link> | <Link to="/politica-cookies" className="hover:text-emerald-500 transition-colors">Política de Cookies</Link></p>
                         </div>
                         <div className="flex gap-8">
                             <span className="flex items-center gap-1">

@@ -1,13 +1,13 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { 
-  LayoutGrid, 
-  Search, 
-  ShoppingCart, 
-  Bell, 
-  User, 
-  Tag, 
-  Truck, 
-  ShieldCheck, 
+import {
+  LayoutGrid,
+  Search,
+  ShoppingCart,
+  Bell,
+  User,
+  Tag,
+  Truck,
+  ShieldCheck,
   ArrowRight,
   TrendingUp,
   Package,
@@ -86,11 +86,7 @@ export default function Marketplace() {
   const [categories, setCategories] = useState<Category[]>([]);
   const { user: authUser, profile, signOut } = useAuth();
   const [showUserMenu, setShowUserMenu] = useState(false);
-  const [notifications, setNotifications] = useState([
-    { id: 1, title: "Oferta Relâmpago!", message: "Fones de ouvido com 30% de cashback hoje.", time: "5 min ago", read: false },
-    { id: 2, title: "Sua compra chegou", message: "O pedido #1234 foi entregue com sucesso.", time: "2 horas ago", read: true },
-    { id: 3, title: "Novo Lojista", message: "A loja 'Urban Sports' agora faz parte da rede.", time: "1 dia ago", read: true },
-  ]);
+  const [notifications, setNotifications] = useState<any[]>([]);
   const [mmnConfig, setMmnConfig] = useState<any>(null);
   const [g1Value, setG1Value] = useState(0);
 
@@ -98,13 +94,13 @@ export default function Marketplace() {
     async function loadData() {
       try {
         setLoading(true);
-        
+
         // Fetch Categories
         const { data: catData, error: catError } = await supabase
           .from('categories')
           .select('id, name')
           .order('name');
-        
+
         if (catError) throw catError;
         const baseCategories = catData || [];
 
@@ -135,14 +131,14 @@ export default function Marketplace() {
           // Map category name from the categories table using category_id
           const categoryFromTable = baseCategories.find(c => c.id === p.category_id);
           const categoryName = categoryFromTable?.name || (p as any).category || 'Geral';
-          
+
           return {
             id: p.id,
             name: p.name || 'Produto sem nome',
             price: price,
             image: p.main_image || p.image || '📦',
-            rating: p.product_reviews?.length > 0 
-              ? p.product_reviews.reduce((acc: number, rev: any) => acc + (rev.rating || 0), 0) / p.product_reviews.length 
+            rating: p.product_reviews?.length > 0
+              ? p.product_reviews.reduce((acc: number, rev: any) => acc + (rev.rating || 0), 0) / p.product_reviews.length
               : 5.0,
             reviews_count: p.product_reviews?.length || 0,
             sales: Number(p.sales) || 0,
@@ -162,7 +158,7 @@ export default function Marketplace() {
         setMmnConfig(mmn);
         const g1 = levels.find(l => l.level === 1);
         if (g1) setG1Value(g1.value);
-        
+
         setCategories(baseCategories.filter(c => !(c as any).parent_id)); // Only show top-level categories
         setProducts(formattedProducts);
       } catch (error) {
@@ -180,9 +176,9 @@ export default function Marketplace() {
       const productName = product.name?.toLowerCase() || '';
       const productCategory = product.category?.toLowerCase() || '';
       const searchLower = search.toLowerCase();
-      
+
       const matchesSearch = productName.includes(searchLower) ||
-                          productCategory.includes(searchLower);
+        productCategory.includes(searchLower);
       const matchesCategory = selectedCategory === 'Todos' || product.category === selectedCategory;
       return matchesSearch && matchesCategory;
     });
@@ -215,7 +211,7 @@ export default function Marketplace() {
   };
 
   const cartCount = cartItems.reduce((acc, item) => acc + item.quantity, 0);
-  
+
   const subtotal = cartItems.reduce((acc, item) => {
     return acc + (item.price * item.quantity);
   }, 0);
@@ -274,7 +270,7 @@ export default function Marketplace() {
       <header className="bg-midnight py-4 md:py-6 px-6 lg:px-20 sticky top-0 z-50 shadow-xl">
         <div className="max-w-7xl mx-auto flex items-center justify-between gap-4 md:gap-8">
           <div className="flex items-center gap-4">
-            <button 
+            <button
               onClick={() => setIsMobileMenuOpen(true)}
               className="md:hidden size-10 flex items-center justify-center bg-white/5 rounded-xl text-white"
             >
@@ -291,11 +287,11 @@ export default function Marketplace() {
 
           {/* Search Bar - Hidden on mobile, visible on md+ */}
           <div className="flex-1 relative group max-w-2xl hidden md:block">
-            <input 
-              type="text" 
+            <input
+              type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Buscar produtos, marcas e muito mais..." 
+              placeholder="Buscar produtos, marcas e muito mais..."
               className="w-full bg-white text-midnight py-2.5 pl-5 pr-12 rounded-lg focus:outline-none shadow-lg transition-all focus:ring-2 focus:ring-primary-blue/20"
             />
             <button className="absolute right-0 top-0 bottom-0 px-4 text-slate-400 hover:text-primary-blue transition-colors border-l border-slate-100">
@@ -307,7 +303,7 @@ export default function Marketplace() {
           <div className="flex items-center gap-6 text-white/80 shrink-0 relative">
             {/* Notifications */}
             <div className="relative">
-              <button 
+              <button
                 onClick={() => setShowNotifications(!showNotifications)}
                 className={`hover:text-primary-blue transition-colors relative p-1 ${showNotifications ? 'text-primary-blue' : ''}`}
               >
@@ -323,7 +319,7 @@ export default function Marketplace() {
                 {showNotifications && (
                   <>
                     <div className="fixed inset-0 z-40" onClick={() => setShowNotifications(false)}></div>
-                    <motion.div 
+                    <motion.div
                       key="notifications-panel"
                       initial={{ opacity: 0, y: 10, scale: 0.95 }}
                       animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -361,7 +357,7 @@ export default function Marketplace() {
 
             {/* Cart Icon */}
             <div className="relative">
-              <button 
+              <button
                 onClick={() => setIsCartOpen(true)}
                 className="hover:text-primary-blue transition-colors p-1 relative"
               >
@@ -380,7 +376,7 @@ export default function Marketplace() {
 
             {authUser ? (
               <div className="relative">
-                <button 
+                <button
                   onClick={() => setShowUserMenu(!showUserMenu)}
                   className="flex items-center gap-3 hover:text-primary-blue transition-colors group px-2 py-1 rounded-xl hover:bg-white/5"
                 >
@@ -401,7 +397,7 @@ export default function Marketplace() {
                   {showUserMenu && (
                     <>
                       <div className="fixed inset-0 z-40" onClick={() => setShowUserMenu(false)}></div>
-                      <motion.div 
+                      <motion.div
                         initial={{ opacity: 0, y: 10, scale: 0.95 }}
                         animate={{ opacity: 1, y: 0, scale: 1 }}
                         exit={{ opacity: 0, y: 10, scale: 0.95 }}
@@ -422,8 +418,8 @@ export default function Marketplace() {
                         </div>
                         <div className="p-2 space-y-1">
                           {profile?.role === 'admin' ? (
-                            <Link 
-                              to="/admin/dashboard" 
+                            <Link
+                              to="/admin/dashboard"
                               onClick={() => setShowUserMenu(false)}
                               className="flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-indigo-50 transition-colors text-xs font-bold text-indigo-600"
                             >
@@ -431,22 +427,22 @@ export default function Marketplace() {
                             </Link>
                           ) : (
                             <>
-                              <Link 
-                                to="/afiliado/dashboard" 
+                              <Link
+                                to="/afiliado/dashboard"
                                 onClick={() => setShowUserMenu(false)}
                                 className="flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-slate-50 transition-colors text-xs font-bold text-slate-600 hover:text-primary-blue"
                               >
                                 <LayoutDashboard size={16} /> Painel do Afiliado
                               </Link>
-                              <Link 
-                                to="/afiliado/perfil" 
+                              <Link
+                                to="/afiliado/perfil"
                                 onClick={() => setShowUserMenu(false)}
                                 className="flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-slate-50 transition-colors text-xs font-bold text-slate-600 hover:text-primary-blue"
                               >
                                 <User size={16} /> Meu Perfil
                               </Link>
-                              <Link 
-                                to="/afiliado/pedidos" 
+                              <Link
+                                to="/afiliado/pedidos"
                                 onClick={() => setShowUserMenu(false)}
                                 className="flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-slate-50 transition-colors text-xs font-bold text-slate-600 hover:text-primary-blue"
                               >
@@ -456,7 +452,7 @@ export default function Marketplace() {
                           )}
                         </div>
                         <div className="p-2 border-t border-slate-100">
-                          <button 
+                          <button
                             onClick={async () => {
                               await signOut();
                               setShowUserMenu(false);
@@ -485,11 +481,11 @@ export default function Marketplace() {
         {/* Mobile Search - Only visible on small screens */}
         <div className="mt-4 md:hidden">
           <div className="relative group">
-            <input 
-              type="text" 
+            <input
+              type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Buscar produtos..." 
+              placeholder="Buscar produtos..."
               className="w-full bg-white/10 text-white placeholder-white/50 py-2.5 pl-5 pr-12 rounded-lg focus:outline-none transition-all focus:bg-white focus:text-midnight focus:placeholder-slate-400 border border-white/5"
             />
             <button className="absolute right-0 top-0 bottom-0 px-4 text-white/50">
@@ -503,14 +499,14 @@ export default function Marketplace() {
       <AnimatePresence>
         {isMobileMenuOpen && (
           <>
-            <motion.div 
+            <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => setIsMobileMenuOpen(false)}
               className="fixed inset-0 bg-midnight/80 backdrop-blur-md z-[100] md:hidden"
             />
-            <motion.div 
+            <motion.div
               initial={{ x: '-100%' }}
               animate={{ x: 0 }}
               exit={{ x: '-100%' }}
@@ -558,11 +554,11 @@ export default function Marketplace() {
                       <Link to="/afiliado/perfil" onClick={() => setIsMobileMenuOpen(false)} className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-white/5 text-xs font-bold text-slate-300">
                         <User size={16} /> Meu Perfil
                       </Link>
-                      <button 
+                      <button
                         onClick={async () => {
                           await signOut();
                           setIsMobileMenuOpen(false);
-                        }} 
+                        }}
                         className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-red-500/10 text-xs font-black uppercase tracking-widest text-red-400 transition-all mt-4"
                       >
                         <LogOut size={16} /> Sair da Conta
@@ -585,14 +581,14 @@ export default function Marketplace() {
       <AnimatePresence>
         {isCartOpen && (
           <>
-            <motion.div 
+            <motion.div
               className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[60]"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => setIsCartOpen(false)}
             />
-            <motion.div 
+            <motion.div
               className="fixed top-0 right-0 h-full w-full max-w-md bg-white z-[70] shadow-2xl flex flex-col"
               initial={{ x: '100%' }}
               animate={{ x: 0 }}
@@ -609,7 +605,7 @@ export default function Marketplace() {
                     <p className="text-xs text-slate-400 font-bold tracking-widest uppercase">{cartCount} items selecionados</p>
                   </div>
                 </div>
-                <button 
+                <button
                   onClick={() => setIsCartOpen(false)}
                   className="size-10 bg-slate-50 hover:bg-slate-100 rounded-full flex items-center justify-center text-slate-400 transition-colors"
                 >
@@ -620,8 +616,8 @@ export default function Marketplace() {
               <div className="flex-1 overflow-y-auto p-6 space-y-6">
                 {cartItems.length > 0 ? (
                   cartItems.map(item => (
-                    <motion.div 
-                      key={item.id} 
+                    <motion.div
+                      key={item.id}
                       layout
                       initial={{ opacity: 0, y: 10 }}
                       animate={{ opacity: 1, y: 0 }}
@@ -629,8 +625,8 @@ export default function Marketplace() {
                     >
                       <div className="size-20 bg-white rounded-xl flex items-center justify-center relative overflow-hidden shrink-0 shadow-sm">
                         {item.image.length > 4 ? (
-                          <img 
-                            src={item.image} 
+                          <img
+                            src={item.image}
                             alt={item.name}
                             className="w-full h-full object-cover"
                           />
@@ -641,25 +637,25 @@ export default function Marketplace() {
                       <div className="flex-1 min-w-0">
                         <h4 className="text-sm font-black text-midnight mb-1 truncate">{item.name}</h4>
                         <p className="text-xs text-slate-400 font-bold uppercase tracking-widest mb-3">{item.category}</p>
-                        
+
                         <div className="flex items-center justify-between mt-auto">
                           <p className="text-sm font-black text-midnight">R$ {item.price.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
                           <div className="flex items-center bg-white border border-slate-200 rounded-xl px-2 py-1 gap-3">
-                            <button 
+                            <button
                               onClick={() => updateQuantity(item.id, -1)}
                               className="size-6 rounded-lg hover:bg-slate-50 flex items-center justify-center lg:transition-colors text-slate-800 hover:text-midnight"
                             >
                               <Minus size={14} strokeWidth={3} />
                             </button>
                             <span className="text-xs font-black w-4 text-center text-slate-800">{item.quantity}</span>
-                            <button 
+                            <button
                               onClick={() => updateQuantity(item.id, 1)}
                               className="size-6 rounded-lg hover:bg-slate-50 flex items-center justify-center lg:transition-colors text-slate-800 hover:text-midnight"
                             >
                               <Plus size={14} strokeWidth={3} />
                             </button>
                           </div>
-                          <button 
+                          <button
                             onClick={() => removeFromCart(item.id)}
                             className="size-8 text-slate-300 hover:text-red-500 transition-colors flex items-center justify-center"
                           >
@@ -676,7 +672,7 @@ export default function Marketplace() {
                     </div>
                     <h4 className="text-lg font-black text-midnight mb-2">Seu carrinho está vazio</h4>
                     <p className="text-slate-400 text-sm font-medium px-10">Explore nossa loja e encontre os melhores produtos com cashback real.</p>
-                    <button 
+                    <button
                       onClick={() => setIsCartOpen(false)}
                       className="mt-8 text-primary-blue font-black text-xs uppercase tracking-widest hover:underline"
                     >
@@ -716,7 +712,7 @@ export default function Marketplace() {
                       <span className="text-2xl font-black text-midnight tracking-tighter">R$ {subtotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
                     </div>
                   </div>
-                  <button 
+                  <button
                     onClick={() => {
                       navigate('/checkout');
                     }}
@@ -738,43 +734,43 @@ export default function Marketplace() {
       <AnimatePresence>
         {showWaitlist && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-6">
-            <motion.div 
+            <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               className="absolute inset-0 bg-midnight/80 backdrop-blur-md"
               onClick={() => setShowWaitlist(false)}
             />
-            <motion.div 
+            <motion.div
               initial={{ opacity: 0, scale: 0.9, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.9, y: 20 }}
               className="relative bg-white rounded-[2.5rem] p-10 lg:p-16 max-w-2xl w-full shadow-2xl text-center overflow-hidden"
             >
               <div className="absolute top-0 right-0 p-8">
-                <button 
+                <button
                   onClick={() => setShowWaitlist(false)}
                   className="size-12 bg-slate-50 hover:bg-slate-100 rounded-full flex items-center justify-center text-slate-400"
                 >
                   <X size={24} />
                 </button>
               </div>
-              
+
               <div className="size-24 bg-primary-blue/10 rounded-3xl flex items-center justify-center text-primary-blue mx-auto mb-8">
                 <TrendingUp size={48} />
               </div>
-              
+
               <h3 className="text-3xl lg:text-4xl font-black text-midnight mb-6 tracking-tighter uppercase">Em Breve: <span className="text-primary-blue italic">Marketplace para Todos</span></h3>
               <p className="text-slate-500 text-lg mb-10 leading-relaxed font-medium">
                 Atualmente, nossa plataforma está aberta exclusivamente para curadoria interna. Em breve, permitiremos que novos lojistas parceiros exponham seus produtos para milhares de clientes.
               </p>
-              
+
               <div className="bg-slate-50 p-8 rounded-3xl border border-slate-100 text-left mb-10">
                 <h4 className="text-xs font-black text-midnight uppercase tracking-widest mb-4">Entre na Lista de Prioridade</h4>
                 <div className="flex flex-col sm:flex-row gap-4">
-                  <input 
-                    type="email" 
-                    placeholder="Seu e-mail profissional" 
+                  <input
+                    type="email"
+                    placeholder="Seu e-mail profissional"
                     className="flex-1 bg-white border border-slate-200 px-6 py-4 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-blue/20 font-bold"
                   />
                   <button className="bg-primary-blue hover:bg-blue-600 text-white px-8 py-4 rounded-xl font-black text-xs uppercase tracking-widest transition-all">
@@ -782,7 +778,7 @@ export default function Marketplace() {
                   </button>
                 </div>
               </div>
-              
+
               <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">
                 Já é um parceiro convidado? <Link to="/lojista/login" className="text-primary-blue hover:underline">Acesse seu painel</Link>
               </p>
@@ -794,15 +790,15 @@ export default function Marketplace() {
       <main className="flex-1 max-w-7xl mx-auto w-full px-6 lg:px-20 py-8">
         {/* Categories */}
         <div className="flex gap-4 overflow-x-auto pb-8 no-scrollbar scroll-smooth">
-          <button 
+          <button
             onClick={() => setSelectedCategory('Todos')}
             className={`px-6 py-2.5 rounded-full text-xs font-black uppercase tracking-widest whitespace-nowrap transition-all border ${selectedCategory === 'Todos' ? 'bg-midnight text-white border-midnight' : 'bg-white text-slate-500 border-slate-100 hover:border-slate-300'}`}
           >
             Todos
           </button>
           {categories.map((cat) => (
-            <button 
-              key={cat.id} 
+            <button
+              key={cat.id}
               onClick={() => setSelectedCategory(cat.name)}
               className={`px-6 py-2.5 rounded-full text-xs font-black uppercase tracking-widest whitespace-nowrap transition-all border ${selectedCategory === cat.name ? 'bg-midnight text-white border-midnight' : 'bg-white text-slate-500 border-slate-100 hover:border-slate-300'}`}
             >
@@ -836,7 +832,7 @@ export default function Marketplace() {
           ) : filteredProducts.length > 0 ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
               {filteredProducts.map((product) => (
-                <Link 
+                <Link
                   to={`/produto/${product.id}`}
                   key={product.id}
                   className="bg-white rounded-[2.5rem] p-6 shadow-sm border border-slate-100 flex flex-col group cursor-pointer transition-all hover:shadow-2xl hover:-translate-y-2 block"
@@ -849,8 +845,8 @@ export default function Marketplace() {
                       </div>
                     )}
                     {product.image.length > 4 ? (
-                      <img 
-                        src={product.image} 
+                      <img
+                        src={product.image}
                         alt={product.name}
                         className={`w-full h-full object-cover transition-transform group-hover:scale-110 ${product.stock === 0 ? 'grayscale opacity-70' : ''}`}
                       />
@@ -858,7 +854,7 @@ export default function Marketplace() {
                       <span className="text-6xl drop-shadow-2xl transition-transform group-hover:scale-110 relative z-10">{product.image}</span>
                     )}
                   </div>
-                  
+
                   <div className="flex-1 flex flex-col">
                     <div className="flex items-center justify-between mb-3">
                       <div className="flex flex-wrap gap-1 mb-3">
@@ -867,14 +863,14 @@ export default function Marketplace() {
                           const pDigital = Number(mmnConfig?.cashbackDigital || 1.0);
                           const pAnual = Number(mmnConfig?.cashbackAnual || 0.75);
                           const totalRatios = pMensal + pDigital + pAnual || 4.5;
-                          
+
                           // Ganho do usuário (G1) direto sobre o valor do produto
                           const userShare = product.price * (g1Value / 100);
-                          
+
                           const mensal = userShare * (pMensal / totalRatios);
                           const digital = userShare * (pDigital / totalRatios);
                           const anual = userShare * (pAnual / totalRatios);
-                          
+
                           return (
                             <>
                               <span className="text-[8px] font-black text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-lg uppercase tracking-tight border border-emerald-100 flex items-center gap-1 shadow-sm">
@@ -909,22 +905,21 @@ export default function Marketplace() {
                           R$ {product.price.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                         </p>
                       </div>
-                      
-                      <button 
+
+                      <button
                         onClick={(e) => {
                           e.preventDefault();
                           e.stopPropagation();
                           if (product.stock > 0) addToCart(product);
                         }}
                         disabled={product.stock === 0}
-                        className={`w-full text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest flex items-center justify-center gap-3 transition-all active:scale-[0.97] shadow-lg group/btn overflow-hidden relative ${
-                          product.stock > 0 
-                          ? 'bg-midnight hover:bg-slate-800' 
+                        className={`w-full text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest flex items-center justify-center gap-3 transition-all active:scale-[0.97] shadow-lg group/btn overflow-hidden relative ${product.stock > 0
+                          ? 'bg-midnight hover:bg-slate-800'
                           : 'bg-slate-400 cursor-not-allowed shadow-none'
-                        }`}
+                          }`}
                       >
                         {product.stock > 0 && (
-                          <motion.div 
+                          <motion.div
                             className="absolute inset-0 bg-white/10 -translate-x-full group-hover/btn:translate-x-full transition-transform duration-500 skew-x-12"
                           />
                         )}
@@ -952,7 +947,7 @@ export default function Marketplace() {
 
         {/* Main Banner */}
         <section className="mb-16">
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0, scale: 0.98 }}
             animate={{ opacity: 1, scale: 1 }}
             className="relative bg-gradient-to-r from-primary-blue to-midnight rounded-[2rem] p-10 lg:p-16 overflow-hidden shadow-2xl"
@@ -961,7 +956,7 @@ export default function Marketplace() {
               <div className="absolute top-10 right-10 size-40 bg-white/10 rounded-3xl rotate-12"></div>
               <div className="absolute bottom-10 right-40 size-32 bg-white/5 rounded-3xl -rotate-12"></div>
             </div>
-            
+
             <div className="max-w-lg relative z-10">
               <div className="flex items-center gap-2 mb-4">
                 <span className="bg-orange-500 text-white text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full shadow-lg shadow-orange-500/20">
@@ -1007,15 +1002,15 @@ export default function Marketplace() {
                 <CreditCard size={36} />
               </div>
               <h5 className="font-black text-midnight mb-3 uppercase tracking-tighter text-lg">Pague com Liberdade</h5>
-              <p className="text-sm text-slate-500 font-medium leading-relaxed max-w-[220px]">Pix Instantâneo ou parcelado em até 12x no cartão com segurança total.</p>
+              <p className="text-sm text-slate-500 font-medium leading-relaxed max-w-[220px]">Pix Instantâneo com segurança total.</p>
             </div>
 
             <div className="flex flex-col items-center border-x border-slate-100 px-6">
               <div className="size-20 bg-slate-50 rounded-3xl flex items-center justify-center text-orange-500 mb-8 shadow-sm">
                 <Truck size={36} />
               </div>
-              <h5 className="font-black text-midnight mb-3 uppercase tracking-tighter text-lg">Entrega Inteligente</h5>
-              <p className="text-sm text-slate-500 font-medium leading-relaxed max-w-[220px]">Sua compra chega voando através da nossa malha logística integrada ao UrbaFood.</p>
+              <h5 className="font-black text-midnight mb-3 uppercase tracking-tighter text-lg">Compre & Retire </h5>
+              <p className="text-sm text-slate-500 font-medium leading-relaxed max-w-[220px]">Compre pelo site e retire em uma de nossas lojas!</p>
             </div>
 
             <div className="flex flex-col items-center">
@@ -1023,7 +1018,7 @@ export default function Marketplace() {
                 <ShieldCheck size={36} />
               </div>
               <h5 className="font-black text-midnight mb-3 uppercase tracking-tighter text-lg">Garantia UrbaShop</h5>
-              <p className="text-sm text-slate-500 font-medium leading-relaxed max-w-[220px]">Cada centavo do seu cashback é garantido. Transações monitoradas 24h por IA.</p>
+              <p className="text-sm text-slate-500 font-medium leading-relaxed max-w-[220px]">Cada centavo do seu cashback é garantido. Transações monitoradas 24h por dia.</p>
             </div>
           </div>
         </section>
@@ -1042,7 +1037,7 @@ export default function Marketplace() {
               </div>
               <p className="text-xs font-medium text-slate-500 max-w-[240px] text-center md:text-left leading-relaxed">O shopping que valoriza seu dinheiro através da economia compartilhada.</p>
             </div>
-            
+
             <div className="flex gap-12">
               <div className="text-center md:text-left">
                 <h6 className="text-white text-xs font-black uppercase tracking-widest mb-6">Marketplace</h6>
@@ -1055,9 +1050,9 @@ export default function Marketplace() {
               <div className="text-center md:text-left">
                 <h6 className="text-white text-xs font-black uppercase tracking-widest mb-6">Suporte</h6>
                 <ul className="space-y-4 text-[10px] font-black uppercase tracking-tighter">
-                  <li><a href="#" className="hover:text-primary-blue transition-colors">Ajuda</a></li>
-                  <li><a href="#" className="hover:text-primary-blue transition-colors">Segurança</a></li>
-                  <li><a href="#" className="hover:text-primary-blue transition-colors">Termos</a></li>
+                  <li><Link to="/termos-uso" className="hover:text-primary-blue transition-colors">Termos de Uso</Link></li>
+                  <li><Link to="/termos-privacidade" className="hover:text-primary-blue transition-colors">Privacidade</Link></li>
+                  <li><Link to="/politica-cookies" className="hover:text-primary-blue transition-colors">Cookies</Link></li>
                 </ul>
               </div>
             </div>
@@ -1066,7 +1061,7 @@ export default function Marketplace() {
           <div className="pt-12 flex flex-col md:flex-row justify-between items-center gap-6 text-[9px] font-black uppercase tracking-[0.2em]">
             <div className="flex flex-col items-center md:items-start gap-1">
               <p className="text-slate-600">© 2026 Ecossistema Serviços Urbanos Tecnologia</p>
-              <p className="text-slate-700 opacity-50 lowercase font-medium tracking-normal">Desenvolvido por <a href="https://p4dmidia.com.br" target="_blank" rel="noopener noreferrer" className="hover:text-primary-blue transition-colors">P4D Mídia</a></p>
+              <p className="text-slate-700 opacity-50 lowercase font-medium tracking-normal">Desenvolvido por <a href="https://p4dmidia.com.br" target="_blank" rel="noopener noreferrer" className="hover:text-primary-blue transition-colors">P4D Mídia</a> | <Link to="/termos-uso" className="hover:text-primary-blue transition-colors">Termos de Uso</Link> | <Link to="/termos-privacidade" className="hover:text-primary-blue transition-colors">Privacidade</Link> | <Link to="/politica-cookies" className="hover:text-primary-blue transition-colors">Cookies</Link></p>
             </div>
             <div className="flex gap-8">
               <span className="flex items-center gap-1 transition-colors hover:text-white cursor-pointer"><Package size={12} /> Rastreio</span>
@@ -1080,21 +1075,21 @@ export default function Marketplace() {
       <AnimatePresence>
         {showWaitlist && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-            <motion.div 
+            <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => { setShowWaitlist(false); setWaitlistSuccess(false); }}
               className="absolute inset-0 bg-midnight/60 backdrop-blur-sm"
             />
-            <motion.div 
+            <motion.div
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
               className="bg-white w-full max-w-lg rounded-[2rem] shadow-2xl relative z-10 overflow-hidden"
             >
               <div className="p-8">
-                <button 
+                <button
                   onClick={() => { setShowWaitlist(false); setWaitlistSuccess(false); }}
                   className="absolute top-6 right-6 text-slate-400 hover:text-slate-600 transition-colors bg-slate-50 p-2 rounded-full"
                 >
@@ -1108,7 +1103,7 @@ export default function Marketplace() {
                     </div>
                     <h3 className="text-2xl font-black text-midnight mb-2">Tudo Certo!</h3>
                     <p className="text-slate-500 mb-8">Você está na nossa lista VIP. Avisaremos via WhatsApp ou E-mail assim que as vagas para novos lojistas abrirem.</p>
-                    <button 
+                    <button
                       onClick={() => { setShowWaitlist(false); setWaitlistSuccess(false); }}
                       className="bg-midnight text-white px-8 py-3 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-slate-800 transition-all"
                     >
@@ -1119,39 +1114,39 @@ export default function Marketplace() {
                   <>
                     <h3 className="text-2xl font-black text-midnight mb-2 tracking-tighter uppercase italic"><span className="text-primary-blue">Lista de Espera:</span> Venda aqui</h3>
                     <p className="text-slate-500 text-sm mb-8 font-medium">Cadastre-se para ser um dos primeiros lojistas e vender para milhares de usuários ativos no nosso ecossistema.</p>
-                    
+
                     <form onSubmit={handleWaitlistSubmit} className="space-y-4">
                       <div>
                         <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 ml-1">Nome Completo *</label>
-                        <input 
-                          type="text" 
+                        <input
+                          type="text"
                           required
                           value={waitlistForm.fullName}
-                          onChange={e => setWaitlistForm({...waitlistForm, fullName: e.target.value})}
+                          onChange={e => setWaitlistForm({ ...waitlistForm, fullName: e.target.value })}
                           className="w-full bg-slate-50 border border-slate-100 rounded-xl px-4 py-3 text-sm font-bold text-midnight focus:outline-none focus:border-primary-blue focus:ring-1 focus:ring-primary-blue transition-all"
                           placeholder="Seu nome completo"
                         />
                       </div>
-                      
+
                       <div className="grid grid-cols-2 gap-4">
                         <div>
                           <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 ml-1">E-mail *</label>
-                          <input 
-                            type="email" 
+                          <input
+                            type="email"
                             required
                             value={waitlistForm.email}
-                            onChange={e => setWaitlistForm({...waitlistForm, email: e.target.value})}
+                            onChange={e => setWaitlistForm({ ...waitlistForm, email: e.target.value })}
                             className="w-full bg-slate-50 border border-slate-100 rounded-xl px-4 py-3 text-sm font-bold text-midnight focus:outline-none focus:border-primary-blue focus:ring-1 focus:ring-primary-blue transition-all"
                             placeholder="seu@email.com"
                           />
                         </div>
                         <div>
                           <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 ml-1">WhatsApp *</label>
-                          <input 
-                            type="tel" 
+                          <input
+                            type="tel"
                             required
                             value={waitlistForm.phone}
-                            onChange={e => setWaitlistForm({...waitlistForm, phone: e.target.value})}
+                            onChange={e => setWaitlistForm({ ...waitlistForm, phone: e.target.value })}
                             className="w-full bg-slate-50 border border-slate-100 rounded-xl px-4 py-3 text-sm font-bold text-midnight focus:outline-none focus:border-primary-blue focus:ring-1 focus:ring-primary-blue transition-all"
                             placeholder="(00) 00000-0000"
                           />
@@ -1160,16 +1155,16 @@ export default function Marketplace() {
 
                       <div>
                         <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 ml-1">Nome da Loja/Negócio</label>
-                        <input 
-                          type="text" 
+                        <input
+                          type="text"
                           value={waitlistForm.businessName}
-                          onChange={e => setWaitlistForm({...waitlistForm, businessName: e.target.value})}
+                          onChange={e => setWaitlistForm({ ...waitlistForm, businessName: e.target.value })}
                           className="w-full bg-slate-50 border border-slate-100 rounded-xl px-4 py-3 text-sm font-bold text-midnight focus:outline-none focus:border-primary-blue focus:ring-1 focus:ring-primary-blue transition-all"
                           placeholder="Sua loja (opcional)"
                         />
                       </div>
 
-                      <button 
+                      <button
                         type="submit"
                         disabled={isSubmittingWaitlist}
                         className="w-full bg-primary-blue hover:bg-blue-600 text-white px-8 py-4 rounded-xl font-black transition-all text-xs uppercase tracking-widest shadow-xl shadow-primary-blue/20 mt-4 disabled:opacity-50"

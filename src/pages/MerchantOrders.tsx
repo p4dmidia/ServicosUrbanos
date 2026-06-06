@@ -335,28 +335,32 @@ export default function MerchantOrders() {
                             <div className="flex items-center justify-end gap-1.5 text-[10px] whitespace-nowrap">
                               {o.status !== 'Concluído' && o.status !== 'Cancelado' && (
                                 <div className="flex items-center gap-1.5 mr-1.5">
-                                  <button 
-                                    onClick={() => {
-                                      if(confirm('Deseja realmente CANCELAR este pedido?')) {
-                                        handleUpdateStatus(o.id, 'Cancelado');
-                                      }
-                                    }}
-                                    className="size-9 bg-red-50 text-red-500 hover:bg-red-500 hover:text-white rounded-xl flex items-center justify-center transition-all border border-red-100"
-                                    title="Cancelar Pedido"
-                                  >
-                                    <XCircle size={14} />
-                                  </button>
-                                  <button 
-                                    onClick={() => {
-                                      if(confirm('Confirmar recebimento do pagamento? Isso também liberará os cashbacks na rede.')) {
-                                        handleUpdateStatus(o.id, 'Pago, Aguardando Retirada');
-                                      }
-                                    }}
-                                    className="size-9 bg-primary-blue/10 text-primary-blue hover:bg-primary-blue hover:text-white rounded-xl flex items-center justify-center transition-all border border-primary-blue/20"
-                                    title="Marcar como Pago"
-                                  >
-                                    <DollarSign size={14} />
-                                  </button>
+                                  {profile?.role === 'owner' && (
+                                    <button 
+                                      onClick={() => {
+                                        if(confirm('Deseja realmente CANCELAR este pedido?')) {
+                                          handleUpdateStatus(o.id, 'Cancelado');
+                                        }
+                                      }}
+                                      className="size-9 bg-red-50 text-red-500 hover:bg-red-500 hover:text-white rounded-xl flex items-center justify-center transition-all border border-red-100"
+                                      title="Cancelar Pedido"
+                                    >
+                                      <XCircle size={14} />
+                                    </button>
+                                  )}
+                                  {profile?.role === 'owner' && (
+                                    <button 
+                                      onClick={() => {
+                                        if(confirm('Confirmar recebimento do pagamento? Isso também liberará os cashbacks na rede.')) {
+                                          handleUpdateStatus(o.id, 'Pago, Aguardando Retirada');
+                                        }
+                                      }}
+                                      className="size-9 bg-primary-blue/10 text-primary-blue hover:bg-primary-blue hover:text-white rounded-xl flex items-center justify-center transition-all border border-primary-blue/20"
+                                      title="Marcar como Pago"
+                                    >
+                                      <DollarSign size={14} />
+                                    </button>
+                                  )}
                                   
                                   <button 
                                     onClick={() => {
@@ -574,28 +578,32 @@ export default function MerchantOrders() {
                 </button>
                 {selectedOrder.status !== 'Concluído' && selectedOrder.status !== 'Cancelado' && (
                   <>
-                    <button 
-                      onClick={() => {
-                        if(confirm('Deseja realmente CANCELAR este pedido?')) {
-                          handleUpdateStatus(selectedOrder.id, 'Cancelado');
-                          setShowDetailsModal(false);
-                        }
-                      }}
-                      className="px-8 py-4 bg-red-50 text-red-500 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-red-500 hover:text-white transition-all"
-                    >
-                      Cancelar Pedido
-                    </button>
-                    <button 
-                      onClick={() => {
-                        if(confirm('Confirmar recebimento do pagamento? Isso também liberará os cashbacks na rede.')) {
-                          handleUpdateStatus(selectedOrder.id, 'Pago, Aguardando Retirada');
-                          setShowDetailsModal(false);
-                        }
-                      }}
-                      className="flex-1 px-8 py-4 bg-primary-blue text-white rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-xl shadow-primary-blue/20 hover:scale-105 transition-all flex items-center justify-center gap-2"
-                    >
-                      <DollarSign size={16} /> Marcar como Pago
-                    </button>
+                    {profile?.role === 'owner' && (
+                      <button 
+                        onClick={() => {
+                          if(confirm('Deseja realmente CANCELAR este pedido?')) {
+                            handleUpdateStatus(selectedOrder.id, 'Cancelado');
+                            setShowDetailsModal(false);
+                          }
+                        }}
+                        className="px-8 py-4 bg-red-50 text-red-500 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-red-500 hover:text-white transition-all"
+                      >
+                        Cancelar Pedido
+                      </button>
+                    )}
+                    {profile?.role === 'owner' && (
+                      <button 
+                        onClick={() => {
+                          if(confirm('Confirmar recebimento do pagamento? Isso também liberará os cashbacks na rede.')) {
+                            handleUpdateStatus(selectedOrder.id, 'Pago, Aguardando Retirada');
+                            setShowDetailsModal(false);
+                          }
+                        }}
+                        className="flex-1 px-8 py-4 bg-primary-blue text-white rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-xl shadow-primary-blue/20 hover:scale-105 transition-all flex items-center justify-center gap-2"
+                      >
+                        <DollarSign size={16} /> Marcar como Pago
+                      </button>
+                    )}
                   </>
                 )}
               </div>

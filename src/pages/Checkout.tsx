@@ -47,10 +47,7 @@ export default function Checkout() {
   const { user: authUser, profile, signOut } = useAuth();
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
-  const [notifications, setNotifications] = useState<any[]>([
-    { id: 1, title: 'Cashback Liberado!', message: 'Você recebeu R$ 25,00 do seu último pedido.', time: 'há 2 horas', read: false },
-    { id: 2, title: 'Oferta Especial', message: 'Tênis Nike com 30% de cashback extra hoje.', time: 'há 5 horas', read: false }
-  ]);
+  const [notifications, setNotifications] = useState<any[]>([]);
   const [search, setSearch] = useState('');
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -1273,9 +1270,9 @@ export default function Checkout() {
               <div className="text-center md:text-left">
                 <h6 className="text-white text-xs font-black uppercase tracking-widest mb-6">Suporte</h6>
                 <ul className="space-y-4 text-[10px] font-black uppercase tracking-tighter">
-                  <li><a href="#" className="hover:text-primary-blue transition-colors">Ajuda</a></li>
-                  <li><a href="#" className="hover:text-primary-blue transition-colors">Segurança</a></li>
-                  <li><a href="#" className="hover:text-primary-blue transition-colors">Termos</a></li>
+                  <li><Link to="/termos-uso" className="hover:text-primary-blue transition-colors">Termos de Uso</Link></li>
+                  <li><Link to="/termos-privacidade" className="hover:text-primary-blue transition-colors">Privacidade</Link></li>
+                  <li><Link to="/politica-cookies" className="hover:text-primary-blue transition-colors">Cookies</Link></li>
                 </ul>
               </div>
             </div>
@@ -1284,7 +1281,7 @@ export default function Checkout() {
           <div className="pt-12 flex flex-col md:flex-row justify-between items-center gap-6 text-[9px] font-black uppercase tracking-[0.2em]">
             <div className="flex flex-col items-center md:items-start gap-1">
               <p className="text-slate-600">© 2026 Ecossistema Serviços Urbanos Tecnologia</p>
-              <p className="text-slate-700 opacity-50 lowercase font-medium tracking-normal">Desenvolvido por <a href="https://p4dmidia.com.br" target="_blank" rel="noopener noreferrer" className="hover:text-primary-blue transition-colors">P4D Mídia</a></p>
+              <p className="text-slate-700 opacity-50 lowercase font-medium tracking-normal">Desenvolvido por <a href="https://p4dmidia.com.br" target="_blank" rel="noopener noreferrer" className="hover:text-primary-blue transition-colors">P4D Mídia</a> | <Link to="/termos-uso" className="hover:text-primary-blue transition-colors">Termos de Uso</Link> | <Link to="/termos-privacidade" className="hover:text-primary-blue transition-colors">Privacidade</Link> | <Link to="/politica-cookies" className="hover:text-primary-blue transition-colors">Cookies</Link></p>
             </div>
             <div className="flex gap-8">
               <span className="flex items-center gap-1 transition-colors hover:text-white cursor-pointer"><Package size={12} /> Rastreio</span>

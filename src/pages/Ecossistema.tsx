@@ -242,8 +242,12 @@ export default function Ecossistema() {
                                     <DollarSign size={32} />
                                 </div>
                                 <div className="text-xs font-black text-emerald-500 uppercase tracking-widest mb-4">Passo 03</div>
-                                <h4 className="text-xl font-black mb-4">Você recebe o Pix</h4>
-                                <p className="text-slate-500 text-sm font-medium leading-relaxed">O saldo cai na sua carteira. Você decide: saca no Pix ou gasta no ecossistema.</p>
+                                <h4 className="text-xl font-black mb-4">Você recebe os Cashbacks</h4>
+                                <p className="text-slate-500 text-sm font-medium leading-relaxed">Mensal: pago no dia 10 do mês seguinte.<br></br>
+
+                                    Digital: liberado na hora para usar no ecossistema.<br></br>
+
+                                    Anual: “Bônus Dezembro” pago em 10 de dezembro</p>
                             </div>
                         </div>
                     </div>
@@ -321,9 +325,9 @@ export default function Ecossistema() {
                         <div className="text-left">
                             <h4 className="text-white font-bold mb-6">Legal</h4>
                             <ul className="flex flex-col gap-4 text-sm">
-                                <li><a href="#" className="hover:text-white transition-colors">Termos de Uso</a></li>
-                                <li><a href="#" className="hover:text-white transition-colors">Privacidade</a></li>
-                                <li><a href="#" className="hover:text-white transition-colors">Cookies</a></li>
+                                <li><Link to="/termos-uso" className="hover:text-white transition-colors">Termos de Uso</Link></li>
+                                <li><Link to="/termos-privacidade" className="hover:text-white transition-colors">Privacidade</Link></li>
+                                <li><Link to="/politica-cookies" className="hover:text-white transition-colors">Cookies</Link></li>
                             </ul>
                         </div>
                     </div>

@@ -26,71 +26,14 @@ const NotificationContext = createContext<NotificationContextType | undefined>(u
 export function NotificationProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
   const [notifications, setNotifications] = useState<Notification[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
 
   const fetchNotifications = async () => {
-    if (!user) return;
-    try {
-      const { data, error } = await supabase
-        .from('notifications')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(20);
-
-      if (error) throw error;
-      setNotifications(data || []);
-    } catch (error) {
-      console.error('Error fetching notifications:', error);
-    } finally {
-      setLoading(false);
-    }
+    setNotifications([]);
   };
 
   useEffect(() => {
-    if (user) {
-      fetchNotifications();
-
-      const channel = supabase
-        .channel(`user-notifications-${user.id}`)
-        .on(
-          'postgres_changes',
-          { 
-            event: 'INSERT', 
-            schema: 'public', 
-            table: 'notifications', 
-            filter: `user_id=eq.${user.id}` 
-          },
-          (payload) => {
-            const newNotif = payload.new as Notification;
-            setNotifications((prev) => [newNotif, ...prev]);
-            
-            // Show toast
-            const icon = newNotif.type === 'sale' ? '💰' : 
-                         newNotif.type === 'order' ? '📦' : 
-                         newNotif.type === 'stock' ? '⚠️' : '🔔';
-            
-            toast(`${newNotif.title}: ${newNotif.message}`, {
-              icon,
-              duration: 5000,
-              style: {
-                borderRadius: '12px',
-                background: '#1e293b',
-                color: '#fff',
-                fontSize: '14px',
-                fontWeight: '600'
-              }
-            });
-          }
-        )
-        .subscribe();
-
-      return () => {
-        supabase.removeChannel(channel);
-      };
-    } else {
-      setNotifications([]);
-      setLoading(false);
-    }
+    setNotifications([]);
   }, [user]);
 
   const markAsRead = async (id: string) => {

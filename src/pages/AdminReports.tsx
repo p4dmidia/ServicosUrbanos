@@ -102,19 +102,21 @@ export default function AdminReports() {
     
     const headers = ['Métrica', 'Valor', 'Tendência'];
     const rows = [
-      ['Volume Transacional (GMV)', `R$ ${reportData.gmv.value.toLocaleString('pt-BR')}`, `${reportData.gmv.trend.toFixed(1)}%`],
-      ['Receita Bruta (Plataforma)', `R$ ${reportData.platformRevenue.value.toLocaleString('pt-BR')}`, `${reportData.platformRevenue.trend.toFixed(1)}%`],
+      ['Volume Transacional (GMV)', `R$ ${reportData.gmv.value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, `${reportData.gmv.trend.toFixed(1)}%`],
+      ['Receita Bruta (Plataforma)', `R$ ${reportData.platformRevenue.value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, `${reportData.platformRevenue.trend.toFixed(1)}%`],
       ['Crescimento de Rede', reportData.userGrowth.value, `${reportData.userGrowth.trend.toFixed(1)}%`],
-      ['Payout MMN', `R$ ${reportData.payoutMMN.value.toLocaleString('pt-BR')}`, `${reportData.payoutMMN.trend.toFixed(1)}%`],
+      ['Payout MMN', `R$ ${reportData.payoutMMN.value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, `${reportData.payoutMMN.trend.toFixed(1)}%`],
     ];
     
-    let csvContent = "data:text/csv;charset=utf-8," 
-      + headers.join(",") + "\n"
-      + rows.map(e => e.join(",")).join("\n");
+    const csvContent = "\uFEFF" + [
+      headers.join(';'),
+      ...rows.map(e => e.map(val => `"${String(val).replace(/"/g, '""')}"`).join(';'))
+    ].join('\n');
 
-    const encodedUri = encodeURI(csvContent);
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
+    link.setAttribute("href", url);
     link.setAttribute("download", `relatorio_urbashop_${startDate}_a_${endDate}_${new Date().getTime()}.csv`);
     document.body.appendChild(link);
     link.click();

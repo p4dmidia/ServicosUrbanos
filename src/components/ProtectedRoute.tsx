@@ -8,7 +8,7 @@ interface ProtectedRouteProps {
 }
 
 export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowedRoles }) => {
-  const { user, profile, loading } = useAuth();
+  const { user, profile, loading, isMerchantAuthorized } = useAuth();
   const location = useLocation();
 
   if (loading) {
@@ -28,6 +28,13 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowe
       return <Navigate to="/admin/login" state={{ from: location }} replace />;
     }
     return <Navigate to="/login" state={{ from: location }} replace />;
+  }
+
+  // Verificar se é uma rota de lojista e se o lojista está autorizado temporariamente
+  if (location.pathname.startsWith('/lojista') && location.pathname !== '/lojista/login') {
+    if (!isMerchantAuthorized) {
+      return <Navigate to="/lojista/login?restricted=true" replace />;
+    }
   }
 
   if (allowedRoles && profile && !allowedRoles.includes(profile.role)) {

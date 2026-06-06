@@ -21,6 +21,7 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { businessRules } from '../lib/businessRules';
 import AffiliateLayout from '../components/AffiliateLayout';
+import { toast } from 'react-hot-toast';
 
 export default function AffiliateOrders() {
   const { user, profile } = useAuth();
@@ -185,7 +186,7 @@ export default function AffiliateOrders() {
     const tableData = items.map((item: any) => [
       item.product_name || item.name || 'Prod.',
       item.quantity || 1,
-      `R$ ${Number(item.price || 0).toFixed(2)}`
+      `R$ ${Number(item.price || 0).toFixed(2).replace('.', ',')}`
     ]);
 
     autoTable(doc, {

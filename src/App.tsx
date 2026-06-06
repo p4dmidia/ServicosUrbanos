@@ -37,6 +37,9 @@ import AffiliateProfile from './pages/AffiliateProfile';
 import AffiliateOrders from './pages/AffiliateOrders';
 import ForgotPassword from './pages/ForgotPassword';
 import ResetPassword from './pages/ResetPassword';
+import TermosPrivacidade from './pages/TermosPrivacidade';
+import PoliticaCookies from './pages/PoliticaCookies';
+import TermosUso from './pages/TermosUso';
 
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { ReferralTracker } from './components/ReferralTracker';
@@ -56,6 +59,9 @@ export default function App() {
             <Route path="/ganhe-dinheiro" element={<GanheDinheiro />} />
             <Route path="/cadastro" element={<Cadastro />} />
             <Route path="/login" element={<Login />} />
+            <Route path="/termos-privacidade" element={<TermosPrivacidade />} />
+            <Route path="/politica-cookies" element={<PoliticaCookies />} />
+            <Route path="/termos-uso" element={<TermosUso />} />
             <Route path="/esqueci-senha" element={<ForgotPassword />} />
             <Route path="/redefinir-senha" element={<ResetPassword />} />
             <Route path="/marketplace" element={<Marketplace />} />

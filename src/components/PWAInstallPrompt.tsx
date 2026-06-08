@@ -5,7 +5,16 @@ import { Download, X, Smartphone, Monitor } from 'lucide-react';
 export default function PWAInstallPrompt() {
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [isVisible, setIsVisible] = useState(false);
-  const [isInstalled, setIsInstalled] = useState(false);
+  const [isInstalled, setIsInstalled] = useState(() => {
+    return localStorage.getItem('pwa-normal-installed') === 'true';
+  });
+
+  useEffect(() => {
+    if (window.location.search.includes('utm_source=pwa_normal')) {
+      localStorage.setItem('pwa-normal-installed', 'true');
+      setIsInstalled(true);
+    }
+  }, []);
 
   useEffect(() => {
     // Ensure the main manifest is loaded
@@ -38,6 +47,7 @@ export default function PWAInstallPrompt() {
       setIsInstalled(true);
       setIsVisible(false);
       setDeferredPrompt(null);
+      localStorage.setItem('pwa-normal-installed', 'true');
       console.log('PWA was installed');
     });
 

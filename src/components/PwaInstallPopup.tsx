@@ -7,9 +7,18 @@ export default function PwaInstallPopup() {
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [isIOS, setIsIOS] = useState(false);
   const [isStandalone, setIsStandalone] = useState(false);
-  const [isInstalled, setIsInstalled] = useState(false);
+  const [isInstalled, setIsInstalled] = useState(() => {
+    return localStorage.getItem('pwa-admin-installed') === 'true';
+  });
   const [showInstructions, setShowInstructions] = useState(false);
   const [isMobileOrTablet, setIsMobileOrTablet] = useState(false);
+
+  useEffect(() => {
+    if (window.location.search.includes('utm_source=pwa_admin')) {
+      localStorage.setItem('pwa-admin-installed', 'true');
+      setIsInstalled(true);
+    }
+  }, []);
   useEffect(() => {
     const manifestLink = document.querySelector('link[rel="manifest"]');
     if (manifestLink) {

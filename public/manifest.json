@@ -2,7 +2,7 @@
   "name": "Serviços Urbanos",
   "short_name": "Serv Urbanos",
   "description": "Mobilidade, Delivery e Compras no app mais completo do Brasil.",
-  "start_url": "/",
+  "start_url": "/?utm_source=pwa_normal",
   "scope": "/",
   "display": "standalone",
   "background_color": "#05070a",

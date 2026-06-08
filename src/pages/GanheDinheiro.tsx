@@ -35,9 +35,9 @@ export default function GanheDinheiro() {
         }
     ];
 
-    const [indicadosStr, setIndicadosStr] = useState("");
-    const [precoStr, setPrecoStr] = useState("");
-    const [quantidadeStr, setQuantidadeStr] = useState("");
+    const [indicadosStr, setIndicadosStr] = useState("5");
+    const [precoStr, setPrecoStr] = useState("7,00");
+    const [quantidadeStr, setQuantidadeStr] = useState("4");
 
     const parseDecimal = (val: string) => {
         if (!val) return 0;
@@ -216,7 +216,7 @@ export default function GanheDinheiro() {
                             </div>
 
                             {/* Results Display */}
-                            <div className="lg:col-span-5 relative h-full">
+                            <div className="lg:col-span-5 relative lg:h-full">
                                 <div className="absolute inset-0 bg-emerald-500/10 rounded-full blur-[120px] pointer-events-none"></div>
                                 <div className="relative bg-gradient-to-br from-slate-950 via-slate-900/90 to-slate-950 p-8 md:p-10 rounded-[3rem] border border-white/10 shadow-2xl space-y-8">
 

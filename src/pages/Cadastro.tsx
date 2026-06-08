@@ -24,6 +24,7 @@ import {
 import { motion, AnimatePresence } from 'framer-motion';
 import { Link, useNavigate } from 'react-router-dom';
 import Header from '../components/Header';
+import PWAInstallPrompt from '../components/PWAInstallPrompt';
 import { supabase } from '../lib/supabase';
 import { useEffect } from 'react';
 import { toast } from 'react-hot-toast';
@@ -47,6 +48,7 @@ export default function Cadastro() {
     const [referrerName, setReferrerName] = useState<string | null>(null);
     const [referrerId, setReferrerId] = useState<string | null>(null);
     const [isSearching, setIsSearching] = useState(false);
+    const [isReferralLocked, setIsReferralLocked] = useState(false);
 
     useEffect(() => {
         // Load referral from storage
@@ -54,6 +56,7 @@ export default function Cadastro() {
         if (storedRef) {
             setReferralCode(storedRef);
             fetchReferrerName(storedRef);
+            setIsReferralLocked(true);
         }
     }, []);
 
@@ -361,6 +364,7 @@ export default function Cadastro() {
     return (
         <div className="min-h-screen flex flex-col font-sans bg-white overflow-x-hidden">
             <Header />
+            <PWAInstallPrompt />
 
             <main className="flex-1 flex flex-col lg:flex-row">
                 {/* Coluna da Esquerda (Informativa) */}
@@ -684,12 +688,14 @@ export default function Cadastro() {
                                         type="text"
                                         value={referralCode}
                                         onChange={(e) => {
+                                            if (isReferralLocked) return;
                                             const val = e.target.value;
                                             setReferralCode(val);
                                             fetchReferrerName(val);
                                         }}
+                                        disabled={isReferralLocked}
                                         placeholder="EX: A1B2C3"
-                                        className="w-full pl-12 pr-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500/50 transition-all font-bold text-midnight placeholder:text-slate-300 uppercase"
+                                        className={`w-full pl-12 pr-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500/50 transition-all font-bold text-midnight placeholder:text-slate-300 uppercase ${isReferralLocked ? 'opacity-70 cursor-not-allowed bg-slate-100/50' : ''}`}
                                     />
                                 </div>
                                 {referrerName ? (

@@ -1,12 +1,12 @@
 {
-  "name": "Serviços Urbanos",
-  "short_name": "Serv Urbanos",
-  "description": "Mobilidade, Delivery e Compras no app mais completo do Brasil.",
-  "start_url": "/",
+  "name": "Serviços Urbanos Admin",
+  "short_name": "SU Admin",
+  "description": "Painel Administrativo do Ecossistema Serviços Urbanos.",
+  "start_url": "/admin/login",
   "scope": "/",
   "display": "standalone",
   "background_color": "#05070a",
-  "theme_color": "#2563eb",
+  "theme_color": "#4f46e5",
   "icons": [
     {
       "src": "/icon-192.png",

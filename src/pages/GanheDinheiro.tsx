@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
     LayoutGrid,
     CheckCircle,
@@ -15,8 +15,27 @@ import {
 import { motion } from 'motion/react';
 import { Link } from 'react-router-dom';
 import Header from '../components/Header';
+import { businessRules } from '../lib/businessRules';
 
 export default function GanheDinheiro() {
+    const [mmnConfig, setMmnConfig] = useState<any>(null);
+
+    useEffect(() => {
+        let isMounted = true;
+        businessRules.getMMNConfig()
+            .then(config => {
+                if (isMounted && config) {
+                    setMmnConfig(config);
+                }
+            })
+            .catch(err => {
+                console.error("Error loading MMN config in GanheDinheiro:", err);
+            });
+        return () => {
+            isMounted = false;
+        };
+    }, []);
+
     const steps = [
         {
             icon: <CheckCircle className="text-emerald-500" size={32} />,
@@ -63,9 +82,13 @@ export default function GanheDinheiro() {
     const totalCompras = totalPessoas * quantidade;
     const arrecadacao = totalCompras * preco;
 
-    const cashMensal = arrecadacao * 0.0275;
-    const cashDigital = arrecadacao * 0.0100;
-    const cashAnual = arrecadacao * 0.0075;
+    const pMensal = mmnConfig ? mmnConfig.cashbackMensal : 2.75;
+    const pDigital = mmnConfig ? mmnConfig.cashbackDigital : 1.00;
+    const pAnual = mmnConfig ? mmnConfig.cashbackAnual : 0.75;
+
+    const cashMensal = arrecadacao * (pMensal / 100);
+    const cashDigital = arrecadacao * (pDigital / 100);
+    const cashAnual = arrecadacao * (pAnual / 100);
     const cashTotal = cashMensal + cashDigital + cashAnual;
 
     return (
@@ -258,7 +281,7 @@ export default function GanheDinheiro() {
                                     <div className="space-y-3">
                                         <div className="flex justify-between items-center p-4 bg-white/5 rounded-2xl border border-white/5">
                                             <div>
-                                                <p className="text-xs font-black text-white">Cashback Mensal (2,75%)</p>
+                                                <p className="text-xs font-black text-white">Cashback Mensal ({pMensal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%)</p>
                                                 <p className="text-[9px] text-slate-500 font-bold uppercase tracking-wide">Depósito automático via PIX</p>
                                             </div>
                                             <span className="text-sm font-black text-white">R$ {cashMensal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
@@ -266,7 +289,7 @@ export default function GanheDinheiro() {
 
                                         <div className="flex justify-between items-center p-4 bg-white/5 rounded-2xl border border-white/5">
                                             <div>
-                                                <p className="text-xs font-black text-white">Cashback Digital (1,00%)</p>
+                                                <p className="text-xs font-black text-white">Cashback Digital ({pDigital.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%)</p>
                                                 <p className="text-[9px] text-slate-500 font-bold uppercase tracking-wide">Saldo livre na carteira virtual</p>
                                             </div>
                                             <span className="text-sm font-black text-white">R$ {cashDigital.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
@@ -274,7 +297,7 @@ export default function GanheDinheiro() {
 
                                         <div className="flex justify-between items-center p-4 bg-white/5 rounded-2xl border border-white/5">
                                             <div>
-                                                <p className="text-xs font-black text-white">Cashback Anual (0,75%)</p>
+                                                <p className="text-xs font-black text-white">Cashback Anual ({pAnual.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%)</p>
                                                 <p className="text-[9px] text-slate-500 font-bold uppercase tracking-wide">Acúmulo pago em 10 de Dezembro</p>
                                             </div>
                                             <span className="text-sm font-black text-indigo-400">R$ {cashAnual.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>

@@ -573,17 +573,27 @@ export default function FinancialReportTable({
                     <td className="p-6 text-center">
                        <div className="flex flex-col items-center">
                           <span className="text-[10px] font-black text-indigo-600 italic tracking-tighter underline">{record.payDate}</span>
-                          <span className="text-[8px] text-slate-300 font-bold uppercase tracking-widest mt-1">Previsto</span>
-                      {(record.orderStatus === 'Pago' || record.orderStatus === 'Concluído') && !hideReceiptButton && (
-                        <button 
-                          onClick={() => setViewingReceipt(record)}
-                          className="mt-2 flex items-center gap-1.5 bg-emerald-50 text-emerald-600 px-3 py-1.5 rounded-lg border border-emerald-100 hover:bg-emerald-100 transition-all text-[9px] font-black uppercase tracking-tighter"
-                        >
-                          <FileText size={10} /> Comprovante
-                        </button>
-                      )}
-                    </div>
-                  </td>
+                          <span className="text-[8px] text-slate-300 font-bold uppercase tracking-widest mt-1">
+                            {record.payoutStatus === 'paid' ? 'Pago' : 'Previsto'}
+                          </span>
+                          {(record.orderStatus === 'Pago' || record.orderStatus === 'Concluído') && (
+                            record.payoutStatus === 'paid' ? (
+                              !hideReceiptButton && (
+                                <button 
+                                  onClick={() => setViewingReceipt(record)}
+                                  className="mt-2 flex items-center gap-1.5 bg-emerald-50 text-emerald-600 px-3 py-1.5 rounded-lg border border-emerald-100 hover:bg-emerald-100 transition-all text-[9px] font-black uppercase tracking-tighter"
+                                >
+                                  <FileText size={10} /> Comprovante
+                                </button>
+                              )
+                            ) : (
+                              <span className="mt-2 text-[8px] font-black text-amber-500 bg-amber-50 border border-amber-100 px-2 py-1 rounded-lg uppercase tracking-tighter text-center leading-tight">
+                                Aguardando Pagamento da Comissão
+                              </span>
+                            )
+                          )}
+                       </div>
+                    </td>
                 </>
               ) : (
                 <>

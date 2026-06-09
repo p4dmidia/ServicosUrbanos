@@ -99,12 +99,8 @@ export default function MerchantReports() {
       const payDate = new Date(saleDate);
       payDate.setDate(payDate.getDate() + 1);
 
-      // Se for dono (owner), o repasse é o valor líquido do lojista (100% - platformRate%)
-      // Se for gerente (manager), o repasse é a comissão dele
-      const isOwner = profile?.role === 'owner';
-      const commissionRate = isOwner 
-        ? (100 - platformRate) 
-        : (manager?.commissionRate || 0);
+      // O repasse no Portal do Lojista (tanto para dono quanto gerente) é o valor líquido do lojista (100% - platformRate%)
+      const commissionRate = 100 - platformRate;
 
       const commissionAmount = o.status === 'Cancelado' 
         ? 0 

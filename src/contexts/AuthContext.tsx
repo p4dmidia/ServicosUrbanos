@@ -6,6 +6,7 @@ import { businessRules } from '../lib/businessRules';
 interface Profile {
   id: string;
   full_name: string;
+  email?: string;
   role: 'admin' | 'owner' | 'manager' | 'affiliate' | 'customer';
   branch_id?: string;
   commission_rate: number;
@@ -45,7 +46,7 @@ interface AuthContextType {
   loading: boolean;
   isMerchantAuthorized: boolean;
   signOut: () => Promise<void>;
-  refreshProfile: () => Promise<void>;
+  refreshProfile: (userId?: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -60,7 +61,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // Get initial session
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user ?? null);
-      if (session?.user) fetchProfile(session.user.id);
+      if (session?.user) fetchProfile(session.user.id, session.user.email);
       else setLoading(false);
     });
 
@@ -68,7 +69,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null);
       if (session?.user) {
-        fetchProfile(session.user.id);
+        fetchProfile(session.user.id, session.user.email);
       } else {
         setProfile(null);
         setIsMerchantAuthorized(false);
@@ -79,7 +80,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return () => subscription.unsubscribe();
   }, []);
 
-  const fetchProfile = async (userId: string) => {
+  const fetchProfile = async (userId: string, email?: string) => {
     try {
       const { data, error } = await supabase
         .from('profiles')
@@ -98,7 +99,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setProfile(data);
 
       if (data) {
-        const isAuth = await businessRules.checkMerchantAccess(data.id, data.email);
+        let userEmail = email || data.email;
+        if (!userEmail) {
+          const { data: { user: authUser } } = await supabase.auth.getUser();
+          userEmail = authUser?.email;
+        }
+        const isAuth = await businessRules.checkMerchantAccess(data.id, userEmail);
         setIsMerchantAuthorized(isAuth);
       } else {
         setIsMerchantAuthorized(false);
@@ -111,8 +117,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const refreshProfile = async () => {
-    if (user) await fetchProfile(user.id);
+  const refreshProfile = async (userId?: string) => {
+    const targetId = userId || user?.id || (await supabase.auth.getUser()).data.user?.id;
+    if (targetId) {
+      const authUser = (await supabase.auth.getUser()).data.user;
+      await fetchProfile(targetId, authUser?.email);
+    }
   };
 
   const signOut = async () => {

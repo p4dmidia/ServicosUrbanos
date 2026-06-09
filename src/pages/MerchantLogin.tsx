@@ -82,7 +82,7 @@ export default function MerchantLogin() {
         throw new Error('Esta área é restrita ao lojista e em breve abriremos vagas para novos lojistas se cadastrarem.');
       }
 
-      await refreshProfile();
+      await refreshProfile(data.user.id);
 
       // Redirecionamento simplificado: No contexto de login de lojista, 
       // sempre enviamos para o dashboard do lojista (desde que o papel seja permitido no App.tsx)

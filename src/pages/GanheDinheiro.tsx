@@ -19,18 +19,24 @@ import { businessRules } from '../lib/businessRules';
 
 export default function GanheDinheiro() {
     const [mmnConfig, setMmnConfig] = useState<any>(null);
+    const [g1Value, setG1Value] = useState<number>(4.5); // Default fallback
 
     useEffect(() => {
         let isMounted = true;
-        businessRules.getMMNConfig()
-            .then(config => {
-                if (isMounted && config) {
-                    setMmnConfig(config);
+        Promise.all([
+            businessRules.getMMNConfig(),
+            businessRules.getMMNLevels()
+        ]).then(([config, levels]) => {
+            if (isMounted) {
+                if (config) setMmnConfig(config);
+                if (levels) {
+                    const g1 = levels.find(l => l.level === 1);
+                    if (g1) setG1Value(Number(g1.value));
                 }
-            })
-            .catch(err => {
-                console.error("Error loading MMN config in GanheDinheiro:", err);
-            });
+            }
+        }).catch(err => {
+            console.error("Error loading MMN config/levels in GanheDinheiro:", err);
+        });
         return () => {
             isMounted = false;
         };
@@ -82,9 +88,14 @@ export default function GanheDinheiro() {
     const totalCompras = totalPessoas * quantidade;
     const arrecadacao = totalCompras * preco;
 
-    const pMensal = mmnConfig ? mmnConfig.cashbackMensal : 2.75;
-    const pDigital = mmnConfig ? mmnConfig.cashbackDigital : 1.00;
-    const pAnual = mmnConfig ? mmnConfig.cashbackAnual : 0.75;
+    const pMensalRatio = mmnConfig ? Number(mmnConfig.cashbackMensal) : 2.75;
+    const pDigitalRatio = mmnConfig ? Number(mmnConfig.cashbackDigital) : 1.00;
+    const pAnualRatio = mmnConfig ? Number(mmnConfig.cashbackAnual) : 0.75;
+    const totalRatio = pMensalRatio + pDigitalRatio + pAnualRatio || 4.5;
+
+    const pMensal = mmnConfig ? g1Value * (pMensalRatio / totalRatio) : 2.75;
+    const pDigital = mmnConfig ? g1Value * (pDigitalRatio / totalRatio) : 1.00;
+    const pAnual = mmnConfig ? g1Value * (pAnualRatio / totalRatio) : 0.75;
 
     const cashMensal = arrecadacao * (pMensal / 100);
     const cashDigital = arrecadacao * (pDigital / 100);

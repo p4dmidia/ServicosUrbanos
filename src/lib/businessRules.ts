@@ -3123,6 +3123,102 @@ export const businessRules = {
       console.error('Error in getOrderCommissions:', error);
       return [];
     }
+  },
+
+  // WhatsApp Config
+  getWhatsAppConfig: async () => {
+    const { data, error } = await supabase
+      .from('whatsapp_config')
+      .select('*')
+      .eq('id', 1)
+      .maybeSingle();
+
+    if (error || !data) {
+      if (error) {
+        console.error('Error fetching WhatsApp config:', error);
+      }
+      return {
+        zapiInstanceId: '',
+        zapiToken: '',
+        zapiClientToken: '',
+        supabaseUrl: '',
+        supabaseAnonKey: '',
+        isEnabled: true
+      };
+    }
+
+    return {
+      zapiInstanceId: data.zapi_instance_id || '',
+      zapiToken: data.zapi_token || '',
+      zapiClientToken: data.zapi_client_token || '',
+      supabaseUrl: data.supabase_url || '',
+      supabaseAnonKey: data.supabase_anon_key || '',
+      isEnabled: data.is_enabled ?? true
+    };
+  },
+
+  saveWhatsAppConfig: async (config: {
+    zapiInstanceId: string;
+    zapiToken: string;
+    zapiClientToken: string;
+    supabaseUrl: string;
+    supabaseAnonKey: string;
+    isEnabled: boolean;
+  }) => {
+    const { error } = await supabase
+      .from('whatsapp_config')
+      .upsert({
+        id: 1,
+        zapi_instance_id: config.zapiInstanceId,
+        zapi_token: config.zapiToken,
+        zapi_client_token: config.zapiClientToken,
+        supabase_url: config.supabaseUrl,
+        supabase_anon_key: config.supabaseAnonKey,
+        is_enabled: config.isEnabled,
+        updated_at: new Date().toISOString()
+      });
+
+    if (error) throw error;
+  },
+
+  // WhatsApp Queue Logs
+  getWhatsAppMessages: async (limitCount = 15): Promise<any[]> => {
+    const { data, error } = await supabase
+      .from('whatsapp_messages')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(limitCount);
+
+    if (error) {
+      console.error('Error fetching WhatsApp messages:', error);
+      return [];
+    }
+
+    return (data || []).map(m => ({
+      id: m.id,
+      phone: m.phone,
+      message: m.message,
+      status: m.status,
+      errorMessage: m.error_message,
+      createdAt: new Date(m.created_at).toLocaleString('pt-BR'),
+      sentAt: m.sent_at ? new Date(m.sent_at).toLocaleString('pt-BR') : null,
+      attempts: m.attempts
+    }));
+  },
+
+  sendTestWhatsAppMessage: async (phone: string, message: string) => {
+    const { data, error } = await supabase
+      .from('whatsapp_messages')
+      .insert([{
+        phone,
+        message,
+        status: 'pending'
+      }])
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
   }
 };
 

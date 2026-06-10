@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import toast from 'react-hot-toast';
 import { 
   Settings, 
   Zap, 
@@ -20,9 +21,22 @@ import AdminLayout from '../components/AdminLayout';
 import { businessRules } from '../lib/businessRules';
 
 export default function AdminSettings() {
-  const [activeTab, setActiveTab] = useState<'mmn' | 'financeiro' | 'plataforma' | 'seguranca'>('mmn');
+  const [activeTab, setActiveTab] = useState<'mmn' | 'financeiro' | 'plataforma' | 'whatsapp' | 'seguranca'>('mmn');
   const [loading, setLoading] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
+
+  // WhatsApp State
+  const [zapiInstanceId, setZapiInstanceId] = useState('');
+  const [zapiToken, setZapiToken] = useState('');
+  const [zapiClientToken, setZapiClientToken] = useState('');
+  const [whatsappSupabaseUrl, setWhatsappSupabaseUrl] = useState('');
+  const [whatsappSupabaseAnonKey, setWhatsappSupabaseAnonKey] = useState('');
+  const [whatsappEnabled, setWhatsappEnabled] = useState(true);
+  const [testPhone, setTestPhone] = useState('');
+  const [testMessage, setTestMessage] = useState('Mensagem de teste do sistema Serviços Urbanos.');
+  const [sendingTest, setSendingTest] = useState(false);
+  const [whatsappLogs, setWhatsappLogs] = useState<any[]>([]);
+  const [logsLoading, setLogsLoading] = useState(false);
 
   // MMN State
   const [mmnDepth, setMmnDepth] = useState(6);
@@ -60,11 +74,12 @@ export default function AdminSettings() {
     const loadConfig = async () => {
       setLoading(true);
       try {
-        const [mmnConfig, levelsData, finConfig, marketConfig] = await Promise.all([
+        const [mmnConfig, levelsData, finConfig, marketConfig, whatsappConfig] = await Promise.all([
           businessRules.getMMNConfig(),
           businessRules.getMMNLevels(),
           businessRules.getFinancialConfig(),
-          businessRules.getMarketplaceConfig()
+          businessRules.getMarketplaceConfig(),
+          businessRules.getWhatsAppConfig()
         ]);
         
         // MMN
@@ -91,6 +106,14 @@ export default function AdminSettings() {
         // Plataforma
         setMarketplaceCommission(marketConfig.commissionRate);
 
+        // WhatsApp
+        setZapiInstanceId(whatsappConfig.zapiInstanceId);
+        setZapiToken(whatsappConfig.zapiToken);
+        setZapiClientToken(whatsappConfig.zapiClientToken);
+        setWhatsappSupabaseUrl(whatsappConfig.supabaseUrl || (import.meta as any).env?.VITE_SUPABASE_URL || '');
+        setWhatsappSupabaseAnonKey(whatsappConfig.supabaseAnonKey || (import.meta as any).env?.VITE_SUPABASE_ANON_KEY || '');
+        setWhatsappEnabled(whatsappConfig.isEnabled);
+
       } catch (error) {
         console.error('Erro ao carregar configurações:', error);
       } finally {
@@ -99,6 +122,24 @@ export default function AdminSettings() {
     };
     loadConfig();
   }, []);
+
+  const loadWhatsAppLogs = async () => {
+    setLogsLoading(true);
+    try {
+      const data = await businessRules.getWhatsAppMessages(15);
+      setWhatsappLogs(data);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLogsLoading(false);
+    }
+  };
+
+  React.useEffect(() => {
+    if (activeTab === 'whatsapp') {
+      loadWhatsAppLogs();
+    }
+  }, [activeTab]);
 
   const handleSave = async () => {
     setLoading(true);
@@ -120,6 +161,15 @@ export default function AdminSettings() {
         });
       } else if (activeTab === 'plataforma') {
         await businessRules.updateMarketplaceConfig({ commissionRate: marketplaceCommission });
+      } else if (activeTab === 'whatsapp') {
+        await businessRules.saveWhatsAppConfig({
+          zapiInstanceId,
+          zapiToken,
+          zapiClientToken,
+          supabaseUrl: whatsappSupabaseUrl,
+          supabaseAnonKey: whatsappSupabaseAnonKey,
+          isEnabled: whatsappEnabled
+        });
       }
       
       setShowSuccess(true);
@@ -136,6 +186,7 @@ export default function AdminSettings() {
     { id: 'mmn', label: 'Lógica MMN', icon: Zap },
     { id: 'financeiro', label: 'Financeiro', icon: CreditCard },
     { id: 'plataforma', label: 'Plataforma', icon: Globe },
+    { id: 'whatsapp', label: 'WhatsApp', icon: Smartphone },
     { id: 'seguranca', label: 'Segurança', icon: Shield },
   ];
 
@@ -433,6 +484,218 @@ export default function AdminSettings() {
                     <div className="flex items-center gap-3 p-4 bg-white/5 rounded-2xl border border-white/10">
                       <Layers size={18} className="text-indigo-400" />
                       <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Marketplace Multi-Vendedor Ativo</span>
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+
+              {activeTab === 'whatsapp' && (
+                <motion.div 
+                  key="whatsapp"
+                  initial={{ opacity: 0, x: 20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: -20 }}
+                  className="space-y-12"
+                >
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
+                    <div className="space-y-8">
+                      <div>
+                        <h3 className="text-xl font-black text-white tracking-tighter uppercase italic leading-none mb-2">Configuração Z-API</h3>
+                        <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Integração para envio de mensagens via WhatsApp</p>
+                      </div>
+
+                      <div className="space-y-6">
+                        <div className="flex items-center justify-between p-6 bg-white/5 rounded-3xl border border-white/5">
+                          <div>
+                            <p className="text-xs font-black text-white">Status das Notificações</p>
+                            <p className="text-[9px] text-slate-500 font-bold uppercase tracking-widest mt-1">Ativar ou desativar envios globais</p>
+                          </div>
+                          <button 
+                            type="button"
+                            onClick={() => setWhatsappEnabled(!whatsappEnabled)}
+                            className={`w-14 h-8 rounded-full flex items-center px-1 transition-all ${
+                              whatsappEnabled ? 'bg-indigo-600 justify-end' : 'bg-white/10 justify-start'
+                            }`}
+                          >
+                            <motion.div layout className="size-6 bg-white rounded-full shadow-md" />
+                          </button>
+                        </div>
+
+                        <div className="space-y-2">
+                          <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Instance ID</label>
+                          <input 
+                            type="text" 
+                            value={zapiInstanceId}
+                            onChange={e => setZapiInstanceId(e.target.value)}
+                            placeholder="Ex: 3C5E9B44F..."
+                            className="w-full bg-white/5 border border-white/5 px-6 py-4 rounded-2xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-white font-bold" 
+                          />
+                        </div>
+
+                        <div className="space-y-2">
+                          <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Instance Token</label>
+                          <input 
+                            type="text" 
+                            value={zapiToken}
+                            onChange={e => setZapiToken(e.target.value)}
+                            placeholder="Ex: T8A3F2..."
+                            className="w-full bg-white/5 border border-white/5 px-6 py-4 rounded-2xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-white font-bold" 
+                          />
+                        </div>
+
+                        <div className="space-y-2">
+                          <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Client Token (Security API Key)</label>
+                          <input 
+                            type="password" 
+                            value={zapiClientToken}
+                            onChange={e => setZapiClientToken(e.target.value)}
+                            placeholder="••••••••"
+                            className="w-full bg-white/5 border border-white/5 px-6 py-4 rounded-2xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-white font-bold" 
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="space-y-8">
+                      <div>
+                        <h3 className="text-xl font-black text-white tracking-tighter uppercase italic leading-none mb-2">Conexão do Sistema (Supabase)</h3>
+                        <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Configurações para chamadas das Edge Functions</p>
+                      </div>
+
+                      <div className="space-y-6">
+                        <div className="space-y-2">
+                          <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Supabase API URL</label>
+                          <input 
+                            type="text" 
+                            value={whatsappSupabaseUrl}
+                            onChange={e => setWhatsappSupabaseUrl(e.target.value)}
+                            placeholder="https://xxx.supabase.co"
+                            className="w-full bg-white/5 border border-white/5 px-6 py-4 rounded-2xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-white font-bold" 
+                          />
+                        </div>
+
+                        <div className="space-y-2">
+                          <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Supabase Anon Key</label>
+                          <input 
+                            type="password" 
+                            value={whatsappSupabaseAnonKey}
+                            onChange={e => setWhatsappSupabaseAnonKey(e.target.value)}
+                            placeholder="••••••••"
+                            className="w-full bg-white/5 border border-white/5 px-6 py-4 rounded-2xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-white font-bold" 
+                          />
+                        </div>
+
+                        {/* Test Message Box */}
+                        <div className="bg-white/5 border border-white/5 rounded-[2rem] p-8 space-y-6">
+                          <div>
+                            <p className="text-xs font-black text-white">Enviar Mensagem de Teste</p>
+                            <p className="text-[9px] text-slate-500 font-bold uppercase tracking-widest mt-1">Valide as credenciais enviando uma mensagem manual</p>
+                          </div>
+
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div className="space-y-1">
+                              <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1">Telefone (DDI + DDD + Num)</label>
+                              <input 
+                                type="text"
+                                placeholder="5511999999999"
+                                value={testPhone}
+                                onChange={e => setTestPhone(e.target.value)}
+                                className="w-full bg-[#05070a] border border-white/5 px-4 py-3 rounded-xl focus:outline-none text-white text-xs font-bold"
+                              />
+                            </div>
+                            <div className="space-y-1 flex items-end">
+                              <button 
+                                type="button"
+                                onClick={async () => {
+                                  if (!testPhone) {
+                                    toast.error("Insira um número de telefone.");
+                                    return;
+                                  }
+                                  setSendingTest(true);
+                                  try {
+                                    await businessRules.sendTestWhatsAppMessage(testPhone, testMessage);
+                                    toast.success("Mensagem de teste enfileirada!");
+                                    setTimeout(loadWhatsAppLogs, 1000);
+                                  } catch (e: any) {
+                                    toast.error(e.message || "Erro ao enfileirar.");
+                                  } finally {
+                                    setSendingTest(false);
+                                  }
+                                }}
+                                disabled={sendingTest}
+                                className="w-full bg-indigo-600 hover:bg-indigo-50 text-white py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all"
+                              >
+                                {sendingTest ? "Enviando..." : "Enviar Teste"}
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Logs Queue Log Table */}
+                  <div className="space-y-6">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h3 className="text-xl font-black text-white tracking-tighter uppercase italic leading-none mb-2">Fila de Transmissão</h3>
+                        <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Logs de envio recentes via Z-API</p>
+                      </div>
+                      <button 
+                        type="button"
+                        onClick={loadWhatsAppLogs}
+                        disabled={logsLoading}
+                        className="bg-white/5 hover:bg-white/10 text-white px-5 py-3 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all border border-white/5 flex items-center gap-2"
+                      >
+                        {logsLoading ? "Atualizando..." : "Atualizar Fila"}
+                      </button>
+                    </div>
+
+                    <div className="bg-[#05070a]/50 rounded-[2rem] border border-white/5 overflow-hidden">
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-left">
+                          <thead>
+                            <tr className="bg-white/5 text-[9px] font-black text-slate-500 uppercase tracking-widest border-b border-white/5">
+                              <th className="px-6 py-4">Criado em</th>
+                              <th className="px-6 py-4">Destinatário</th>
+                              <th className="px-6 py-4">Mensagem</th>
+                              <th className="px-6 py-4 text-center">Tentativas</th>
+                              <th className="px-6 py-4 text-center">Status</th>
+                              <th className="px-6 py-4">Erro / Info</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-white/5 text-slate-300">
+                            {whatsappLogs.length > 0 ? (
+                              whatsappLogs.map(log => (
+                                <tr key={log.id} className="hover:bg-white/5 transition-colors text-xs">
+                                  <td className="px-6 py-4 font-bold text-slate-500">{log.createdAt}</td>
+                                  <td className="px-6 py-4 font-black">{log.phone}</td>
+                                  <td className="px-6 py-4 max-w-xs truncate" title={log.message}>{log.message}</td>
+                                  <td className="px-6 py-4 text-center font-bold">{log.attempts}</td>
+                                  <td className="px-6 py-4 text-center whitespace-nowrap">
+                                    <span className={`inline-block px-2.5 py-1 rounded-md text-[8px] font-black uppercase tracking-wider ${
+                                      log.status === 'sent' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' :
+                                      log.status === 'failed' ? 'bg-red-500/10 text-red-400 border border-red-500/20' :
+                                      'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+                                    }`}>
+                                      {log.status === 'sent' ? 'Enviado' : log.status === 'failed' ? 'Falhou' : 'Pendente'}
+                                    </span>
+                                  </td>
+                                  <td className="px-6 py-4 text-xs font-medium text-red-400/80 max-w-sm truncate" title={log.errorMessage}>
+                                    {log.errorMessage || '-'}
+                                  </td>
+                                </tr>
+                              ))
+                            ) : (
+                              <tr>
+                                <td colSpan={6} className="px-6 py-12 text-center text-slate-500 font-bold uppercase tracking-widest">
+                                  Nenhuma mensagem enfileirada nas últimas horas.
+                                </td>
+                              </tr>
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
                     </div>
                   </div>
                 </motion.div>

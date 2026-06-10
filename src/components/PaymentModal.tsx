@@ -112,6 +112,7 @@ export default function PaymentModal({ isOpen, onClose, selectedRecords, onConfi
         payeeId: currentRecord.payeeId,
         payeeName: currentRecord.payeeName,
         payeePixKey: manualPixKey,
+        payeeWhatsapp: currentRecord.payeeWhatsapp,
         totalAmount: currentRecord.repasse,
         orders: [currentRecord]
       });

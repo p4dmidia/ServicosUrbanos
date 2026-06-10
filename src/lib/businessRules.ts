@@ -1474,7 +1474,7 @@ export const businessRules = {
   async getPayeeDetails(userIds: string[]) {
     const { data, error } = await supabase
       .from('profiles')
-      .select('id, full_name, pix_key, cpf')
+      .select('id, full_name, pix_key, cpf, whatsapp')
       .in('id', userIds);
     
     if (error) throw error;
@@ -1911,7 +1911,7 @@ export const businessRules = {
       // 3. Busca os perfis (tabela 'profiles')
       const { data: profiles, error: profError } = await supabase
         .from('profiles')
-        .select('id, full_name, pix_key, pix_type, cpf')
+        .select('id, full_name, pix_key, pix_type, cpf, whatsapp')
         .in('id', affiliateIds);
 
       if (profError) {
@@ -1939,6 +1939,7 @@ export const businessRules = {
             pix_key: profile?.pix_key || '---',
             pix_type: profile?.pix_type || '---',
             cpf: profile?.cpf || '---',
+            whatsapp: profile?.whatsapp || '',
             mensal: 0,
             anual: 0,
             digital: 0,
@@ -2508,7 +2509,7 @@ export const businessRules = {
     // 1. Buscar todos os perfis
     const { data: profiles, error: pError } = await supabase
       .from('profiles')
-      .select('id, full_name, email, pix_key, bank_name, bank_branch, bank_account');
+      .select('id, full_name, email, pix_key, bank_name, bank_branch, bank_account, whatsapp');
     
     if (pError) throw pError;
 
@@ -2559,6 +2560,7 @@ export const businessRules = {
         userEmail: profile.email || 'N/A',
         pixKey: profile.pix_key || 'Não informado',
         bankDetails: profile.bank_name ? `${profile.bank_name} / Ag: ${profile.bank_branch} / CC: ${profile.bank_account}` : 'Apenas PIX',
+        whatsapp: profile.whatsapp || '',
         monthlyPending,
         annualPending,
         digitalPending

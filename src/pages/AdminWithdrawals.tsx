@@ -76,6 +76,23 @@ export default function AdminWithdrawals() {
       else if (type === 'anual') displayType = 'Anual';
       else displayType = 'Digital';
 
+      // Enviar notificação WhatsApp
+      if (selectedPayout.whatsapp && selectedPayout.whatsapp.trim() !== '') {
+        try {
+          let msg = '';
+          if (type === 'mensal') {
+            msg = `Olá! Seu cashback mensal no valor de R$ ${amount.toFixed(2).replace('.', ',')} foi pago com sucesso em sua chave PIX cadastrada.`;
+          } else if (type === 'anual') {
+            msg = `Olá! Seu cashback anual no valor de R$ ${amount.toFixed(2).replace('.', ',')} foi pago com sucesso em sua chave PIX cadastrada.`;
+          } else {
+            msg = `Olá! Seu resgate de cashback digital no valor de R$ ${amount.toFixed(2).replace('.', ',')} foi pago com sucesso em sua chave PIX cadastrada.`;
+          }
+          await businessRules.sendTestWhatsAppMessage(selectedPayout.whatsapp, msg);
+        } catch (whatsappErr) {
+          console.error('Erro ao enviar notificação WhatsApp para cashback:', whatsappErr);
+        }
+      }
+
       toast.success(`Pagamento ${displayType} processado com sucesso!`);
       setSelectedPayout(null);
       setReceiptFile(null);

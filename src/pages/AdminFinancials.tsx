@@ -137,6 +137,7 @@ export default function AdminFinancials() {
           payeeId: String(payeeId),
           payeePixKey: payee?.pix_key || (payeeId === 'matriz' ? profile?.pix_key || matrixPixKey || '' : ''),
           payeeCpf: payee?.cpf || (payeeId === 'matriz' ? profile?.cpf || matrixCpf || '' : ''),
+          payeeWhatsapp: payee?.whatsapp || (payeeId === 'matriz' ? profile?.whatsapp || '' : ''),
           paymentMethod: o.paymentMethod || 'PIX',
           items: o.items || []
         };
@@ -193,6 +194,7 @@ export default function AdminFinancials() {
         payeeId: r.id,
         payeePixKey: r.pix_key,
         payeeCpf: r.cpf,
+        payeeWhatsapp: r.whatsapp,
         paymentMethod: 'PIX',
         items: [
           { name: 'Cashback Mensal', price: r.mensal },
@@ -217,6 +219,16 @@ export default function AdminFinancials() {
         setOrders(prev => prev.map(o => 
           orderIds.includes(String(o.id)) ? { ...o, payoutStatus: 'paid' } : o
         ));
+
+        // Enviar notificação WhatsApp para lojista
+        if (payeeGroup.payeeWhatsapp && payeeGroup.payeeWhatsapp.trim() !== '') {
+          try {
+            const msg = `Olá, parceiro! O repasse de suas vendas no valor de R$ ${payeeGroup.totalAmount.toFixed(2).replace('.', ',')} foi pago com sucesso em sua chave PIX cadastrada. Obrigado pela parceria!`;
+            await businessRules.sendTestWhatsAppMessage(payeeGroup.payeeWhatsapp, msg);
+          } catch (whatsappErr) {
+            console.error('Erro ao enviar notificação WhatsApp para lojista:', whatsappErr);
+          }
+        }
       } else {
         // 1. Registramos o histórico na tabela de relatórios
         await businessRules.registerAffiliatePayout({
@@ -243,6 +255,16 @@ export default function AdminFinancials() {
         
         // 3. Recarrega os dados silenciosamente
         await loadAdminData(true);
+
+        // Enviar notificação WhatsApp para afiliado (Cashback Mensal)
+        if (payeeGroup.payeeWhatsapp && payeeGroup.payeeWhatsapp.trim() !== '') {
+          try {
+            const msg = `Olá! Seu cashback mensal no valor de R$ ${payeeGroup.totalAmount.toFixed(2).replace('.', ',')} foi pago com sucesso em sua chave PIX cadastrada.`;
+            await businessRules.sendTestWhatsAppMessage(payeeGroup.payeeWhatsapp, msg);
+          } catch (whatsappErr) {
+            console.error('Erro ao enviar notificação WhatsApp para afiliado:', whatsappErr);
+          }
+        }
       }
 
       // Remove o registro recém-pago da lista de selecionados (fila)

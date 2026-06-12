@@ -141,15 +141,13 @@ BEGIN
     v_mmn_depth := COALESCE(v_mmn_depth, 4);
 
     FOR v_upline IN 
-      SELECT u.upline_id, u.level
+      SELECT DISTINCT p.whatsapp
       FROM public.get_upline_chain(NEW.id, v_mmn_depth) u
-      WHERE u.level > 1 -- Pula o nível 1 que já recebeu o aviso direto de indicação
+      JOIN public.profiles p ON p.id = u.upline_id
+      WHERE u.level > 1 AND p.whatsapp IS NOT NULL AND p.whatsapp <> ''
     LOOP
-      SELECT whatsapp INTO v_referrer_whatsapp FROM public.profiles WHERE id = v_upline.upline_id;
-      IF v_referrer_whatsapp IS NOT NULL AND v_referrer_whatsapp <> '' THEN
-        INSERT INTO public.whatsapp_messages (phone, message)
-        VALUES (v_referrer_whatsapp, 'Você ganhou um novo afiliado em sua rede. Agora sua geração se fortalece e pode gerar mais cashback.');
-      END IF;
+      INSERT INTO public.whatsapp_messages (phone, message)
+      VALUES (v_upline.whatsapp, 'Você ganhou um novo afiliado em sua rede. Agora sua geração se fortalece e pode gerar mais cashback.');
     END LOOP;
   END IF;
 
@@ -195,20 +193,19 @@ BEGIN
   v_mmn_depth := COALESCE(v_mmn_depth, 4);
 
   FOR v_upline IN 
-    SELECT u.upline_id, u.level
+    SELECT DISTINCT p.whatsapp
     FROM public.get_upline_chain(NEW.customer_id, v_mmn_depth) u
+    JOIN public.profiles p ON p.id = u.upline_id
+    WHERE p.whatsapp IS NOT NULL AND p.whatsapp <> ''
   LOOP
-    SELECT whatsapp INTO v_upline_whatsapp FROM public.profiles WHERE id = v_upline.upline_id;
-    IF v_upline_whatsapp IS NOT NULL AND v_upline_whatsapp <> '' THEN
-      INSERT INTO public.whatsapp_messages (phone, message)
-      VALUES (v_upline_whatsapp, 'Você recebeu cashback pelas compras realizadas por seus afiliados até a 5ª geração.');
-    END IF;
+    INSERT INTO public.whatsapp_messages (phone, message)
+    VALUES (v_upline.whatsapp, 'Você recebeu cashback pelas compras realizadas por seus afiliados até a 5ª geração.');
   END LOOP;
 
   -- D. Aviso de retirada de produto (para parceiros/lojistas)
   IF NEW.branch_id IS NOT NULL THEN
     FOR v_staff IN 
-      SELECT whatsapp 
+      SELECT DISTINCT whatsapp 
       FROM public.profiles 
       WHERE branch_id = NEW.branch_id AND role IN ('owner', 'manager') AND whatsapp IS NOT NULL AND whatsapp <> ''
     LOOP
@@ -237,7 +234,7 @@ BEGIN
   -- A. Confirmação de retirada realizada
   IF NEW.status = 'Concluído' AND OLD.status = 'Pago, Aguardando Retirada' AND NEW.branch_id IS NOT NULL THEN
     FOR v_staff IN 
-      SELECT whatsapp 
+      SELECT DISTINCT whatsapp 
       FROM public.profiles 
       WHERE branch_id = NEW.branch_id AND role IN ('owner', 'manager') AND whatsapp IS NOT NULL AND whatsapp <> ''
     LOOP
@@ -249,7 +246,7 @@ BEGIN
   -- B. Aviso de alteração ou cancelamento de retirada
   IF NEW.status = 'Cancelado' AND OLD.status IN ('Pago, Aguardando Retirada', 'Pendente', 'Aguardando Pagamento', 'Processando') AND NEW.branch_id IS NOT NULL THEN
     FOR v_staff IN 
-      SELECT whatsapp 
+      SELECT DISTINCT whatsapp 
       FROM public.profiles 
       WHERE branch_id = NEW.branch_id AND role IN ('owner', 'manager') AND whatsapp IS NOT NULL AND whatsapp <> ''
     LOOP
@@ -276,7 +273,7 @@ DECLARE
 BEGIN
   IF NEW.stock <= 5 AND (OLD.stock > 5 OR OLD.stock IS NULL) AND NEW.branch_id IS NOT NULL THEN
     FOR v_staff IN 
-      SELECT whatsapp 
+      SELECT DISTINCT whatsapp 
       FROM public.profiles 
       WHERE branch_id = NEW.branch_id AND role IN ('owner', 'manager') AND whatsapp IS NOT NULL AND whatsapp <> ''
     LOOP
@@ -302,7 +299,7 @@ DECLARE
 BEGIN
   IF NEW.stock <= 5 AND (OLD.stock > 5 OR OLD.stock IS NULL) AND NEW.branch_id IS NOT NULL THEN
     FOR v_staff IN 
-      SELECT whatsapp 
+      SELECT DISTINCT whatsapp 
       FROM public.profiles 
       WHERE branch_id = NEW.branch_id AND role IN ('owner', 'manager') AND whatsapp IS NOT NULL AND whatsapp <> ''
     LOOP

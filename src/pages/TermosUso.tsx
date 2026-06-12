@@ -21,7 +21,7 @@ export default function TermosUso() {
         <div className="mb-12 border-b border-slate-200 pb-8">
           <span className="text-[10px] font-black text-primary-blue uppercase tracking-[0.3em] mb-3 block">Serviços Urbanos</span>
           <h1 className="text-3xl md:text-5xl font-black text-midnight mb-4 tracking-tighter uppercase italic">
-            Termos de Uso
+            Termos de Uso da Plataforma Serviços Urbanos
           </h1>
           <p className="text-sm font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
             <FileText size={16} className="text-primary-blue" /> Regras, obrigações e diretrizes da plataforma
@@ -56,15 +56,15 @@ export default function TermosUso() {
             <div className="pl-9 space-y-2">
               <p className="flex items-start gap-2">
                 <span className="text-primary-blue font-bold mt-1.5">•</span>
-                <span>O AFILIADO deve fornecer informações verdadeiras, exatas e atualizadas em seu cadastro.</span>
+                <span>O AFILIADO deve fornecer informações verdadeiras e atualizadas.</span>
               </p>
               <p className="flex items-start gap-2">
                 <span className="text-primary-blue font-bold mt-1.5">•</span>
-                <span>O acesso à conta é estritamente pessoal e intransferível, sendo de exclusiva responsabilidade do AFILIADO a guarda de suas credenciais de segurança.</span>
+                <span>O acesso é pessoal e intransferível.</span>
               </p>
               <p className="flex items-start gap-2">
                 <span className="text-primary-blue font-bold mt-1.5">•</span>
-                <span>O tratamento de dados pessoais coletados pela PLATAFORMA seguirá rigorosamente as diretrizes da Lei nº 13.709/2018 (Lei Geral de Proteção de Dados Pessoais - LGPD).</span>
+                <span>O tratamento de dados pessoais seguirá a Lei nº 13.709/2018 (LGPD).</span>
               </p>
             </div>
           </div>
@@ -78,11 +78,11 @@ export default function TermosUso() {
             <div className="pl-9 space-y-2">
               <p className="flex items-start gap-2">
                 <span className="text-primary-blue font-bold mt-1.5">•</span>
-                <span>Todas as compras elegíveis para o programa de benefícios devem ser realizadas obrigatoriamente via PIX através dos canais oficiais da PLATAFORMA.</span>
+                <span>Todas as compras devem ser realizadas via PIX no site oficial.</span>
               </p>
               <p className="flex items-start gap-2">
                 <span className="text-primary-blue font-bold mt-1.5">•</span>
-                <span>Apenas transações efetivamente concluídas e pagas por este meio geram direito à apuração e recebimento de cashback.</span>
+                <span>Apenas compras concluídas e pagas por este meio geram direito a cashback.</span>
               </p>
             </div>
           </div>
@@ -96,19 +96,19 @@ export default function TermosUso() {
             <div className="pl-9 space-y-3">
               <p className="flex items-start gap-2">
                 <span className="text-emerald-500 font-bold mt-1.5">•</span>
-                <span><strong>Mensal:</strong> equivalente a 2% sobre o valor das compras realizadas pela rede do AFILIADO (Geração 0 a 5), pago no dia 10 do mês subsequente.</span>
+                <span><strong>Mensal:</strong> 1,35% sobre compras da Geração 0 a 5, pago no dia 10 do mês seguinte.</span>
               </p>
               <p className="flex items-start gap-2">
                 <span className="text-emerald-500 font-bold mt-1.5">•</span>
-                <span><strong>Digital:</strong> equivalente a 0,5% para uso exclusivo dentro do ecossistema da PLATAFORMA, com liberação automática de resgate após acumular o valor mínimo de R$ 10,00.</span>
+                <span><strong>Digital:</strong> 0,20% para uso exclusivo dentro da PLATAFORMA, liberado <strong>APÓS ESTAR ELEGÍVEL MENSALMENTE</strong>.</span>
               </p>
               <p className="flex items-start gap-2">
                 <span className="text-emerald-500 font-bold mt-1.5">•</span>
-                <span><strong>Anual:</strong> equivalente a 0,5% sobre o valor das compras realizadas pela rede do AFILIADO (Geração 0 a 5), acumulado anualmente e pago no dia 10 de dezembro.</span>
+                <span><strong>Anual:</strong> 0,20% sobre compras da Geração 0 a 5, pago em 10 de dezembro.</span>
               </p>
               <p className="flex items-start gap-2">
                 <span className="text-amber-500 font-bold mt-1.5">•</span>
-                <span><strong>Condição Essencial:</strong> para fazer jus aos benefícios de cashback, o AFILIADO deve realizar ao menos uma compra mensal própria na PLATAFORMA e confirmar a retirada do produto ou prestação do serviço.</span>
+                <span><strong>Condição:</strong> o AFILIADO deve realizar ao menos uma compra mensal e confirmar retirada ou prestação de serviço.</span>
               </p>
             </div>
           </div>
@@ -122,11 +122,11 @@ export default function TermosUso() {
             <div className="pl-9 space-y-2">
               <p className="flex items-start gap-2">
                 <span className="text-red-500 font-bold mt-1.5">•</span>
-                <span><strong>Ausência de consumo mínimo mensal:</strong> enseja a perda imediata de 50% do saldo de cashback acumulado até aquele período.</span>
+                <span><strong>Ausência de consumo mínimo mensal:</strong> perda de 50% do cashback acumulado.</span>
               </p>
               <p className="flex items-start gap-2">
                 <span className="text-red-500 font-bold mt-1.5">•</span>
-                <span><strong>Inatividade superior a 90 dias:</strong> acarreta o bloqueio preventivo da conta e a perda integral dos valores acumulados.</span>
+                <span><strong>Inatividade superior a 90 dias:</strong> bloqueio da conta e perda integral dos valores.</span>
               </p>
             </div>
           </div>
@@ -140,11 +140,11 @@ export default function TermosUso() {
             <div className="pl-9 space-y-2">
               <p className="flex items-start gap-2">
                 <span className="text-primary-blue font-bold mt-1.5">•</span>
-                <span>Incidirá taxa administrativa fixa de 10% sobre o total de todos os cashbacks apurados.</span>
+                <span>Incide taxa administrativa de 10% sobre todos os cashbacks.</span>
               </p>
               <p className="flex items-start gap-2">
                 <span className="text-primary-blue font-bold mt-1.5">•</span>
-                <span>Haverá retenção na fonte do Imposto de Renda (IRRF) quando legalmente aplicável.</span>
+                <span>Retenção de IRRF quando aplicável.</span>
               </p>
             </div>
           </div>
@@ -158,11 +158,11 @@ export default function TermosUso() {
             <div className="pl-9 space-y-2">
               <p className="flex items-start gap-2">
                 <span className="text-primary-blue font-bold mt-1.5">•</span>
-                <span>As indicações geram rede de benefícios válida até a 5ª geração de usuários conectados.</span>
+                <span>Indicações válidas até a 5ª geração.</span>
               </p>
               <p className="flex items-start gap-2">
                 <span className="text-red-500 font-bold mt-1.5">•</span>
-                <span>É expressamente proibida qualquer conduta de fraude, simulação artificial de compras, spam de indicações ou criação de contas falsas para manipulação do sistema.</span>
+                <span>É proibida fraude, simulação de compras ou criação de contas falsas.</span>
               </p>
             </div>
           </div>
@@ -176,11 +176,11 @@ export default function TermosUso() {
             <div className="pl-9 space-y-2">
               <p className="flex items-start gap-2">
                 <span className="text-primary-blue font-bold mt-1.5">•</span>
-                <span>Os cashbacks mensal e anual qualificados serão creditados em conta bancária do titular cadastrado.</span>
+                <span>Cashback mensal e anual: creditado em conta bancária do titular.</span>
               </p>
               <p className="flex items-start gap-2">
                 <span className="text-primary-blue font-bold mt-1.5">•</span>
-                <span>O cashback digital é para uso exclusivo para aquisições de produtos e serviços dentro da PLATAFORMA.</span>
+                <span>Cashback digital: uso exclusivo dentro da PLATAFORMA.</span>
               </p>
             </div>
           </div>
@@ -194,11 +194,11 @@ export default function TermosUso() {
             <div className="pl-9 space-y-2">
               <p className="flex items-start gap-2">
                 <span className="text-primary-blue font-bold mt-1.5">•</span>
-                <span>Utilizar os recursos da PLATAFORMA de forma lícita, ética, em boa-fé e de acordo com as leis vigentes.</span>
+                <span>Utilizar a PLATAFORMA de forma lícita e ética.</span>
               </p>
               <p className="flex items-start gap-2">
                 <span className="text-primary-blue font-bold mt-1.5">•</span>
-                <span>Manter todos os dados cadastrais (e-mail, CPF, chave PIX, telefone) devidamente atualizados.</span>
+                <span>Manter dados cadastrais atualizados.</span>
               </p>
             </div>
           </div>
@@ -212,15 +212,15 @@ export default function TermosUso() {
             <div className="pl-9 space-y-2">
               <p className="flex items-start gap-2">
                 <span className="text-primary-blue font-bold mt-1.5">•</span>
-                <span>Garantir a disponibilidade e correto funcionamento da PLATAFORMA, salvo períodos de manutenção necessária ou falhas de infraestrutura técnica alheias ao controle.</span>
+                <span>Garantir funcionamento, salvo manutenção ou falhas técnicas.</span>
               </p>
               <p className="flex items-start gap-2">
                 <span className="text-primary-blue font-bold mt-1.5">•</span>
-                <span>Alterar percentuais de cashback, políticas do sistema e condições gerais mediante aviso prévio aos AFILIADOS.</span>
+                <span>Alterar percentuais e condições de cashback mediante aviso prévio.</span>
               </p>
               <p className="flex items-start gap-2">
                 <span className="text-primary-blue font-bold mt-1.5">•</span>
-                <span>Suspender ou excluir contas temporária ou definitivamente em caso de descumprimento dos presentes Termos.</span>
+                <span>Suspender ou excluir contas em caso de descumprimento dos presentes Termos.</span>
               </p>
             </div>
           </div>
@@ -234,11 +234,11 @@ export default function TermosUso() {
             <div className="pl-9 space-y-2">
               <p className="flex items-start gap-2">
                 <span className="text-primary-blue font-bold mt-1.5">•</span>
-                <span>A PLATAFORMA não se responsabiliza por falhas de conectividade externas, problemas de processamento bancário ou erro do usuário na chave PIX.</span>
+                <span>A PLATAFORMA não se responsabiliza por falhas externas, como problemas bancários ou de conexão.</span>
               </p>
               <p className="flex items-start gap-2">
                 <span className="text-primary-blue font-bold mt-1.5">•</span>
-                <span>O cashback constituído na rede possui finalidade meramente promocional e de fidelidade comercial, não representando investimento financeiro, promessa de rendimento ou aplicação de capital.</span>
+                <span>O cashback constitui benefício promocional e não representa investimento financeiro ou promessa de rendimento.</span>
               </p>
             </div>
           </div>
@@ -252,11 +252,11 @@ export default function TermosUso() {
             <div className="pl-9 space-y-2">
               <p className="flex items-start gap-2">
                 <span className="text-primary-blue font-bold mt-1.5">•</span>
-                <span>A PLATAFORMA poderá modificar estes Termos de Uso a qualquer tempo, com o objetivo de adaptá-la às atualizações regulatórias, comerciais ou operacionais, informando previamente o AFILIADO em nossos canais oficiais.</span>
+                <span>A PLATAFORMA poderá modificar estes Termos a qualquer tempo, mediante comunicação prévia.</span>
               </p>
               <p className="flex items-start gap-2">
                 <span className="text-primary-blue font-bold mt-1.5">•</span>
-                <span>O uso continuado da PLATAFORMA após a publicação das alterações implicará plena concordância do AFILIADO com as novas regras estabelecidas.</span>
+                <span>O uso continuado da PLATAFORMA após alterações implica concordância com os novos termos.</span>
               </p>
             </div>
           </div>
@@ -268,7 +268,7 @@ export default function TermosUso() {
               1.1.13. Foro
             </h3>
             <div className="pl-9">
-              <p>Este Termo é regido em sua totalidade pela legislação brasileira. Para dirimir conflitos, fica eleito o foro da comarca de <strong>Salvador/BA</strong>.</p>
+              <p>Este Termo é regido pela legislação brasileira. Para dirimir conflitos, fica eleito o foro da comarca de <strong>Salvador/BA</strong>.</p>
             </div>
           </div>
         </div>

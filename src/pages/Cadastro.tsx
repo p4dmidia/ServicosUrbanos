@@ -840,7 +840,7 @@ export default function Cadastro() {
                                     </div>
                                     <div>
                                         <h3 className="text-lg font-black text-midnight uppercase italic tracking-tight">
-                                            Resumo dos Termos
+                                            Resumo dos Termos da Plataforma Serviços Urbanos
                                         </h3>
                                         <p className="text-[9px] text-slate-400 font-black uppercase tracking-widest">
                                             Plataforma Serviços Urbanos
@@ -878,9 +878,9 @@ export default function Cadastro() {
                                                 <strong className="text-midnight font-bold">Cashback:</strong>
                                             </span>
                                             <ul className="pl-6 space-y-2 list-disc text-slate-500">
-                                                <li><strong className="text-midnight font-bold">Mensal:</strong> 2% sobre compras até a 5ª geração.</li>
-                                                <li><strong className="text-midnight font-bold">Digital:</strong> 0,5% para uso dentro da plataforma (mínimo R$ 10).</li>
-                                                <li><strong className="text-midnight font-bold">Anual:</strong> 0,5% pago em dezembro.</li>
+                                                <li><strong className="text-midnight font-bold">Mensal:</strong> 1,35% sobre compras até a 5ª geração.</li>
+                                                <li><strong className="text-midnight font-bold">Digital:</strong> 0,20% para uso dentro da plataforma.</li>
+                                                <li><strong className="text-midnight font-bold">Anual:</strong> 0,20% pago em dezembro.</li>
                                                 <li><strong className="text-midnight font-bold">Condição:</strong> realizar ao menos uma compra mensal e confirmar retirada/serviço.</li>
                                             </ul>
                                         </div>

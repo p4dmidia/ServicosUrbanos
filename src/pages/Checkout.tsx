@@ -194,6 +194,9 @@ export default function Checkout() {
         // Adicionar filiais que possuem estoque para todos os produtos
         if (branchesData) {
           for (const branch of branchesData) {
+            // Desconsiderar filiais suspensas (inactive)
+            if (branch.status === 'inactive') continue;
+
             let branchAvailable = true;
             for (const item of cartItems) {
               const detail = productsDetails?.find(p => p.id === item.id);

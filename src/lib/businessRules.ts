@@ -194,6 +194,34 @@ export const businessRules = {
     const profile = await businessRules.getProfileById(userId);
     if (!profile) return false;
 
+    // Se for gerente, verifica se a filial dele está suspensa (inactive)
+    if (profile.role === 'manager' && profile.branchId) {
+      const { data: branch } = await supabase
+        .from('branches')
+        .select('status')
+        .eq('id', profile.branchId)
+        .maybeSingle();
+
+      if (branch && branch.status === 'inactive') {
+        console.warn('Acesso bloqueado: filial suspensa.');
+        return false;
+      }
+    }
+
+    // Se for dono (owner), verifica se ele possui pelo menos uma filial ativa
+    if (profile.role === 'owner') {
+      const { data: branches } = await supabase
+        .from('branches')
+        .select('status')
+        .eq('merchant_id', profile.id);
+
+      // Se tiver filiais cadastradas mas todas estiverem suspensas, bloqueia o acesso
+      if (branches && branches.length > 0 && branches.every(b => b.status === 'inactive')) {
+        console.warn('Acesso bloqueado: todas as filiais do lojista estão suspensas.');
+        return false;
+      }
+    }
+
     if (!emailNormalized) {
       emailNormalized = profile.email?.trim().toLowerCase();
     }

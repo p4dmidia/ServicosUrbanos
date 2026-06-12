@@ -458,7 +458,7 @@ export default function AdminSettings() {
                           <input 
                             type="range" 
                             min="1" 
-                            max="90" 
+                            max="100" 
                             value={marketplaceCommission}
                             onChange={(e) => setMarketplaceCommission(parseInt(e.target.value))}
                             className="flex-1 accent-indigo-500"

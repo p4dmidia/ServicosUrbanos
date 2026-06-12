@@ -42,17 +42,32 @@ export default function Login() {
                 const cleanCpf = email.replace(/\D/g, '');
                 
                 if (cleanCpf.length === 11) {
-                    const { data: profile, error: profileError } = await supabase
-                        .from('profiles')
-                        .select('email')
-                        .eq('cpf', cleanCpf)
-                        .single();
+                    let emailResult = null;
                     
-                    if (profileError || !profile?.email) {
+                    // 1. Tenta buscar pela função RPC (ignora RLS e sincroniza no banco se necessário)
+                    const { data: rpcEmail, error: rpcError } = await supabase
+                        .rpc('get_email_by_cpf', { search_cpf: cleanCpf });
+                    
+                    if (!rpcError && rpcEmail) {
+                        emailResult = rpcEmail;
+                    } else {
+                        // 2. Fallback: busca direta no banco caso a RPC não esteja ativa
+                        const { data: profile, error: profileError } = await supabase
+                            .from('profiles')
+                            .select('email')
+                            .eq('cpf', cleanCpf)
+                            .single();
+                        
+                        if (!profileError && profile?.email) {
+                            emailResult = profile.email;
+                        }
+                    }
+                    
+                    if (!emailResult) {
                         throw new Error('CPF não encontrado ou sem e-mail vinculado');
                     }
                     
-                    loginEmail = profile.email;
+                    loginEmail = emailResult;
                 } else {
                     throw new Error('Formato de E-mail ou CPF inválido');
                 }

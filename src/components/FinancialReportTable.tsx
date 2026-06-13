@@ -588,7 +588,7 @@ export default function FinancialReportTable({
                               )
                             ) : (
                               <span className="mt-2 text-[8px] font-black text-amber-500 bg-amber-50 border border-amber-100 px-2 py-1 rounded-lg uppercase tracking-tighter text-center leading-tight">
-                                Aguardando Pagamento da Comissão
+                                {mode === 'merchants' ? 'Aguardando Pagamento do Repasse' : 'Aguardando Pagamento da Comissão'}
                               </span>
                             )
                           )}

@@ -139,6 +139,7 @@ export default function AdminFinancials() {
           payeeCpf: payee?.cpf || (payeeId === 'matriz' ? profile?.cpf || matrixCpf || '' : ''),
           payeeWhatsapp: payee?.whatsapp || (payeeId === 'matriz' ? profile?.whatsapp || '' : ''),
           paymentMethod: o.paymentMethod || 'PIX',
+          payoutStatus: o.payoutStatus,
           items: o.items || []
         };
         

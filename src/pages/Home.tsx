@@ -50,7 +50,7 @@ export default function Home() {
     async function loadData() {
       try {
         setLoading(true);
-        
+
         // Fetch MMN Config
         const configData = await businessRules.getMMNConfig();
         if (configData) setMmnConfig(configData);
@@ -71,16 +71,16 @@ export default function Home() {
           console.error('Supabase error:', error);
           throw error;
         }
-        
+
         console.log('Products found:', data?.length || 0);
-        
+
         if (data) {
           setProducts(data.map(p => ({
             ...p,
             price: Number(p.price) || 0,
             cashback: Number(p.cashback) || 5,
-            rating: p.product_reviews?.length > 0 
-              ? p.product_reviews.reduce((acc: number, rev: any) => acc + (rev.rating || 0), 0) / p.product_reviews.length 
+            rating: p.product_reviews?.length > 0
+              ? p.product_reviews.reduce((acc: number, rev: any) => acc + (rev.rating || 0), 0) / p.product_reviews.length
               : 5.0,
             reviews_count: p.product_reviews?.length || 0,
             sales: Number(p.sales) || 0
@@ -145,7 +145,6 @@ export default function Home() {
                       </div>
                     ))}
                   </div>
-                  <span className="text-sm font-medium">+50k usuários ativos hoje</span>
                 </div>
               </motion.div>
 
@@ -267,16 +266,16 @@ export default function Home() {
                 ))
               ) : products.length > 0 ? (
                 products.map((product) => (
-                  <Link 
+                  <Link
                     to={`/produto/${product.id}`}
-                    key={product.id} 
+                    key={product.id}
                     className="bg-[#f8fafc] p-8 rounded-[2rem] border border-slate-100 hover:shadow-2xl transition-all group cursor-pointer relative overflow-hidden flex flex-col h-full"
                   >
                     <div className="size-20 bg-white rounded-2xl flex items-center justify-center text-4xl mb-6 shadow-sm group-hover:scale-110 transition-transform overflow-hidden">
                       {(product.main_image || product.image) ? (
-                        <img 
-                          src={product.main_image || product.image} 
-                          alt={product.name} 
+                        <img
+                          src={product.main_image || product.image}
+                          alt={product.name}
                           className="w-full h-full object-cover"
                         />
                       ) : (
@@ -286,7 +285,7 @@ export default function Home() {
                     <h3 className="text-sm font-black text-midnight mb-1 group-hover:text-primary-blue transition-colors uppercase tracking-tight line-clamp-2">
                       {product.name}
                     </h3>
-                    
+
                     <div className="flex items-center gap-1 mt-1 mb-2">
                       <Star className="text-yellow-400 fill-yellow-400" size={10} />
                       <span className="text-[10px] font-black text-midnight">{product.rating?.toFixed(1)}</span>
@@ -306,14 +305,14 @@ export default function Home() {
                             const pDigital = Number(mmnConfig?.cashbackDigital || 1.0);
                             const pAnual = Number(mmnConfig?.cashbackAnual || 0.75);
                             const totalRatios = pMensal + pDigital + pAnual || 4.5;
-                            
+
                             // Ganho do usuário (G1) direto sobre o valor do produto
                             const userShare = product.price * (g1Value / 100);
-                            
+
                             const mensal = userShare * (pMensal / totalRatios);
                             const digital = userShare * (pDigital / totalRatios);
                             const anual = userShare * (pAnual / totalRatios);
-                            
+
                             return (
                               <>
                                 <p className="text-[8px] font-bold text-emerald-500 uppercase tracking-widest flex items-center gap-1">
@@ -446,7 +445,7 @@ export default function Home() {
               </ul>
             </div>
 
-             <div>
+            <div>
               <h4 className="text-white font-bold mb-6">Legal</h4>
               <ul className="flex flex-col gap-4 text-sm">
                 <li><Link to="/termos-uso" className="hover:text-white transition-colors">Termos de Uso</Link></li>

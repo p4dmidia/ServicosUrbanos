@@ -652,49 +652,16 @@ export const businessRules = {
   },
 
   decrementStock: async (productId: string, quantity: number, branchId?: string | null) => {
-    // 1. Se tiver branchId, atualizar o estoque da filial em product_stocks
-    if (branchId) {
-      const { data: stockRecord } = await supabase
-        .from('product_stocks')
-        .select('stock')
-        .eq('product_id', productId)
-        .eq('branch_id', branchId)
-        .maybeSingle();
+    const { error } = await supabase.rpc('decrement_stock', {
+      p_product_id: productId,
+      p_quantity: quantity,
+      p_branch_id: branchId || null
+    });
 
-      if (stockRecord) {
-        const newBranchStock = Math.max(0, (stockRecord.stock || 0) - quantity);
-        await supabase
-          .from('product_stocks')
-          .update({ stock: newBranchStock })
-          .eq('product_id', productId)
-          .eq('branch_id', branchId);
-      }
-    }
-
-    // 2. Busca estoque atual do anúncio principal e atualiza
-    const { data: product, error: fetchError } = await supabase
-      .from('products')
-      .select('stock, sales')
-      .eq('id', productId)
-      .single();
-    
-    if (fetchError || !product) return;
-
-    const newStock = Math.max(0, (product.stock || 0) - quantity);
-    const newSales = (product.sales || 0) + quantity;
-
-    const { error: updateError } = await supabase
-      .from('products')
-      .update({ 
-        stock: newStock,
-        sales: newSales 
-      })
-      .eq('id', productId);
-
-    if (updateError) {
-      console.error('ERRO CRÍTICO AO ATUALIZAR ESTOQUE:', updateError.message, updateError.details);
+    if (error) {
+      console.error('ERRO CRÍTICO AO ATUALIZAR ESTOQUE VIA RPC:', error.message, error.details);
     } else {
-      console.log(`Estoque atualizado com sucesso para o produto ${productId}. Novo saldo: ${newStock}`);
+      console.log(`Estoque decrementado via RPC com sucesso para o produto ${productId}.`);
     }
   },
 

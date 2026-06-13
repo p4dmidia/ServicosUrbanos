@@ -153,7 +153,8 @@ export default function AdminReports() {
             payeeName: branch ? branch.name : 'Lojista Matriz',
             payeePixKey: payee?.pix_key || '',
             payeeCpf: payee?.cpf || '',
-            paymentMethod: o.paymentMethod || 'PIX'
+            paymentMethod: o.paymentMethod || 'PIX',
+            payoutStatus: o.payoutStatus
           };
         });
     } else {

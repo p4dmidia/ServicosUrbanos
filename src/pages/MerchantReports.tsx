@@ -422,41 +422,43 @@ export default function MerchantReports() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {financialReportData.map((record) => {
-                    const originalOrder = orders.find(o => String(o.id) === String(record.orderId));
-                    const items = originalOrder?.items || [];
-                    const totalUnits = items.reduce((acc: number, item: any) => acc + (Number(item.quantity) || 1), 0);
+                  {financialReportData
+                    .filter(record => record.orderStatus !== 'Cancelado')
+                    .map((record) => {
+                      const originalOrder = orders.find(o => String(o.id) === String(record.orderId));
+                      const items = originalOrder?.items || [];
+                      const totalUnits = items.reduce((acc: number, item: any) => acc + (Number(item.quantity) || 1), 0);
 
-                    return (
-                      <tr key={record.orderId} className="hover:bg-slate-50/50 transition-colors">
-                        <td className="p-6 text-xs font-bold text-slate-500 whitespace-nowrap">
-                          {record.saleDate}
-                        </td>
-                        <td className="p-6 text-xs font-bold text-slate-500 whitespace-nowrap">
-                          #{record.orderId}
-                        </td>
-                        <td className="p-6 text-xs font-bold text-slate-500 whitespace-nowrap">
-                          {record.completedDate}
-                        </td>
-                        <td className="p-6 text-xs font-bold text-midnight uppercase whitespace-nowrap">
-                          {record.buyerName}
-                        </td>
-                        <td className="p-6 text-xs text-slate-600 font-medium max-w-md">
-                          <div className="flex flex-wrap gap-2">
-                            {items.map((item: any, idx: number) => (
-                              <span key={idx} className="bg-slate-100 text-slate-800 text-[10px] font-semibold px-2.5 py-1 rounded-lg">
-                                {item.name || 'Produto'} <strong className="text-indigo-600 ml-1">x{item.quantity || 1}</strong>
-                              </span>
-                            ))}
-                          </div>
-                        </td>
-                        <td className="p-6 text-xs font-black text-midnight text-center">
-                          {totalUnits}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                  {financialReportData.length === 0 && (
+                      return (
+                        <tr key={record.orderId} className="hover:bg-slate-50/50 transition-colors">
+                          <td className="p-6 text-xs font-bold text-slate-500 whitespace-nowrap">
+                            {record.saleDate}
+                          </td>
+                          <td className="p-6 text-xs font-bold text-slate-500 whitespace-nowrap">
+                            #{record.orderId}
+                          </td>
+                          <td className="p-6 text-xs font-bold text-slate-500 whitespace-nowrap">
+                            {record.completedDate}
+                          </td>
+                          <td className="p-6 text-xs font-bold text-midnight uppercase whitespace-nowrap">
+                            {record.buyerName}
+                          </td>
+                          <td className="p-6 text-xs text-slate-600 font-medium max-w-md">
+                            <div className="flex flex-wrap gap-2">
+                              {items.map((item: any, idx: number) => (
+                                <span key={idx} className="bg-slate-100 text-slate-800 text-[10px] font-semibold px-2.5 py-1 rounded-lg">
+                                  {item.name || 'Produto'} <strong className="text-indigo-600 ml-1">x{item.quantity || 1}</strong>
+                                </span>
+                              ))}
+                            </div>
+                          </td>
+                          <td className="p-6 text-xs font-black text-midnight text-center">
+                            {totalUnits}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  {financialReportData.filter(record => record.orderStatus !== 'Cancelado').length === 0 && (
                     <tr>
                       <td colSpan={6} className="p-12 text-center text-xs font-black text-slate-400 uppercase tracking-widest">
                         Nenhum pedido encontrado no período

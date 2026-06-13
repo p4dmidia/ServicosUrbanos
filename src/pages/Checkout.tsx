@@ -96,6 +96,8 @@ export default function Checkout() {
     const loc = availableLocations.find(l => l.id === locId);
     if (loc) {
       setPickupAddress(loc.address);
+    } else {
+      setPickupAddress('');
     }
   };
 
@@ -159,16 +161,19 @@ export default function Checkout() {
 
         // Adicionar Matriz como opção de retirada se tiver estoque para todos os produtos
         let matrizAvailable = true;
+        let matrizReason = '';
         for (const item of cartItems) {
           const detail = productsDetails?.find(p => p.id === item.id);
           if (!detail) {
             matrizAvailable = false;
+            matrizReason = 'Produto não encontrado';
             break;
           }
           
           // Se for produto legado associado a uma filial específica, não está na matriz
           if (detail.branch_id !== null) {
             matrizAvailable = false;
+            matrizReason = 'Não disponível na matriz';
             break;
           }
 
@@ -179,29 +184,33 @@ export default function Checkout() {
           
           if (matrizStock < item.quantity) {
             matrizAvailable = false;
+            matrizReason = 'Estoque insuficiente';
             break;
           }
         }
 
-        if (matrizAvailable && merchantProfile) {
+        if (matrizReason !== 'Não disponível na matriz' && merchantProfile) {
           candidateLocations.push({
             id: 'matriz',
-            name: `${merchantProfile.store_name || 'Loja Principal'} (Matriz)`,
-            address: `${merchantProfile.address || ''}, ${merchantProfile.number || ''} - ${merchantProfile.city || ''}/${merchantProfile.state || ''}`
+            name: `${merchantProfile.store_name || 'Loja Principal'} (Matriz)` + (!matrizAvailable ? ` (${matrizReason})` : ''),
+            address: `${merchantProfile.address || ''}, ${merchantProfile.number || ''} - ${merchantProfile.city || ''}/${merchantProfile.state || ''}`,
+            disabled: !matrizAvailable
           });
         }
 
-        // Adicionar filiais que possuem estoque para todos os produtos
+        // Adicionar filiais
         if (branchesData) {
           for (const branch of branchesData) {
             // Desconsiderar filiais suspensas (inactive)
             if (branch.status === 'inactive') continue;
 
             let branchAvailable = true;
+            let branchReason = '';
             for (const item of cartItems) {
               const detail = productsDetails?.find(p => p.id === item.id);
               if (!detail) {
                 branchAvailable = false;
+                branchReason = 'Produto não encontrado';
                 break;
               }
 
@@ -209,6 +218,7 @@ export default function Checkout() {
               if (detail.branch_id === branch.id) {
                 if ((detail.stock || 0) < item.quantity) {
                   branchAvailable = false;
+                  branchReason = 'Estoque insuficiente';
                 }
                 continue;
               }
@@ -216,6 +226,7 @@ export default function Checkout() {
               // Se for legado associado a outra filial/matriz
               if (detail.branch_id !== null && detail.branch_id !== branch.id) {
                 branchAvailable = false;
+                branchReason = 'Não disponível nesta filial';
                 break;
               }
 
@@ -224,25 +235,25 @@ export default function Checkout() {
               const bStock = bStocks.find(bs => bs.branch_id === branch.id);
               if (!bStock || bStock.stock < item.quantity) {
                 branchAvailable = false;
+                branchReason = 'Estoque insuficiente';
                 break;
               }
             }
 
-            if (branchAvailable) {
-              candidateLocations.push({
-                id: branch.id,
-                name: branch.name,
-                address: `${branch.address || ''}, ${branch.city || ''}/${branch.state || ''}`
-              });
-            }
+            candidateLocations.push({
+              id: branch.id,
+              name: branch.name + (!branchAvailable ? ` (${branchReason})` : ''),
+              address: `${branch.address || ''}, ${branch.city || ''}/${branch.state || ''}`,
+              disabled: !branchAvailable
+            });
           }
         }
 
         setAvailableLocations(candidateLocations);
-        if (candidateLocations.length > 0) {
-          // Pré-selecionar o primeiro disponível
-          setSelectedLocationId(candidateLocations[0].id);
-          setPickupAddress(candidateLocations[0].address);
+        const firstAvailable = candidateLocations.find(loc => !loc.disabled);
+        if (firstAvailable) {
+          setSelectedLocationId(firstAvailable.id);
+          setPickupAddress(firstAvailable.address);
         } else {
           setSelectedLocationId('');
           setPickupAddress('Não há locais com estoque disponível para retirada.');
@@ -372,9 +383,16 @@ export default function Checkout() {
       return;
     }
 
-    if (shippingMethod === 'pickup' && !selectedLocationId) {
-      toast.error('Selecione um local para retirada.');
-      return;
+    if (shippingMethod === 'pickup') {
+      if (!selectedLocationId) {
+        toast.error('Selecione um local para retirada.');
+        return;
+      }
+      const selectedLoc = availableLocations.find(l => l.id === selectedLocationId);
+      if (selectedLoc?.disabled) {
+        toast.error('O local selecionado não possui estoque suficiente.');
+        return;
+      }
     }
 
     if (shippingMethod !== 'pickup' && (!address.cep || !address.numero)) {
@@ -989,8 +1007,11 @@ export default function Checkout() {
                             onChange={handleLocationChange}
                             className="w-full bg-white border border-slate-200 px-4 py-3 rounded-xl font-bold text-xs text-midnight cursor-pointer focus:ring-2 focus:ring-primary-blue/20"
                           >
+                            {!selectedLocationId && (
+                              <option value="">Selecione um local...</option>
+                            )}
                             {availableLocations.map(loc => (
-                              <option key={loc.id} value={loc.id}>
+                              <option key={loc.id} value={loc.id} disabled={loc.disabled}>
                                 {loc.name} - {loc.address}
                               </option>
                             ))}

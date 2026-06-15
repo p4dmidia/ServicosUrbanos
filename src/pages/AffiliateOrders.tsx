@@ -432,7 +432,11 @@ export default function AffiliateOrders() {
                   </div>
                   <div className="p-4 bg-primary-blue/5 rounded-2xl border border-primary-blue/10">
                     <p className="text-[9px] font-black text-primary-blue uppercase tracking-widest mb-1">Cód. Retirada</p>
-                    <span className="text-sm font-black text-primary-blue font-mono">{extras[selectedOrder.id]?.withdrawal_code || '---'}</span>
+                    <span className={`text-sm font-black text-primary-blue ${['Pago, Aguardando Retirada', 'Concluído'].includes(selectedOrder.status) ? 'font-mono' : 'text-[10px] uppercase tracking-wider'}`}>
+                      {['Pago, Aguardando Retirada', 'Concluído'].includes(selectedOrder.status) 
+                        ? (extras[selectedOrder.id]?.withdrawal_code || '---') 
+                        : 'Liberado após pagamento'}
+                    </span>
                   </div>
                 </div>
 

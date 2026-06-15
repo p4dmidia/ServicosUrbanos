@@ -130,6 +130,11 @@ export default function MerchantOrders() {
     e.preventDefault();
     if (!selectedOrder) return;
 
+    if (selectedOrder.status !== 'Pago, Aguardando Retirada') {
+      setError('Não é possível retirar um pedido que não está pago.');
+      return;
+    }
+
     const extra = extras[selectedOrder.id];
     if (extra && extra.withdrawalCode === withdrawalInput.toUpperCase()) {
       try {
@@ -348,7 +353,7 @@ export default function MerchantOrders() {
                                       <XCircle size={14} />
                                     </button>
                                   )}
-                                  {profile?.role === 'owner' && (
+                                  {profile?.role === 'owner' && ['Aguardando Pagamento', 'Pendente', 'Processando'].includes(o.status) && (
                                     <button 
                                       onClick={() => {
                                         if(confirm('Confirmar recebimento do pagamento? Isso também liberará os cashbacks na rede.')) {
@@ -362,16 +367,18 @@ export default function MerchantOrders() {
                                     </button>
                                   )}
                                   
-                                  <button 
-                                    onClick={() => {
-                                      setSelectedOrder(o);
-                                      setShowWithdrawalModal(true);
-                                    }}
-                                    className="size-9 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl flex items-center justify-center shadow-lg shadow-emerald-500/20"
-                                    title="Confirmar Retirada"
-                                  >
-                                    <Check size={14} />
-                                  </button>
+                                  {o.status === 'Pago, Aguardando Retirada' && (
+                                    <button 
+                                      onClick={() => {
+                                        setSelectedOrder(o);
+                                        setShowWithdrawalModal(true);
+                                      }}
+                                      className="size-9 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl flex items-center justify-center shadow-lg shadow-emerald-500/20"
+                                      title="Confirmar Retirada"
+                                    >
+                                      <Check size={14} />
+                                    </button>
+                                  )}
                                 </div>
                               )}
                               <button 
@@ -591,7 +598,7 @@ export default function MerchantOrders() {
                         Cancelar Pedido
                       </button>
                     )}
-                    {profile?.role === 'owner' && (
+                    {profile?.role === 'owner' && ['Aguardando Pagamento', 'Pendente', 'Processando'].includes(selectedOrder.status) && (
                       <button 
                         onClick={() => {
                           if(confirm('Confirmar recebimento do pagamento? Isso também liberará os cashbacks na rede.')) {

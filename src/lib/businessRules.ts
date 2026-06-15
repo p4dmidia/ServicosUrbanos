@@ -660,6 +660,7 @@ export const businessRules = {
 
     if (error) {
       console.error('ERRO CRÍTICO AO ATUALIZAR ESTOQUE VIA RPC:', error.message, error.details);
+      throw new Error(`Erro ao atualizar estoque: ${error.message}`);
     } else {
       console.log(`Estoque decrementado via RPC com sucesso para o produto ${productId}.`);
     }

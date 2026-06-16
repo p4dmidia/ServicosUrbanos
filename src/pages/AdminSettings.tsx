@@ -14,16 +14,28 @@ import {
   HelpCircle,
   Lock,
   Globe,
-  Smartphone
+  Smartphone,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import AdminLayout from '../components/AdminLayout';
 import { businessRules } from '../lib/businessRules';
+import { supabase } from '../lib/supabase';
+import { useAuth } from '../contexts/AuthContext';
+
 
 export default function AdminSettings() {
+  const { user } = useAuth();
   const [activeTab, setActiveTab] = useState<'mmn' | 'financeiro' | 'plataforma' | 'whatsapp' | 'seguranca'>('mmn');
   const [loading, setLoading] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
+
+  // Segurança State
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
 
   // WhatsApp State
   const [zapiInstanceId, setZapiInstanceId] = useState('');
@@ -170,6 +182,54 @@ export default function AdminSettings() {
           supabaseAnonKey: whatsappSupabaseAnonKey,
           isEnabled: whatsappEnabled
         });
+      } else if (activeTab === 'seguranca') {
+        if (!currentPassword || !newPassword) {
+          toast.error("Por favor, preencha a senha atual e a nova senha.");
+          setLoading(false);
+          return;
+        }
+
+        if (newPassword.length < 6) {
+          toast.error("A nova senha deve ter pelo menos 6 caracteres.");
+          setLoading(false);
+          return;
+        }
+
+        const email = user?.email;
+        if (!email) {
+          toast.error("Erro ao obter o email do usuário.");
+          setLoading(false);
+          return;
+        }
+
+        // Verify current password by signing in
+        const { error: signInError } = await supabase.auth.signInWithPassword({
+          email: email,
+          password: currentPassword
+        });
+
+        if (signInError) {
+          toast.error("Senha atual incorreta.");
+          setLoading(false);
+          return;
+        }
+
+        // Update to new password
+        const { error: updateError } = await supabase.auth.updateUser({
+          password: newPassword
+        });
+
+        if (updateError) {
+          toast.error("Erro ao atualizar a senha: " + updateError.message);
+          setLoading(false);
+          return;
+        }
+
+        toast.success("Senha alterada com sucesso!");
+        setCurrentPassword('');
+        setNewPassword('');
+        setLoading(false);
+        return;
       }
       
       setShowSuccess(true);
@@ -716,11 +776,43 @@ export default function AdminSettings() {
                   <div className="space-y-6">
                     <div className="space-y-2">
                       <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Senha Atual</label>
-                      <input type="password" placeholder="••••••••" className="w-full bg-white/5 border border-white/5 px-6 py-4 rounded-2xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-white font-bold" />
+                      <div className="relative group">
+                        <input 
+                          type={showCurrentPassword ? "text" : "password"} 
+                          placeholder="••••••••" 
+                          value={currentPassword}
+                          onChange={(e) => setCurrentPassword(e.target.value)}
+                          autoComplete="new-password"
+                          className="w-full bg-white/5 border border-white/5 pl-6 pr-12 py-4 rounded-2xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-white font-bold" 
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowCurrentPassword(!showCurrentPassword)}
+                          className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 hover:text-indigo-400 transition-colors"
+                        >
+                          {showCurrentPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                        </button>
+                      </div>
                     </div>
                     <div className="space-y-2">
                       <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Nova Senha</label>
-                      <input type="password" placeholder="••••••••" className="w-full bg-white/5 border border-white/5 px-6 py-4 rounded-2xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-white font-bold" />
+                      <div className="relative group">
+                        <input 
+                          type={showNewPassword ? "text" : "password"} 
+                          placeholder="••••••••" 
+                          value={newPassword}
+                          onChange={(e) => setNewPassword(e.target.value)}
+                          autoComplete="new-password"
+                          className="w-full bg-white/5 border border-white/5 pl-6 pr-12 py-4 rounded-2xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-white font-bold" 
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowNewPassword(!showNewPassword)}
+                          className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 hover:text-indigo-400 transition-colors"
+                        >
+                          {showNewPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                        </button>
+                      </div>
                     </div>
                     
                     <div className="p-8 bg-indigo-500/5 rounded-3xl border border-indigo-500/10 flex items-center gap-6">

@@ -43,6 +43,7 @@ import TermosUso from './pages/TermosUso';
 
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { ReferralTracker } from './components/ReferralTracker';
+import WhatsAppButton from './components/WhatsAppButton';
 
 import { NotificationProvider } from './contexts/NotificationContext';
 
@@ -53,6 +54,7 @@ export default function App() {
         <Toaster position="top-right" reverseOrder={false} />
         <BrowserRouter>
           <ReferralTracker />
+          <WhatsAppButton />
           <Routes>
             <Route path="/" element={<Home />} />
             <Route path="/invite/:referrerId" element={<ReferralTracker />} />

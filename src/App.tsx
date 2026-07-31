@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import { AuthProvider } from './contexts/AuthContext';
 import Home from './pages/Home';
+import Maintenance from './pages/Maintenance';
 import GanheDinheiro from './pages/GanheDinheiro';
 import Cadastro from './pages/Cadastro';
 import Login from './pages/Login';
@@ -47,6 +48,9 @@ import WhatsAppButton from './components/WhatsAppButton';
 
 import { NotificationProvider } from './contexts/NotificationContext';
 
+// Defina como true para ativar a tela de manutenção na home, ou false para desativar.
+const IS_MAINTENANCE = true;
+
 export default function App() {
   return (
     <AuthProvider>
@@ -56,7 +60,7 @@ export default function App() {
           <ReferralTracker />
           <WhatsAppButton />
           <Routes>
-            <Route path="/" element={<Home />} />
+            <Route path="/" element={IS_MAINTENANCE ? <Maintenance /> : <Home />} />
             <Route path="/invite/:referrerId" element={<ReferralTracker />} />
             <Route path="/ganhe-dinheiro" element={<GanheDinheiro />} />
             <Route path="/cadastro" element={<Cadastro />} />

@@ -12,6 +12,8 @@ interface Profile {
   commission_rate: number;
   cpf?: string;
   whatsapp?: string;
+  birth_date?: string;
+  gender?: 'M' | 'F';
   description?: string;
   status: 'active' | 'blocked' | 'pending';
   address?: string;

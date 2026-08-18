@@ -86,6 +86,23 @@ export default function Checkout() {
   const [paymentConfirmed, setPaymentConfirmed] = useState(false);
   const [isCopying, setIsCopying] = useState(false);
 
+  const [birthDate, setBirthDate] = useState('');
+  const [gender, setGender] = useState('');
+  const [acceptTerms, setAcceptTerms] = useState(false);
+  const [needsProfileUpdate, setNeedsProfileUpdate] = useState(false);
+
+  useEffect(() => {
+    if (profile) {
+      if (!profile.birth_date || !profile.gender) {
+        setNeedsProfileUpdate(true);
+        if (profile.birth_date) setBirthDate(profile.birth_date);
+        if (profile.gender) setGender(profile.gender);
+      } else {
+        setNeedsProfileUpdate(false);
+      }
+    }
+  }, [profile]);
+
   const [availableLocations, setAvailableLocations] = useState<any[]>([]);
   const [selectedLocationId, setSelectedLocationId] = useState<string>('');
   const [locationsLoading, setLocationsLoading] = useState(false);
@@ -378,6 +395,33 @@ export default function Checkout() {
   }, [cartItems]);
 
   const handleCheckout = async () => {
+    if (!acceptTerms) {
+      toast.error('Você precisa aceitar os Termos de Adesão do Seguro.');
+      return;
+    }
+
+    if (needsProfileUpdate) {
+      if (!birthDate || !gender) {
+        toast.error('Por favor, preencha sua data de nascimento e sexo.');
+        return;
+      }
+      
+      const { error: updateError } = await supabase
+        .from('profiles')
+        .update({
+          birth_date: birthDate,
+          gender: gender
+        })
+        .eq('id', authUser?.id);
+
+      if (updateError) {
+        toast.error('Erro ao atualizar dados do perfil: ' + updateError.message);
+        return;
+      }
+      
+      setNeedsProfileUpdate(false);
+    }
+
     if (!shippingMethod) {
       toast.error('Selecione um método de envio ou retirada.');
       return;
@@ -1251,9 +1295,56 @@ export default function Checkout() {
                 </div>
               </div>
 
+              {/* Coleta de Dados Adicionais se o perfil estiver incompleto */}
+              {needsProfileUpdate && (
+                <div className="bg-slate-50 border border-slate-100 rounded-2xl p-5 mb-4 space-y-4">
+                  <p className="text-[10px] font-black text-amber-600 uppercase tracking-widest block italic leading-tight">
+                    * Informações obrigatórias adicionais para a ativação do seu seguro de acidentes pessoais junto à MBM Seguradora:
+                  </p>
+                  <div className="flex flex-col gap-2">
+                    <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Data de Nascimento</label>
+                    <input
+                      required
+                      type="date"
+                      value={birthDate}
+                      onChange={(e) => setBirthDate(e.target.value)}
+                      className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-blue/20 font-bold text-xs text-midnight"
+                    />
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Sexo</label>
+                    <select
+                      required
+                      value={gender}
+                      onChange={(e) => setGender(e.target.value)}
+                      className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-blue/20 font-bold text-xs text-midnight cursor-pointer"
+                    >
+                      <option value="" disabled>Selecione...</option>
+                      <option value="M">Masculino</option>
+                      <option value="F">Feminino</option>
+                    </select>
+                  </div>
+                </div>
+              )}
+
+              {/* Checkbox do Termo de Aceite Obrigatório */}
+              <div className="bg-slate-50 border border-slate-100 rounded-2xl p-5 mb-6 space-y-3">
+                <label className="flex items-start gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={acceptTerms}
+                    onChange={(e) => setAcceptTerms(e.target.checked)}
+                    className="mt-1 size-4 rounded border-slate-300 text-primary-blue focus:ring-primary-blue cursor-pointer"
+                  />
+                  <div className="text-[10px] font-bold text-slate-500 leading-relaxed uppercase tracking-tight">
+                    Li e concordo com os <span className="text-primary-blue font-black underline">Termos de Adesão do Seguro de Acidentes Pessoais MBM</span> (Cobertura de R$ 5.000,00) e concordo em ceder os direitos de participação nos 4 sorteios mensais da Loteria Federal.
+                  </div>
+                </label>
+              </div>
+
               <button 
                 onClick={handleCheckout}
-                disabled={isProcessing || !shippingMethod || (shippingMethod === 'pickup' && !selectedLocationId)}
+                disabled={isProcessing || !shippingMethod || (shippingMethod === 'pickup' && !selectedLocationId) || !acceptTerms || (needsProfileUpdate && (!birthDate || !gender))}
                 className="w-full bg-primary-blue hover:bg-blue-600 text-white py-4 rounded-xl font-black text-sm uppercase tracking-widest transition-all shadow-lg shadow-primary-blue/30 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
               >
                 {isProcessing ? 'Processando...' : paymentMethod === 'wallet' ? 'Pagar com Carteira Digital' : 'Finalizar Pedido / Pagar'}

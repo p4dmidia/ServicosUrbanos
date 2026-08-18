@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Globe, 
   Store, 
@@ -10,12 +10,39 @@ import {
   ShieldCheck,
   TrendingUp,
   ShoppingBag,
+  ExternalLink,
+  Info
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { Link } from 'react-router-dom';
 import AffiliateLayout from '../components/AffiliateLayout';
+import { supabase } from '../lib/supabase';
 
 export default function AffiliateEcosystem() {
+  const [partners, setPartners] = useState<any[]>([]);
+  const [loadingPartners, setLoadingPartners] = useState(true);
+
+  useEffect(() => {
+    async function loadPartners() {
+      try {
+        setLoadingPartners(true);
+        const { data, error } = await supabase
+          .from('commercial_partners')
+          .select('*')
+          .eq('active', true)
+          .order('name');
+        
+        if (error) throw error;
+        setPartners(data || []);
+      } catch (err) {
+        console.error('Erro ao carregar parceiros comerciais:', err);
+      } finally {
+        setLoadingPartners(false);
+      }
+    }
+    loadPartners();
+  }, []);
+
   const platforms = [
     { 
       id: 'market', 
@@ -174,8 +201,65 @@ export default function AffiliateEcosystem() {
                     <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest leading-tight">Potencial médio <br /> mensal (diamante)</p>
                  </div>
               </div>
+            </div>
+         </div>
+
+         {/* Seção de Parceiros Comerciais */}
+         <div className="space-y-6 pt-12 border-t border-slate-100">
+           <div>
+             <h3 className="text-2xl font-black text-midnight uppercase tracking-tighter italic">Clube de Benefícios e Vantagens</h3>
+             <p className="text-slate-500 text-sm font-medium">Aproveite descontos e vantagens exclusivas com nossos parceiros credenciados (exclusivo para segurados ativos).</p>
            </div>
-        </div>
+
+           {loadingPartners ? (
+             <div className="p-12 text-center text-slate-400 font-bold uppercase tracking-widest text-xs">Carregando parceiros comerciais...</div>
+           ) : partners.length === 0 ? (
+             <div className="bg-white rounded-[2rem] p-12 border border-slate-100 text-center text-slate-400 font-bold uppercase tracking-widest text-xs shadow-sm">
+               Nenhum parceiro cadastrado no momento.
+             </div>
+           ) : (
+             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+               {partners.map((partner) => (
+                 <motion.div
+                   key={partner.id}
+                   whileHover={{ y: -5 }}
+                   className="bg-white rounded-[2rem] border border-slate-100 p-6 flex flex-col justify-between gap-6 shadow-sm hover:shadow-xl hover:shadow-slate-200/50 transition-all"
+                 >
+                   <div className="flex gap-4 items-start">
+                     <div className="size-14 rounded-2xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-3xl shrink-0 shadow-sm">
+                       {partner.logo || '🤝'}
+                     </div>
+                     <div className="space-y-1">
+                       <span className="text-[8px] bg-indigo-50 text-indigo-600 px-2.5 py-1 rounded-full font-black uppercase tracking-widest block w-fit">
+                         {partner.category}
+                       </span>
+                       <h4 className="text-sm font-black text-midnight truncate mt-1">{partner.name}</h4>
+                       <p className="text-[10px] text-slate-500 line-clamp-2 leading-relaxed mt-1">{partner.description}</p>
+                     </div>
+                   </div>
+
+                   <div className="flex items-center justify-between pt-4 border-t border-slate-50">
+                     <div className="space-y-0.5">
+                       <span className="text-[8px] text-slate-400 font-black uppercase tracking-widest block">Benefício</span>
+                       <span className="text-xs font-black text-emerald-600 uppercase tracking-tight">{partner.discount_value}</span>
+                     </div>
+
+                     {partner.link && (
+                       <a
+                         href={partner.link}
+                         target="_blank"
+                         rel="noopener noreferrer"
+                         className="inline-flex items-center gap-1.5 bg-midnight text-white px-4 py-2.5 rounded-xl font-black text-[9px] uppercase tracking-widest hover:bg-indigo-600 transition-colors shadow-md shadow-midnight/10"
+                       >
+                         Resgatar <ExternalLink size={10} />
+                       </a>
+                     )}
+                   </div>
+                 </motion.div>
+               ))}
+             </div>
+           )}
+         </div>
 
       </div>
     </AffiliateLayout>

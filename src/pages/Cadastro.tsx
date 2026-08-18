@@ -42,6 +42,8 @@ export default function Cadastro() {
     const [whatsapp, setWhatsapp] = useState('');
     const [email, setEmail] = useState('');
     const [cpf, setCpf] = useState('');
+    const [birthDate, setBirthDate] = useState('');
+    const [gender, setGender] = useState('');
     const [password, setPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
     const [referralCode, setReferralCode] = useState('');
@@ -279,7 +281,9 @@ export default function Cadastro() {
                         neighborhood,
                         city,
                         state,
-                        zip_code: zipCode.replace(/\D/g, '')
+                        zip_code: zipCode.replace(/\D/g, ''),
+                        birth_date: birthDate,
+                        gender: gender
                     }
                 }
             });
@@ -510,6 +514,33 @@ export default function Cadastro() {
                                                 placeholder="000.000.000-00"
                                                 className="w-full pl-12 pr-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500/50 transition-all font-bold text-midnight placeholder:text-slate-300"
                                             />
+                                        </div>
+                                    </div>
+                                    <div className="flex flex-col gap-2">
+                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Data de Nascimento</label>
+                                        <div className="relative group">
+                                            <input
+                                                required
+                                                type="date"
+                                                value={birthDate}
+                                                onChange={(e) => setBirthDate(e.target.value)}
+                                                className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500/50 transition-all font-bold text-midnight"
+                                            />
+                                        </div>
+                                    </div>
+                                    <div className="flex flex-col gap-2">
+                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Sexo</label>
+                                        <div className="relative group">
+                                            <select
+                                                required
+                                                value={gender}
+                                                onChange={(e) => setGender(e.target.value)}
+                                                className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500/50 transition-all font-bold text-midnight appearance-none"
+                                            >
+                                                <option value="" disabled>Selecione...</option>
+                                                <option value="M">Masculino</option>
+                                                <option value="F">Feminino</option>
+                                            </select>
                                         </div>
                                     </div>
                                 </div>

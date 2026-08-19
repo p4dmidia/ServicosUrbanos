@@ -150,14 +150,30 @@ export default function GanheDinheiro() {
       const faturamentoLvl3 = current_levels.lvl3 * planPrice;
       const faturamentoTotal = novos * planPrice;
 
+      // Direct (G0) commissions
+      const g0Semanal = faturamentoLvl1 * 0.20;
+      const g0Mensal = faturamentoLvl1 * 0.01;
+      const g0Anual = faturamentoLvl1 * 0.01;
+
+      // Network G1 & G2 commissions
+      const g1Mensal = faturamentoLvl2 * 0.01;
+      const g1Anual = faturamentoLvl2 * 0.01;
+      const g2Mensal = faturamentoLvl3 * 0.01;
+      const g2Anual = faturamentoLvl3 * 0.01;
+
+      // Regional Reseller commissions
+      const regSemanal = isRegional ? faturamentoTotal * 0.04 : 0;
+      const regMensal = isRegional ? faturamentoTotal * 0.01 : 0;
+      const regAnual = isRegional ? faturamentoTotal * 0.01 : 0;
+
       // Weekly (Semanal): Direct (20% on Level 1) + Regional (4% on total pool, if applicable)
-      const semanal = (faturamentoLvl1 * 0.20) + (isRegional ? faturamentoTotal * 0.04 : 0);
+      const semanal = g0Semanal + regSemanal;
 
       // Monthly (Mensal): 1% on G0(Lvl1), G1(Lvl2), G2(Lvl3) + Regional (1% on total pool, if applicable)
-      const mensal = ((faturamentoLvl1 + faturamentoLvl2 + faturamentoLvl3) * 0.01) + (isRegional ? faturamentoTotal * 0.01 : 0);
+      const mensal = g0Mensal + g1Mensal + g2Mensal + regMensal;
 
       // Yearly (Anual): 1% on G0(Lvl1), G1(Lvl2), G2(Lvl3) + Regional (1% on total pool, if applicable)
-      const anual = ((faturamentoLvl1 + faturamentoLvl2 + faturamentoLvl3) * 0.01) + (isRegional ? faturamentoTotal * 0.01 : 0);
+      const anual = g0Anual + g1Anual + g2Anual + regAnual;
 
       // Renewals from T-3 (reference month)
       const refMonth = history[history.length - 3];
@@ -167,9 +183,22 @@ export default function GanheDinheiro() {
       const refFaturamentoLvl3 = ref_levels.lvl3 * planPrice;
       const refFaturamentoTotal = refMonth.novos * planPrice;
 
-      const renovacaoSemanal = (refFaturamentoLvl1 * 0.20) + (isRegional ? refFaturamentoTotal * 0.04 : 0);
-      const renovacaoMensal = ((refFaturamentoLvl1 + refFaturamentoLvl2 + refFaturamentoLvl3) * 0.01) + (isRegional ? refFaturamentoTotal * 0.01 : 0);
-      const renovacaoAnual = ((refFaturamentoLvl1 + refFaturamentoLvl2 + refFaturamentoLvl3) * 0.01) + (isRegional ? refFaturamentoTotal * 0.01 : 0);
+      const refG0Semanal = refFaturamentoLvl1 * 0.20;
+      const refG0Mensal = refFaturamentoLvl1 * 0.01;
+      const refG0Anual = refFaturamentoLvl1 * 0.01;
+
+      const refG1Mensal = refFaturamentoLvl2 * 0.01;
+      const refG1Anual = refFaturamentoLvl2 * 0.01;
+      const refG2Mensal = refFaturamentoLvl3 * 0.01;
+      const refG2Anual = refFaturamentoLvl3 * 0.01;
+
+      const refRegSemanal = isRegional ? refFaturamentoTotal * 0.04 : 0;
+      const refRegMensal = isRegional ? refFaturamentoTotal * 0.01 : 0;
+      const refRegAnual = isRegional ? refFaturamentoTotal * 0.01 : 0;
+
+      const renovacaoSemanal = refG0Semanal + refRegSemanal;
+      const renovacaoMensal = refG0Mensal + refG1Mensal + refG2Mensal + refRegMensal;
+      const renovacaoAnual = refG0Anual + refG1Anual + refG2Anual + refRegAnual;
 
       accumulatedCashAnual += anual;
       accumulatedRenovacaoAnual += renovacaoAnual;
@@ -201,7 +230,23 @@ export default function GanheDinheiro() {
         inss,
         irpf,
         recebidoPF,
-        recebidoMEI: bruto
+        recebidoMEI: bruto,
+        g0Semanal,
+        g0Mensal,
+        g0Anual,
+        g1Mensal,
+        g1Anual,
+        g2Mensal,
+        g2Anual,
+        regSemanal,
+        regMensal,
+        regAnual,
+        renovacaoG0Semanal: refG0Semanal,
+        renovacaoG0Mensal: refG0Mensal,
+        renovacaoG1Mensal: refG1Mensal,
+        renovacaoG2Mensal: refG2Mensal,
+        renovacaoRegSemanal: refRegSemanal,
+        renovacaoRegMensal: refRegMensal
       };
 
       history.push({
@@ -443,7 +488,11 @@ export default function GanheDinheiro() {
                         <tr className="text-slate-500 font-black uppercase tracking-wider border-b border-white/5">
                           <th className="py-3 px-2">Mês</th>
                           <th className="py-3 px-2 text-right">Rede Total</th>
-                          <th className="py-3 px-2 text-right">Bruto Mensal</th>
+                          <th className="py-3 px-2 text-right">Novos</th>
+                          <th className="py-3 px-2 text-right">C. Semanal</th>
+                          <th className="py-3 px-2 text-right">C. Mensal</th>
+                          <th className="py-3 px-2 text-right">C. Anual</th>
+                          <th className="py-3 px-2 text-right">Bruto</th>
                           <th className="py-3 px-2 text-right text-red-400">PF Líquido</th>
                           <th className="py-3 px-2 text-right text-accent">MEI Líquido</th>
                         </tr>
@@ -457,6 +506,10 @@ export default function GanheDinheiro() {
                           >
                             <td className="py-3.5 px-2 font-bold text-white">{m.name}</td>
                             <td className="py-3.5 px-2 text-right text-slate-300 font-medium">{m.total.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}</td>
+                            <td className="py-3.5 px-2 text-right text-slate-300 font-medium">{m.novos.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}</td>
+                            <td className="py-3.5 px-2 text-right text-slate-400 font-medium">R$ {m.semanal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                            <td className="py-3.5 px-2 text-right text-slate-400 font-medium">R$ {m.mensal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                            <td className="py-3.5 px-2 text-right text-slate-400 font-medium">R$ {m.anual.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                             <td className="py-3.5 px-2 text-right text-slate-300 font-bold">R$ {m.bruto.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                             <td className="py-3.5 px-2 text-right text-red-300 font-medium">R$ {m.recebidoPF.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                             <td className="py-3.5 px-2 text-right text-accent font-bold">R$ {m.recebidoMEI.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
@@ -493,21 +546,28 @@ export default function GanheDinheiro() {
               </div>
 
               {/* MMN breakdown list */}
-              <div className="grid grid-cols-3 gap-4 pb-4 border-b border-white/5 text-xs">
+              <div className={`grid ${isRegional ? 'grid-cols-4' : 'grid-cols-3'} gap-4 pb-4 border-b border-white/5 text-xs`}>
                 <div className="bg-white/5 p-4 rounded-xl border border-white/5">
-                  <p className="text-[9px] text-slate-500 font-bold uppercase mb-1">Ganhos de Vendas G0 (Lvl 1)</p>
-                  <p className="text-sm font-black text-white">R$ {(selMonth.semanal * 20 / (isRegional ? 24 : 20) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} <span className="text-[9px] text-slate-400 font-medium">Semanal (20%)</span></p>
-                  <p className="text-[10px] font-bold text-emerald-400 mt-1">R$ {(selMonth.mensal * 1 / (isRegional ? 4 : 3) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} <span className="text-[9px] text-slate-400 font-medium">Mensal (1%)</span></p>
+                  <p className="text-[9px] text-slate-500 font-bold uppercase mb-1.5">Vendas G0 (Direto Lvl 1)</p>
+                  <p className="text-sm font-black text-white">R$ {selMonth.g0Semanal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} <span className="text-[9px] text-slate-500 font-medium">Semanal (20%)</span></p>
+                  <p className="text-[10px] font-bold text-accent mt-1">R$ {selMonth.g0Mensal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} <span className="text-[9px] text-slate-500 font-medium">Mensal (1%)</span></p>
                 </div>
                 <div className="bg-white/5 p-4 rounded-xl border border-white/5">
-                  <p className="text-[9px] text-slate-500 font-bold uppercase mb-1">Ganhos de Rede G1 & G2</p>
-                  <p className="text-sm font-black text-white">R$ {(selMonth.mensal * 2 / (isRegional ? 4 : 3) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} <span className="text-[9px] text-slate-400 font-medium">Mensal (1% G1 + 1% G2)</span></p>
-                  <p className="text-[10px] font-bold text-indigo-400 mt-1">R$ {(selMonth.anual * 2 / (isRegional ? 4 : 3) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} <span className="text-[9px] text-slate-400 font-medium">Anual Acumulado (1%+1%)</span></p>
+                  <p className="text-[9px] text-slate-500 font-bold uppercase mb-1.5">Rede G1 & G2 (Lvl 2 e 3)</p>
+                  <p className="text-sm font-black text-white">R$ {(selMonth.g1Mensal + selMonth.g2Mensal).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} <span className="text-[9px] text-slate-500 font-medium">Mensal (1%+1%)</span></p>
+                  <p className="text-[10px] font-bold text-indigo-400 mt-1">R$ {(selMonth.g1Anual + selMonth.g2Anual).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} <span className="text-[9px] text-slate-500 font-medium">Anual (1%+1%)</span></p>
                 </div>
+                {isRegional && (
+                  <div className="bg-white/5 p-4 rounded-xl border border-white/5 border-accent/20">
+                    <p className="text-[9px] text-accent font-black uppercase mb-1.5">Líder Regional (+6% total)</p>
+                    <p className="text-sm font-black text-white">R$ {selMonth.regSemanal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} <span className="text-[9px] text-slate-500 font-medium">Semanal (4%)</span></p>
+                    <p className="text-[10px] font-bold text-accent mt-1">R$ {selMonth.regMensal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} <span className="text-[9px] text-slate-500 font-medium">Mensal/Anual (1%+1%)</span></p>
+                  </div>
+                )}
                 <div className="bg-white/5 p-4 rounded-xl border border-white/5">
-                  <p className="text-[9px] text-slate-500 font-bold uppercase mb-1">Demonstrativo de Renovação</p>
-                  <p className="text-sm font-black text-white">R$ {selMonth.renovacaoSemanal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} <span className="text-[9px] text-slate-400 font-medium">Semanal ($T-3$)</span></p>
-                  <p className="text-[10px] font-bold text-emerald-400 mt-1">R$ {selMonth.renovacaoMensal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} <span className="text-[9px] text-slate-400 font-medium">Mensal ($T-3$)</span></p>
+                  <p className="text-[9px] text-slate-500 font-bold uppercase mb-1.5">Renovação ($T-3$)</p>
+                  <p className="text-sm font-black text-white">R$ {selMonth.renovacaoSemanal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} <span className="text-[9px] text-slate-500 font-medium">Semanal (G0/Reg)</span></p>
+                  <p className="text-[10px] font-bold text-accent mt-1">R$ {selMonth.renovacaoMensal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} <span className="text-[9px] text-slate-500 font-medium">Mensal/Anual</span></p>
                 </div>
               </div>
 

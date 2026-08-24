@@ -1285,7 +1285,7 @@ export default function Checkout() {
                     <span className="text-sm font-black text-emerald-600">+ R$ {totalMensal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
                   </div>
                   <div className="flex justify-between items-center">
-                    <span className="text-xs font-bold text-blue-600">Cashback Digital</span>
+                    <span className="text-xs font-bold text-blue-600">Cashback Semanal</span>
                     <span className="text-sm font-black text-blue-600">+ R$ {totalDigital.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
                   </div>
                   <div className="flex justify-between items-center">
@@ -1337,7 +1337,7 @@ export default function Checkout() {
                     className="mt-1 size-4 rounded border-slate-300 text-primary-blue focus:ring-primary-blue cursor-pointer"
                   />
                   <div className="text-[10px] font-bold text-slate-500 leading-relaxed uppercase tracking-tight">
-                    Li e concordo com os <span className="text-primary-blue font-black underline">Termos de Adesão do Seguro de Acidentes Pessoais MBM</span> (Cobertura de R$ 5.000,00) e concordo em ceder os direitos de participação nos 4 sorteios mensais da Loteria Federal.
+                    Li e concordo com os <span className="text-primary-blue font-black underline">Termos de Adesão do Seguro de Acidentes Pessoais MBM</span> (Cobertura de R$ 5.000,00) e concordo em ceder os direitos de participação nos sorteios semanais da Loteria Federal.
                   </div>
                 </label>
               </div>

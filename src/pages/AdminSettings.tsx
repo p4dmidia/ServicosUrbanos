@@ -345,7 +345,7 @@ export default function AdminSettings() {
                               </div>
                            </div>
                            <div className="space-y-2">
-                              <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1">Cashback Digital</label>
+                              <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1">Cashback Semanal</label>
                               <div className="relative">
                                 <input 
                                   type="number" 

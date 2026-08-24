@@ -1178,7 +1178,7 @@ export const businessRules = {
         mappedDescription = mappedDescription
           .replace(/Comiss[aã]o MMN\s*\(Mensal\)/gi, 'Cashback Mensal')
           .replace(/Comiss[aã]o MMN\s*\(Anual\)/gi, 'Cashback Anual')
-          .replace(/Comiss[aã]o MMN\s*\(CD\)/gi, 'Cashback Digital');
+          .replace(/Comiss[aã]o MMN\s*\(CD\)/gi, 'Cashback Semanal');
 
         return {
           id: t.id,
@@ -1531,7 +1531,7 @@ export const businessRules = {
           mappedDesc = mappedDesc
             .replace(/Comiss[aã]o MMN\s*\(Mensal\)/gi, 'Cashback Mensal')
             .replace(/Comiss[aã]o MMN\s*\(Anual\)/gi, 'Cashback Anual')
-            .replace(/Comiss[aã]o MMN\s*\(CD\)/gi, 'Cashback Digital');
+            .replace(/Comiss[aã]o MMN\s*\(CD\)/gi, 'Cashback Semanal');
 
           logs.push({
             type: 'Success',

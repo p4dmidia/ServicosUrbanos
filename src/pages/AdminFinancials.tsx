@@ -211,7 +211,7 @@ export default function AdminFinancials() {
         paymentMethod: 'PIX',
         items: [
           { name: 'Cashback Mensal', price: r.mensal },
-          { name: 'Cashback Digital', price: r.digital },
+          { name: 'Cashback Semanal', price: r.digital },
           { name: 'Cashback Anual', price: r.anual }
         ]
       }));

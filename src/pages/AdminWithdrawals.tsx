@@ -85,7 +85,7 @@ export default function AdminWithdrawals() {
           } else if (type === 'anual') {
             msg = `Olá! Seu cashback anual no valor de R$ ${amount.toFixed(2).replace('.', ',')} foi pago com sucesso em sua chave PIX cadastrada.`;
           } else {
-            msg = `Olá! Seu resgate de cashback digital no valor de R$ ${amount.toFixed(2).replace('.', ',')} foi pago com sucesso em sua chave PIX cadastrada.`;
+            msg = `Olá! Seu resgate de cashback semanal no valor de R$ ${amount.toFixed(2).replace('.', ',')} foi pago com sucesso em sua chave PIX cadastrada.`;
           }
           await businessRules.sendTestWhatsAppMessage(selectedPayout.whatsapp, msg);
         } catch (whatsappErr) {
@@ -447,7 +447,7 @@ export default function AdminWithdrawals() {
                     </div>
                     <h3 className="text-3xl font-black text-white tracking-tighter uppercase italic">Confirmar Pagamento</h3>
                     <p className="text-slate-400 font-bold uppercase text-[10px] tracking-widest mt-2">
-                      {selectedPayout.userName} • {selectedPayout.currentType === 'mensal' ? 'Cashback Mensal' : selectedPayout.currentType === 'anual' ? 'Cashback Anual' : 'Cashback Digital'}
+                      {selectedPayout.userName} • {selectedPayout.currentType === 'mensal' ? 'Cashback Mensal' : selectedPayout.currentType === 'anual' ? 'Cashback Anual' : 'Cashback Semanal'}
                     </p>
                   </div>
 

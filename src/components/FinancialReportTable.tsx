@@ -490,7 +490,7 @@ export default function FinancialReportTable({
                 <>
                   <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-left">Afiliado</th>
                   <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Cashback Mensal <br/><span className="text-[7px] text-emerald-500">(PAGO TODO MÊS)</span></th>
-                  <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Cashback Digital <br/><span className="text-[7px] text-blue-500">(CARTEIRA)</span></th>
+                  <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Cashback Semanal <br/><span className="text-[7px] text-blue-500">(CARTEIRA)</span></th>
                   <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Cashback Anual <br/><span className="text-[7px] text-indigo-500">(PAGO 10/DEZ)</span></th>
                   <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right bg-slate-50/50">
                     {hideReceiptButton ? (

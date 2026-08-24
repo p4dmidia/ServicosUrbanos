@@ -180,7 +180,7 @@ export default function TermosUso() {
               </p>
               <p className="flex items-start gap-2">
                 <span className="text-primary-blue font-bold mt-1.5">•</span>
-                <span>Cashback digital: uso exclusivo dentro da PLATAFORMA.</span>
+                <span>Cashback semanal: creditado em conta bancária do titular.</span>
               </p>
             </div>
           </div>

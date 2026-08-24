@@ -275,7 +275,7 @@ export default function AffiliateWallet() {
               <div className="relative z-10 flex justify-between items-start">
                  <div>
                     <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Saldo Disponível em Carteira Digital</p>
-                    <p className="text-[8px] font-bold text-slate-600 uppercase tracking-[0.2em]">Cashback Digital</p>
+                    <p className="text-[8px] font-bold text-slate-600 uppercase tracking-[0.2em]">Cashback Semanal</p>
                  </div>
                  <div className={`size-10 rounded-xl flex items-center justify-center border transition-colors ${
                    activeFilter === 'cd' ? 'bg-emerald-500 text-white border-emerald-500' : 'bg-white/5 text-emerald-500 border-white/5'

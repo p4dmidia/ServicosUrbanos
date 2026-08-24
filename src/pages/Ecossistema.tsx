@@ -160,12 +160,12 @@ export default function Ecossistema() {
                   </div>
                   <h3 className="text-xl font-bold text-white mb-3">2. Sorteios Oficiais</h3>
                   <p className="text-slate-400 text-sm leading-relaxed font-medium">
-                    Concorra a 4 sorteios mensais no valor de R$ 5.000,00 cada. A apuração é baseada nas extrações oficiais da Loteria Federal, garantindo lisura e transparência total a todos os segurados.
+                    Concorra a sorteios semanais no valor de R$ 5.000,00 cada. A apuração é baseada nas extrações oficiais da Loteria Federal, garantindo lisura e transparência total a todos os segurados.
                   </p>
                 </div>
                 <div className="pt-6 border-t border-white/5 mt-6 text-xs text-slate-500 font-bold uppercase flex justify-between">
                   <span>Loteria Federal</span>
-                  <span className="text-accent">48 Chances Anuais</span>
+                  <span className="text-accent">Chances Semanais</span>
                 </div>
               </motion.div>
 
@@ -231,7 +231,7 @@ export default function Ecossistema() {
                 <div className="text-xs font-black text-accent uppercase tracking-widest mb-4">Passo 01</div>
                 <h4 className="text-xl font-black text-white mb-4">Ative seu Plano & Indique</h4>
                 <p className="text-slate-400 text-sm font-medium leading-relaxed">
-                  Adira ao Seguro Premiável para garantir sua cobertura e destrave seu link exclusivo de afiliado para começar a indicar imediatamente.
+                  Adquira o Seguro Premiável para garantir sua cobertura e destrave seu link exclusivo de afiliado para começar a indicar imediatamente.
                 </p>
               </div>
 

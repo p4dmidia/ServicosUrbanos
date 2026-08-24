@@ -862,7 +862,7 @@ export default function ProductDetail() {
                 </div>
                 <div>
                   <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 flex items-center gap-1">
-                    <div className="size-1.5 bg-blue-500 rounded-full" /> Cashback Digital
+                    <div className="size-1.5 bg-blue-500 rounded-full" /> Cashback Semanal
                   </div>
                   <div className="flex items-center gap-2 text-blue-600">
                     <Smartphone size={16} />

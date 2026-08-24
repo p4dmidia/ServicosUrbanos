@@ -26,6 +26,7 @@ import Header from '../components/Header';
 export default function GanheDinheiro() {
   const [totalMembrosStr, setTotalMembrosStr] = useState('10000');
   const [planPriceStr, setPlanPriceStr] = useState('60');
+  const [isRegional, setIsRegional] = useState(false);
 
   const totalMembros = Number(totalMembrosStr) || 0;
   const planPrice = Number(planPriceStr) || 0;
@@ -56,11 +57,28 @@ export default function GanheDinheiro() {
     }
   }
 
-  // Calculations based on the simplified spreadsheet
+  // Calculations based on the simplified spreadsheet & MMN v4 rules
   const arrecadacao = totalMembros * planPrice;
-  const cashSemanal = arrecadacao * 0.02;
-  const cashMensal = arrecadacao * 0.02;
-  const cashAnual = arrecadacao * 0.02;
+  
+  function getPlanPeriodLabel(price: number): string {
+    switch (price) {
+      case 20: return 'Mensal';
+      case 30: return 'Trimestral';
+      case 40: return 'Semestral';
+      case 60: return 'Anual';
+      default: return 'Mensal';
+    }
+  }
+
+  const periodLabel = getPlanPeriodLabel(planPrice);
+  
+  // Standard affiliate commission is 2% for G0, G1, G2.
+  // Regional Reseller gets an additional 2% weekly, 2% monthly, and 2% yearly.
+  const rate = isRegional ? 0.04 : 0.02;
+
+  const cashSemanal = arrecadacao * rate;
+  const cashMensal = arrecadacao * rate;
+  const cashAnual = arrecadacao * rate;
 
   // Bruto mensal a receber = Cash Semanal + Cash Mensal
   const bruto = cashSemanal + cashMensal;
@@ -227,13 +245,32 @@ export default function GanheDinheiro() {
                     <span>R$ 200,00</span>
                   </div>
                 </div>
+
+                {/* Regional Reseller Checkbox Toggle */}
+                <div className="pt-4 border-t border-white/5 flex items-center justify-between">
+                  <div>
+                    <label className="block text-xs font-black text-white uppercase tracking-wider">Sou Revendedor Regional</label>
+                    <p className="text-[10px] text-slate-500 font-medium italic mt-1">Acumula +2% de bônus de liderança regional.</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setIsRegional(!isRegional)}
+                    className={`size-7 rounded-lg border flex items-center justify-center transition-all ${
+                      isRegional 
+                        ? 'bg-accent border-accent text-midnight' 
+                        : 'border-white/20 hover:border-white/30 text-transparent'
+                    }`}
+                  >
+                    ✓
+                  </button>
+                </div>
               </div>
 
               {/* Outputs Panel */}
               <div className="lg:col-span-7 space-y-8 bg-slate-900/30 p-8 rounded-[2.5rem] border border-white/5">
                 <div className="flex flex-col md:flex-row justify-between md:items-center pb-6 border-b border-white/5 gap-4">
                   <div>
-                    <p className="text-[10px] text-slate-500 font-black uppercase tracking-wider">Arrecadação Mensal da Rede</p>
+                    <p className="text-[10px] text-slate-500 font-black uppercase tracking-wider">Arrecadação {periodLabel} da Rede</p>
                     <p className="text-3xl font-black text-white tracking-tighter">
                       R$ {arrecadacao.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </p>
@@ -250,15 +287,15 @@ export default function GanheDinheiro() {
                 {/* Cashback Cards */}
                 <div className="grid grid-cols-3 gap-4">
                   <div className="bg-slate-950/40 p-4 rounded-2xl border border-white/5">
-                    <p className="text-[9px] text-slate-500 font-black uppercase tracking-wider mb-1">C. Semanal (2%)</p>
+                    <p className="text-[9px] text-slate-500 font-black uppercase tracking-wider mb-1">C. Semanal ({isRegional ? '4%' : '2%'})</p>
                     <p className="text-md font-black text-white">R$ {cashSemanal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                   </div>
                   <div className="bg-slate-950/40 p-4 rounded-2xl border border-white/5">
-                    <p className="text-[9px] text-slate-500 font-black uppercase tracking-wider mb-1">C. Mensal (2%)</p>
+                    <p className="text-[9px] text-slate-500 font-black uppercase tracking-wider mb-1">C. Mensal ({isRegional ? '4%' : '2%'})</p>
                     <p className="text-md font-black text-white">R$ {cashMensal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                   </div>
                   <div className="bg-slate-950/40 p-4 rounded-2xl border border-white/5">
-                    <p className="text-[9px] text-slate-500 font-black uppercase tracking-wider mb-1">C. Anual (2%)</p>
+                    <p className="text-[9px] text-slate-500 font-black uppercase tracking-wider mb-1">C. Anual ({isRegional ? '4%' : '2%'})</p>
                     <p className="text-md font-black text-white text-indigo-400">R$ {cashAnual.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                   </div>
                 </div>

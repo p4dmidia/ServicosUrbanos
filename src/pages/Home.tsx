@@ -102,7 +102,7 @@ export default function Home() {
                 <div className="grid grid-cols-3 gap-6 pt-6 border-t border-white/5 max-w-lg">
                   <div>
                     <p className="text-2xl font-extrabold text-white">R$ 5.000</p>
-                    <p className="text-xs text-slate-400 font-bold uppercase tracking-wider mt-1">Sorteios Mensais</p>
+                    <p className="text-xs text-slate-400 font-bold uppercase tracking-wider mt-1">Sorteios Semanais</p>
                   </div>
                   <div>
                     <p className="text-2xl font-extrabold text-white">24/7</p>
@@ -164,10 +164,10 @@ export default function Home() {
                         </div>
                         <div>
                           <p className="text-xs font-bold text-white">Loteria Federal</p>
-                          <p className="text-[10px] text-slate-400 font-medium">4 sorteios de R$ 5.000 mensais</p>
+                           <p className="text-[10px] text-slate-400 font-medium">Sorteios semanais de R$ 5.000</p>
                         </div>
                       </div>
-                      <span className="text-[10px] bg-white/10 px-2 py-1 rounded text-slate-300 font-bold uppercase">48 Chances</span>
+                       <span className="text-[10px] bg-white/10 px-2 py-1 rounded text-slate-300 font-bold uppercase">Chances Semanais</span>
                     </div>
                   </div>
 
@@ -287,7 +287,7 @@ export default function Home() {
                 >
                   <span className="text-accent font-black uppercase text-sm tracking-widest">02. Sorteios pela Loteria Federal</span>
                   <h2 className="text-3xl md:text-5xl font-extrabold text-white leading-tight">
-                    “48 chances de ganhar em 12 meses.”
+                    “Chances semanais de ganhar R$ 5.000,00.”
                   </h2>
                   
                   <div className="h-1 w-20 bg-accent rounded-full mb-2"></div>
@@ -298,7 +298,7 @@ export default function Home() {
                         <CheckCircle2 size={14} />
                       </div>
                       <span className="text-slate-300 font-medium text-base">
-                        4 sorteios mensais de R$ 5.000,00.
+                        Sorteios semanais de R$ 5.000,00.
                       </span>
                     </li>
                     <li className="flex items-start gap-3">
@@ -339,7 +339,7 @@ export default function Home() {
                   className="flex justify-center lg:justify-end"
                 >
                   {/* Virtual Lotto ticket mockup */}
-                  <div className="relative w-full max-w-[440px] aspect-[1.1] rounded-[2.5rem] bg-slate-900 border border-white/10 p-8 shadow-2xl overflow-hidden flex flex-col justify-between group">
+                  <div className="relative w-full max-w-[440px] rounded-[2.5rem] bg-slate-900 border border-white/10 p-8 shadow-2xl overflow-hidden flex flex-col justify-between group">
                     <div className="absolute -top-16 -right-16 size-40 bg-accent/10 rounded-full blur-2xl group-hover:scale-125 transition-transform"></div>
                     
                     <div className="flex justify-between items-center border-b border-white/5 pb-4">
@@ -347,21 +347,56 @@ export default function Home() {
                         <Gift size={20} className="text-accent" />
                         <span className="text-xs font-black text-white uppercase tracking-wider">Loteria Federal</span>
                       </div>
-                      <span className="text-[10px] text-slate-500 font-black uppercase">Extração Mensal</span>
+                      <span className="text-[10px] text-slate-500 font-black uppercase">Extração Semanal</span>
                     </div>
 
-                    <div className="py-6 flex flex-col gap-4">
-                      <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Seu Bilhete Digital</p>
-                      <div className="grid grid-cols-5 gap-2">
-                        {['08', '19', '26', '54', '88'].map((num, i) => (
-                          <div key={i} className="aspect-square rounded-xl bg-white/5 border border-white/10 flex items-center justify-center text-lg font-black text-white group-hover:border-accent/40 transition-colors">
-                            {num}
-                          </div>
-                        ))}
+                    <div className="py-4 flex flex-col gap-3">
+                      <p className="text-[9px] text-slate-400 font-black uppercase tracking-widest">Como funciona o Sorteio (Regra Oficial)</p>
+                      
+                      {/* Extraction Table */}
+                      <div className="bg-white/5 border border-white/5 rounded-2xl p-4 space-y-2 text-xs">
+                        <div className="flex justify-between items-center text-slate-400">
+                          <span>1º Prêmio</span>
+                          <span className="font-mono text-sm text-slate-500">
+                            15.9<strong className="text-accent underline font-extrabold decoration-2">45</strong>
+                          </span>
+                        </div>
+                        <div className="flex justify-between items-center text-slate-400">
+                          <span>2º Prêmio</span>
+                          <span className="font-mono text-sm text-slate-500">
+                            46.72<strong className="text-accent underline font-extrabold decoration-2">9</strong>
+                          </span>
+                        </div>
+                        <div className="flex justify-between items-center text-slate-400">
+                          <span>3º Prêmio</span>
+                          <span className="font-mono text-sm text-slate-500">
+                            53.00<strong className="text-accent underline font-extrabold decoration-2">8</strong>
+                          </span>
+                        </div>
+                        <div className="flex justify-between items-center text-slate-400">
+                          <span>4º Prêmio</span>
+                          <span className="font-mono text-sm text-slate-500">
+                            40.14<strong className="text-accent underline font-extrabold decoration-2">3</strong>
+                          </span>
+                        </div>
+                        <div className="flex justify-between items-center text-slate-400">
+                          <span>5º Prêmio</span>
+                          <span className="font-mono text-sm text-slate-500">
+                            30.12<strong className="text-accent underline font-extrabold decoration-2">3</strong>
+                          </span>
+                        </div>
                       </div>
-                      <div className="p-4 rounded-xl bg-accent/10 border border-accent/20 flex items-center justify-between mt-2">
-                        <span className="text-xs text-accent font-bold">Prêmio Estimado</span>
-                        <span className="text-sm font-black text-white">R$ 5.000,00</span>
+
+                      {/* Resulting Digital Ticket */}
+                      <div className="space-y-2">
+                        <p className="text-[9px] text-slate-500 font-black uppercase tracking-widest">Número Sorteado Exemplo</p>
+                        <div className="grid grid-cols-6 gap-1.5">
+                          {['4', '5', '9', '8', '3', '3'].map((digit, i) => (
+                            <div key={i} className="aspect-square rounded-xl bg-accent/15 border border-accent/30 flex items-center justify-center text-xl font-black text-accent shadow-inner shadow-accent/5">
+                              {digit}
+                            </div>
+                          ))}
+                        </div>
                       </div>
                     </div>
 
@@ -619,7 +654,7 @@ export default function Home() {
               </h2>
 
               <p className="text-lg text-slate-400 max-w-2xl mx-auto font-medium">
-                Adira ao Seguro Premiável hoje mesmo por um valor acessível e destrave todos os benefícios, sorteios mensais e o seu link de indicações instantaneamente.
+                Adquira o Seguro Premiável hoje mesmo por um valor acessível e destrave todos os benefícios, sorteios semanais e o seu link de indicações instantaneamente.
               </p>
 
               <div className="pt-4 flex flex-col sm:flex-row justify-center items-center gap-4">

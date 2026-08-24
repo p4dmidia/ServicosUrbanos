@@ -1,3 +1,9 @@
+-- 0. Adicionar colunas de comissão regional na tabela mmn_config se não existirem
+ALTER TABLE public.mmn_config
+ADD COLUMN IF NOT EXISTS commission_regional_semanal NUMERIC DEFAULT 2.00,
+ADD COLUMN IF NOT EXISTS commission_regional_mensal NUMERIC DEFAULT 2.00,
+ADD COLUMN IF NOT EXISTS commission_regional_anual NUMERIC DEFAULT 2.00;
+
 -- 1. Atualizar a trigger de pagamento de comissão para as regras finais de MMN v4
 CREATE OR REPLACE FUNCTION public.handle_order_payment()
 RETURNS TRIGGER AS $$
@@ -8,6 +14,10 @@ DECLARE
     v_amount NUMERIC := NEW.amount;
     v_regional_id UUID := NULL;
     v_current_id UUID := NEW.customer_id;
+    -- Variáveis para comissão regional dinâmica
+    v_reg_semanal NUMERIC;
+    v_reg_mensal NUMERIC;
+    v_reg_anual NUMERIC;
 BEGIN
     -- [CONDIÇÃO DE DISPARO]
     -- Só processa se o novo status for 'Pago, Aguardando Retirada' ou 'Concluído'
@@ -60,13 +70,20 @@ BEGIN
         END LOOP;
 
         -- 3. DISTRIBUIR COMISSÕES DE REVENDEDOR REGIONAL
-        -- Se encontramos um regional_reseller na rede, ele ganha a comissão do regional de rede de 6% (2% semanal + 2% mensal + 2% anual)
+        -- Se encontramos um regional_reseller na rede, ele ganha a comissão configurada no banco (padrão 2% semanal + 2% mensal + 2% anual)
         IF v_regional_id IS NOT NULL THEN
+            SELECT COALESCE(commission_regional_semanal, 2.00),
+                   COALESCE(commission_regional_mensal, 2.00),
+                   COALESCE(commission_regional_anual, 2.00)
+            INTO v_reg_semanal, v_reg_mensal, v_reg_anual
+            FROM public.mmn_config
+            WHERE id = 1;
+
             INSERT INTO public.transactions (profile_id, type, description, amount, status, order_id)
             VALUES 
-            (v_regional_id, 'commission', 'Comissão Regional Semanal (2%) - Pedido #' || NEW.id, ROUND(v_amount * 0.02, 2), 'pending', NEW.id),
-            (v_regional_id, 'commission', 'Comissão Regional Mensal (2%) - Pedido #' || NEW.id, ROUND(v_amount * 0.02, 2), 'pending', NEW.id),
-            (v_regional_id, 'commission', 'Comissão Regional Anual (2%) - Pedido #' || NEW.id, ROUND(v_amount * 0.02, 2), 'pending', NEW.id);
+            (v_regional_id, 'commission', 'Comissão Regional Semanal (' || v_reg_semanal || '%) - Pedido #' || NEW.id, ROUND(v_amount * (v_reg_semanal / 100), 2), 'pending', NEW.id),
+            (v_regional_id, 'commission', 'Comissão Regional Mensal (' || v_reg_mensal || '%) - Pedido #' || NEW.id, ROUND(v_amount * (v_reg_mensal / 100), 2), 'pending', NEW.id),
+            (v_regional_id, 'commission', 'Comissão Regional Anual (' || v_reg_anual || '%) - Pedido #' || NEW.id, ROUND(v_amount * (v_reg_anual / 100), 2), 'pending', NEW.id);
         END IF;
 
     END IF;

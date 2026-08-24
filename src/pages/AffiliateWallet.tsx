@@ -42,7 +42,7 @@ export default function AffiliateWallet() {
     return transactions.filter(t => {
       const matchesFilter = 
         activeFilter === 'all' || 
-        (activeFilter === 'cd' && t.cashbackType === 'Digital') ||
+        (activeFilter === 'cd' && t.cashbackType === 'Semanal') ||
         (activeFilter === 'mensal' && t.cashbackType === 'Mensal') ||
         (activeFilter === 'anual' && t.cashbackType === 'Anual');
       
@@ -274,7 +274,7 @@ export default function AffiliateWallet() {
               
               <div className="relative z-10 flex justify-between items-start">
                  <div>
-                    <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Saldo Disponível em Carteira Digital</p>
+                    <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Saldo Disponível em Carteira Semanal</p>
                     <p className="text-[8px] font-bold text-slate-600 uppercase tracking-[0.2em]">Cashback Semanal</p>
                  </div>
                  <div className={`size-10 rounded-xl flex items-center justify-center border transition-colors ${
@@ -504,7 +504,7 @@ export default function AffiliateWallet() {
                               <td className="px-6 py-5 border-y border-transparent group-hover:border-slate-100">
                                 <span className={`text-[10px] font-black px-2 py-1 rounded-md uppercase ${
                                   t.cashbackType === 'Mensal' ? 'bg-red-50 text-red-600' : 
-                                  t.cashbackType === 'Digital' ? 'bg-emerald-50 text-emerald-600' : 
+                                  t.cashbackType === 'Semanal' ? 'bg-emerald-50 text-emerald-600' : 
                                   'bg-blue-50 text-blue-600'
                                 }`}>
                                   {t.cashbackType}

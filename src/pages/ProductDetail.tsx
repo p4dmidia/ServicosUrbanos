@@ -759,7 +759,7 @@ export default function ProductDetail() {
                         <span className="text-xs font-black text-emerald-600">+ R$ {totalMensal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
                       </div>
                       <div className="flex justify-between items-center">
-                        <span className="text-[10px] font-bold text-blue-600">Digital</span>
+                        <span className="text-[10px] font-bold text-blue-600">Semanal</span>
                         <span className="text-xs font-black text-blue-600">+ R$ {totalDigital.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
                       </div>
                       <div className="flex justify-between items-center">

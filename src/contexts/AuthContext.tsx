@@ -7,7 +7,7 @@ interface Profile {
   id: string;
   full_name: string;
   email?: string;
-  role: 'admin' | 'owner' | 'manager' | 'affiliate' | 'customer';
+  role: 'admin' | 'owner' | 'manager' | 'affiliate' | 'customer' | 'regional_reseller';
   branch_id?: string;
   commission_rate: number;
   cpf?: string;

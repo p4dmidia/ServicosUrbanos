@@ -104,7 +104,7 @@ export default function AffiliateOrders() {
       
       if (orderTransactions.length > 0) {
         const mensal = orderTransactions.filter(t => t.description?.toLowerCase().includes('mensal')).reduce((acc, t) => acc + Number(t.amount), 0);
-        const digital = orderTransactions.filter(t => t.description?.toLowerCase().includes('cd') || t.description?.toLowerCase().includes('digital')).reduce((acc, t) => acc + Number(t.amount), 0);
+        const digital = orderTransactions.filter(t => t.description?.toLowerCase().includes('cd') || t.description?.toLowerCase().includes('digital') || t.description?.toLowerCase().includes('semanal')).reduce((acc, t) => acc + Number(t.amount), 0);
         const anual = orderTransactions.filter(t => t.description?.toLowerCase().includes('anual')).reduce((acc, t) => acc + Number(t.amount), 0);
         const total = orderTransactions.reduce((acc, t) => acc + Number(t.amount), 0);
         
@@ -339,7 +339,7 @@ export default function AffiliateOrders() {
                             <span className="text-emerald-600">R$ {breakdown.mensal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
                           </div>
                           <div className="flex justify-between md:justify-end gap-2 text-[10px] font-bold">
-                            <span className="text-slate-400">Digital:</span>
+                            <span className="text-slate-400">Semanal:</span>
                             <span className="text-emerald-600">R$ {breakdown.digital.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
                           </div>
                           <div className="flex justify-between md:justify-end gap-2 text-[10px] font-bold border-b border-slate-100 pb-0.5">
@@ -482,7 +482,7 @@ export default function AffiliateOrders() {
                                   <span className="text-sm font-black text-blue-600">R$ {breakdown.mensal.toFixed(2).replace('.', ',')}</span>
                                 </div>
                                 <div className="flex justify-between items-center">
-                                  <span className="text-xs font-bold text-slate-500">Bônus Digital</span>
+                                  <span className="text-xs font-bold text-slate-500">Bônus Semanal</span>
                                   <span className="text-sm font-black text-emerald-600">R$ {breakdown.digital.toFixed(2).replace('.', ',')}</span>
                                 </div>
                                 <div className="flex justify-between items-center">

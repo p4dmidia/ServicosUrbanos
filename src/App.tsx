@@ -125,31 +125,31 @@ export default function App() {
             {/* Affiliate / Virtual Office Routes */}
             <Route 
               path="/afiliado" 
-              element={<ProtectedRoute allowedRoles={['affiliate', 'owner', 'manager', 'admin']}><AffiliateDashboard /></ProtectedRoute>} 
+              element={<ProtectedRoute allowedRoles={['affiliate', 'owner', 'manager', 'admin', 'regional_reseller']}><AffiliateDashboard /></ProtectedRoute>} 
             />
             <Route 
               path="/afiliado/dashboard" 
-              element={<ProtectedRoute allowedRoles={['affiliate', 'owner', 'manager', 'admin']}><AffiliateDashboard /></ProtectedRoute>} 
+              element={<ProtectedRoute allowedRoles={['affiliate', 'owner', 'manager', 'admin', 'regional_reseller']}><AffiliateDashboard /></ProtectedRoute>} 
             />
             <Route 
               path="/afiliado/rede" 
-              element={<ProtectedRoute allowedRoles={['affiliate', 'owner', 'manager', 'admin']}><AffiliateNetwork /></ProtectedRoute>} 
+              element={<ProtectedRoute allowedRoles={['affiliate', 'owner', 'manager', 'admin', 'regional_reseller']}><AffiliateNetwork /></ProtectedRoute>} 
             />
             <Route 
               path="/afiliado/financeiro" 
-              element={<ProtectedRoute allowedRoles={['affiliate', 'owner', 'manager', 'admin']}><AffiliateWallet /></ProtectedRoute>} 
+              element={<ProtectedRoute allowedRoles={['affiliate', 'owner', 'manager', 'admin', 'regional_reseller']}><AffiliateWallet /></ProtectedRoute>} 
             />
             <Route 
               path="/afiliado/ecossistema" 
-              element={<ProtectedRoute allowedRoles={['affiliate', 'owner', 'manager', 'admin']}><AffiliateEcosystem /></ProtectedRoute>} 
+              element={<ProtectedRoute allowedRoles={['affiliate', 'owner', 'manager', 'admin', 'regional_reseller']}><AffiliateEcosystem /></ProtectedRoute>} 
             />
             <Route 
               path="/afiliado/perfil" 
-              element={<ProtectedRoute allowedRoles={['affiliate', 'owner', 'manager', 'admin']}><AffiliateProfile /></ProtectedRoute>} 
+              element={<ProtectedRoute allowedRoles={['affiliate', 'owner', 'manager', 'admin', 'regional_reseller']}><AffiliateProfile /></ProtectedRoute>} 
             />
             <Route 
               path="/afiliado/pedidos" 
-              element={<ProtectedRoute allowedRoles={['affiliate', 'owner', 'manager', 'admin']}><AffiliateOrders /></ProtectedRoute>} 
+              element={<ProtectedRoute allowedRoles={['affiliate', 'owner', 'manager', 'admin', 'regional_reseller']}><AffiliateOrders /></ProtectedRoute>} 
             />
 
             {/* Merchant Routes */}

@@ -169,7 +169,7 @@ export default function AffiliateLayout({ children, title }: AffiliateLayoutProp
           <div className="flex items-center gap-6">
             {/* Saldo Rápido Real do Banco de Dados */}
             <div className="hidden md:flex flex-col items-end">
-              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Saldo Disponível em Carteira Digital</p>
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Saldo Disponível em Carteira Semanal</p>
               <div className="flex items-center gap-2">
                  <span className="text-lg font-black text-emerald-600 tracking-tighter">
                    {stats ? `R$ ${stats.availableBalance.toFixed(2)}` : 'R$ 0,00'}

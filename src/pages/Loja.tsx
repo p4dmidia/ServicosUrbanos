@@ -635,7 +635,7 @@ export default function Loja() {
                                 <TrendingUp size={10} /> Mensal: R$ {mensal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                               </p>
                               <p className="text-[9px] font-black text-blue-600 uppercase tracking-widest flex items-center gap-1">
-                                <Smartphone size={10} /> Digital: R$ {digital.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                <Smartphone size={10} /> Semanal: R$ {digital.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                               </p>
                               <p className="text-[9px] font-black text-indigo-600 uppercase tracking-widest flex items-center gap-1">
                                 <Calendar size={10} /> Anual: R$ {anual.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
@@ -779,7 +779,7 @@ export default function Loja() {
                         <span className="text-xs font-black text-emerald-600">+ R$ {totalMensal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
                       </div>
                       <div className="flex justify-between items-center">
-                        <span className="text-[10px] font-bold text-blue-600">Digital</span>
+                        <span className="text-[10px] font-bold text-blue-600">Semanal</span>
                         <span className="text-xs font-black text-blue-600">+ R$ {totalDigital.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
                       </div>
                       <div className="flex justify-between items-center">

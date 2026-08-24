@@ -253,7 +253,7 @@ export default function Ecossistema() {
                 <div className="text-xs font-black text-accent uppercase tracking-widest mb-4">Passo 03</div>
                 <h4 className="text-xl font-black text-white mb-4">Você Recebe os Ganhos</h4>
                 <p className="text-slate-400 text-sm font-medium leading-relaxed">
-                  Ganho Mensal pago via Pix todo dia 10, Ganho Digital liberado em tempo real no ecossistema e o bônus anual pago em dezembro.
+                  Ganho Mensal pago via Pix todo dia 10, Ganho Semanal pago toda sexta-feira e o bônus anual pago em dezembro.
                 </p>
               </div>
             </div>

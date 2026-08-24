@@ -779,7 +779,10 @@ export const businessRules = {
         paymentType: 'percent' as const,
         cashbackMensal: 2.75,
         cashbackDigital: 1.00,
-        cashbackAnual: 0.75
+        cashbackAnual: 0.75,
+        commissionRegionalSemanal: 2.00,
+        commissionRegionalMensal: 2.00,
+        commissionRegionalAnual: 2.00
       };
     }
     
@@ -788,7 +791,10 @@ export const businessRules = {
       paymentType: data.payment_type as 'percent' | 'fixed',
       cashbackMensal: Number(data.cashback_mensal),
       cashbackDigital: Number(data.cashback_digital),
-      cashbackAnual: Number(data.cashback_anual)
+      cashbackAnual: Number(data.cashback_anual),
+      commissionRegionalSemanal: Number(data.commission_regional_semanal ?? 2.00),
+      commissionRegionalMensal: Number(data.commission_regional_mensal ?? 2.00),
+      commissionRegionalAnual: Number(data.commission_regional_anual ?? 2.00)
     };
   },
 
@@ -812,6 +818,9 @@ export const businessRules = {
     cashbackMensal: number;
     cashbackDigital: number;
     cashbackAnual: number;
+    commissionRegionalSemanal: number;
+    commissionRegionalMensal: number;
+    commissionRegionalAnual: number;
   }) => {
     const { error } = await supabase
       .from('mmn_config')
@@ -822,6 +831,9 @@ export const businessRules = {
         cashback_mensal: config.cashbackMensal,
         cashback_digital: config.cashbackDigital,
         cashback_anual: config.cashbackAnual,
+        commission_regional_semanal: config.commissionRegionalSemanal,
+        commission_regional_mensal: config.commissionRegionalMensal,
+        commission_regional_anual: config.commissionRegionalAnual,
         updated_at: new Date().toISOString()
       });
     
@@ -979,7 +991,7 @@ export const businessRules = {
         .reduce((acc, t) => acc + Number(t.amount || 0), 0);
 
       const walletBonus = transactions
-        .filter(t => (t.description?.includes('Digital') || t.description?.includes('(CD)')) && 
+        .filter(t => (t.description?.includes('Digital') || t.description?.includes('(CD)') || t.description?.includes('Semanal')) && 
                 (t.status === 'completed' || t.status === 'pago'))
         .reduce((acc, t) => acc + Number(t.amount || 0), 0);
 
@@ -1145,16 +1157,16 @@ export const businessRules = {
         const orderId = orderMatch ? orderMatch[1].trim() : null;
         const order = orderId ? ordersMap.get(orderId) : null;
 
-        // Classificar saques como 'Digital' por padrão, mas respeitar a descrição se for Mensal/Anual
+        // Classificar saques e comissões como 'Semanal', 'Mensal' ou 'Anual' baseado na descrição
         let cashbackType = 'Outros';
-        if (t.type === 'withdrawal') {
-          const typeMatch = t.description?.match(/(Mensal|Anual|Digital|CD)/i);
-          cashbackType = typeMatch ? typeMatch[1] : 'Digital';
-          if (cashbackType === 'CD') cashbackType = 'Digital';
+        const typeMatch = t.description?.match(/(Mensal|Anual|Semanal|Digital|CD)/i);
+        if (typeMatch) {
+          const matched = typeMatch[1].toLowerCase();
+          if (matched === 'mensal') cashbackType = 'Mensal';
+          else if (matched === 'anual') cashbackType = 'Anual';
+          else cashbackType = 'Semanal'; // mapeia 'semanal', 'digital' e 'cd' para 'Semanal'
         } else {
-          const typeMatch = t.description?.match(/(Mensal|Anual|Digital|CD)/i);
-          cashbackType = typeMatch ? typeMatch[1] : 'Outros';
-          if (cashbackType === 'CD') cashbackType = 'Digital';
+          cashbackType = t.type === 'withdrawal' ? 'Semanal' : 'Outros';
         }
 
         // Determinar o nível, extraindo primeiramente da descrição (Nível X) se disponível
@@ -1178,7 +1190,12 @@ export const businessRules = {
         mappedDescription = mappedDescription
           .replace(/Comiss[aã]o MMN\s*\(Mensal\)/gi, 'Cashback Mensal')
           .replace(/Comiss[aã]o MMN\s*\(Anual\)/gi, 'Cashback Anual')
-          .replace(/Comiss[aã]o MMN\s*\(CD\)/gi, 'Cashback Semanal');
+          .replace(/Comiss[aã]o MMN\s*\(CD\)/gi, 'Cashback Semanal')
+          .replace(/Comiss[aã]o MMN\s*\(Semanal\)/gi, 'Cashback Semanal')
+          .replace(/Cashback Digital/gi, 'Cashback Semanal')
+          .replace(/Comiss[aã]o Semanal/gi, 'Cashback Semanal')
+          .replace(/Comiss[aã]o Mensal/gi, 'Cashback Mensal')
+          .replace(/Comiss[aã]o Anual/gi, 'Cashback Anual');
 
         return {
           id: t.id,

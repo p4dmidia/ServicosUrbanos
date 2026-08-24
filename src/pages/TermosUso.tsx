@@ -43,7 +43,7 @@ export default function TermosUso() {
               1.1.1. Objeto
             </h3>
             <div className="pl-9">
-              <p>A PLATAFORMA disponibiliza benefícios de cashback mensal, digital e anual vinculados ao consumo de produtos e serviços pelo AFILIADO e por seus indicados até a 5ª geração.</p>
+              <p>A PLATAFORMA disponibiliza benefícios de cashback mensal, semanal e anual vinculados ao consumo de produtos e serviços pelo AFILIADO e por seus indicados até a 5ª geração.</p>
             </div>
           </div>
 
@@ -100,7 +100,7 @@ export default function TermosUso() {
               </p>
               <p className="flex items-start gap-2">
                 <span className="text-emerald-500 font-bold mt-1.5">•</span>
-                <span><strong>Digital:</strong> 0,20% para uso exclusivo dentro da PLATAFORMA, liberado <strong>APÓS ESTAR ELEGÍVEL MENSALMENTE</strong>.</span>
+                <span><strong>Semanal:</strong> 0,20% para uso exclusivo dentro da PLATAFORMA, liberado <strong>APÓS ESTAR ELEGÍVEL MENSALMENTE</strong>.</span>
               </p>
               <p className="flex items-start gap-2">
                 <span className="text-emerald-500 font-bold mt-1.5">•</span>

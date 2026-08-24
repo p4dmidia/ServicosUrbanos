@@ -51,6 +51,7 @@ export default function Cadastro() {
     const [referrerId, setReferrerId] = useState<string | null>(null);
     const [isSearching, setIsSearching] = useState(false);
     const [isReferralLocked, setIsReferralLocked] = useState(false);
+    const [isRegional, setIsRegional] = useState(false);
 
     useEffect(() => {
         // Load referral from storage
@@ -274,7 +275,7 @@ export default function Cadastro() {
                         full_name: fullName,
                         whatsapp: whatsapp,
                         cpf: cpf.replace(/\D/g, ''),
-                        role: 'affiliate',
+                        role: isRegional ? 'regional_reseller' : 'affiliate',
                         referred_by: referrerId || null,
                         address,
                         number,
@@ -755,6 +756,25 @@ export default function Cadastro() {
                                 )}
                             </div>
 
+                            {/* Opção Revendedor Regional */}
+                            <div className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                                <div>
+                                    <label htmlFor="isRegional" className="text-xs font-black text-midnight uppercase tracking-wider cursor-pointer">Sou Revendedor Regional</label>
+                                    <p className="text-[10px] text-slate-500 font-medium italic mt-1">Marque esta opção para se cadastrar como um líder de rede regional.</p>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => setIsRegional(!isRegional)}
+                                    className={`size-7 rounded-lg border flex items-center justify-center transition-all ${
+                                        isRegional 
+                                            ? 'bg-emerald-500 border-emerald-500 text-white' 
+                                            : 'border-slate-300 hover:border-slate-400 text-transparent'
+                                    }`}
+                                >
+                                    ✓
+                                </button>
+                            </div>
+
                             {/* Mensagem de Erro */}
                             <AnimatePresence>
                                 {error && (
@@ -910,7 +930,7 @@ export default function Cadastro() {
                                             </span>
                                             <ul className="pl-6 space-y-2 list-disc text-slate-500">
                                                 <li><strong className="text-midnight font-bold">Mensal:</strong> 1,35% sobre compras até a 5ª geração.</li>
-                                                <li><strong className="text-midnight font-bold">Digital:</strong> 0,20% para uso dentro da plataforma.</li>
+                                                <li><strong className="text-midnight font-bold">Semanal:</strong> 0,20% para uso dentro da plataforma.</li>
                                                 <li><strong className="text-midnight font-bold">Anual:</strong> 0,20% pago em dezembro.</li>
                                                 <li><strong className="text-midnight font-bold">Condição:</strong> realizar ao menos uma compra mensal e confirmar retirada/serviço.</li>
                                             </ul>

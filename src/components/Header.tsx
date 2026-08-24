@@ -115,7 +115,7 @@ export default function Header() {
                                                             onClick={() => setShowUserMenu(false)}
                                                             className="flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-slate-50 transition-colors text-xs font-bold text-slate-600 hover:text-primary-blue"
                                                         >
-                                                            <LayoutDashboard size={16} /> Painel do Afiliado
+                                                            <LayoutDashboard size={16} /> {profile?.role === 'regional_reseller' ? 'Painel do Revendedor' : 'Painel do Afiliado'}
                                                         </Link>
                                                         <Link 
                                                             to="/afiliado/perfil" 
@@ -229,9 +229,9 @@ export default function Header() {
                                                 <ShieldCheck size={18} /> Painel Administrativo
                                             </Link>
                                         ) : (
-                                            <Link to="/afiliado/dashboard" onClick={() => setIsMobileMenuOpen(false)} className="w-full flex items-center gap-4 px-6 py-4 rounded-2xl bg-primary-blue text-white font-black uppercase tracking-widest text-xs shadow-lg shadow-primary-blue/20">
-                                                <LayoutDashboard size={18} /> Painel do Afiliado
-                                            </Link>
+                                             <Link to="/afiliado/dashboard" onClick={() => setIsMobileMenuOpen(false)} className="w-full flex items-center gap-4 px-6 py-4 rounded-2xl bg-primary-blue text-white font-black uppercase tracking-widest text-xs shadow-lg shadow-primary-blue/20">
+                                                 <LayoutDashboard size={18} /> {profile?.role === 'regional_reseller' ? 'Painel do Revendedor' : 'Painel do Afiliado'}
+                                             </Link>
                                         )}
                                         <button 
                                             onClick={async () => {

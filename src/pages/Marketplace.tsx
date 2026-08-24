@@ -699,7 +699,7 @@ export default function Marketplace() {
                         <span className="text-xs font-black text-emerald-600">+ R$ {totalMensal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                       </div>
                       <div className="flex justify-between items-center">
-                        <span className="text-[10px] font-bold text-blue-600">Digital</span>
+                        <span className="text-[10px] font-bold text-blue-600">Semanal</span>
                         <span className="text-xs font-black text-blue-600">+ R$ {totalDigital.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                       </div>
                       <div className="flex justify-between items-center">
@@ -879,7 +879,7 @@ export default function Marketplace() {
                               </span>
                               <span className="text-[8px] font-black text-blue-600 bg-blue-50 px-2 py-0.5 rounded-lg uppercase tracking-tight border border-blue-100 flex items-center gap-1 shadow-sm">
                                 <Smartphone size={8} />
-                                Digital: R$ {digital.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                Semanal: R$ {digital.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                               </span>
                               <span className="text-[8px] font-black text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-lg uppercase tracking-tight border border-indigo-100 flex items-center gap-1 shadow-sm">
                                 <Calendar size={8} />

@@ -57,6 +57,9 @@ export default function AdminSettings() {
   const [cashbackMensal, setCashbackMensal] = useState(2.75);
   const [cashbackDigital, setCashbackDigital] = useState(1.00);
   const [cashbackAnual, setCashbackAnual] = useState(0.75);
+  const [commissionRegionalSemanal, setCommissionRegionalSemanal] = useState(2.00);
+  const [commissionRegionalMensal, setCommissionRegionalMensal] = useState(2.00);
+  const [commissionRegionalAnual, setCommissionRegionalAnual] = useState(2.00);
 
   // Financeiro State
   const [minWithdrawal, setMinWithdrawal] = useState(50);
@@ -100,6 +103,9 @@ export default function AdminSettings() {
         setCashbackMensal(mmnConfig.cashbackMensal);
         setCashbackDigital(mmnConfig.cashbackDigital);
         setCashbackAnual(mmnConfig.cashbackAnual);
+        setCommissionRegionalSemanal(mmnConfig.commissionRegionalSemanal);
+        setCommissionRegionalMensal(mmnConfig.commissionRegionalMensal);
+        setCommissionRegionalAnual(mmnConfig.commissionRegionalAnual);
         
         setMmnLevels(levelsData.length > 0 ? levelsData : [
           { level: 1, value: 0.25 },
@@ -162,7 +168,10 @@ export default function AdminSettings() {
           paymentType: mmnType,
           cashbackMensal,
           cashbackDigital,
-          cashbackAnual
+          cashbackAnual,
+          commissionRegionalSemanal,
+          commissionRegionalMensal,
+          commissionRegionalAnual
         });
         await businessRules.saveMMNLevels(mmnLevels.slice(0, mmnDepth));
       } else if (activeTab === 'financeiro') {
@@ -367,9 +376,55 @@ export default function AdminSettings() {
                                   onChange={e => setCashbackAnual(Number(e.target.value))}
                                   className="w-full bg-white/5 border border-white/5 px-4 py-4 rounded-2xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-white font-black text-center"
                                 />
-                                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-indigo-500/50 text-[10px] font-black">%</span>
-                              </div>
+                                 <span className="absolute right-3 top-1/2 -translate-y-1/2 text-indigo-500/50 text-[10px] font-black">%</span>
+                                </div>
                            </div>
+                        </div>
+
+                        {/* Comissão Regional */}
+                        <div className="space-y-4 pt-4 border-t border-white/5">
+                          <h4 className="text-[11px] font-black uppercase tracking-widest text-indigo-400">Comissões do Revendedor Regional</h4>
+                          <div className="grid grid-cols-3 gap-4">
+                            <div className="space-y-2">
+                               <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1">Reg. Semanal</label>
+                               <div className="relative">
+                                 <input 
+                                   type="number" 
+                                   step="0.01"
+                                   value={commissionRegionalSemanal}
+                                   onChange={e => setCommissionRegionalSemanal(Number(e.target.value))}
+                                   className="w-full bg-white/5 border border-white/5 px-4 py-4 rounded-2xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-white font-black text-center"
+                                 />
+                                 <span className="absolute right-3 top-1/2 -translate-y-1/2 text-indigo-500/50 text-[10px] font-black">%</span>
+                               </div>
+                            </div>
+                            <div className="space-y-2">
+                               <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1">Reg. Mensal</label>
+                               <div className="relative">
+                                 <input 
+                                   type="number" 
+                                   step="0.01"
+                                   value={commissionRegionalMensal}
+                                   onChange={e => setCommissionRegionalMensal(Number(e.target.value))}
+                                   className="w-full bg-white/5 border border-white/5 px-4 py-4 rounded-2xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-white font-black text-center"
+                                 />
+                                 <span className="absolute right-3 top-1/2 -translate-y-1/2 text-indigo-500/50 text-[10px] font-black">%</span>
+                               </div>
+                            </div>
+                            <div className="space-y-2">
+                               <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1">Reg. Anual</label>
+                               <div className="relative">
+                                 <input 
+                                   type="number" 
+                                   step="0.01"
+                                   value={commissionRegionalAnual}
+                                   onChange={e => setCommissionRegionalAnual(Number(e.target.value))}
+                                   className="w-full bg-white/5 border border-white/5 px-4 py-4 rounded-2xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-white font-black text-center"
+                                 />
+                                 <span className="absolute right-3 top-1/2 -translate-y-1/2 text-indigo-500/50 text-[10px] font-black">%</span>
+                               </div>
+                            </div>
+                          </div>
                         </div>
 
                         <div className="space-y-2">

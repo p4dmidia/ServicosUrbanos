@@ -14,13 +14,14 @@ import {
   ShoppingBag
 } from 'lucide-react';
 import { motion } from 'motion/react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import AffiliateLayout from '../components/AffiliateLayout';
 import { businessRules } from '../lib/businessRules';
 import { useAuth } from '../contexts/AuthContext';
 import { toast } from 'react-hot-toast';
 
 export default function AffiliateDashboard() {
+  const navigate = useNavigate();
   const { user, profile } = useAuth();
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState<any>(null);
@@ -43,6 +44,12 @@ export default function AffiliateDashboard() {
         setStats(statsData);
         setActivity(activityData);
         
+        if (statsData && !statsData.isEligible) {
+          navigate('/afiliado/renovacoes');
+          toast.error("Assinatura pendente. Regularize seu plano para ter acesso total.", { id: 'pending-sub-alert' });
+          return;
+        }
+
         // Use referral_code from profile context if available, fallback to user.id
         // This avoids making a failing query if the migration hasn't been run yet
         const referralCode = profile?.referral_code || user.id;
@@ -155,7 +162,7 @@ export default function AffiliateDashboard() {
                 <Wallet size={22} />
               </div>
               <div className="flex items-center gap-1 text-[10px] font-black text-indigo-500 bg-indigo-50 px-2 py-1 rounded-lg uppercase">
-                 Carteira Digital (CD)
+                 Carteira Semanal
               </div>
             </div>
             <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Saldo para Resgate</p>
@@ -178,9 +185,13 @@ export default function AffiliateDashboard() {
                 {stats.isEligible ? 'Elegível' : 'Pendente'}
               </div>
             </div>
-            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Meta: 1 Consumo Mensal</p>
-            <h3 className="text-2xl font-black text-midnight tracking-tighter">
-              {stats.consumptionCount} / 1 <span className="text-sm font-medium text-slate-400">serviço</span>
+            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">
+              {stats.isEligible ? `Plano ${stats.activeSubscription?.planType || 'Ativo'}` : 'Meta: Adesão Ativa'}
+            </p>
+            <h3 className="text-base font-black text-midnight tracking-tighter">
+              {stats.isEligible && stats.activeSubscription
+                ? `Vence em: ${new Date(stats.activeSubscription.endDate).toLocaleDateString('pt-BR')}`
+                : 'Fatura Pendente'}
             </h3>
           </motion.div>
         </div>
@@ -199,7 +210,7 @@ export default function AffiliateDashboard() {
                 <h2 className="text-2xl font-black text-midnight tracking-tight mb-2 italic uppercase">Indique e Ganhe</h2>
                 <p className="text-slate-500 font-medium">
                   Indique uma vez, ganhe sempre. <br />
-                  Receba Cashback mensal, digital e anual recorrentes sobre todas as compras que seus indicados fizerem.
+                  Receba Cashback mensal, semanal e anual recorrentes sobre todas as compras que seus indicados fizerem.
                 </p>
               </div>
 
@@ -241,8 +252,7 @@ export default function AffiliateDashboard() {
                <div className="space-y-6">
                  {[
                    { label: 'Indicações G1', value: stats.networkSummary.g1, max: 100, color: 'bg-emerald-500' },
-                   { label: 'Rede Indireta', value: stats.networkSummary.total - stats.networkSummary.g1, max: 500, color: 'bg-primary-blue' },
-                   { label: 'Alcance G5', value: stats.networkSummary.g5 || 0, max: 1000, color: 'bg-purple-500' },
+                   { label: 'Rede Indireta (G2)', value: stats.networkSummary.g2 || 0, max: 500, color: 'bg-primary-blue' },
                  ].map((item, i) => (
                    <div key={i} className="space-y-2">
                      <div className="flex justify-between text-xs font-bold uppercase tracking-widest">

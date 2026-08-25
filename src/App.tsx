@@ -36,6 +36,10 @@ import AffiliateWallet from './pages/AffiliateWallet';
 import AffiliateEcosystem from './pages/AffiliateEcosystem';
 import AffiliateProfile from './pages/AffiliateProfile';
 import AffiliateOrders from './pages/AffiliateOrders';
+import AffiliateAdherenceTerm from './pages/AffiliateAdherenceTerm';
+import AffiliatePolicy from './pages/AffiliatePolicy';
+import AffiliateLuckyNumber from './pages/AffiliateLuckyNumber';
+import AffiliateRenewals from './pages/AffiliateRenewals';
 import ForgotPassword from './pages/ForgotPassword';
 import ResetPassword from './pages/ResetPassword';
 import TermosPrivacidade from './pages/TermosPrivacidade';
@@ -150,6 +154,22 @@ export default function App() {
             <Route 
               path="/afiliado/pedidos" 
               element={<ProtectedRoute allowedRoles={['affiliate', 'owner', 'manager', 'admin', 'regional_reseller']}><AffiliateOrders /></ProtectedRoute>} 
+            />
+            <Route 
+              path="/afiliado/termo-adesao" 
+              element={<ProtectedRoute allowedRoles={['affiliate', 'owner', 'manager', 'admin', 'regional_reseller']}><AffiliateAdherenceTerm /></ProtectedRoute>} 
+            />
+            <Route 
+              path="/afiliado/apolice" 
+              element={<ProtectedRoute allowedRoles={['affiliate', 'owner', 'manager', 'admin', 'regional_reseller']}><AffiliatePolicy /></ProtectedRoute>} 
+            />
+            <Route 
+              path="/afiliado/numero-sorte" 
+              element={<ProtectedRoute allowedRoles={['affiliate', 'owner', 'manager', 'admin', 'regional_reseller']}><AffiliateLuckyNumber /></ProtectedRoute>} 
+            />
+            <Route 
+              path="/afiliado/renovacoes" 
+              element={<ProtectedRoute allowedRoles={['affiliate', 'owner', 'manager', 'admin', 'regional_reseller']}><AffiliateRenewals /></ProtectedRoute>} 
             />
 
             {/* Merchant Routes */}

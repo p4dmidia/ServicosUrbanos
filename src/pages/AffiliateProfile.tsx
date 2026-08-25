@@ -20,6 +20,7 @@ import { motion } from 'framer-motion';
 import AffiliateLayout from '../components/AffiliateLayout';
 import { businessRules } from '../lib/businessRules';
 import { useAuth } from '../contexts/AuthContext';
+import { supabase } from '../lib/supabase';
 import { toast } from 'react-hot-toast';
 
 export default function AffiliateProfile() {
@@ -53,10 +54,53 @@ export default function AffiliateProfile() {
     }
   }, [profile]);
 
+  const [subscription, setSubscription] = useState<any | null>(null);
+
+  useEffect(() => {
+    async function loadSubscription() {
+      if (!user) return;
+      try {
+        const { data } = await supabase
+          .from('subscriptions')
+          .select('*')
+          .eq('profile_id', user.id)
+          .order('end_date', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        let finalSub = data;
+        if (!finalSub) {
+          try {
+            const savedMock = localStorage.getItem(`mock_subscription_${user.id}`);
+            if (savedMock) {
+              const mockData = JSON.parse(savedMock);
+              finalSub = {
+                plan_type: mockData.planType,
+                end_date: mockData.endDate,
+                status: mockData.status
+              };
+            }
+          } catch (e) {
+            console.error('Erro ao ler mock subscription:', e);
+          }
+        }
+        setSubscription(finalSub);
+      } catch (e) {
+        console.error(e);
+      }
+    }
+    loadSubscription();
+  }, [user]);
+
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) return;
     
+    if (!formData.bank_name || !formData.pix_key || !formData.bank_branch || !formData.bank_account) {
+      toast.error('Por favor, preencha todos os dados bancários e chave PIX.');
+      return;
+    }
+
     setLoading(true);
     setSuccess(false);
     
@@ -148,6 +192,11 @@ export default function AffiliateProfile() {
               </div>
               <p className="text-slate-500 font-medium max-w-md">
                 Membro do ecossistema desde {membershipDate}. Suas informações estão seguras e integradas em todas as nossas plataformas.
+                {subscription && (
+                   <span className="block mt-3 text-xs font-black text-primary-blue uppercase tracking-widest">
+                     Data de Renovação do Plano: {new Date(subscription.end_date).toLocaleDateString('pt-BR')} ({subscription.plan_type})
+                   </span>
+                 )}
               </p>
            </div>
         </div>

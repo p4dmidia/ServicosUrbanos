@@ -57,8 +57,8 @@ export default function AffiliateNetwork() {
           businessRules.getMMNConfig()
         ]);
         
-        // Filter levels based on depth, excluding G6
-        const filteredLevels = levelsConfig.filter(l => l.level <= mmnConfigData.depth && l.level !== 6);
+        // Filter levels to only show up to G2 (level <= 2)
+        const filteredLevels = levelsConfig.filter(l => l.level <= 2);
         
         // Add G0 (Você) to the network list
         const g0User = {
@@ -73,7 +73,8 @@ export default function AffiliateNetwork() {
           spillover: false
         };
 
-        setNetwork([g0User, ...networkData]);
+        const filteredNetworkData = networkData.filter(item => Number(item.level) <= 2);
+        setNetwork([g0User, ...filteredNetworkData]);
         setStats(statsData);
         setMmnConfig(filteredLevels);
       } catch (error) {
@@ -152,7 +153,7 @@ export default function AffiliateNetwork() {
               </div>
               <div>
                 <h2 className="text-3xl font-black text-midnight tracking-tighter italic uppercase">Gerenciamento de Rede</h2>
-                <p className="text-slate-500 font-medium">Status: <span className="text-emerald-600 font-bold uppercase">{stats.rank}</span> • {stats.networkSummary.total} usuários no total.</p>
+                <p className="text-slate-500 font-medium">Status: <span className="text-emerald-600 font-bold uppercase">{stats.rank}</span> • {network.filter(item => item.level > 0).length} usuários no total.</p>
               </div>
            </div>
 

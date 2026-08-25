@@ -1007,6 +1007,50 @@ export const businessRules = {
 
       const availableBalance = walletBonus - totalWithdrawn;
 
+      // Buscar assinatura ativa ou última assinatura
+      const { data: lastSub } = await supabase
+        .from('subscriptions')
+        .select('*')
+        .eq('profile_id', userId)
+        .order('end_date', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      let hasActiveSub = lastSub && lastSub.status === 'active' && new Date(lastSub.end_date) > new Date();
+      let activeSubData = lastSub ? {
+        id: lastSub.id,
+        planType: lastSub.plan_type,
+        amount: Number(lastSub.amount),
+        status: lastSub.status,
+        startDate: lastSub.start_date,
+        endDate: lastSub.end_date,
+        isActive: hasActiveSub
+      } : null;
+
+      // Fallback para LocalStorage se não houver assinatura ativa no Supabase
+      if (!hasActiveSub) {
+        try {
+          const savedMock = localStorage.getItem(`mock_subscription_${userId}`);
+          if (savedMock) {
+            const mockData = JSON.parse(savedMock);
+            if (new Date(mockData.endDate) > new Date() && mockData.status === 'active') {
+              hasActiveSub = true;
+              activeSubData = {
+                id: mockData.id,
+                planType: mockData.planType,
+                amount: Number(mockData.amount),
+                status: mockData.status,
+                startDate: mockData.startDate,
+                endDate: mockData.endDate,
+                isActive: true
+              };
+            }
+          }
+        } catch (e) {
+          console.error("Erro ao carregar mock_subscription:", e);
+        }
+      }
+
       return {
         monthlyBonus,
         annualBonus,
@@ -1016,7 +1060,8 @@ export const businessRules = {
         availableBalance,
         cashbackBalance: 0,
         consumptionCount,
-        isEligible: consumptionCount >= 1 && availableBalance > 0,
+        isEligible: !!hasActiveSub,
+        activeSubscription: activeSubData,
         networkSummary: nSummary,
         rank: nSummary.rank
       };
@@ -1026,9 +1071,61 @@ export const businessRules = {
         monthlyBonus: 0, annualBonus: 0, walletBonus: 0, maintenanceFee: 0,
         totalEarnings: 0, availableBalance: 0, cashbackBalance: 0,
         consumptionCount: 0, isEligible: false,
+        activeSubscription: null,
         networkSummary: { g1: 0, g2: 0, g3: 0, g4: 0, g5: 0, total: 0, rank: 'Afiliado' },
         rank: 'Afiliado'
       };
+    }
+  },
+
+  paySubscription: async (userId: string, planType: 'mensal' | 'trimestral' | 'semestral' | 'anual') => {
+    let days = 30;
+    let amount = 20;
+    if (planType === 'trimestral') {
+      days = 90;
+      amount = 30;
+    } else if (planType === 'semestral') {
+      days = 180;
+      amount = 40;
+    } else if (planType === 'anual') {
+      days = 365;
+      amount = 60;
+    }
+
+    const startDate = new Date();
+    const endDate = new Date();
+    endDate.setDate(startDate.getDate() + days);
+
+    try {
+      const { data, error } = await supabase
+        .from('subscriptions')
+        .insert([{
+          profile_id: userId,
+          plan_type: planType,
+          amount: amount,
+          status: 'active',
+          start_date: startDate.toISOString(),
+          end_date: endDate.toISOString()
+        }])
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data;
+    } catch (dbError: any) {
+      console.warn("DB subscription insert failed, saving to localStorage fallback:", dbError.message);
+      // Fallback para LocalStorage
+      const mockData = {
+        id: `mock-${Date.now()}`,
+        profileId: userId,
+        planType: planType,
+        amount: amount,
+        status: 'active',
+        startDate: startDate.toISOString(),
+        endDate: endDate.toISOString()
+      };
+      localStorage.setItem(`mock_subscription_${userId}`, JSON.stringify(mockData));
+      return mockData;
     }
   },
 

@@ -52,6 +52,10 @@ export default function Cadastro() {
     const [isSearching, setIsSearching] = useState(false);
     const [isReferralLocked, setIsReferralLocked] = useState(false);
     const [isRegional, setIsRegional] = useState(false);
+    const [bankName, setBankName] = useState('');
+    const [pixKey, setPixKey] = useState('');
+    const [bankBranch, setBankBranch] = useState('');
+    const [bankAccount, setBankAccount] = useState('');
 
     useEffect(() => {
         // Load referral from storage
@@ -254,6 +258,12 @@ export default function Cadastro() {
             return;
         }
 
+        if (!bankName || !pixKey || !bankBranch || !bankAccount) {
+            setError("Por favor, preencha todos os dados bancários e chave PIX.");
+            setLoading(false);
+            return;
+        }
+
         if (password !== confirmPassword) {
             setError("As senhas não coincidem.");
             setLoading(false);
@@ -284,7 +294,11 @@ export default function Cadastro() {
                         state,
                         zip_code: zipCode.replace(/\D/g, ''),
                         birth_date: birthDate,
-                        gender: gender
+                        gender: gender,
+                        bank_name: bankName,
+                        bank_branch: bankBranch,
+                        bank_account: bankAccount,
+                        pix_key: pixKey
                     }
                 }
             });
@@ -625,11 +639,66 @@ export default function Cadastro() {
                                 </div>
                             </div>
 
-                            {/* Seção 3: Segurança */}
+                            {/* Seção 3: Dados Bancários / PIX */}
                             <div className="space-y-6">
                                 <div className="flex items-center gap-3 mb-2">
                                     <div className="size-1.5 rounded-full bg-emerald-500" />
-                                    <h3 className="text-[11px] font-black uppercase tracking-widest text-midnight">03. Senha e Segurança</h3>
+                                    <h3 className="text-[11px] font-black uppercase tracking-widest text-midnight">03. Dados Bancários / PIX</h3>
+                                </div>
+
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    <div className="flex flex-col gap-2">
+                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Banco</label>
+                                        <input
+                                            required
+                                            type="text"
+                                            value={bankName}
+                                            onChange={(e) => setBankName(e.target.value)}
+                                            placeholder="Ex: Itaú, Nubank, Agibank..."
+                                            className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500/50 transition-all font-bold text-midnight placeholder:text-slate-300"
+                                        />
+                                    </div>
+                                    <div className="flex flex-col gap-2">
+                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Chave PIX</label>
+                                        <input
+                                            required
+                                            type="text"
+                                            value={pixKey}
+                                            onChange={(e) => setPixKey(e.target.value)}
+                                            placeholder="CPF, E-mail, Celular ou Chave Aleatória"
+                                            className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500/50 transition-all font-bold text-midnight placeholder:text-slate-300"
+                                        />
+                                    </div>
+                                    <div className="flex flex-col gap-2">
+                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Agência</label>
+                                        <input
+                                            required
+                                            type="text"
+                                            value={bankBranch}
+                                            onChange={(e) => setBankBranch(e.target.value)}
+                                            placeholder="Ex: 0001"
+                                            className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500/50 transition-all font-bold text-midnight placeholder:text-slate-300"
+                                        />
+                                    </div>
+                                    <div className="flex flex-col gap-2">
+                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Conta com dígito</label>
+                                        <input
+                                            required
+                                            type="text"
+                                            value={bankAccount}
+                                            onChange={(e) => setBankAccount(e.target.value)}
+                                            placeholder="Ex: 12345-6"
+                                            className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500/50 transition-all font-bold text-midnight placeholder:text-slate-300"
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Seção 4: Segurança */}
+                            <div className="space-y-6">
+                                <div className="flex items-center gap-3 mb-2">
+                                    <div className="size-1.5 rounded-full bg-emerald-500" />
+                                    <h3 className="text-[11px] font-black uppercase tracking-widest text-midnight">04. Senha e Segurança</h3>
                                 </div>
 
                                 <div className="space-y-6">

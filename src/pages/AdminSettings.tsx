@@ -71,7 +71,13 @@ export default function AdminSettings() {
 
   // Automação de Níveis baseada na Regra Geral (Total / Profundidade)
   React.useEffect(() => {
-    const totalRepasse = (Number(cashbackMensal) || 0) + (Number(cashbackDigital) || 0) + (Number(cashbackAnual) || 0);
+    const totalRepasse = 
+      (Number(cashbackMensal) || 0) + 
+      (Number(cashbackDigital) || 0) + 
+      (Number(cashbackAnual) || 0) +
+      (Number(commissionRegionalSemanal) || 0) +
+      (Number(commissionRegionalMensal) || 0) +
+      (Number(commissionRegionalAnual) || 0);
     const perLevel = Number((totalRepasse / (mmnDepth || 1)).toFixed(6));
     
     setMmnLevels(prev => {
@@ -82,7 +88,15 @@ export default function AdminSettings() {
         value: lvl.level <= mmnDepth ? perLevel : 0
       }));
     });
-  }, [cashbackMensal, cashbackDigital, cashbackAnual, mmnDepth]);
+  }, [
+    cashbackMensal, 
+    cashbackDigital, 
+    cashbackAnual, 
+    commissionRegionalSemanal, 
+    commissionRegionalMensal, 
+    commissionRegionalAnual, 
+    mmnDepth
+  ]);
 
   // Carregar dados iniciais
   React.useEffect(() => {

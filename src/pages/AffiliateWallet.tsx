@@ -97,7 +97,7 @@ export default function AffiliateWallet() {
     
     doc.setFontSize(10);
     doc.setFont('helvetica', 'normal');
-    doc.text(`Filtro Ativo: ${activeFilter === 'all' ? 'Todos' : activeFilter === 'cd' ? 'Carteira Digital' : activeFilter === 'mensal' ? 'Mensal' : 'Anual'}`, 14, 62);
+    doc.text(`Filtro Ativo: ${activeFilter === 'all' ? 'Todos' : activeFilter === 'cd' ? 'Carteira Semanal' : activeFilter === 'mensal' ? 'Mensal' : 'Anual'}`, 14, 62);
     doc.text(`Registros: ${filteredTransactions.length}`, 14, 67);
     doc.text(`Total Acumulado: ${totalPending.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`, 14, 72);
 
@@ -353,9 +353,7 @@ export default function AffiliateWallet() {
                  <div>
                     <h4 className="text-lg font-black text-amber-800 uppercase tracking-tighter">Resgate Bloqueado</h4>
                     <p className="text-sm font-medium text-amber-700/80">
-                       {stats.consumptionCount < 1 
-                         ? 'Você precisa realizar ao menos 1 consumo mensal no ecossistema para liberar seus bônus.' 
-                         : 'Seu saldo ainda não atingiu o limite mínimo para saque.'}
+                       Sua assinatura do plano está inativa ou vencida. Pague a fatura pendente na sua tela inicial para liberar seus bônus e resgates.
                     </p>
                     <Link to="/afiliado/ecossistema" className="inline-flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-amber-800 mt-4 hover:underline">
                        Explorar Ecossistema <ChevronRight size={12} />

@@ -12,7 +12,12 @@ import {
   Search,
   ChevronRight,
   TrendingUp,
-  ShoppingBag
+  ShoppingBag,
+  FileText,
+  Shield,
+  Ticket,
+  Package,
+  RefreshCw
 } from 'lucide-react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
@@ -89,8 +94,12 @@ export default function AffiliateLayout({ children, title }: AffiliateLayoutProp
     { path: '/afiliado/rede', icon: Users, label: 'Cashback' },
     { path: '/afiliado/financeiro', icon: Wallet, label: 'Financeiro' },
     { path: '/afiliado/pedidos', icon: ShoppingBag, label: 'Meus Pedidos' },
+    { path: '/afiliado/renovacoes', icon: RefreshCw, label: 'Minhas Renovações' },
     { path: '/afiliado/ecossistema', icon: Globe, label: 'Ecossistema' },
     { path: '/afiliado/perfil', icon: User, label: 'Dados Pessoais' },
+    { path: '/afiliado/termo-adesao', icon: FileText, label: 'Termo de Adesão' },
+    { path: '/afiliado/apolice', icon: Shield, label: 'Apólice' },
+    { path: '/afiliado/numero-sorte', icon: Ticket, label: 'Número da Sorte' },
   ];
 
   return (

@@ -34,6 +34,7 @@ export default function AffiliateOrders() {
   const [mmnConfig, setMmnConfig] = useState<any>(null);
   const [mmnLevels, setMmnLevels] = useState<any[]>([]);
   const [transactions, setTransactions] = useState<any[]>([]);
+  const [subscription, setSubscription] = useState<any | null>(null);
 
   // Unificamos tudo em um único useEffect para evitar race conditions
   useEffect(() => {
@@ -42,8 +43,8 @@ export default function AffiliateOrders() {
       
       try {
         setLoading(true);
-        // Buscamos Pedidos, Configurações, Níveis e Transações em paralelo
-        const [ordersRes, config, levels, transRes] = await Promise.all([
+        // Buscamos Pedidos, Configurações, Níveis, Transações e Assinatura em paralelo
+        const [ordersRes, config, levels, transRes, subRes] = await Promise.all([
           supabase
             .from('orders')
             .select('*')
@@ -55,7 +56,14 @@ export default function AffiliateOrders() {
             .from('transactions')
             .select('*')
             .eq('profile_id', user.id)
-            .eq('type', 'commission')
+            .eq('type', 'commission'),
+          supabase
+            .from('subscriptions')
+            .select('*')
+            .eq('profile_id', user.id)
+            .order('end_date', { ascending: false })
+            .limit(1)
+            .maybeSingle()
         ]);
         
         if (ordersRes.error) throw ordersRes.error;
@@ -64,6 +72,24 @@ export default function AffiliateOrders() {
         setMmnConfig(config);
         setMmnLevels(levels || []);
         setTransactions(transRes.data || []);
+
+        let finalSub = subRes.data;
+        if (!finalSub) {
+          try {
+            const savedMock = localStorage.getItem(`mock_subscription_${user.id}`);
+            if (savedMock) {
+              const mockData = JSON.parse(savedMock);
+              finalSub = {
+                plan_type: mockData.planType,
+                end_date: mockData.endDate,
+                status: mockData.status
+              };
+            }
+          } catch (e) {
+            console.error('Erro ao ler mock subscription:', e);
+          }
+        }
+        setSubscription(finalSub);
 
         // Busca extras (códigos de retirada)
         if (ordersRes.data && ordersRes.data.length > 0) {
@@ -274,6 +300,48 @@ export default function AffiliateOrders() {
               </button>
             </div>
           </div>
+
+          {/* Informações da Assinatura / Renovação do Plano */}
+          {subscription ? (
+            <div className="bg-slate-50 border border-slate-200 rounded-2xl p-6 mb-8 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+              <div className="flex items-center gap-4">
+                <div className={`p-3 rounded-xl ${subscription.status === 'active' ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600'}`}>
+                  <CheckCircle2 size={20} />
+                </div>
+                <div>
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Plano Ativo</p>
+                  <h4 className="text-sm font-black text-midnight uppercase tracking-tight">
+                    Plano {subscription.plan_type}
+                  </h4>
+                </div>
+              </div>
+              <div className="bg-primary-blue/5 border border-primary-blue/10 px-6 py-3 rounded-xl shrink-0">
+                <span className="text-[10px] font-black text-primary-blue uppercase tracking-widest block leading-none mb-1">
+                  Data de Renovação (Vencimento)
+                </span>
+                <span className="text-sm font-black text-midnight">
+                  {new Date(subscription.end_date).toLocaleDateString('pt-BR')}
+                </span>
+              </div>
+            </div>
+          ) : (
+            <div className="bg-amber-50 border border-amber-200 rounded-2xl p-6 mb-8 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+              <div className="flex items-center gap-4">
+                <div className="p-3 rounded-xl bg-amber-100 text-amber-800">
+                  <Clock size={20} />
+                </div>
+                <div>
+                  <p className="text-[10px] font-black text-amber-800 uppercase tracking-widest leading-none mb-1">Assinatura de Plano</p>
+                  <h4 className="text-sm font-black text-amber-900 uppercase tracking-tight">
+                    Nenhuma assinatura ativa encontrada
+                  </h4>
+                </div>
+              </div>
+              <span className="text-xs font-bold text-amber-800 max-w-xs text-right leading-relaxed">
+                Regularize sua fatura pendente na tela inicial para ativar seu plano e renovação.
+              </span>
+            </div>
+          )}
 
           {/* Lista de Pedidos */}
           <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">

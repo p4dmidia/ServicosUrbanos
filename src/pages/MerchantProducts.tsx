@@ -458,7 +458,7 @@ export default function MerchantProducts() {
   }
 
   return (
-    <MerchantLayout title="Gerenciamento de Produtos" subtitle="Controle total do seu catálogo de ofertas">
+    <MerchantLayout title="Gerenciamento de Apólices e Microcréditos" subtitle="Controle total do seu catálogo de apólices e ofertas">
       <div className="p-8 lg:p-12 space-y-8 text-[13px]">
         {/* Header Actions */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
@@ -466,7 +466,7 @@ export default function MerchantProducts() {
             <div className="relative flex-1">
               <input 
                 type="text" 
-                placeholder="Buscar por nome ou ID..." 
+                placeholder="Buscar por apólice ou ID..." 
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 className="w-full bg-white border border-slate-200 py-3 pl-11 pr-4 rounded-2xl text-sm font-bold focus:outline-none focus:ring-2 focus:ring-primary-blue/20 transition-all text-midnight"
@@ -503,7 +503,7 @@ export default function MerchantProducts() {
               className="bg-midnight hover:bg-slate-800 text-white px-8 py-4 rounded-2xl font-black text-xs uppercase tracking-widest transition-all shadow-xl shadow-midnight/20 flex items-center justify-center gap-3 group"
             >
               <Plus size={18} className="group-hover:rotate-90 transition-transform" />
-              Novo Produto
+              Nova Apólice
             </button>
           )}
         </div>
@@ -514,10 +514,10 @@ export default function MerchantProducts() {
               <table className="w-full text-left">
                 <thead>
                   <tr className="bg-slate-50 border-b border-slate-100">
-                    <th className="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Produto</th>
+                    <th className="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Apólice / Microcrédito</th>
                     {profile?.role === 'owner' && <th className="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Filial</th>}
                     <th className="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Valor</th>
-                    <th className="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Estoque</th>
+                    <th className="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Estoque / Limite</th>
                     <th className="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Cashback</th>
                     <th className="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Status</th>
                     {profile?.role === 'owner' && <th className="px-8 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Ações</th>}
@@ -637,10 +637,10 @@ export default function MerchantProducts() {
               <div className="p-8 border-b border-slate-100 flex items-center justify-between bg-white z-10">
                 <div>
                   <h3 className="text-2xl font-black text-midnight tracking-tighter uppercase italic">
-                    {profile?.role === 'manager' ? 'Ajustar Estoque' : (isEditing ? 'Editar Produto' : 'Adicionar Produto')}
+                    {profile?.role === 'manager' ? 'Ajustar Estoque / Limite' : (isEditing ? 'Editar Apólice' : 'Adicionar Apólice')}
                   </h3>
                   <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">
-                    {profile?.role === 'manager' ? 'Acesso limitado ao estoque' : `Catálogo da ${profile?.role === 'manager' ? 'Filial' : 'Matriz/Filiais'}`}
+                    {profile?.role === 'manager' ? 'Acesso limitado ao estoque/limite' : `Catálogo da ${profile?.role === 'manager' ? 'Filial' : 'Matriz/Filiais'}`}
                   </p>
                 </div>
               </div>
@@ -650,7 +650,7 @@ export default function MerchantProducts() {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     {/* Informações Básicas */}
                     <div className="space-y-2 md:col-span-2">
-                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Nome do Produto</label>
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Nome da Apólice / Microcrédito</label>
                       <input type="text" required disabled={profile?.role === 'manager'} value={newProduct.name} onChange={e => setNewProduct({...newProduct, name: e.target.value})} className="w-full bg-slate-50 border border-slate-100 px-6 py-4 rounded-2xl font-bold text-midnight disabled:opacity-50" />
                     </div>
 
@@ -721,7 +721,7 @@ export default function MerchantProducts() {
                     {/* Estoque por Filial / Local de Retirada */}
                     <div className="space-y-4 md:col-span-2 pt-4 border-t border-slate-100">
                       <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
-                        Estoque por Filial / Local de Retirada
+                        Estoque / Limite por Filial
                       </label>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         {/* LOJA MATRIZ */}
@@ -801,34 +801,11 @@ export default function MerchantProducts() {
                       </div>
                     </div>
 
-                    {/* Logística */}
-                    <div className="md:col-span-2 pt-4 border-t border-slate-100">
-                      <h4 className="text-[10px] font-black text-midnight uppercase tracking-widest mb-4 flex items-center gap-2">
-                        <Truck size={14} /> Detalhes de Entrega
-                      </h4>
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                        <div className="space-y-1">
-                          <label className="text-[9px] font-black text-slate-400 uppercase">Peso (kg)</label>
-                          <input type="number" disabled={profile?.role === 'manager'} step="0.001" value={newProduct.weight || ''} onChange={e => setNewProduct({...newProduct, weight: parseFloat(e.target.value)})} className="w-full bg-slate-50 border border-slate-100 px-4 py-3 rounded-xl font-bold text-xs text-midnight disabled:opacity-50" />
-                        </div>
-                        <div className="space-y-1">
-                          <label className="text-[9px] font-black text-slate-400 uppercase">Altura (cm)</label>
-                          <input type="number" disabled={profile?.role === 'manager'} value={newProduct.height || ''} onChange={e => setNewProduct({...newProduct, height: parseFloat(e.target.value)})} className="w-full bg-slate-50 border border-slate-100 px-4 py-3 rounded-xl font-bold text-xs text-midnight disabled:opacity-50" />
-                        </div>
-                        <div className="space-y-1">
-                          <label className="text-[9px] font-black text-slate-400 uppercase">Largura (cm)</label>
-                          <input type="number" disabled={profile?.role === 'manager'} value={newProduct.width || ''} onChange={e => setNewProduct({...newProduct, width: parseFloat(e.target.value)})} className="w-full bg-slate-50 border border-slate-100 px-4 py-3 rounded-xl font-bold text-xs text-midnight disabled:opacity-50" />
-                        </div>
-                        <div className="space-y-1">
-                          <label className="text-[9px] font-black text-slate-400 uppercase">Comprimento (cm)</label>
-                          <input type="number" disabled={profile?.role === 'manager'} value={newProduct.length || ''} onChange={e => setNewProduct({...newProduct, length: parseFloat(e.target.value)})} className="w-full bg-slate-50 border border-slate-100 px-4 py-3 rounded-xl font-bold text-xs text-midnight disabled:opacity-50" />
-                        </div>
-                      </div>
-                    </div>
+                    {/* O bloco de logística física foi removido por tratar-se de produtos digitais/apólices */}
 
                     {/* Descrição e Imagens */}
                     <div className="md:col-span-2 space-y-2">
-                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Descrição do Produto</label>
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Descrição da Apólice / Microcrédito</label>
                       <textarea 
                         rows={4} 
                         disabled={profile?.role === 'manager'}
@@ -942,7 +919,7 @@ export default function MerchantProducts() {
               <div className="p-8 border-t border-slate-100 bg-slate-50 flex justify-end gap-4">
                 <button disabled={saving} onClick={closeModal} className="px-8 py-4 rounded-2xl font-black text-xs uppercase tracking-widest text-slate-500 hover:bg-slate-200 transition-all font-black">Cancelar</button>
                 <button type="submit" form="add-product-form" disabled={saving} className="bg-primary-blue hover:bg-blue-600 text-white px-8 py-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg shadow-primary-blue/20 flex items-center justify-center gap-2">
-                  {saving ? <Loader2 size={16} className="animate-spin" /> : (isEditing ? 'Salvar Alterações' : 'Salvar Produto')}
+                  {saving ? <Loader2 size={16} className="animate-spin" /> : (isEditing ? 'Salvar Alterações' : 'Salvar Apólice')}
                 </button>
               </div>
             </motion.div>

@@ -2619,7 +2619,7 @@ export const businessRules = {
     // 1. Buscar todos os perfis
     const { data: profiles, error: pError } = await supabase
       .from('profiles')
-      .select('id, full_name, email, pix_key, bank_name, bank_branch, bank_account, whatsapp');
+      .select('id, full_name, email, pix_key, bank_name, bank_branch, bank_account, whatsapp, role');
     
     if (pError) throw pError;
 
@@ -2673,7 +2673,8 @@ export const businessRules = {
         whatsapp: profile.whatsapp || '',
         monthlyPending,
         annualPending,
-        digitalPending
+        digitalPending,
+        role: profile.role
       };
     }).filter(p => p.monthlyPending > 0 || p.annualPending > 0 || p.digitalPending > 0);
 
@@ -2975,21 +2976,52 @@ export const businessRules = {
       }
     });
 
-    // 3. Buscar detalhes dos perfis para obter e-mail, whatsapp e localização
-    const { data: profiles, error: pError } = await supabase
-      .from('profiles')
-      .select('id, email, whatsapp, city, state')
-      .in('id', customerIds);
+    // 3. Buscar detalhes dos perfis para obter e-mail, whatsapp e localização, e buscar assinaturas
+    const [profilesRes, subsRes] = await Promise.all([
+      supabase
+        .from('profiles')
+        .select('id, email, whatsapp, city, state')
+        .in('id', customerIds),
+      supabase
+        .from('subscriptions')
+        .select('profile_id, status, end_date')
+        .in('profile_id', customerIds)
+        .order('end_date', { ascending: false })
+    ]);
 
-    if (pError) throw pError;
+    if (profilesRes.error) throw profilesRes.error;
+    const profiles = profilesRes.data;
+    const subscriptions = subsRes.data || [];
 
     // 4. Consolidar dados
     return customerIds.map(id => {
       const stats = customerMap[id];
       const profile = profiles?.find(p => p.id === id);
+      const sub = subscriptions.find(s => s.profile_id === id);
       
       const lastOrderDate = new Date(stats.lastOrder);
-      const isRecent = (new Date().getTime() - lastOrderDate.getTime()) < (30 * 24 * 60 * 60 * 1000);
+      
+      let customerStatus: 'Ativo' | 'Inativo' | 'A Renovar' = 'Inativo';
+      let renewalDate = 'Nenhuma';
+
+      if (sub) {
+        const endDate = new Date(sub.end_date);
+        const today = new Date();
+        const diffTime = endDate.getTime() - today.getTime();
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+        renewalDate = endDate.toLocaleDateString('pt-BR');
+
+        if (sub.status === 'active' && endDate > today) {
+          if (diffDays <= 7) {
+            customerStatus = 'A Renovar';
+          } else {
+            customerStatus = 'Ativo';
+          }
+        } else {
+          customerStatus = 'Inativo';
+        }
+      }
 
       return {
         id: `C-${id.substring(0, 4).toUpperCase()}`,
@@ -3000,8 +3032,9 @@ export const businessRules = {
         orders: stats.orders,
         spent: stats.spent,
         lastOrder: lastOrderDate.toLocaleDateString('pt-BR'),
-        status: isRecent ? 'Ativo' : 'Inativo',
-        rating: 5.0 // Por enquanto fixo, poderia ser média de avaliações se houver tabela de reviews
+        status: customerStatus,
+        renewalDate,
+        rating: 5.0
       };
     });
   },

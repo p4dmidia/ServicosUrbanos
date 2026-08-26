@@ -40,6 +40,7 @@ import AffiliateAdherenceTerm from './pages/AffiliateAdherenceTerm';
 import AffiliatePolicy from './pages/AffiliatePolicy';
 import AffiliateLuckyNumber from './pages/AffiliateLuckyNumber';
 import AffiliateRenewals from './pages/AffiliateRenewals';
+import AffiliateTelemedicina from './pages/AffiliateTelemedicina';
 import ForgotPassword from './pages/ForgotPassword';
 import ResetPassword from './pages/ResetPassword';
 import TermosPrivacidade from './pages/TermosPrivacidade';
@@ -170,6 +171,10 @@ export default function App() {
             <Route 
               path="/afiliado/renovacoes" 
               element={<ProtectedRoute allowedRoles={['affiliate', 'owner', 'manager', 'admin', 'regional_reseller']}><AffiliateRenewals /></ProtectedRoute>} 
+            />
+            <Route 
+              path="/afiliado/telemedicina" 
+              element={<ProtectedRoute allowedRoles={['affiliate', 'owner', 'manager', 'admin', 'regional_reseller']}><AffiliateTelemedicina /></ProtectedRoute>} 
             />
 
             {/* Merchant Routes */}

@@ -312,11 +312,20 @@ export default function MerchantOrders() {
                             {o.id.length > 12 ? `${o.id.substring(0, 8)}...` : o.id}
                           </td>
                           <td className="px-1 py-5">
-                            <div className="flex items-center gap-1.5">
-                              <div className="size-7 rounded-full bg-slate-100 flex items-center justify-center text-[9px] font-black text-slate-500 shadow-sm shrink-0">
+                            <div className="flex items-center gap-2">
+                              <div className="size-8 rounded-full bg-slate-100 flex items-center justify-center text-[9px] font-black text-slate-500 shadow-sm shrink-0">
                                 {o.customerInitial || o.customerName.charAt(0)}
                               </div>
-                              <span className="text-xs font-bold text-midnight tracking-tight truncate max-w-[100px]">{o.customerName}</span>
+                              <div className="flex flex-col min-w-0">
+                                <span className="text-xs font-bold text-midnight tracking-tight truncate max-w-[150px]">{o.customerName}</span>
+                                <div className="flex flex-wrap gap-1 mt-1">
+                                  {(o.items || []).map((item: any, idx: number) => (
+                                    <span key={idx} className="bg-slate-100 text-slate-600 text-[9px] font-bold px-1.5 py-0.5 rounded-md whitespace-nowrap">
+                                      {item.name} <strong className="text-primary-blue ml-0.5">x{item.quantity}</strong>
+                                    </span>
+                                  ))}
+                                </div>
+                              </div>
                             </div>
                           </td>
                           <td className="px-1 py-5 text-[10px] font-bold text-slate-400 whitespace-nowrap">{o.date.split(',')[0]}</td>

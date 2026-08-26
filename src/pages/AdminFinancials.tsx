@@ -139,7 +139,7 @@ export default function AdminFinancials() {
         const record = {
           orderId: String(o.id),
           buyerName: o.customerName || 'Cliente',
-          payeeName: branch ? branch.name : 'Lojista Matriz',
+          payeeName: branch ? branch.name : 'Revendedor Matriz',
           orderStatus: o.status === 'Concluído' || o.status === 'Pago' ? 'Pago' : o.status,
           deliveryStatus: (extra?.status as any) || 'Pendente',
           saleDate: saleDate.toLocaleDateString('pt-BR'),
@@ -592,7 +592,7 @@ export default function AdminFinancials() {
   }
 
   return (
-    <AdminLayout title="Gestão de Pagamentos PIX [Sincronizado]" subtitle="Auditoria global de repasses para lojistas e parceiros">
+    <AdminLayout title="Gestão de Pagamentos PIX [Sincronizado]" subtitle="Auditoria global de repasses para revendedores e parceiros">
       <div className="p-8 lg:p-12 space-y-12">
         
         {/* Toggle de Visualização e Filtros */}
@@ -604,7 +604,7 @@ export default function AdminFinancials() {
                 viewType === 'merchants' ? 'bg-white text-indigo-600 shadow-md' : 'text-slate-400 hover:text-slate-600'
               }`}
             >
-              Lojistas
+              Revendedores
             </button>
             <button
               onClick={() => setViewType('affiliates')}
@@ -677,7 +677,7 @@ export default function AdminFinancials() {
                     <div>
                        <p className="text-[10px] text-amber-700 font-black uppercase tracking-widest mb-1">Condição de Repasse</p>
                        <p className="text-xs text-amber-800 leading-relaxed font-medium">
-                         Os valores só serão liberados ao lojista quando o status do pedido e status da entrega estiverem <span className="font-black">PAGOS E ENTREGUES</span>.
+                          Os valores só serão liberados ao revendedor quando o status do pedido e status da entrega estiverem <span className="font-black">PAGOS E ENTREGUES</span>.
                        </p>
                     </div>
                     <div className="bg-amber-100/50 p-4 rounded-2xl border border-amber-200">
@@ -696,7 +696,7 @@ export default function AdminFinancials() {
                 </div>
                 <div>
                   <p className="text-[10px] text-indigo-100 font-bold uppercase tracking-widest mb-1">
-                    {viewType === 'merchants' ? 'Total a Pagar Lojistas Hoje' : 'Total a Pagar Afiliados Hoje'}
+                    {viewType === 'merchants' ? 'Total a Pagar Revendedores Hoje' : 'Total a Pagar Afiliados Hoje'}
                   </p>
                   <h3 className="text-4xl font-black text-white tracking-tighter italic leading-none">
                      R$ {(viewType === 'merchants' ? totalLojistasHoje : totalAfiliadosHoje).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}

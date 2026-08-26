@@ -48,12 +48,39 @@ export default function MerchantDashboard() {
       setLoading(true);
       const mId = await businessRules.getMerchantId(profile!.id);
       
-      const [statsData, ordersData, productsData, perfData] = await Promise.all([
+      const [statsData, ordersData, productsData, perfData, affiliateStats] = await Promise.all([
         businessRules.getMerchantDashboardStats(mId, branchId),
         businessRules.getMerchantRecentOrders(mId, branchId),
         businessRules.getMerchantTopProducts(mId, branchId),
-        businessRules.getMerchantSalesPerformance(mId, branchId)
+        businessRules.getMerchantSalesPerformance(mId, branchId),
+        businessRules.getAffiliateStats(profile!.id).catch(() => null)
       ]);
+
+      if (affiliateStats) {
+        statsData.push(
+          { 
+            title: 'Comissão Mensal', 
+            value: new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(affiliateStats.monthlyBonus || 0), 
+            change: '0%', 
+            isPositive: true, 
+            icon: 'TrendingUp' 
+          },
+          { 
+            title: 'Comissão Semanal', 
+            value: new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(affiliateStats.availableBalance || 0), 
+            change: '0%', 
+            isPositive: true, 
+            icon: 'DollarSign' 
+          },
+          { 
+            title: 'Comissão Anual', 
+            value: new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(affiliateStats.annualBonus || 0), 
+            change: '0%', 
+            isPositive: true, 
+            icon: 'DollarSign' 
+          }
+        );
+      }
 
       setStats(statsData);
       setRecentOrders(ordersData);

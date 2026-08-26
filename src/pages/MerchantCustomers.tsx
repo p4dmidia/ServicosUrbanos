@@ -33,7 +33,8 @@ interface Customer {
   orders: number;
   spent: number;
   lastOrder: string;
-  status: 'Ativo' | 'Inativo';
+  status: 'Ativo' | 'Inativo' | 'A Renovar';
+  renewalDate?: string;
   rating: number;
 }
 
@@ -141,6 +142,7 @@ export default function MerchantCustomers() {
             >
               <option value="Todos">Todos os Status</option>
               <option value="Ativo">Ativos</option>
+              <option value="A Renovar">A Renovar</option>
               <option value="Inativo">Inativos</option>
             </select>
           </div>
@@ -230,11 +232,20 @@ export default function MerchantCustomers() {
                             <p className="text-sm font-black text-emerald-600 tracking-tighter">R$ {c.spent.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
                           </td>
                           <td className="px-8 py-6">
-                            <span className={`inline-flex px-3 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest border transition-all ${
-                              c.status === 'Ativo' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-slate-50 text-slate-400 border-slate-100'
-                            }`}>
-                              {c.status}
-                            </span>
+                            <div className="flex flex-col gap-1 items-start">
+                              <span className={`inline-flex px-3 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest border transition-all ${
+                                c.status === 'Ativo' 
+                                  ? 'bg-emerald-50 text-emerald-600 border-emerald-100' 
+                                  : c.status === 'A Renovar'
+                                    ? 'bg-amber-50 text-amber-600 border-amber-100'
+                                    : 'bg-slate-50 text-slate-400 border-slate-100'
+                              }`}>
+                                {c.status}
+                              </span>
+                              <span className="text-[9px] text-slate-400 font-bold uppercase tracking-widest whitespace-nowrap">
+                                Renovação: {c.renewalDate || 'Nenhuma'}
+                              </span>
+                            </div>
                           </td>
                           <td className="px-8 py-6 text-right relative">
                             <div className="flex items-center justify-end gap-2 text-slate-400">

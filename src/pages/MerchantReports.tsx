@@ -16,6 +16,7 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 import MerchantLayout from '../components/MerchantLayout';
 import { businessRules } from '../lib/businessRules';
+import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import toast from 'react-hot-toast';
 import FinancialReportTable, { FinancialRecord } from '../components/FinancialReportTable';
@@ -37,6 +38,7 @@ export default function MerchantReports() {
   const [team, setTeam] = useState<any[]>([]);
   const [branches, setBranches] = useState<any[]>([]);
   const [platformRate, setPlatformRate] = useState(18);
+  const [userCommissions, setUserCommissions] = useState<any[]>([]);
 
   useEffect(() => {
     async function loadReports() {
@@ -50,14 +52,19 @@ export default function MerchantReports() {
         const mId = await businessRules.getMerchantId(profile!.id);
         if (!mId) return;
 
-        const [data, ordersData, branches, marketConfig] = await Promise.all([
+        const [data, ordersData, branchesData, marketConfig, commsRes] = await Promise.all([
           businessRules.getMerchantDetailedReports(mId, '30d', profile?.branch_id),
           businessRules.getMerchantOrders(mId, profile?.branch_id),
           businessRules.getBranches(mId),
-          businessRules.getMarketplaceConfig()
+          businessRules.getMarketplaceConfig(),
+          supabase
+            .from('transactions')
+            .select('amount, type, description, created_at, status')
+            .eq('profile_id', profile!.id)
+            .in('status', ['completed', 'pago'])
         ]);
 
-        const branchIds = branches.map(b => b.id);
+        const branchIds = branchesData.map(b => b.id);
         const teamData = await businessRules.getMerchantTeam(branchIds);
 
         // Buscar extras (status de entrega) para os pedidos
@@ -69,8 +76,9 @@ export default function MerchantReports() {
         setOrders(ordersData);
         setExtras(extrasData.filter(Boolean));
         setTeam(teamData);
-        setBranches(branches);
+        setBranches(branchesData);
         setPlatformRate(marketConfig?.commissionRate || 20);
+        setUserCommissions(commsRes.data || []);
       } catch (error) {
         console.error('Erro ao carregar relatórios:', error);
         toast.error('Erro ao carregar dados analíticos');
@@ -135,6 +143,23 @@ export default function MerchantReports() {
       const orderDate = r.orderDateRaw;
       return orderDate >= start && orderDate <= end;
     });
+
+    const filteredUserComms = userCommissions.filter(t => {
+      const date = new Date(t.created_at);
+      return date >= start && date <= end;
+    });
+
+    const totalMensal = filteredUserComms
+      .filter(t => t.description?.includes('Mensal'))
+      .reduce((acc, t) => acc + Math.abs(Number(t.amount || 0)), 0);
+
+    const totalSemanal = filteredUserComms
+      .filter(t => t.description?.includes('Digital') || t.description?.includes('Semanal') || t.description?.includes('(CD)'))
+      .reduce((acc, t) => acc + Math.abs(Number(t.amount || 0)), 0);
+
+    const totalAnual = filteredUserComms
+      .filter(t => t.description?.includes('Anual'))
+      .reduce((acc, t) => acc + Math.abs(Number(t.amount || 0)), 0);
     
     // KPIs
     const activeRecords = filteredRecords.filter(r => r.orderStatus !== 'Cancelado');
@@ -146,10 +171,13 @@ export default function MerchantReports() {
       .reduce((acc, r) => acc + r.repasse, 0);
 
     const kpiList = [
-      { title: 'Total Cashbacks', value: totalCommissions, trend: 0, isPositive: true },
+      { title: 'Total Repasses', value: totalCommissions, trend: 0, isPositive: true },
       { title: 'Volume de Vendas', value: totalSales, trend: 0, isPositive: true },
       { title: 'Média por Pedido', value: avgOrderValue, trend: 0, isPositive: true },
-      { title: 'Pendentes Liberação', value: pendingCommissions, trend: 0, isPositive: false }
+      { title: 'Pendentes Liberação', value: pendingCommissions, trend: 0, isPositive: false },
+      { title: 'Cashback Mensal', value: totalMensal, trend: 0, isPositive: true },
+      { title: 'Cashback Semanal', value: totalSemanal, trend: 0, isPositive: true },
+      { title: 'Cashback Anual', value: totalAnual, trend: 0, isPositive: true }
     ];
 
     // Chart Data (simplified day grouping)
@@ -179,7 +207,7 @@ export default function MerchantReports() {
       kpis: kpiList,
       chart: { labels: chartLabels, values: chartValues }
     };
-  }, [orders, extras, team, startDateStr, endDateStr, branches, profile, platformRate]);
+  }, [orders, extras, team, startDateStr, endDateStr, branches, profile, platformRate, userCommissions]);
 
   if (loading) {
     return (
@@ -319,7 +347,7 @@ export default function MerchantReports() {
               <div className="absolute -right-10 -top-10 size-40 bg-purple-500 rounded-full blur-[60px] opacity-20 pointer-events-none"></div>
               
               <div className="flex items-center justify-between mb-8 relative z-10">
-                <h3 className="text-lg font-black text-white tracking-tighter uppercase italic">Cashbacks por Filial</h3>
+                <h3 className="text-lg font-black text-white tracking-tighter uppercase italic">Cashbacks por revendedor</h3>
                 <PieChart className="text-slate-400" size={20} />
               </div>
 

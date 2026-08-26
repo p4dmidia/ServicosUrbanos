@@ -14,14 +14,15 @@ async function run() {
   
   const { data: profiles, error } = await supabase
     .from('profiles')
-    .select('id, full_name, role, referred_by, status')
-    .limit(50);
+    .select('id, full_name, email, role, status')
+    .in('role', ['regional_reseller', 'owner', 'manager', 'merchant'])
+    .limit(10);
     
   if (error) {
     console.error('Error fetching profiles:', error.message);
   } else {
-    console.log(`Found ${profiles?.length || 0} profiles.`);
-    console.log(profiles);
+    console.log(`Found ${profiles?.length || 0} reseller profiles.`);
+    console.log(JSON.stringify(profiles, null, 2));
   }
 }
 

@@ -150,7 +150,7 @@ export default function AdminReports() {
             repasse: o.amount * (1 - (platformRate / 100)),
             payDate: payDate.toLocaleDateString('pt-BR'),
             payeeId: String(payeeId),
-            payeeName: branch ? branch.name : 'Lojista Matriz',
+            payeeName: branch ? branch.name : 'Revendedor Matriz',
             payeePixKey: payee?.pix_key || '',
             payeeCpf: payee?.cpf || '',
             paymentMethod: o.paymentMethod || 'PIX',
@@ -348,7 +348,7 @@ export default function AdminReports() {
               viewType === 'merchants' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-slate-600'
             }`}
           >
-            Lojistas
+            Revendedores
           </button>
           <button
             onClick={() => setViewType('affiliates')}
@@ -365,7 +365,7 @@ export default function AdminReports() {
            <FinancialReportTable 
               data={viewType === 'merchants' ? financialReportData : []} 
               affiliateData={viewType === 'affiliates' ? financialReportData : []}
-              title={viewType === 'merchants' ? "Repasses Liquidados (Lojistas)" : "Repasses Liquidados (Afiliados)"} 
+              title={viewType === 'merchants' ? "Repasses Liquidados (Revendedores)" : "Repasses Liquidados (Afiliados)"} 
               isAdmin={true} 
               mode={viewType}
               platformRate={platformRate}

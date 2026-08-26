@@ -212,7 +212,7 @@ export default function FinancialReportTable({
     
     doc.setFontSize(10);
     doc.setTextColor(100, 100, 100);
-    doc.text(`Tipo: ${mode === 'merchants' ? 'Repasses Lojistas' : 'Cashback Afiliados'}`, 14, 30);
+    doc.text(`Tipo: ${mode === 'merchants' ? 'Repasses Revendedores' : 'Cashback Afiliados'}`, 14, 30);
     doc.text(`Gerado em: ${now}`, 14, 35);
     if (startDate || endDate) {
       doc.text(`Período: ${startDate || 'Início'} até ${endDate || 'Hoje'}`, 14, 40);
@@ -256,7 +256,7 @@ export default function FinancialReportTable({
     });
 
     const head = mode === 'merchants' 
-      ? [['ID', 'Lojista', 'Status', 'Data', 'Bruto', 'Líquido']]
+      ? [['ID', 'Revendedor', 'Status', 'Data', 'Bruto', 'Líquido']]
       : hideReceiptButton
         ? [['Afiliado', 'Mensal', 'Digital', 'Anual', 'Chave PIX']]
         : [['Afiliado', 'Mensal', 'Digital', 'Anual', 'Total Pago', 'Chave PIX', 'Data Pagamento']];
@@ -307,7 +307,7 @@ export default function FinancialReportTable({
     const rows = recordsToExport.map((record: any) => {
       if (mode === 'merchants') {
         return [
-          record.payeeName || 'Lojista',
+          record.payeeName || 'Revendedor',
           record.payeePixKey || '---',
           `R$ ${(record.repasse || 0).toFixed(2).replace('.', ',')}`,
           record.payDate || '---'
@@ -479,7 +479,7 @@ export default function FinancialReportTable({
               {mode === 'merchants' ? (
                 <>
                   <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">ID do Pedido</th>
-                  <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Lojista / Beneficiário</th>
+                  <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Revendedor / Beneficiário</th>
                   <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Status</th>
                   <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Data</th>
                   <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Valor Bruto</th>

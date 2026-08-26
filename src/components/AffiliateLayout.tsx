@@ -17,7 +17,8 @@ import {
   Shield,
   Ticket,
   Package,
-  RefreshCw
+  RefreshCw,
+  HeartPulse
 } from 'lucide-react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
@@ -96,6 +97,7 @@ export default function AffiliateLayout({ children, title }: AffiliateLayoutProp
     { path: '/afiliado/pedidos', icon: ShoppingBag, label: 'Meus Pedidos' },
     { path: '/afiliado/renovacoes', icon: RefreshCw, label: 'Minhas Renovações' },
     { path: '/afiliado/ecossistema', icon: Globe, label: 'Ecossistema' },
+    { path: '/afiliado/telemedicina', icon: HeartPulse, label: 'Telemedicina' },
     { path: '/afiliado/perfil', icon: User, label: 'Dados Pessoais' },
     { path: '/afiliado/termo-adesao', icon: FileText, label: 'Termo de Adesão' },
     { path: '/afiliado/apolice', icon: Shield, label: 'Apólice' },

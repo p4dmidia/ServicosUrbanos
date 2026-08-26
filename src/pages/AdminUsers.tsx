@@ -26,7 +26,7 @@ interface User {
   id: string;
   name: string;
   email: string;
-  role: 'admin' | 'merchant' | 'customer' | 'affiliate';
+  role: 'admin' | 'merchant' | 'customer' | 'affiliate' | 'regional_reseller' | 'owner' | 'manager' | string;
   status: 'active' | 'blocked' | 'pending';
   joinedAt: string;
   location: string;
@@ -140,10 +140,23 @@ export default function AdminUsers() {
     if (users.length === 0) return;
     
     const headers = ['Nome', 'Email', 'Cargo', 'Status', 'Desde', 'Localização', 'CPF', 'WhatsApp'];
+    const getRoleLabel = (role: string) => {
+      switch (role) {
+        case 'admin': return 'Admin';
+        case 'merchant':
+        case 'owner':
+        case 'manager': return 'Lojista';
+        case 'regional_reseller': return 'Segurado/Revendedor';
+        case 'affiliate': return 'Afiliado';
+        case 'customer':
+        default: return 'Segurado';
+      }
+    };
+
     const rows = users.map(u => [
       u.name,
       u.email,
-      u.role,
+      getRoleLabel(u.role),
       u.status,
       u.joinedAt,
       u.location,
@@ -166,9 +179,19 @@ export default function AdminUsers() {
 
   const getRoleBadge = (role: User['role']) => {
     switch (role) {
-      case 'admin': return <span className="px-2 py-1 bg-indigo-500/10 text-indigo-400 rounded-lg text-[9px] font-black uppercase tracking-widest border border-indigo-500/20">Admin</span>;
-      case 'merchant': return <span className="px-2 py-1 bg-emerald-500/10 text-emerald-400 rounded-lg text-[9px] font-black uppercase tracking-widest border border-emerald-500/20">Lojista</span>;
-      default: return <span className="px-2 py-1 bg-blue-500/10 text-blue-400 rounded-lg text-[9px] font-black uppercase tracking-widest border border-blue-500/20">Cliente</span>;
+      case 'admin': 
+        return <span className="px-2 py-1 bg-indigo-500/10 text-indigo-400 rounded-lg text-[9px] font-black uppercase tracking-widest border border-indigo-500/20">Admin</span>;
+      case 'merchant': 
+      case 'owner':
+      case 'manager':
+        return <span className="px-2 py-1 bg-emerald-500/10 text-emerald-400 rounded-lg text-[9px] font-black uppercase tracking-widest border border-emerald-500/20">Revendedor</span>;
+      case 'regional_reseller':
+        return <span className="px-2 py-1 bg-purple-500/10 text-purple-400 rounded-lg text-[9px] font-black uppercase tracking-widest border border-purple-500/20">Segurado/Revendedor</span>;
+      case 'affiliate':
+        return <span className="px-2 py-1 bg-pink-500/10 text-pink-400 rounded-lg text-[9px] font-black uppercase tracking-widest border border-pink-500/20">Afiliado</span>;
+      case 'customer':
+      default: 
+        return <span className="px-2 py-1 bg-blue-500/10 text-blue-400 rounded-lg text-[9px] font-black uppercase tracking-widest border border-blue-500/20">Segurado</span>;
     }
   };
 
@@ -188,7 +211,7 @@ export default function AdminUsers() {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
           {[
             { label: 'Total Usuários', value: globalStats?.userCount?.toLocaleString('pt-BR') || '0', icon: Users, color: 'text-indigo-500' },
-            { label: 'Lojistas Ativos', value: globalStats?.branchCount?.toLocaleString('pt-BR') || '0', icon: Shield, color: 'text-emerald-500' },
+            { label: 'Revendedores Ativos', value: globalStats?.branchCount?.toLocaleString('pt-BR') || '0', icon: Shield, color: 'text-emerald-500' },
             { label: 'Crescimento Mês', value: (globalStats?.userTrend >= 0 ? '+' : '') + (globalStats?.userTrend?.toFixed(1) || '0') + '%', icon: UserPlus, color: 'text-purple-500' },
             { label: 'Contas Bloqueadas', value: globalStats?.blockedUserCount?.toLocaleString('pt-BR') || '0', icon: Ban, color: 'text-red-500' },
           ].map((stat, i) => (

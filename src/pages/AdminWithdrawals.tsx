@@ -26,6 +26,24 @@ import { toast } from 'react-hot-toast';
 export default function AdminWithdrawals() {
   const [loading, setLoading] = useState(true);
   const [payableBalances, setPayableBalances] = useState<any[]>([]);
+
+  const getRoleBadge = (role: string) => {
+    switch (role) {
+      case 'admin': 
+        return <span className="px-2 py-0.5 bg-indigo-500/10 text-indigo-400 rounded-md text-[8px] font-black uppercase tracking-widest border border-indigo-500/20">Admin</span>;
+      case 'merchant': 
+      case 'owner':
+      case 'manager':
+        return <span className="px-2 py-0.5 bg-emerald-500/10 text-emerald-400 rounded-md text-[8px] font-black uppercase tracking-widest border border-emerald-500/20">Revendedor</span>;
+      case 'regional_reseller':
+        return <span className="px-2 py-0.5 bg-purple-500/10 text-purple-400 rounded-md text-[8px] font-black uppercase tracking-widest border border-purple-500/20">Segurado/Revendedor</span>;
+      case 'affiliate':
+        return <span className="px-2 py-0.5 bg-pink-500/10 text-pink-400 rounded-md text-[8px] font-black uppercase tracking-widest border border-pink-500/20">Afiliado</span>;
+      case 'customer':
+      default: 
+        return <span className="px-2 py-0.5 bg-blue-500/10 text-blue-400 rounded-md text-[8px] font-black uppercase tracking-widest border border-blue-500/20">Segurado</span>;
+    }
+  };
   const [searchTerm, setSearchTerm] = useState('');
   const [processingId, setProcessingId] = useState<string | null>(null);
   const [selectedPayout, setSelectedPayout] = useState<any>(null);
@@ -124,7 +142,7 @@ export default function AdminWithdrawals() {
     csvContent.push('');
     
     // Totais Gerais
-    csvContent.push('Total Geral Pendente;Pendente Mensal;Pendente Digital;Pendente Anual');
+    csvContent.push('Total Geral Pendente;Pendente Mensal;Pendente Semanal;Pendente Anual');
     csvContent.push([
       `R$ ${totalPending.toFixed(2).replace('.', ',')}`,
       `R$ ${totalMonthlyPending.toFixed(2).replace('.', ',')}`,
@@ -134,7 +152,7 @@ export default function AdminWithdrawals() {
     csvContent.push('');
     
     // Detalhado
-    csvContent.push('Nome;Email;Chave PIX;Dados Bancarios;Pendente Mensal;Pendente Digital;Pendente Anual;Pendente Total');
+    csvContent.push('Nome;Email;Chave PIX;Dados Bancarios;Pendente Mensal;Pendente Semanal;Pendente Anual;Pendente Total');
     
     payableBalances.forEach(w => {
       const userTotal = (w.monthlyPending || 0) + (w.digitalPending || 0) + (w.annualPending || 0);
@@ -217,12 +235,13 @@ export default function AdminWithdrawals() {
           </div>
 
           {/* Card 3: Digital */}
+          {/* Card 3: Semanal */}
           <div className="flex items-center gap-6 bg-[#0a0e17] p-8 rounded-[2.5rem] border border-white/5 shadow-2xl relative overflow-hidden group">
              <div className="size-16 bg-purple-500/20 text-purple-400 rounded-3xl flex items-center justify-center shadow-lg shadow-purple-500/10 shrink-0">
                 <Wallet size={32} />
              </div>
              <div>
-                <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest leading-none mb-2">Pendente Digital</p>
+                <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest leading-none mb-2">Pendente Semanal</p>
                 <p className="text-3xl font-black text-white tracking-tighter italic">
                   R$ {totalDigitalPending.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                 </p>
@@ -295,8 +314,9 @@ export default function AdminWithdrawals() {
                         {w.userName.charAt(0)}
                       </div>
                       <div>
-                        <div className="flex items-center gap-2 mb-1">
+                        <div className="flex items-center gap-3 mb-1">
                           <h3 className="text-xl font-black text-white italic uppercase tracking-tighter">{w.userName}</h3>
+                          {getRoleBadge(w.role)}
                         </div>
                         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-slate-500 font-bold text-[10px] uppercase tracking-widest">
                           <span className="flex items-center gap-1.5"><User size={12} className="text-slate-600" /> {w.userEmail}</span>
@@ -320,7 +340,7 @@ export default function AdminWithdrawals() {
                            </button>
                         </div>
                         <div className="text-center md:text-left border-r border-white/10 pr-8">
-                           <p className="text-[10px] font-black text-purple-400 uppercase tracking-widest mb-1">Digital</p>
+                           <p className="text-[10px] font-black text-purple-400 uppercase tracking-widest mb-1">Semanal</p>
                            <p className="text-2xl font-black text-white tracking-tighter italic">
                              R$ {(w.digitalPending || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                            </p>

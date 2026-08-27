@@ -173,14 +173,15 @@ export default function AffiliateRenewals() {
               
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                 {plansList.map((planItem) => {
-                  const isPopular = planItem.plan_type === 'trimestral';
+                  const isPopular = planItem.plan_type === 'trimestral' && !stats?.isEligible;
                   const isActivePlan = subscription && subscription.plan_type === planItem.plan_type && stats?.isEligible;
+                  const isEcon = !stats?.isEligible && planItem.plan_type === 'anual';
                   
                   return (
                     <div 
                       key={planItem.id} 
                       className={`bg-white border rounded-[2rem] p-6 flex flex-col justify-between gap-6 hover:shadow-xl hover:shadow-primary-blue/5 transition-all relative overflow-hidden ${
-                        isActivePlan 
+                        isActivePlan || isEcon
                           ? 'border-emerald-500 ring-2 ring-emerald-500/10' 
                           : isPopular 
                             ? 'border-primary-blue ring-2 ring-primary-blue/10' 
@@ -190,6 +191,10 @@ export default function AffiliateRenewals() {
                       {isActivePlan ? (
                         <span className="absolute top-0 right-0 bg-emerald-500 text-white text-[9px] font-black uppercase tracking-widest px-3 py-1 rounded-bl-xl leading-none">
                           Ativo
+                        </span>
+                      ) : isEcon ? (
+                        <span className="absolute top-0 right-0 bg-emerald-500 text-white text-[9px] font-black uppercase tracking-widest px-3 py-1 rounded-bl-xl leading-none">
+                          Mais Econômico
                         </span>
                       ) : isPopular ? (
                         <span className="absolute top-0 right-0 bg-primary-blue text-white text-[9px] font-black uppercase tracking-widest px-3 py-1 rounded-bl-xl leading-none">
@@ -213,7 +218,7 @@ export default function AffiliateRenewals() {
                       <button
                         onClick={() => handlePay(planItem)}
                         className={`w-full py-3.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all active:scale-[0.98] ${
-                          isActivePlan 
+                          isActivePlan || isEcon
                             ? 'bg-emerald-500 text-white hover:bg-emerald-600 shadow-lg shadow-emerald-500/15' 
                             : isPopular 
                               ? 'bg-primary-blue text-white hover:bg-primary-blue/90 shadow-lg shadow-primary-blue/15' 

@@ -28,4 +28,11 @@
     transform-origin: top center;
     animation: swing 1s ease-in-out;
   }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
 }

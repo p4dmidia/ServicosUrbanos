@@ -1121,10 +1121,10 @@ export default function Checkout() {
               </div>
 
               <div className="space-y-4">
-                <label className={`flex items-center justify-between p-4 rounded-xl border-2 cursor-pointer transition-all ${paymentMethod === 'mercadopago' ? 'border-primary-blue bg-blue-50/50' : 'border-slate-100 hover:border-slate-200'}`}>
+                <label className="flex items-center justify-between p-4 rounded-xl border-2 border-primary-blue bg-blue-50/50 cursor-default">
                   <div className="flex items-center gap-4">
-                    <div className={`size-5 rounded-full border-2 flex items-center justify-center ${paymentMethod === 'mercadopago' ? 'border-primary-blue' : 'border-slate-300'}`}>
-                      {paymentMethod === 'mercadopago' && <div className="size-2.5 bg-primary-blue rounded-full" />}
+                    <div className="size-5 rounded-full border-2 border-primary-blue flex items-center justify-center">
+                      <div className="size-2.5 bg-primary-blue rounded-full" />
                     </div>
                     <div className="flex items-center gap-3">
                       <div className="size-8 bg-blue-100 rounded-lg flex items-center justify-center text-primary-blue">
@@ -1136,120 +1136,7 @@ export default function Checkout() {
                       </div>
                     </div>
                   </div>
-                  <input type="radio" name="payment" className="hidden" checked={paymentMethod === 'mercadopago'} onChange={() => setPaymentMethod('mercadopago')} />
                 </label>
-
-
-                <label className={`flex items-center justify-between p-4 rounded-xl border-2 cursor-pointer transition-all ${paymentMethod === 'wallet' ? 'border-primary-blue bg-blue-50/50' : 'border-slate-100 hover:border-slate-200'} ${(!authUser || walletBalance < total || walletBalance < 10 || !isEligibleForWallet) ? 'opacity-50 grayscale' : ''}`}>
-                  <div className="flex items-center gap-4">
-                    <div className={`size-5 rounded-full border-2 flex items-center justify-center ${paymentMethod === 'wallet' ? 'border-primary-blue' : 'border-slate-300'}`}>
-                      {paymentMethod === 'wallet' && <div className="size-2.5 bg-primary-blue rounded-full" />}
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <div className="size-5 bg-emerald-500 rounded flex items-center justify-center text-white font-black text-[10px]">CD</div>
-                      <div>
-                        <p className="font-black text-midnight">Saldo Carteira Digital</p>
-                        <p className="text-[10px] text-emerald-600 font-black uppercase">Saldo: R$ {walletBalance.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
-                        {authUser && !isEligibleForWallet && (
-                          <p className="text-[9px] text-red-500 font-bold uppercase mt-1 italic">Liberação após o 1º consumo na plataforma</p>
-                        )}
-                        {authUser && isEligibleForWallet && walletBalance < 10 && (
-                          <p className="text-[9px] text-amber-500 font-bold uppercase mt-1 italic">Saldo mínimo de R$ 10,00 para uso</p>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                  {!authUser ? (
-                    <span className="text-[10px] font-bold text-amber-500 uppercase">Faça login</span>
-                  ) : !isEligibleForWallet ? (
-                    <span className="text-[10px] font-bold text-red-500 uppercase">Conta Inativa</span>
-                  ) : walletBalance < 10 ? (
-                    <span className="text-[10px] font-bold text-amber-500 uppercase">Mínimo R$ 10</span>
-                  ) : walletBalance < total ? (
-                    <span className="text-[10px] font-bold text-red-500 uppercase">Saldo Insuficiente</span>
-                  ) : (
-                    <span className="text-[10px] font-black text-emerald-600 uppercase">Disponível</span>
-                  )}
-                  <input 
-                    type="radio" 
-                    name="payment" 
-                    className="hidden" 
-                    disabled={!authUser || walletBalance < total || walletBalance < 10 || !isEligibleForWallet}
-                    checked={paymentMethod === 'wallet'} 
-                    onChange={() => setPaymentMethod('wallet')} 
-                  />
-                </label>
-
-                <label className={`flex items-center justify-between p-4 rounded-xl border-2 cursor-pointer transition-all ${paymentMethod === 'mixed' ? 'border-primary-blue bg-blue-50/50' : 'border-slate-100 hover:border-slate-200'} ${(!authUser || walletBalance <= 0 || !isEligibleForWallet) ? 'opacity-50 grayscale cursor-not-allowed' : ''}`}>
-                  <div className="flex items-center gap-4">
-                    <div className={`size-5 rounded-full border-2 flex items-center justify-center ${paymentMethod === 'mixed' ? 'border-primary-blue' : 'border-slate-300'}`}>
-                      {paymentMethod === 'mixed' && <div className="size-2.5 bg-primary-blue rounded-full" />}
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <div className="size-8 bg-purple-100 rounded-lg flex items-center justify-center text-purple-600">
-                        <Plus size={20} />
-                      </div>
-                      <div>
-                        <p className="font-black text-midnight uppercase tracking-tight">Pagamento Misto (Carteira + PIX)</p>
-                        <p className="text-[10px] text-slate-400 font-bold uppercase">Pague parte com saldo e o restante via PIX</p>
-                      </div>
-                    </div>
-                  </div>
-                  {!authUser ? (
-                    <span className="text-[10px] font-bold text-amber-500 uppercase">Faça login</span>
-                  ) : !isEligibleForWallet ? (
-                    <span className="text-[10px] font-bold text-red-500 uppercase">Conta Inativa</span>
-                  ) : walletBalance <= 0 ? (
-                    <span className="text-[10px] font-bold text-red-500 uppercase">Sem Saldo</span>
-                  ) : (
-                    <span className="text-[10px] font-black text-purple-600 uppercase">Disponível</span>
-                  )}
-                  <input 
-                    type="radio" 
-                    name="payment" 
-                    className="hidden" 
-                    disabled={!authUser || walletBalance <= 0 || !isEligibleForWallet}
-                    checked={paymentMethod === 'mixed'} 
-                    onChange={() => setPaymentMethod('mixed')} 
-                  />
-                </label>
-
-                {paymentMethod === 'mixed' && (
-                  <motion.div 
-                    initial={{ opacity: 0, height: 0 }}
-                    animate={{ opacity: 1, height: 'auto' }}
-                    className="p-5 bg-purple-50/30 rounded-2xl border border-purple-100 space-y-3"
-                  >
-                    <label className="text-[10px] font-black text-purple-700 uppercase tracking-widest block">
-                      Valor a pagar com saldo da carteira (Máximo: R$ {Math.min(walletBalance, total - 0.01).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}):
-                    </label>
-                    <div className="relative">
-                      <span className="absolute left-4 top-1/2 -translate-y-1/2 text-xs font-black text-slate-400">R$</span>
-                      <input 
-                        type="number"
-                        step="0.01"
-                        min="0.01"
-                        max={Math.min(walletBalance, total - 0.01)}
-                        value={mixedWalletAmount}
-                        onChange={(e) => {
-                          const val = Number(e.target.value);
-                          const maxVal = Number(Math.min(walletBalance, total - 0.01).toFixed(2));
-                          if (val > maxVal) {
-                            setMixedWalletAmount(maxVal);
-                          } else if (val < 0) {
-                            setMixedWalletAmount(0);
-                          } else {
-                            setMixedWalletAmount(val);
-                          }
-                        }}
-                        className="w-full bg-white border border-slate-200 rounded-xl py-3 pl-10 pr-4 text-xs font-bold text-midnight focus:outline-none focus:ring-2 focus:ring-purple-500/20"
-                      />
-                    </div>
-                    <p className="text-[10px] text-slate-500 font-bold">
-                      Restante a ser pago via PIX: <span className="text-midnight font-black">R$ {Number(Math.max(0, total - mixedWalletAmount).toFixed(2)).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
-                    </p>
-                  </motion.div>
-                )}
               </div>
             </motion.section>
           </div>

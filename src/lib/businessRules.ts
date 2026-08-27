@@ -1473,7 +1473,9 @@ export const businessRules = {
       { data: currentCommissions },
       { data: lastCommissions },
       { count: blockedUserCount },
-      { count: pendingWithdrawalCount }
+      { count: pendingWithdrawalCount },
+      { count: resellerCount },
+      { count: subscriberCount }
     ] = await Promise.all([
       // Revenue
       supabase.from('orders').select('amount').in('status', ['Pago, Aguardando Retirada', 'Concluído']).gte('order_date', firstDayCurrentMonth.toISOString()),
@@ -1496,7 +1498,13 @@ export const businessRules = {
       supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('status', 'blocked'),
 
       // Pending Withdrawals
-      supabase.from('transactions').select('*', { count: 'exact', head: true }).eq('type', 'withdrawal').eq('status', 'pending')
+      supabase.from('transactions').select('*', { count: 'exact', head: true }).eq('type', 'withdrawal').eq('status', 'pending'),
+
+      // Resellers
+      supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('role', 'regional_reseller'),
+
+      // Active Subscriptions
+      supabase.from('subscriptions').select('*', { count: 'exact', head: true }).eq('status', 'active').gt('end_date', now.toISOString())
     ]);
 
     // Totais Atuais (Gerais)
@@ -1536,7 +1544,9 @@ export const businessRules = {
       commissionTotal: currentTotalCommissions,
       commissionTrend: calculateTrend(currentTotalCommissions, lastTotalCommissions),
       blockedUserCount: blockedUserCount || 0,
-      pendingWithdrawals: pendingWithdrawalCount || 0
+      pendingWithdrawals: pendingWithdrawalCount || 0,
+      resellerCount: resellerCount || 0,
+      subscriberCount: subscriberCount || 0
     };
   },
 

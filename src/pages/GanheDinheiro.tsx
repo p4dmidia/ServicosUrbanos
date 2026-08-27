@@ -26,7 +26,6 @@ import Header from '../components/Header';
 export default function GanheDinheiro() {
   const [totalMembrosStr, setTotalMembrosStr] = useState('10000');
   const [planPriceStr, setPlanPriceStr] = useState('60');
-  const [isRegional, setIsRegional] = useState(false);
 
   const totalMembros = Number(totalMembrosStr) || 0;
   const planPrice = Number(planPriceStr) || 0;
@@ -74,7 +73,7 @@ export default function GanheDinheiro() {
   
   // Standard affiliate commission is 2% for G0, G1, G2.
   // Regional Reseller gets an additional 2% weekly, 2% monthly, and 2% yearly.
-  const rate = isRegional ? 0.04 : 0.02;
+  const rate = 0.02;
 
   const cashSemanal = arrecadacao * rate;
   const cashMensal = arrecadacao * rate;
@@ -139,7 +138,7 @@ export default function GanheDinheiro() {
                 </div>
                 <h3 className="text-xl font-bold mb-3 text-white">1. Selecione um Plano</h3>
                 <p className="text-slate-400 leading-relaxed text-sm font-medium">
-                  Adira a um dos planos ativos no marketplace para garantir sua proteção e liberar seu link de indicação.
+                  Adira a um dos planos de licenciamento ativos para garantir sua proteção e liberar seu link de indicação.
                 </p>
               </div>
 
@@ -246,24 +245,6 @@ export default function GanheDinheiro() {
                   </div>
                 </div>
 
-                {/* Regional Reseller Checkbox Toggle */}
-                <div className="pt-4 border-t border-white/5 flex items-center justify-between">
-                  <div>
-                    <label className="block text-xs font-black text-white uppercase tracking-wider">Sou Revendedor Regional</label>
-                    <p className="text-[10px] text-slate-500 font-medium italic mt-1">Acumula +2% de bônus de liderança regional.</p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setIsRegional(!isRegional)}
-                    className={`size-7 rounded-lg border flex items-center justify-center transition-all ${
-                      isRegional 
-                        ? 'bg-accent border-accent text-midnight' 
-                        : 'border-white/20 hover:border-white/30 text-transparent'
-                    }`}
-                  >
-                    ✓
-                  </button>
-                </div>
               </div>
 
               {/* Outputs Panel */}
@@ -287,15 +268,15 @@ export default function GanheDinheiro() {
                 {/* Cashback Cards */}
                 <div className="grid grid-cols-3 gap-4">
                   <div className="bg-slate-950/40 p-4 rounded-2xl border border-white/5">
-                    <p className="text-[9px] text-slate-500 font-black uppercase tracking-wider mb-1">C. Semanal ({isRegional ? '4%' : '2%'})</p>
+                    <p className="text-[9px] text-slate-500 font-black uppercase tracking-wider mb-1">C. Semanal (2%)</p>
                     <p className="text-md font-black text-white">R$ {cashSemanal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                   </div>
                   <div className="bg-slate-950/40 p-4 rounded-2xl border border-white/5">
-                    <p className="text-[9px] text-slate-500 font-black uppercase tracking-wider mb-1">C. Mensal ({isRegional ? '4%' : '2%'})</p>
+                    <p className="text-[9px] text-slate-500 font-black uppercase tracking-wider mb-1">C. Mensal (2%)</p>
                     <p className="text-md font-black text-white">R$ {cashMensal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                   </div>
                   <div className="bg-slate-950/40 p-4 rounded-2xl border border-white/5">
-                    <p className="text-[9px] text-slate-500 font-black uppercase tracking-wider mb-1">C. Anual ({isRegional ? '4%' : '2%'})</p>
+                    <p className="text-[9px] text-slate-500 font-black uppercase tracking-wider mb-1">C. Anual (2%)</p>
                     <p className="text-md font-black text-white text-indigo-400">R$ {cashAnual.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                   </div>
                 </div>
@@ -413,7 +394,7 @@ export default function GanheDinheiro() {
             </div>
 
             <div className="flex gap-8 items-center text-xs">
-              <Link to="/marketplace" className="hover:text-white transition-colors">Marketplace</Link>
+              <Link to="/afiliado/renovacoes" className="hover:text-white transition-colors">Planos</Link>
               <Link to="/ecossistema" className="hover:text-white transition-colors">Ecossistema</Link>
               <Link to="/termos-uso" className="hover:text-white transition-colors">Terms of Use</Link>
               <Link to="/termos-privacidade" className="hover:text-white transition-colors">Privacidade</Link>

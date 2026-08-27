@@ -18,6 +18,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import AffiliateLayout from '../components/AffiliateLayout';
 import { businessRules } from '../lib/businessRules';
 import { useAuth } from '../contexts/AuthContext';
+import { supabase } from '../lib/supabase';
 import { toast } from 'react-hot-toast';
 
 export default function AffiliateDashboard() {
@@ -28,6 +29,8 @@ export default function AffiliateDashboard() {
   const [activity, setActivity] = useState<any[]>([]);
   const [links, setLinks] = useState<any[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
+  const [regionalEarnings, setRegionalEarnings] = useState(0);
+  const [regionalConfig, setRegionalConfig] = useState<any>(null);
   const itemsPerPage = 8;
 
   useEffect(() => {
@@ -48,6 +51,25 @@ export default function AffiliateDashboard() {
           navigate('/afiliado/renovacoes');
           toast.error("Assinatura pendente. Regularize seu plano para ter acesso total.", { id: 'pending-sub-alert' });
           return;
+        }
+
+        // Se for revendedor, carregar comissões regionais e taxas ativas
+        if (profile?.role === 'regional_reseller') {
+          const [regTransRes, regConfigRes] = await Promise.all([
+            supabase
+              .from('transactions')
+              .select('amount')
+              .eq('profile_id', user.id)
+              .like('description', '%Comissão Regional%'),
+            supabase
+              .from('mmn_config')
+              .select('commission_regional_semanal, commission_regional_mensal, commission_regional_anual')
+              .single()
+          ]);
+
+          const totalReg = (regTransRes.data || []).reduce((acc, t) => acc + Number(t.amount || 0), 0);
+          setRegionalEarnings(totalReg);
+          setRegionalConfig(regConfigRes.data);
         }
 
         // Use referral_code from profile context if available, fallback to user.id
@@ -102,11 +124,11 @@ export default function AffiliateDashboard() {
             <p className="text-slate-500 font-medium">Acompanhe seu desempenho e gerencie suas indicações.</p>
           </div>
           <Link 
-            to="/marketplace" 
-            className="inline-flex items-center gap-3 bg-midnight text-white px-6 py-3 rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl shadow-midnight/10 hover:bg-slate-800 transition-all group"
+            to="/afiliado/renovacoes" 
+            className="inline-flex items-center gap-3 bg-primary-blue text-white px-6 py-3 rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl shadow-primary-blue/10 hover:bg-primary-blue/90 transition-all group"
           >
             <ShoppingBag size={18} className="group-hover:scale-110 transition-transform" />
-            Loja de Produtos
+            Planos de Licenciamento
           </Link>
         </div>
         
@@ -195,6 +217,99 @@ export default function AffiliateDashboard() {
             </h3>
           </motion.div>
         </div>
+
+        {/* Reseller Leadership Panel */}
+        {profile?.role === 'regional_reseller' && (
+          <div className="space-y-6 pt-6 border-t border-dashed border-slate-200">
+            <div className="flex items-center gap-3">
+              <div className="size-10 bg-purple-50 rounded-xl flex items-center justify-center text-purple-600">
+                <Target size={20} />
+              </div>
+              <div>
+                <h2 className="text-lg font-black text-midnight uppercase tracking-tighter italic">Liderança Regional</h2>
+                <p className="text-xs text-slate-500 font-bold uppercase tracking-wider">Acompanhe seu desempenho e comissões extras como Revendedor Regional</p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {/* Card 1: Comissões Regionais Acumuladas */}
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="bg-gradient-to-br from-purple-500 to-indigo-600 p-6 rounded-3xl text-white shadow-xl shadow-indigo-600/10 relative overflow-hidden"
+              >
+                <div className="absolute top-0 right-0 p-6 opacity-10 pointer-events-none">
+                  <TrendingUp size={120} />
+                </div>
+                <div className="flex justify-between items-start mb-4">
+                  <div className="p-2.5 rounded-2xl bg-white/10 text-white">
+                    <TrendingUp size={22} />
+                  </div>
+                  <div className="text-[9px] font-black bg-white/20 px-2 py-1 rounded-lg uppercase">
+                    Comissão Acumulada
+                  </div>
+                </div>
+                <p className="text-[10px] font-black text-white/70 uppercase tracking-widest leading-none mb-1">Ganhos Regionais Extras</p>
+                <h3 className="text-2xl font-black text-white tracking-tighter">
+                  R$ {regionalEarnings.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                </h3>
+              </motion.div>
+
+              {/* Card 2: Taxas Ativas */}
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.1 }}
+                className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm hover:shadow-xl transition-all"
+              >
+                <div className="flex justify-between items-start mb-4">
+                  <div className="p-3 rounded-2xl bg-purple-50 text-purple-600">
+                    <Target size={22} />
+                  </div>
+                  <div className="text-[10px] font-black text-purple-500 bg-purple-50 px-2 py-1 rounded-lg uppercase">
+                    Taxas Ativas
+                  </div>
+                </div>
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Bônus de Liderança Regional</p>
+                <div className="flex gap-4 pt-1 font-black text-xs text-midnight">
+                  <div>
+                    <span className="text-slate-400 font-bold block uppercase text-[8px]">Semanal</span>
+                    <span className="text-purple-600 font-mono text-sm">+{regionalConfig?.commission_regional_semanal || '2.00'}%</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 font-bold block uppercase text-[8px]">Mensal</span>
+                    <span className="text-purple-600 font-mono text-sm">+{regionalConfig?.commission_regional_mensal || '2.00'}%</span>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 font-bold block uppercase text-[8px]">Anual</span>
+                    <span className="text-purple-600 font-mono text-sm">+{regionalConfig?.commission_regional_anual || '2.00'}%</span>
+                  </div>
+                </div>
+              </motion.div>
+
+              {/* Card 3: Indicados / Rede Regional */}
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.2 }}
+                className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm hover:shadow-xl transition-all"
+              >
+                <div className="flex justify-between items-start mb-4">
+                  <div className="p-3 rounded-2xl bg-indigo-50 text-indigo-600">
+                    <Users size={22} />
+                  </div>
+                  <div className="text-[10px] font-black text-indigo-500 bg-indigo-50 px-2 py-1 rounded-lg uppercase">
+                    Rede Regional
+                  </div>
+                </div>
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Membros na Linhagem Regional</p>
+                <h3 className="text-2xl font-black text-midnight tracking-tighter">
+                  {stats?.total || 0} Membros
+                </h3>
+              </motion.div>
+            </div>
+          </div>
+        )}
 
         {/* Action & Links Section */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">

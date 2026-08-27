@@ -31,7 +31,7 @@ export default function TermosUso() {
         {/* Content */}
         <div className="bg-white rounded-3xl border border-slate-100 p-8 md:p-12 shadow-xl shadow-slate-100/50 space-y-8 text-sm md:text-base leading-relaxed">
           <p className="font-bold text-slate-700">
-            Ao se cadastrar e utilizar a Plataforma Serviços Urbanos (“PLATAFORMA”), o usuário (“AFILIADO”) declara ter lido, compreendido e aceitado integralmente os presentes Termos de Uso. O aceite se dá de forma digital, mediante seleção da opção “Li e concordo” ou ação equivalente no site/aplicativo. O AFILIADO está ciente de que, ao aceitar digitalmente, concorda com todas as condições aqui estabelecidas, assumindo integral responsabilidade pelo cumprimento destes Termos.
+            Ao se cadastrar e utilizar a Plataforma Serviços Urbanos Tecnologia S.A. (“PLATAFORMA”), o usuário (“LICENCIADO” ou “AFILIADO”) declara ter lido, compreendido e aceitado integralmente os presentes Termos de Uso. O presente instrumento celebra as cláusulas descritas a seguir entre a Serviços Urbanos Tecnologia S.A., doravante denominada “LICENCIANTE”, e o usuário, doravante denominado “LICENCIADO” ou “AFILIADO”.
           </p>
 
           <hr className="border-slate-100" />
@@ -40,10 +40,10 @@ export default function TermosUso() {
           <div className="space-y-3">
             <h3 className="text-base md:text-lg font-black text-midnight uppercase tracking-tight flex items-center gap-3">
               <span className="size-6 rounded-lg bg-slate-100 text-slate-600 flex items-center justify-center text-xs font-black">1</span>
-              1.1.1. Objeto
+              CLÁUSULA PRIMEIRA - DO OBJETO
             </h3>
-            <div className="pl-9">
-              <p>A PLATAFORMA disponibiliza benefícios de cashback mensal, semanal e anual vinculados ao consumo de produtos e serviços pelo AFILIADO e por seus indicados até a 5ª geração.</p>
+            <div className="pl-9 text-slate-500">
+              <p>O presente contrato tem por objeto o licenciamento de uso não exclusivo do ecossistema tecnológico da LICENCIANTE, permitindo ao LICENCIADO indicar novos membros, usufruir do marketplace de serviços urbanos, e participar do programa de cashback estruturado em rede MMN do G0 ao G2.</p>
             </div>
           </div>
 
@@ -51,21 +51,10 @@ export default function TermosUso() {
           <div className="space-y-3">
             <h3 className="text-base md:text-lg font-black text-midnight uppercase tracking-tight flex items-center gap-3">
               <span className="size-6 rounded-lg bg-slate-100 text-slate-600 flex items-center justify-center text-xs font-black">2</span>
-              1.1.2. Cadastro e Conta
+              CLÁUSULA SEGUNDA - DA ELEGIBILIDADE E ASSINATURA
             </h3>
-            <div className="pl-9 space-y-2">
-              <p className="flex items-start gap-2">
-                <span className="text-primary-blue font-bold mt-1.5">•</span>
-                <span>O AFILIADO deve fornecer informações verdadeiras e atualizadas.</span>
-              </p>
-              <p className="flex items-start gap-2">
-                <span className="text-primary-blue font-bold mt-1.5">•</span>
-                <span>O acesso é pessoal e intransferível.</span>
-              </p>
-              <p className="flex items-start gap-2">
-                <span className="text-primary-blue font-bold mt-1.5">•</span>
-                <span>O tratamento de dados pessoais seguirá a Lei nº 13.709/2018 (LGPD).</span>
-              </p>
+            <div className="pl-9 text-slate-500">
+              <p>Para estar elegível ao recebimento do cashback recorrente gerado por sua rede própria (G0) e de seus indicados diretos (G1) e indiretos (G2), o LICENCIADO compromete-se a manter ativa a assinatura mensal, trimestral, semestral ou anual de licenciamento do sistema, conforme opção escolhida em sua adesão, realizando o adimplemento nos prazos estabelecidos. O atraso ou inadimplemento resulta na inatividade temporária da conta e na suspensão dos bônus.</p>
             </div>
           </div>
 
@@ -73,17 +62,10 @@ export default function TermosUso() {
           <div className="space-y-3">
             <h3 className="text-base md:text-lg font-black text-midnight uppercase tracking-tight flex items-center gap-3">
               <span className="size-6 rounded-lg bg-slate-100 text-slate-600 flex items-center justify-center text-xs font-black">3</span>
-              1.1.3. Compras e Pagamentos
+              CLÁUSULA TERCEIRA - DOS DADOS BANCÁRIOS E SEGURANÇA
             </h3>
-            <div className="pl-9 space-y-2">
-              <p className="flex items-start gap-2">
-                <span className="text-primary-blue font-bold mt-1.5">•</span>
-                <span>Todas as compras devem ser realizadas via PIX no site oficial.</span>
-              </p>
-              <p className="flex items-start gap-2">
-                <span className="text-primary-blue font-bold mt-1.5">•</span>
-                <span>Apenas compras concluídas e pagas por este meio geram direito a cashback.</span>
-              </p>
+            <div className="pl-9 text-slate-500">
+              <p>O LICENCIADO deve obrigatoriamente preencher e manter atualizados seus dados bancários e chave PIX pessoal para a realização de eventuais repasses e transferências de cashback. A LICENCIANTE não se responsabiliza por transferências mal sucedidas causadas por preenchimento incorreto de dados bancários.</p>
             </div>
           </div>
 
@@ -91,25 +73,10 @@ export default function TermosUso() {
           <div className="space-y-3">
             <h3 className="text-base md:text-lg font-black text-midnight uppercase tracking-tight flex items-center gap-3">
               <span className="size-6 rounded-lg bg-slate-100 text-slate-600 flex items-center justify-center text-xs font-black">4</span>
-              1.1.4. Cashback
+              CLÁUSULA QUARTA - DO CANCELAMENTO
             </h3>
-            <div className="pl-9 space-y-3">
-              <p className="flex items-start gap-2">
-                <span className="text-emerald-500 font-bold mt-1.5">•</span>
-                <span><strong>Mensal:</strong> 1,35% sobre compras da Geração 0 a 5, pago no dia 10 do mês seguinte.</span>
-              </p>
-              <p className="flex items-start gap-2">
-                <span className="text-emerald-500 font-bold mt-1.5">•</span>
-                <span><strong>Semanal:</strong> 0,20% para uso exclusivo dentro da PLATAFORMA, liberado <strong>APÓS ESTAR ELEGÍVEL MENSALMENTE</strong>.</span>
-              </p>
-              <p className="flex items-start gap-2">
-                <span className="text-emerald-500 font-bold mt-1.5">•</span>
-                <span><strong>Anual:</strong> 0,20% sobre compras da Geração 0 a 5, pago em 10 de dezembro.</span>
-              </p>
-              <p className="flex items-start gap-2">
-                <span className="text-amber-500 font-bold mt-1.5">•</span>
-                <span><strong>Condição:</strong> o AFILIADO deve realizar ao menos uma compra mensal e confirmar retirada ou prestação de serviço.</span>
-              </p>
+            <div className="pl-9 text-slate-500">
+              <p>O LICENCIADO poderá solicitar o cancelamento de sua participação a qualquer momento através de solicitação por escrito na central de atendimento do ecossistema. Eventuais saldos acumulados de cashback não resgatados deverão ser solicitados previamente e estarão sujeitos às taxas de saque vigentes na plataforma.</p>
             </div>
           </div>
 
@@ -117,17 +84,11 @@ export default function TermosUso() {
           <div className="space-y-3">
             <h3 className="text-base md:text-lg font-black text-midnight uppercase tracking-tight flex items-center gap-3">
               <span className="size-6 rounded-lg bg-slate-100 text-slate-600 flex items-center justify-center text-xs font-black">5</span>
-              1.1.5. Penalidades por Inatividade
+              CLÁUSULA QUINTA - ANEXO DE SERVIÇOS ADICIONAIS
             </h3>
-            <div className="pl-9 space-y-2">
-              <p className="flex items-start gap-2">
-                <span className="text-red-500 font-bold mt-1.5">•</span>
-                <span><strong>Ausência de consumo mínimo mensal:</strong> perda de 50% do cashback acumulado.</span>
-              </p>
-              <p className="flex items-start gap-2">
-                <span className="text-red-500 font-bold mt-1.5">•</span>
-                <span><strong>Inatividade superior a 90 dias:</strong> bloqueio da conta e perda integral dos valores.</span>
-              </p>
+            <div className="pl-9 text-slate-500 space-y-2">
+              <p>O LICENCIADO declara ter ciência de que o ecossistema Serviços Urbanos oferece benefícios adicionais de seguro coletivo contra acidentes pessoais (Apólice), telemedicina e Número da Sorte, cujo regulamento específico faz parte integrante deste contrato na qualidade de anexo técnico, conforme Anexo I ao XI, que estarão disponíveis em seu dashboard na aba “Termo de Adesão”.</p>
+              <p>O Número da Sorte estará disponível em seu dashboard na aba “Número da Sorte” a partir do mês seguinte à sua adesão, sendo os sorteios sempre realizados pela Loteria Federal nos últimos quatro domingos de cada mês. Em meses com cinco domingos, o primeiro domingo será descartado.</p>
             </div>
           </div>
 
@@ -135,17 +96,12 @@ export default function TermosUso() {
           <div className="space-y-3">
             <h3 className="text-base md:text-lg font-black text-midnight uppercase tracking-tight flex items-center gap-3">
               <span className="size-6 rounded-lg bg-slate-100 text-slate-600 flex items-center justify-center text-xs font-black">6</span>
-              1.1.6. Taxa Administrativa e Impostos
+              CLÁUSULA SEXTA - DISPOSIÇÕES GERAIS
             </h3>
-            <div className="pl-9 space-y-2">
-              <p className="flex items-start gap-2">
-                <span className="text-primary-blue font-bold mt-1.5">•</span>
-                <span>Incide taxa administrativa de 10% sobre todos os cashbacks.</span>
-              </p>
-              <p className="flex items-start gap-2">
-                <span className="text-primary-blue font-bold mt-1.5">•</span>
-                <span>Retenção de IRRF quando aplicável.</span>
-              </p>
+            <div className="pl-9 text-slate-500 space-y-2">
+              <p>O LICENCIADO compromete-se a manter sigilo absoluto sobre quaisquer informações técnicas, comerciais ou estratégicas obtidas em razão deste contrato, sob pena de responsabilização civil e criminal.</p>
+              <p>O licenciamento concedido não transfere ao LICENCIADO quaisquer direitos de propriedade intelectual sobre a tecnologia, marcas, patentes ou demais ativos da LICENCIANTE, permanecendo estes de titularidade exclusiva da mesma.</p>
+              <p>Fica eleito o foro da Comarca de Salvador/BA para dirimir quaisquer controvérsias oriundas deste contrato, com renúncia a qualquer outro, por mais privilegiado que seja.</p>
             </div>
           </div>
 
@@ -153,17 +109,11 @@ export default function TermosUso() {
           <div className="space-y-3">
             <h3 className="text-base md:text-lg font-black text-midnight uppercase tracking-tight flex items-center gap-3">
               <span className="size-6 rounded-lg bg-slate-100 text-slate-600 flex items-center justify-center text-xs font-black">7</span>
-              1.1.7. Sistema de Indicação
+              CLÁUSULA SÉTIMA - PENALIDADES E USO INDEVIDO
             </h3>
-            <div className="pl-9 space-y-2">
-              <p className="flex items-start gap-2">
-                <span className="text-primary-blue font-bold mt-1.5">•</span>
-                <span>Indicações válidas até a 5ª geração.</span>
-              </p>
-              <p className="flex items-start gap-2">
-                <span className="text-red-500 font-bold mt-1.5">•</span>
-                <span>É proibida fraude, simulação de compras ou criação de contas falsas.</span>
-              </p>
+            <div className="pl-9 text-slate-500 space-y-2">
+              <p>O uso indevido da plataforma, incluindo mas não se limitando a práticas fraudulentas, manipulação de dados, criação de contas falsas, utilização de meios ilícitos para obtenção de benefícios ou qualquer violação das regras estabelecidas neste termo, acarretará a imediata suspensão da conta do LICENCIADO, sem prejuízo da adoção de medidas judiciais cabíveis.</p>
+              <p>Em caso de reincidência ou fraude comprovada, o LICENCIADO perderá definitivamente o direito a quaisquer bônus, cashback ou benefícios acumulados, além de responder civil e criminalmente pelos danos causados à LICENCIANTE e a terceiros.</p>
             </div>
           </div>
 
@@ -171,17 +121,10 @@ export default function TermosUso() {
           <div className="space-y-3">
             <h3 className="text-base md:text-lg font-black text-midnight uppercase tracking-tight flex items-center gap-3">
               <span className="size-6 rounded-lg bg-slate-100 text-slate-600 flex items-center justify-center text-xs font-black">8</span>
-              1.1.8. Pagamentos e Resgates
+              CLÁUSULA OITAVA - VIGÊNCIA
             </h3>
-            <div className="pl-9 space-y-2">
-              <p className="flex items-start gap-2">
-                <span className="text-primary-blue font-bold mt-1.5">•</span>
-                <span>Cashback mensal e anual: creditado em conta bancária do titular.</span>
-              </p>
-              <p className="flex items-start gap-2">
-                <span className="text-primary-blue font-bold mt-1.5">•</span>
-                <span>Cashback semanal: creditado em conta bancária do titular.</span>
-              </p>
+            <div className="pl-9 text-slate-500">
+              <p>A vigência deste termo de uso vale durante o período de contratação mensal, trimestral, semestral ou anual, conforme a modalidade escolhida pelo LICENCIADO no momento da adesão, renovando-se automaticamente mediante o pagamento da respectiva assinatura, salvo manifestação expressa em contrário por qualquer das partes.</p>
             </div>
           </div>
 
@@ -189,17 +132,11 @@ export default function TermosUso() {
           <div className="space-y-3">
             <h3 className="text-base md:text-lg font-black text-midnight uppercase tracking-tight flex items-center gap-3">
               <span className="size-6 rounded-lg bg-slate-100 text-slate-600 flex items-center justify-center text-xs font-black">9</span>
-              1.1.9. Direitos e Deveres do Usuário
+              CLÁUSULA NONA - ALTERAÇÕES DO TERMO DE USO
             </h3>
-            <div className="pl-9 space-y-2">
-              <p className="flex items-start gap-2">
-                <span className="text-primary-blue font-bold mt-1.5">•</span>
-                <span>Utilizar a PLATAFORMA de forma lícita e ética.</span>
-              </p>
-              <p className="flex items-start gap-2">
-                <span className="text-primary-blue font-bold mt-1.5">•</span>
-                <span>Manter dados cadastrais atualizados.</span>
-              </p>
+            <div className="pl-9 text-slate-500 space-y-2">
+              <p>A LICENCIANTE reserva-se o direito de alterar, atualizar ou complementar este termo de uso a qualquer momento, mediante publicação da versão atualizada no dashboard do LICENCIADO, na aba “Termo de Adesão”.</p>
+              <p>As alterações entrarão em vigor imediatamente após sua publicação, exceto quando envolverem mudanças substanciais nas condições financeiras ou nos direitos do LICENCIADO, caso em que será concedido prazo mínimo de 30 (trinta) dias para ciência e adaptação. A continuidade do uso da plataforma após a publicação das alterações será considerada como aceitação tácita das novas condições.</p>
             </div>
           </div>
 
@@ -207,21 +144,11 @@ export default function TermosUso() {
           <div className="space-y-3">
             <h3 className="text-base md:text-lg font-black text-midnight uppercase tracking-tight flex items-center gap-3">
               <span className="size-10 rounded-lg bg-slate-100 text-slate-600 flex items-center justify-center text-xs font-black shrink-0">10</span>
-              1.1.10. Direitos e Deveres da Plataforma
+              CLÁUSULA DÉCIMA - COMUNICAÇÕES E NOTIFICAÇÕES
             </h3>
-            <div className="pl-9 space-y-2">
-              <p className="flex items-start gap-2">
-                <span className="text-primary-blue font-bold mt-1.5">•</span>
-                <span>Garantir funcionamento, salvo manutenção ou falhas técnicas.</span>
-              </p>
-              <p className="flex items-start gap-2">
-                <span className="text-primary-blue font-bold mt-1.5">•</span>
-                <span>Alterar percentuais e condições de cashback mediante aviso prévio.</span>
-              </p>
-              <p className="flex items-start gap-2">
-                <span className="text-primary-blue font-bold mt-1.5">•</span>
-                <span>Suspender ou excluir contas em caso de descumprimento dos presentes Termos.</span>
-              </p>
+            <div className="pl-9 text-slate-500 space-y-2">
+              <p>Todas as comunicações oficiais entre a LICENCIANTE e o LICENCIADO serão realizadas por meio do dashboard da plataforma, na aba de notificações, e/ou através do e-mail cadastrado pelo LICENCIADO no momento da adesão.</p>
+              <p>O LICENCIADO compromete-se a manter seu endereço de e-mail atualizado e ativo, reconhecendo que a ausência de atualização poderá resultar na perda de informações relevantes, sem responsabilidade da LICENCIANTE. As notificações enviadas por e-mail ou publicadas no dashboard serão consideradas recebidas e válidas para todos os efeitos legais.</p>
             </div>
           </div>
 
@@ -229,17 +156,18 @@ export default function TermosUso() {
           <div className="space-y-3">
             <h3 className="text-base md:text-lg font-black text-midnight uppercase tracking-tight flex items-center gap-3">
               <span className="size-10 rounded-lg bg-slate-100 text-slate-600 flex items-center justify-center text-xs font-black shrink-0">11</span>
-              1.1.11. Limitação de Responsabilidade
+              CLÁUSULA DÉCIMA PRIMEIRA - RESCISÃO CONTRATUAL PELA LICENCIANTE
             </h3>
-            <div className="pl-9 space-y-2">
-              <p className="flex items-start gap-2">
-                <span className="text-primary-blue font-bold mt-1.5">•</span>
-                <span>A PLATAFORMA não se responsabiliza por falhas externas, como problemas bancários ou de conexão.</span>
-              </p>
-              <p className="flex items-start gap-2">
-                <span className="text-primary-blue font-bold mt-1.5">•</span>
-                <span>O cashback constitui benefício promocional e não representa investimento financeiro ou promessa de rendimento.</span>
-              </p>
+            <div className="pl-9 text-slate-500 space-y-3">
+              <p>A LICENCIANTE poderá rescindir unilateralmente este termo de uso, sem necessidade de aviso prévio, nos seguintes casos:</p>
+              <ul className="list-disc pl-5 space-y-1">
+                <li>Descumprimento grave das obrigações assumidas pelo LICENCIADO;</li>
+                <li>Prática de atos ilícitos, fraudulentos ou que atentem contra a boa-fé contratual;</li>
+                <li>Utilização indevida da plataforma que comprometa sua segurança, estabilidade ou reputação;</li>
+                <li>Inatividade prolongada da conta, superior a 90 (noventa) dias, sem justificativa apresentada;</li>
+                <li>Qualquer violação às disposições previstas neste termo e em seus anexos.</li>
+              </ul>
+              <p>A rescisão acarretará a imediata suspensão da conta do LICENCIADO e a perda dos benefícios acumulados, sem prejuízo da adoção de medidas judiciais cabíveis para reparação de danos.</p>
             </div>
           </div>
 
@@ -247,17 +175,10 @@ export default function TermosUso() {
           <div className="space-y-3">
             <h3 className="text-base md:text-lg font-black text-midnight uppercase tracking-tight flex items-center gap-3">
               <span className="size-10 rounded-lg bg-slate-100 text-slate-600 flex items-center justify-center text-xs font-black shrink-0">12</span>
-              1.1.12. Alterações
+              CLÁUSULA DÉCIMA SEGUNDA - FORÇA MAIOR
             </h3>
-            <div className="pl-9 space-y-2">
-              <p className="flex items-start gap-2">
-                <span className="text-primary-blue font-bold mt-1.5">•</span>
-                <span>A PLATAFORMA poderá modificar estes Termos a qualquer tempo, mediante comunicação prévia.</span>
-              </p>
-              <p className="flex items-start gap-2">
-                <span className="text-primary-blue font-bold mt-1.5">•</span>
-                <span>O uso continuado da PLATAFORMA após alterações implica concordância com os novos termos.</span>
-              </p>
+            <div className="pl-9 text-slate-500">
+              <p>Nenhuma das partes será responsabilizada pelo descumprimento parcial ou total das obrigações previstas neste termo quando tal descumprimento decorrer de casos fortuitos ou de força maior, incluindo, mas não se limitando a: desastres naturais, incêndios, enchentes, greves, guerras, falhas sistêmicas, ataques cibernéticos, pandemias ou quaisquer outros eventos imprevisíveis e inevitáveis que impeçam a execução das obrigações aqui assumidas. Nesses casos, as obrigações afetadas ficarão suspensas pelo período em que perdurar o evento de força maior, retomando-se sua plena eficácia tão logo cesse a causa impeditiva.</p>
             </div>
           </div>
 
@@ -265,10 +186,10 @@ export default function TermosUso() {
           <div className="space-y-3">
             <h3 className="text-base md:text-lg font-black text-midnight uppercase tracking-tight flex items-center gap-3">
               <span className="size-10 rounded-lg bg-slate-100 text-slate-600 flex items-center justify-center text-xs font-black shrink-0">13</span>
-              1.1.13. Foro
+              CLÁUSULA DÉCIMA TERCEIRA - ENCERRAMENTO E CONCORDÂNCIA
             </h3>
-            <div className="pl-9">
-              <p>Este Termo é regido pela legislação brasileira. Para dirimir conflitos, fica eleito o foro da comarca de <strong>Salvador/BA</strong>.</p>
+            <div className="pl-9 text-slate-500">
+              <p>O LICENCIADO declara ter lido, compreendido e aceitado integralmente todas as cláusulas e condições estabelecidas neste termo de uso e em seus anexos. Ao confirmar sua adesão, o LICENCIADO reconhece que este termo constitui o acordo completo entre as partes, substituindo quaisquer entendimentos ou comunicações anteriores, verbais ou escritas, relacionadas ao objeto aqui tratado.</p>
             </div>
           </div>
         </div>

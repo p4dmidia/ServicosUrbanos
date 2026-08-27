@@ -127,27 +127,72 @@ export default function AffiliateLayout({ children, title }: AffiliateLayoutProp
           )}
         </div>
 
-        <nav className="flex-1 px-4 py-4 space-y-2">
+        <nav className="flex-1 px-4 py-4 space-y-2 overflow-y-auto max-h-[calc(100vh-200px)] custom-scrollbar">
           {menuItems.map((item) => {
-            const isActive = location.pathname === item.path;
+            const isTermActive = location.pathname.startsWith('/afiliado/termo-adesao');
+            const isActive = item.path === '/afiliado/termo-adesao' 
+              ? isTermActive 
+              : location.pathname === item.path;
+
+            const termSubItems = [
+              { path: '/afiliado/termo-adesao', label: 'Termo Principal' },
+              { path: '/afiliado/termo-adesao/anexo-1', label: 'Anexo I - Regulamento' },
+              { path: '/afiliado/termo-adesao/anexo-2', label: 'Anexo II - Condições Gerais' },
+              { path: '/afiliado/termo-adesao/anexo-3', label: 'Anexo III - Tabela Indenização' },
+              { path: '/afiliado/termo-adesao/anexo-4', label: 'Anexo IV - Cobrança/Renovação' },
+              { path: '/afiliado/termo-adesao/anexo-5', label: 'Anexo V - Proteção Dados' },
+              { path: '/afiliado/termo-adesao/anexo-6', label: 'Anexo VI - Divulgação' },
+              { path: '/afiliado/termo-adesao/anexo-7', label: 'Anexo VII - Cancelamento' },
+              { path: '/afiliado/termo-adesao/anexo-8', label: 'Anexo VIII - Comissionamento' },
+              { path: '/afiliado/termo-adesao/anexo-9', label: 'Anexo IX - Telemedicina' },
+              { path: '/afiliado/termo-adesao/anexo-10', label: 'Anexo X - Qtde Sorteios' },
+              { path: '/afiliado/termo-adesao/anexo-11', label: 'Anexo XI - Docs Indenização' },
+            ];
+
             return (
-              <Link
-                key={item.path}
-                to={item.path}
-                className={`flex items-center gap-4 px-4 py-4 rounded-2xl transition-all group ${
-                  isActive 
-                    ? 'bg-primary-blue text-white shadow-lg shadow-primary-blue/20' 
-                    : 'text-slate-400 hover:bg-slate-50 hover:text-midnight'
-                }`}
-              >
-                <item.icon size={22} className={isActive ? 'text-white' : 'group-hover:text-primary-blue'} />
-                {isSidebarOpen && <span className="font-bold text-sm tracking-tight">{item.label}</span>}
-                {isActive && isSidebarOpen && (
-                  <motion.div layoutId="activeNav" className="ml-auto">
-                    <ChevronRight size={16} />
+              <div key={item.path} className="space-y-1">
+                <Link
+                  to={item.path}
+                  className={`flex items-center gap-4 px-4 py-4 rounded-2xl transition-all group ${
+                    isActive 
+                      ? 'bg-primary-blue text-white shadow-lg shadow-primary-blue/20' 
+                      : 'text-slate-400 hover:bg-slate-50 hover:text-midnight'
+                  }`}
+                >
+                  <item.icon size={22} className={isActive ? 'text-white' : 'group-hover:text-primary-blue'} />
+                  {isSidebarOpen && <span className="font-bold text-sm tracking-tight">{item.label}</span>}
+                  {isActive && isSidebarOpen && (
+                    <motion.div layoutId="activeNav" className="ml-auto">
+                      <ChevronRight size={16} />
+                    </motion.div>
+                  )}
+                </Link>
+                
+                {item.path === '/afiliado/termo-adesao' && isTermActive && isSidebarOpen && (
+                  <motion.div 
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: 'auto', opacity: 1 }}
+                    className="pl-6 border-l-2 border-slate-200 ml-6 space-y-1 py-1"
+                  >
+                    {termSubItems.map((subItem) => {
+                      const isSubActive = location.pathname === subItem.path || (subItem.path === '/afiliado/termo-adesao' && (location.pathname === '/afiliado/termo-adesao/' || location.pathname === '/afiliado/termo-adesao'));
+                      return (
+                        <Link
+                          key={subItem.path}
+                          to={subItem.path}
+                          className={`block py-2 px-3 text-xs font-bold rounded-xl transition-all ${
+                            isSubActive 
+                              ? 'text-primary-blue bg-primary-blue/5' 
+                              : 'text-slate-400 hover:text-midnight hover:bg-slate-50'
+                          }`}
+                        >
+                          {subItem.label}
+                        </Link>
+                      );
+                    })}
                   </motion.div>
                 )}
-              </Link>
+              </div>
             );
           })}
         </nav>
@@ -289,10 +334,12 @@ export default function AffiliateLayout({ children, title }: AffiliateLayoutProp
                 </div>
                
                <div className="flex items-center gap-3 pl-2 border-l border-slate-100">
-                 <div className="text-right hidden sm:block">
-                   <p className="text-xs font-black text-midnight leading-none mb-1">{profile?.full_name || 'Carregando...'}</p>
-                   <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Afiliado Premium</p>
-                 </div>
+                  <div className="text-right hidden sm:block">
+                    <p className="text-xs font-black text-midnight leading-none mb-1">{profile?.full_name || 'Carregando...'}</p>
+                    <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">
+                      {profile?.role === 'regional_reseller' ? 'Revendedor Regional' : 'Afiliado Premium'}
+                    </p>
+                  </div>
                  <div className="size-10 rounded-xl bg-slate-100 flex items-center justify-center font-black text-slate-400 border border-slate-200 uppercase overflow-hidden relative">
                    {profile?.avatar_url ? (
                      <img src={profile.avatar_url} alt="Profile" className="w-full h-full object-cover" />
@@ -337,21 +384,69 @@ export default function AffiliateLayout({ children, title }: AffiliateLayoutProp
                   <button onClick={() => setIsMobileMenuOpen(false)} className="text-slate-400"><X size={24} /></button>
                </div>
                
-               <nav className="flex-1 space-y-2">
-                 {menuItems.map((item) => (
-                   <Link
-                      key={item.path}
-                      to={item.path}
-                      onClick={() => setIsMobileMenuOpen(false)}
-                      className={`flex items-center gap-4 px-6 py-4 rounded-2xl font-bold transition-all ${
-                        location.pathname === item.path ? 'bg-primary-blue text-white shadow-lg' : 'text-slate-400'
-                      }`}
-                   >
-                     <item.icon size={20} />
-                     {item.label}
-                   </Link>
-                 ))}
-               </nav>
+               <nav className="flex-1 space-y-2 overflow-y-auto max-h-[70vh] custom-scrollbar pr-2">
+                  {menuItems.map((item) => {
+                    const isTermActive = location.pathname.startsWith('/afiliado/termo-adesao');
+                    const isActive = item.path === '/afiliado/termo-adesao' 
+                      ? isTermActive 
+                      : location.pathname === item.path;
+
+                    const termSubItems = [
+                      { path: '/afiliado/termo-adesao', label: 'Termo Principal' },
+                      { path: '/afiliado/termo-adesao/anexo-1', label: 'Anexo I - Regulamento' },
+                      { path: '/afiliado/termo-adesao/anexo-2', label: 'Anexo II - Condições Gerais' },
+                      { path: '/afiliado/termo-adesao/anexo-3', label: 'Anexo III - Tabela Indenização' },
+                      { path: '/afiliado/termo-adesao/anexo-4', label: 'Anexo IV - Cobrança/Renovação' },
+                      { path: '/afiliado/termo-adesao/anexo-5', label: 'Anexo V - Proteção Dados' },
+                      { path: '/afiliado/termo-adesao/anexo-6', label: 'Anexo VI - Divulgação' },
+                      { path: '/afiliado/termo-adesao/anexo-7', label: 'Anexo VII - Cancelamento' },
+                      { path: '/afiliado/termo-adesao/anexo-8', label: 'Anexo VIII - Comissionamento' },
+                      { path: '/afiliado/termo-adesao/anexo-9', label: 'Anexo IX - Telemedicina' },
+                      { path: '/afiliado/termo-adesao/anexo-10', label: 'Anexo X - Qtde Sorteios' },
+                      { path: '/afiliado/termo-adesao/anexo-11', label: 'Anexo XI - Docs Indenização' },
+                    ];
+
+                    return (
+                      <div key={item.path} className="space-y-1">
+                        <Link
+                           to={item.path}
+                           onClick={() => {
+                             if (item.path !== '/afiliado/termo-adesao') {
+                               setIsMobileMenuOpen(false);
+                             }
+                           }}
+                           className={`flex items-center gap-4 px-6 py-4 rounded-2xl font-bold transition-all ${
+                             isActive ? 'bg-primary-blue text-white shadow-lg' : 'text-slate-400'
+                           }`}
+                        >
+                          <item.icon size={20} />
+                          {item.label}
+                        </Link>
+                        {item.path === '/afiliado/termo-adesao' && isTermActive && (
+                          <div className="pl-6 border-l-2 border-slate-100 ml-8 space-y-1 py-1">
+                            {termSubItems.map((subItem) => {
+                              const isSubActive = location.pathname === subItem.path || (subItem.path === '/afiliado/termo-adesao' && (location.pathname === '/afiliado/termo-adesao/' || location.pathname === '/afiliado/termo-adesao'));
+                              return (
+                                <Link
+                                  key={subItem.path}
+                                  to={subItem.path}
+                                  onClick={() => setIsMobileMenuOpen(false)}
+                                  className={`block py-2 px-3 text-xs font-bold rounded-xl transition-all ${
+                                    isSubActive 
+                                      ? 'text-primary-blue bg-primary-blue/5' 
+                                      : 'text-slate-400 hover:text-midnight hover:bg-slate-50'
+                                  }`}
+                                >
+                                  {subItem.label}
+                                </Link>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </nav>
 
                <button 
                  onClick={handleLogout}

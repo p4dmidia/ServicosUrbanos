@@ -110,10 +110,9 @@ export default function AdminLayout({ children, title, subtitle }: AdminLayoutPr
 
   const menuItems = [
     { name: 'Dashboard', icon: BarChart3, path: '/admin/dashboard' },
-    { name: 'Plataformas', icon: Globe, path: '/admin/plataformas' },
+    { name: 'Produtos', icon: Package, path: '/admin/produtos' },
+    { name: 'Pedidos', icon: ShoppingBag, path: '/admin/pedidos' },
     { name: 'Usuários', icon: Users, path: '/admin/usuarios' },
-    { name: 'Marketplace', icon: Store, path: '/admin/marketplace' },
-    { name: 'Lista de Espera', icon: Clock, path: '/admin/lista-espera' },
     { name: 'Relatórios', icon: PieChart, path: '/admin/relatorios' },
     { name: 'Financeiro', icon: DollarSign, path: '/admin/financeiro' },
     { name: 'Pagamentos', icon: CreditCard, path: '/admin/saques' },

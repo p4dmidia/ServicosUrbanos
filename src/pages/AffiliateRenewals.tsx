@@ -5,19 +5,22 @@ import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import { businessRules } from '../lib/businessRules';
 import { toast } from 'react-hot-toast';
+import { useNavigate } from 'react-router-dom';
 
 export default function AffiliateRenewals() {
+  const navigate = useNavigate();
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState<any>(null);
   const [subscription, setSubscription] = useState<any | null>(null);
   const [subHistory, setSubHistory] = useState<any[]>([]);
+  const [plansList, setPlansList] = useState<any[]>([]);
 
   const loadData = async () => {
     if (!user) return;
     try {
       setLoading(true);
-      const [statsData, subRes, historyRes] = await Promise.all([
+      const [statsData, subRes, historyRes, plansRes] = await Promise.all([
         businessRules.getAffiliateStats(user.id),
         supabase
           .from('subscriptions')
@@ -30,10 +33,24 @@ export default function AffiliateRenewals() {
           .from('subscriptions')
           .select('*')
           .eq('profile_id', user.id)
-          .order('created_at', { ascending: false })
+          .order('created_at', { ascending: false }),
+        supabase
+          .from('products')
+          .select('*')
+          .eq('is_subscription', true)
+          .eq('status', 'Ativo')
+          .order('price', { ascending: true })
       ]);
 
       setStats(statsData);
+
+      const fetchedPlans = plansRes.data && plansRes.data.length > 0 ? plansRes.data : [
+        { id: 'sub-mensal', name: 'Plano Mensal', price: 20, duration_days: 30, plan_type: 'mensal', image: '📅' },
+        { id: 'sub-trimestral', name: 'Plano Trimestral', price: 30, duration_days: 90, plan_type: 'trimestral', image: '🌟' },
+        { id: 'sub-semestral', name: 'Plano Semestral', price: 40, duration_days: 180, plan_type: 'semestral', image: '💼' },
+        { id: 'sub-anual', name: 'Plano Anual', price: 60, duration_days: 365, plan_type: 'anual', image: '🏆' }
+      ];
+      setPlansList(fetchedPlans);
 
       let finalSub = subRes.data;
       if (!finalSub) {
@@ -71,25 +88,24 @@ export default function AffiliateRenewals() {
     loadData();
   }, [user]);
 
-  const handlePay = async (plan: string) => {
+  const handlePay = async (plan: any) => {
     if (!user) return;
     try {
-      const loadingToast = toast.loading('Processando pagamento da renovação...');
-      await businessRules.paySubscription(user.id, plan as any);
-      toast.dismiss(loadingToast);
-      toast.success(`Renovação do plano ${plan.toUpperCase()} realizada com sucesso!`);
-      loadData();
+      const cartItem = {
+        id: plan.id,
+        name: `Licenciamento MMN - ${plan.name}`,
+        price: plan.price,
+        quantity: 1,
+        image: plan.image || "🔄",
+        is_subscription: true,
+        plan_type: plan.plan_type
+      };
+      
+      localStorage.setItem('urbashop_cart', JSON.stringify([cartItem]));
+      navigate('/checkout');
     } catch (e: any) {
-      toast.dismiss();
-      toast.error('Erro ao processar renovação: ' + e.message);
+      toast.error('Erro ao redirecionar para o checkout: ' + e.message);
     }
-  };
-
-  const planLabels: Record<string, { label: string; price: string }> = {
-    mensal: { label: 'Plano Mensal', price: 'R$ 20,00' },
-    trimestral: { label: 'Plano Trimestral', price: 'R$ 30,00' },
-    semestral: { label: 'Plano Semestral', price: 'R$ 40,00' },
-    anual: { label: 'Plano Anual', price: 'R$ 60,00' }
   };
 
   return (
@@ -156,42 +172,59 @@ export default function AffiliateRenewals() {
               <h3 className="text-lg font-black text-midnight tracking-tighter uppercase italic">Planos de Renovação Disponíveis</h3>
               
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                {['mensal', 'trimestral', 'semestral', 'anual'].map((plan) => {
-                  const details = planLabels[plan];
-                  const isPopular = plan === 'trimestral';
+                {plansList.map((planItem) => {
+                  const isPopular = planItem.plan_type === 'trimestral';
+                  const isActivePlan = subscription && subscription.plan_type === planItem.plan_type && stats?.isEligible;
+                  
                   return (
                     <div 
-                      key={plan} 
+                      key={planItem.id} 
                       className={`bg-white border rounded-[2rem] p-6 flex flex-col justify-between gap-6 hover:shadow-xl hover:shadow-primary-blue/5 transition-all relative overflow-hidden ${
-                        isPopular ? 'border-primary-blue ring-2 ring-primary-blue/10' : 'border-slate-200'
+                        isActivePlan 
+                          ? 'border-emerald-500 ring-2 ring-emerald-500/10' 
+                          : isPopular 
+                            ? 'border-primary-blue ring-2 ring-primary-blue/10' 
+                            : 'border-slate-200'
                       }`}
                     >
-                      {isPopular && (
+                      {isActivePlan ? (
+                        <span className="absolute top-0 right-0 bg-emerald-500 text-white text-[9px] font-black uppercase tracking-widest px-3 py-1 rounded-bl-xl leading-none">
+                          Ativo
+                        </span>
+                      ) : isPopular ? (
                         <span className="absolute top-0 right-0 bg-primary-blue text-white text-[9px] font-black uppercase tracking-widest px-3 py-1 rounded-bl-xl leading-none">
                           Popular
                         </span>
-                      )}
+                      ) : null}
 
                       <div className="space-y-2">
                         <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Opção</span>
-                        <h4 className="text-base font-black text-midnight uppercase tracking-tight">{details.label}</h4>
+                        <h4 className="text-base font-black text-midnight uppercase tracking-tight">{planItem.name}</h4>
                         <div className="pt-2">
-                          <span className="text-2xl font-black text-primary-blue font-mono">{details.price}</span>
+                          <span className="text-2xl font-black text-primary-blue font-mono">
+                            R$ {Number(planItem.price).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                          </span>
                           <span className="text-[10px] text-slate-400 font-bold uppercase ml-1">
-                            {plan === 'mensal' ? '/ 30 dias' : plan === 'trimestral' ? '/ 90 dias' : plan === 'semestral' ? '/ 180 dias' : '/ 365 dias'}
+                            / {planItem.duration_days} dias
                           </span>
                         </div>
                       </div>
 
                       <button
-                        onClick={() => handlePay(plan)}
+                        onClick={() => handlePay(planItem)}
                         className={`w-full py-3.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all active:scale-[0.98] ${
-                          isPopular 
-                            ? 'bg-primary-blue text-white hover:bg-primary-blue/90 shadow-lg shadow-primary-blue/15' 
-                            : 'bg-slate-50 border border-slate-200 text-slate-600 hover:bg-slate-100 hover:text-midnight'
+                          isActivePlan 
+                            ? 'bg-emerald-500 text-white hover:bg-emerald-600 shadow-lg shadow-emerald-500/15' 
+                            : isPopular 
+                              ? 'bg-primary-blue text-white hover:bg-primary-blue/90 shadow-lg shadow-primary-blue/15' 
+                              : 'bg-slate-50 border border-slate-200 text-slate-600 hover:bg-slate-100 hover:text-midnight'
                         }`}
                       >
-                        Pagar Agora
+                        {isActivePlan 
+                          ? 'Renovar Plano' 
+                          : stats?.isEligible 
+                            ? 'Trocar para este' 
+                            : 'Escolher Plano'}
                       </button>
                     </div>
                   );

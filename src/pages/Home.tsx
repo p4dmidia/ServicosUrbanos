@@ -701,7 +701,7 @@ export default function Home() {
               <ul className="flex flex-col gap-4 text-sm">
                 <li><a href="#" className="hover:text-white transition-colors">Como funciona</a></li>
                 <li><Link to="/ecossistema" className="hover:text-white transition-colors">Ecossistema</Link></li>
-                <li><Link to="/marketplace" className="hover:text-white transition-colors">Marketplace</Link></li>
+                <li><Link to="/afiliado/renovacoes" className="hover:text-white transition-colors">Planos de Licença</Link></li>
                 <li><Link to="/cadastro" className="hover:text-white transition-colors">Seja um parceiro</Link></li>
               </ul>
             </div>

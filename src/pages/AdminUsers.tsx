@@ -20,6 +20,7 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 import AdminLayout from '../components/AdminLayout';
 import { businessRules } from '../lib/businessRules';
+import { supabase } from '../lib/supabase';
 import { toast } from 'react-hot-toast';
 
 interface User {
@@ -103,6 +104,30 @@ export default function AdminUsers() {
       loadData();
     } catch (error) {
       toast.error('Erro ao atualizar status do usuário.');
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleToggleRole = async (userId: string, currentRole: string) => {
+    const newRole = currentRole === 'regional_reseller' ? 'affiliate' : 'regional_reseller';
+    setActionLoading(userId);
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({ role: newRole })
+        .eq('id', userId);
+
+      if (error) throw error;
+
+      toast.success(newRole === 'regional_reseller' ? 'Usuário definido como Revendedor!' : 'Usuário definido como Afiliado!');
+      if (selectedUser?.id === userId) {
+        setSelectedUser({ ...selectedUser, role: newRole });
+      }
+      loadData();
+    } catch (error: any) {
+      console.error('Erro ao atualizar cargo:', error);
+      toast.error('Erro ao atualizar cargo do usuário: ' + error.message);
     } finally {
       setActionLoading(null);
     }
@@ -318,6 +343,14 @@ export default function AdminUsers() {
                       </td>
                       <td className="py-5 px-4 text-right">
                         <div className="flex items-center justify-end gap-2">
+                          <button 
+                            onClick={() => handleToggleRole(user.id, user.role)}
+                            disabled={actionLoading === user.id}
+                            className={`p-2 rounded-xl transition-all ${user.role === 'regional_reseller' ? 'hover:bg-amber-500/10 text-amber-500' : 'hover:bg-purple-500/10 text-purple-400'}`}
+                            title={user.role === 'regional_reseller' ? 'Remover Revendedor' : 'Tornar Revendedor'}
+                          >
+                            {actionLoading === user.id ? <Loader2 size={18} className="animate-spin" /> : <Shield size={18} />}
+                          </button>
                           <button 
                             onClick={() => handleToggleStatus(user.id, user.status)}
                             disabled={actionLoading === user.id}

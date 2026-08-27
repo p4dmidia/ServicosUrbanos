@@ -53,6 +53,7 @@ export default function Checkout() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   
   const cartCount = cartItems.reduce((acc, item) => acc + item.quantity, 0);
+  const hasSubscription = cartItems.some(item => item.is_subscription);
 
   const markAllAsRead = () => {
     setNotifications(notifications.map(n => ({ ...n, read: true })));
@@ -374,8 +375,8 @@ export default function Checkout() {
 
   useEffect(() => {
     setShippingCost(0);
-    setShippingMethod('pickup');
-  }, []);
+    setShippingMethod(hasSubscription ? 'digital' : 'pickup');
+  }, [hasSubscription]);
 
   useEffect(() => {
     if (walletBalance > 0 && total > 0) {
@@ -422,26 +423,28 @@ export default function Checkout() {
       setNeedsProfileUpdate(false);
     }
 
-    if (!shippingMethod) {
-      toast.error('Selecione um método de envio ou retirada.');
-      return;
-    }
-
-    if (shippingMethod === 'pickup') {
-      if (!selectedLocationId) {
-        toast.error('Selecione um local para retirada.');
+    if (!hasSubscription) {
+      if (!shippingMethod) {
+        toast.error('Selecione um método de envio ou retirada.');
         return;
       }
-      const selectedLoc = availableLocations.find(l => l.id === selectedLocationId);
-      if (selectedLoc?.disabled) {
-        toast.error('O local selecionado não possui estoque suficiente.');
+
+      if (shippingMethod === 'pickup') {
+        if (!selectedLocationId) {
+          toast.error('Selecione um local para retirada.');
+          return;
+        }
+        const selectedLoc = availableLocations.find(l => l.id === selectedLocationId);
+        if (selectedLoc?.disabled) {
+          toast.error('O local selecionado não possui estoque suficiente.');
+          return;
+        }
+      }
+
+      if (shippingMethod !== 'pickup' && (!address.cep || !address.numero)) {
+        toast.error('Preencha os dados de endereço obrigatórios para entrega.');
         return;
       }
-    }
-
-    if (shippingMethod !== 'pickup' && (!address.cep || !address.numero)) {
-      toast.error('Preencha os dados de endereço obrigatórios para entrega.');
-      return;
     }
 
     if (!authUser || !profile) {
@@ -476,13 +479,13 @@ export default function Checkout() {
             amount: total,
             status: 'Aguardando Pagamento',
             items: cartItems,
-            branch_id: shippingMethod === 'pickup' 
-              ? (selectedLocationId === 'matriz' ? null : selectedLocationId)
-              : null, 
+            branch_id: hasSubscription 
+              ? null 
+              : (shippingMethod === 'pickup' ? (selectedLocationId === 'matriz' ? null : selectedLocationId) : null), 
             cashback_amount: userTotalCashbackAmount,
-            shipping_address: shippingMethod === 'pickup' 
-              ? `Retirada na Loja: ${pickupAddress}` 
-              : `${address.logradouro}, ${address.numero} - ${address.cidade}/${address.estado}`,
+            shipping_address: hasSubscription 
+              ? 'Licenciamento MMN Digital' 
+              : (shippingMethod === 'pickup' ? `Retirada na Loja: ${pickupAddress}` : `${address.logradouro}, ${address.numero} - ${address.cidade}/${address.estado}`),
             payment_method: 'Carteira Digital'
           }])
           .select()
@@ -501,8 +504,8 @@ export default function Checkout() {
 
         if (updateStatusError) throw updateStatusError;
 
-        // 2. Se for retirada, criar o registro de código de retirada
-        if (shippingMethod === 'pickup') {
+        // 2. Se for retirada, criar o registro de código de retirada (apenas se não for assinatura)
+        if (shippingMethod === 'pickup' && !hasSubscription) {
           // Formato: [ID do pedido]/[3 letras e números aleatórios]
           const randomSuffix = Array.from({ length: 3 }, () => 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'[Math.floor(Math.random() * 36)]).join('');
           const withdrawalCode = `${orderId}/${randomSuffix}`;
@@ -530,16 +533,22 @@ export default function Checkout() {
 
         if (transError) throw transError;
         
-        // 4. Dar baixa no estoque de cada produto
-        await Promise.all(cartItems.map(item => 
-          businessRules.decrementStock(item.id, item.quantity, selectedLocationId === 'matriz' ? null : selectedLocationId)
-        ));
+        // 4. Dar baixa no estoque de cada produto (apenas se não for assinatura)
+        if (!hasSubscription) {
+          await Promise.all(cartItems.map(item => 
+            businessRules.decrementStock(item.id, item.quantity, selectedLocationId === 'matriz' ? null : selectedLocationId)
+          ));
+        }
 
         toast.dismiss(loadingToast);
         toast.success('Pagamento realizado com sucesso!');
         
         localStorage.removeItem('urbashop_cart');
-        navigate('/afiliado/pedidos');
+        if (hasSubscription) {
+          navigate('/afiliado/renovacoes');
+        } else {
+          navigate('/afiliado/pedidos');
+        }
         return;
       }
 
@@ -559,11 +568,13 @@ export default function Checkout() {
             amount: total,
             status: 'Aguardando Pagamento',
             items: cartItems,
-            branch_id: shippingMethod === 'pickup' 
-              ? (selectedLocationId === 'matriz' ? null : selectedLocationId)
-              : null, 
+            branch_id: hasSubscription 
+              ? null 
+              : (shippingMethod === 'pickup' ? (selectedLocationId === 'matriz' ? null : selectedLocationId) : null), 
             cashback_amount: userTotalCashbackAmount,
-            shipping_address: `RETIRADA NA LOJA: ${pickupAddress}`,
+            shipping_address: hasSubscription 
+              ? 'Licenciamento MMN Digital' 
+              : `RETIRADA NA LOJA: ${pickupAddress}`,
             payment_method: paymentMethod === 'wallet' ? 'Saldo de Carteira Virtual' : paymentMethod === 'mixed' ? 'Saldo de Carteira + Pix' : 'Pix'
           }])
           .select()
@@ -589,13 +600,15 @@ export default function Checkout() {
           if (transError) throw transError;
         }
 
-        // 2. Dar baixa no estoque de cada produto (apenas se for pedido novo)
-        await Promise.all(cartItems.map(item => 
-          businessRules.decrementStock(item.id, item.quantity, selectedLocationId === 'matriz' ? null : selectedLocationId)
-        ));
+        // 2. Dar baixa no estoque de cada produto (apenas se for pedido novo e não for assinatura)
+        if (!hasSubscription) {
+          await Promise.all(cartItems.map(item => 
+            businessRules.decrementStock(item.id, item.quantity, selectedLocationId === 'matriz' ? null : selectedLocationId)
+          ));
+        }
 
-        // 3. Se for retirada, criar o registro de código de retirada antecipadamente
-        if (shippingMethod === 'pickup') {
+        // 3. Se for retirada, criar o registro de código de retirada antecipadamente (apenas se não for assinatura)
+        if (shippingMethod === 'pickup' && !hasSubscription) {
           // Formato: [ID do pedido]/[3 letras e números aleatórios]
           const randomSuffix = Array.from({ length: 3 }, () => 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'[Math.floor(Math.random() * 36)]).join('');
           const withdrawalCode = `${currentOrderId}/${randomSuffix}`;
@@ -735,11 +748,11 @@ export default function Checkout() {
               <Menu size={20} />
             </button>
             {/* Logo */}
-            <Link to="/marketplace" className="flex items-center gap-2 text-white shrink-0">
+            <Link to="/afiliado/dashboard" className="flex items-center gap-2 text-white shrink-0">
               <div className="size-8 bg-primary-blue rounded flex items-center justify-center">
                 <LayoutGrid size={18} />
               </div>
-              <span className="text-xl font-black tracking-tighter uppercase italic">URBA<span className="text-primary-blue">SHOP</span></span>
+              <span className="text-xl font-black tracking-tighter uppercase italic">SERVIÇOS <span className="text-primary-blue">URBANOS</span></span>
             </Link>
           </div>
 
@@ -950,11 +963,11 @@ export default function Checkout() {
               className="fixed inset-y-0 left-0 w-80 bg-midnight z-[101] md:hidden p-8 flex flex-col shadow-2xl border-r border-white/5"
             >
               <div className="flex items-center justify-between mb-12">
-                <Link to="/marketplace" onClick={() => setIsMobileMenuOpen(false)} className="flex items-center gap-2">
+                <Link to="/afiliado/dashboard" onClick={() => setIsMobileMenuOpen(false)} className="flex items-center gap-2">
                   <div className="size-8 bg-primary-blue rounded flex items-center justify-center">
                     <LayoutGrid size={18} />
                   </div>
-                  <span className="text-xl font-black tracking-tighter uppercase italic text-white">URBA<span className="text-primary-blue">SHOP</span></span>
+                  <span className="text-xl font-black tracking-tighter uppercase italic text-white">SERVIÇOS <span className="text-primary-blue">URBANOS</span></span>
                 </Link>
                 <button onClick={() => setIsMobileMenuOpen(false)} className="text-slate-400 hover:text-white transition-colors">
                   <X size={24} />
@@ -962,9 +975,8 @@ export default function Checkout() {
               </div>
 
               <nav className="flex flex-col gap-2">
-                <Link to="/marketplace" onClick={() => setIsMobileMenuOpen(false)} className="px-4 py-4 rounded-2xl font-black uppercase tracking-widest text-xs text-slate-400 hover:text-white transition-all">Marketplace</Link>
-                <Link to="/lojista/login" onClick={() => setIsMobileMenuOpen(false)} className="px-4 py-4 rounded-2xl font-black uppercase tracking-widest text-xs text-slate-400 hover:text-white transition-all flex items-center gap-3">
-                  <Store size={18} /> Área do Lojista
+                <Link to="/afiliado/renovacoes" onClick={() => setIsMobileMenuOpen(false)} className="px-4 py-4 rounded-2xl font-black uppercase tracking-widest text-xs text-slate-400 hover:text-white transition-all flex items-center gap-3">
+                  <ShoppingBag size={18} /> Planos de Licenciamento
                 </Link>
                 <Link to="/afiliado/dashboard" onClick={() => setIsMobileMenuOpen(false)} className="px-4 py-4 rounded-2xl font-black uppercase tracking-widest text-xs text-slate-400 hover:text-white transition-all flex items-center gap-3">
                   <LayoutDashboard size={18} /> Escritório Virtual
@@ -1018,60 +1030,79 @@ export default function Checkout() {
           
           <div className="lg:col-span-8 space-y-10 flex flex-col">
             {/* Frete */}
-            <motion.section 
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.1 }}
-              className="bg-white rounded-[2rem] p-8 shadow-sm border border-slate-100 order-1"
-            >
-              <div className="flex items-center gap-3 mb-6">
-                <div className="size-10 bg-emerald-50 rounded-xl flex items-center justify-center text-emerald-500">
-                  <ShoppingBag size={20} />
+            {!hasSubscription ? (
+              <motion.section 
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.1 }}
+                className="bg-white rounded-[2rem] p-8 shadow-sm border border-slate-100 order-1"
+              >
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="size-10 bg-emerald-50 rounded-xl flex items-center justify-center text-emerald-500">
+                    <ShoppingBag size={20} />
+                  </div>
+                  <h2 className="text-lg font-black text-midnight uppercase tracking-tighter">Forma de Entrega</h2>
                 </div>
-                <h2 className="text-lg font-black text-midnight uppercase tracking-tighter">Forma de Entrega</h2>
-              </div>
 
-              <div className="p-6 bg-blue-50/50 rounded-2xl border-2 border-primary-blue">
-                  <div className="flex items-start gap-4 w-full">
-                    <div className="mt-1 size-5 rounded-full border-2 border-primary-blue flex items-center justify-center shrink-0">
-                      <div className="size-2.5 bg-primary-blue rounded-full" />
-                    </div>
-                    <div className="flex-1 min-w-0 space-y-3">
-                      <p className="font-black text-midnight uppercase italic tracking-tighter">Retirada na Loja</p>
+                <div className="p-6 bg-blue-50/50 rounded-2xl border-2 border-primary-blue">
+                    <div className="flex items-start gap-4 w-full">
+                      <div className="mt-1 size-5 rounded-full border-2 border-primary-blue flex items-center justify-center shrink-0">
+                        <div className="size-2.5 bg-primary-blue rounded-full" />
+                      </div>
+                      <div className="flex-1 min-w-0 space-y-3">
+                        <p className="font-black text-midnight uppercase italic tracking-tighter">Retirada na Loja</p>
 
-                      {locationsLoading ? (
-                        <p className="text-xs text-slate-400 font-bold">Carregando locais disponíveis...</p>
-                      ) : availableLocations.length > 0 ? (
-                        <div className="space-y-2">
-                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">
-                            Selecione o local para retirada:
-                          </label>
-                          <select 
-                            value={selectedLocationId}
-                            onChange={handleLocationChange}
-                            className="w-full bg-white border border-slate-200 px-4 py-3 rounded-xl font-bold text-xs text-midnight cursor-pointer focus:ring-2 focus:ring-primary-blue/20"
-                          >
-                            {!selectedLocationId && (
-                              <option value="">Selecione um local...</option>
-                            )}
-                            {availableLocations.map(loc => (
-                              <option key={loc.id} value={loc.id} disabled={loc.disabled}>
-                                {loc.name} - {loc.address}
-                              </option>
-                            ))}
-                          </select>
+                        {locationsLoading ? (
+                          <p className="text-xs text-slate-400 font-bold">Carregando locais disponíveis...</p>
+                        ) : availableLocations.length > 0 ? (
+                          <div className="space-y-2">
+                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">
+                              Selecione o local para retirada:
+                            </label>
+                            <select 
+                              value={selectedLocationId}
+                              onChange={handleLocationChange}
+                              className="w-full bg-white border border-slate-200 px-4 py-3 rounded-xl font-bold text-xs text-midnight cursor-pointer focus:ring-2 focus:ring-primary-blue/20"
+                            >
+                              {!selectedLocationId && (
+                                <option value="">Selecione um local...</option>
+                              )}
+                              {availableLocations.map(loc => (
+                                <option key={loc.id} value={loc.id} disabled={loc.disabled}>
+                                  {loc.name} - {loc.address}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                        ) : (
+                          <p className="text-sm text-red-500 font-bold">Nenhuma loja com estoque disponível para os itens do carrinho.</p>
+                        )}
+
+                        <div className="mt-4 inline-flex items-center gap-2 text-[10px] bg-white text-primary-blue font-black px-3 py-1.5 rounded-lg uppercase tracking-widest border border-primary-blue/10 shadow-sm">
+                          <AlertCircle size={12} /> Você receberá um código de retirada após o pagamento
                         </div>
-                      ) : (
-                        <p className="text-sm text-red-500 font-bold">Nenhuma loja com estoque disponível para os itens do carrinho.</p>
-                      )}
-
-                      <div className="mt-4 inline-flex items-center gap-2 text-[10px] bg-white text-primary-blue font-black px-3 py-1.5 rounded-lg uppercase tracking-widest border border-primary-blue/10 shadow-sm">
-                        <AlertCircle size={12} /> Você receberá um código de retirada após o pagamento
                       </div>
                     </div>
+                </div>
+              </motion.section>
+            ) : (
+              <motion.section 
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.1 }}
+                className="bg-white rounded-[2rem] p-8 shadow-sm border border-slate-100 order-1 bg-emerald-500/5 border-emerald-500/10"
+              >
+                <div className="flex items-center gap-4">
+                  <div className="size-12 rounded-2xl bg-emerald-500 text-white flex items-center justify-center shrink-0 shadow-lg shadow-emerald-500/20">
+                    <CheckCircle2 size={24} />
                   </div>
-              </div>
-            </motion.section>
+                  <div>
+                    <h2 className="text-base font-black text-emerald-950 uppercase italic tracking-tight">Ativação Digital</h2>
+                    <p className="text-xs text-slate-500 font-bold uppercase tracking-wider mt-1">Este plano de licenciamento será ativado de forma imediata na sua conta após a confirmação de pagamento.</p>
+                  </div>
+                </div>
+              </motion.section>
+            )}
 
 
 
@@ -1276,23 +1307,25 @@ export default function Checkout() {
                 </div>
 
                 {/* Cashback Detailed Summary */}
-                <div className="bg-emerald-50 rounded-2xl p-5 border border-emerald-100 space-y-3">
-                  <p className="text-[10px] font-black text-emerald-800 uppercase tracking-widest flex items-center gap-2">
-                    <TrendingUp size={14} /> Seu Retorno com esta compra:
-                  </p>
-                  <div className="flex justify-between items-center">
-                    <span className="text-xs font-bold text-emerald-600">Cashback Mensal</span>
-                    <span className="text-sm font-black text-emerald-600">+ R$ {totalMensal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                {!hasSubscription && (
+                  <div className="bg-emerald-50 rounded-2xl p-5 border border-emerald-100 space-y-3">
+                    <p className="text-[10px] font-black text-emerald-800 uppercase tracking-widest flex items-center gap-2">
+                      <TrendingUp size={14} /> Seu Retorno com esta compra:
+                    </p>
+                    <div className="flex justify-between items-center">
+                      <span className="text-xs font-bold text-emerald-600">Cashback Mensal</span>
+                      <span className="text-sm font-black text-emerald-600">+ R$ {totalMensal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-xs font-bold text-blue-600">Cashback Semanal</span>
+                      <span className="text-sm font-black text-blue-600">+ R$ {totalDigital.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-xs font-bold text-indigo-600">Cashback Anual</span>
+                      <span className="text-sm font-black text-indigo-600">+ R$ {totalAnual.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                    </div>
                   </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-xs font-bold text-blue-600">Cashback Semanal</span>
-                    <span className="text-sm font-black text-blue-600">+ R$ {totalDigital.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-xs font-bold text-indigo-600">Cashback Anual</span>
-                    <span className="text-sm font-black text-indigo-600">+ R$ {totalAnual.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
-                  </div>
-                </div>
+                )}
               </div>
 
               {/* Coleta de Dados Adicionais se o perfil estiver incompleto */}
@@ -1653,21 +1686,23 @@ export default function Checkout() {
             </h2>
             
             <p className="text-slate-500 font-medium max-w-md mb-12">
-              Seu pedido foi processado com sucesso. Você já pode acompanhar o status e baixar seu comprovante na área do cliente.
+              {hasSubscription 
+                ? 'Sua assinatura foi ativada com sucesso! Você já está elegível para receber cashbacks da rede.' 
+                : 'Seu pedido foi processado com sucesso. Você já pode acompanhar o status e baixar seu comprovante na área do cliente.'}
             </p>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 w-full max-w-md">
               <button 
-                onClick={() => navigate('/afiliado/pedidos')}
+                onClick={() => navigate(hasSubscription ? '/afiliado/renovacoes' : '/afiliado/pedidos')}
                 className="bg-midnight text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-slate-800 transition-all shadow-xl shadow-midnight/20"
               >
-                Ver Meus Pedidos
+                {hasSubscription ? 'Ver Minhas Renovações' : 'Ver Meus Pedidos'}
               </button>
               <button 
-                onClick={() => navigate('/marketplace')}
+                onClick={() => navigate(hasSubscription ? '/afiliado' : '/afiliado/renovacoes')}
                 className="bg-white border-2 border-slate-100 text-slate-400 py-4 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-slate-50 transition-all"
               >
-                Voltar para Loja
+                {hasSubscription ? 'Painel do Afiliado' : 'Voltar para Planos'}
               </button>
             </div>
           </motion.div>

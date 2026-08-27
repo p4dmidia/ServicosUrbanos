@@ -45,16 +45,6 @@ export default function AffiliateEcosystem() {
 
   const platforms = [
     { 
-      id: 'market', 
-      name: 'Marketplace', 
-      role: 'Lojista / Seller', 
-      icon: Store, 
-      color: 'bg-primary-blue/10 text-primary-blue', 
-      status: 'Ativo', 
-      description: 'Abra sua loja online e venda para milhares de usuários dentro do nosso ecossistema.',
-      link: '/lojista/login'
-    },
-    { 
       id: 'moby', 
       name: 'Urba Moby', 
       role: 'Condutor / Motorista', 
@@ -101,13 +91,13 @@ export default function AffiliateEcosystem() {
              Seus dados estão interligados: escolha onde quer atuar e comece a gerar receita imediatamente.
            </p>
            <div className="pt-4">
-             <Link 
-               to="/marketplace" 
-               className="inline-flex items-center gap-3 bg-primary-blue text-white px-8 py-4 rounded-2xl font-black text-sm uppercase tracking-widest shadow-xl shadow-primary-blue/20 hover:scale-105 transition-all group"
-             >
-               <ShoppingBag size={20} className="group-hover:rotate-12 transition-transform" />
-               Ir para o Marketplace
-             </Link>
+              <Link 
+                to="/afiliado/renovacoes" 
+                className="inline-flex items-center gap-3 bg-primary-blue text-white px-8 py-4 rounded-2xl font-black text-sm uppercase tracking-widest shadow-xl shadow-primary-blue/20 hover:scale-105 transition-all group"
+              >
+                <ShoppingBag size={20} className="group-hover:rotate-12 transition-transform" />
+                Ver Planos de Licença
+              </Link>
            </div>
         </div>
 

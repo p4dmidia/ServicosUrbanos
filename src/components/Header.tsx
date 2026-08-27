@@ -52,7 +52,6 @@ export default function Header() {
                         )}
                     </Link>
                     <Link to="/ganhe-dinheiro" className={`text-sm font-medium transition-colors ${isActive('/ganhe-dinheiro') ? 'text-accent' : 'hover:text-accent'}`}>Ganhe Dinheiro</Link>
-                    <Link to="/marketplace" className={`text-sm font-medium transition-colors ${isActive('/marketplace') ? 'text-accent' : 'hover:text-accent'}`}>Marketplace</Link>
                 </nav>
 
                 <div className="flex items-center gap-6">
@@ -209,7 +208,6 @@ export default function Header() {
                                 <Link to="/" onClick={() => setIsMobileMenuOpen(false)} className={`px-4 py-4 rounded-2xl font-black uppercase tracking-widest text-xs transition-all ${isActive('/') ? 'bg-white/10 text-accent' : 'text-slate-400 hover:text-white'}`}>Início</Link>
                                 <Link to="/ecossistema" onClick={() => setIsMobileMenuOpen(false)} className={`px-4 py-4 rounded-2xl font-black uppercase tracking-widest text-xs transition-all ${isActive('/ecossistema') ? 'bg-white/10 text-accent' : 'text-slate-400 hover:text-white'}`}>Ecossistema</Link>
                                 <Link to="/ganhe-dinheiro" onClick={() => setIsMobileMenuOpen(false)} className={`px-4 py-4 rounded-2xl font-black uppercase tracking-widest text-xs transition-all ${isActive('/ganhe-dinheiro') ? 'bg-white/10 text-accent' : 'text-slate-400 hover:text-white'}`}>Ganhe Dinheiro</Link>
-                                <Link to="/marketplace" onClick={() => setIsMobileMenuOpen(false)} className={`px-4 py-4 rounded-2xl font-black uppercase tracking-widest text-xs transition-all ${isActive('/marketplace') ? 'bg-white/10 text-accent' : 'text-slate-400 hover:text-white'}`}>Marketplace</Link>
                             </nav>
 
                             <div className="mt-auto pt-8 border-t border-white/5 space-y-4">

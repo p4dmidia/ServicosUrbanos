@@ -51,7 +51,6 @@ export default function Cadastro() {
     const [referrerId, setReferrerId] = useState<string | null>(null);
     const [isSearching, setIsSearching] = useState(false);
     const [isReferralLocked, setIsReferralLocked] = useState(false);
-    const [isRegional, setIsRegional] = useState(false);
     const [bankName, setBankName] = useState('');
     const [pixKey, setPixKey] = useState('');
     const [bankBranch, setBankBranch] = useState('');
@@ -285,7 +284,7 @@ export default function Cadastro() {
                         full_name: fullName,
                         whatsapp: whatsapp,
                         cpf: cpf.replace(/\D/g, ''),
-                        role: isRegional ? 'regional_reseller' : 'affiliate',
+                        role: 'affiliate',
                         referred_by: referrerId || null,
                         address,
                         number,
@@ -825,25 +824,6 @@ export default function Cadastro() {
                                 )}
                             </div>
 
-                            {/* Opção Revendedor Regional */}
-                            <div className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100">
-                                <div>
-                                    <label htmlFor="isRegional" className="text-xs font-black text-midnight uppercase tracking-wider cursor-pointer">Sou Revendedor Regional</label>
-                                    <p className="text-[10px] text-slate-500 font-medium italic mt-1">Marque esta opção para se cadastrar como um líder de rede regional.</p>
-                                </div>
-                                <button
-                                    type="button"
-                                    onClick={() => setIsRegional(!isRegional)}
-                                    className={`size-7 rounded-lg border flex items-center justify-center transition-all ${
-                                        isRegional 
-                                            ? 'bg-emerald-500 border-emerald-500 text-white' 
-                                            : 'border-slate-300 hover:border-slate-400 text-transparent'
-                                    }`}
-                                >
-                                    ✓
-                                </button>
-                            </div>
-
                             {/* Mensagem de Erro */}
                             <AnimatePresence>
                                 {error && (
@@ -960,10 +940,10 @@ export default function Cadastro() {
                                     </div>
                                     <div>
                                         <h3 className="text-lg font-black text-midnight uppercase italic tracking-tight">
-                                            Resumo dos Termos da Plataforma Serviços Urbanos
+                                            Resumo dos Anexos I a XI – Seguro Vida Light R$ 5.000,00
                                         </h3>
                                         <p className="text-[9px] text-slate-400 font-black uppercase tracking-widest">
-                                            Plataforma Serviços Urbanos
+                                            Termo de Aceite Digital Simplificado
                                         </p>
                                     </div>
                                 </div>
@@ -982,69 +962,75 @@ export default function Cadastro() {
                                     <li className="flex gap-3 items-start">
                                         <div className="size-2 rounded-full bg-emerald-500 mt-2 shrink-0 animate-pulse" />
                                         <span>
-                                            <strong className="text-midnight font-bold">Uso da Plataforma:</strong> O usuário (AFILIADO) deve fornecer dados verdadeiros, manter login e senha em sigilo e utilizar a plataforma de forma ética e lícita.
+                                            <strong className="text-midnight font-bold">Anexo I – Regulamento da Promoção:</strong> Sorteios nos 4 últimos domingos de cada mês; se houver 5 domingos, desconsidera-se o primeiro.
                                         </span>
                                     </li>
                                     <li className="flex gap-3 items-start">
                                         <div className="size-2 rounded-full bg-emerald-500 mt-2 shrink-0" />
                                         <span>
-                                            <strong className="text-midnight font-bold">Compras e Pagamentos:</strong> Só são válidas compras feitas via PIX no site oficial.
+                                            <strong className="text-midnight font-bold">Anexo II – Condições Gerais:</strong> Direitos e deveres do segurado em relação às coberturas contratadas.
+                                        </span>
+                                    </li>
+                                    <li className="flex gap-3 items-start">
+                                        <div className="size-2 rounded-full bg-emerald-500 mt-2 shrink-0" />
+                                        <span>
+                                            <strong className="text-midnight font-bold">Anexo III – Tabela de Indenização:</strong> Percentuais aplicados em casos de invalidez permanente por acidente.
+                                        </span>
+                                    </li>
+                                    <li className="flex gap-3 items-start">
+                                        <div className="size-2 rounded-full bg-emerald-500 mt-2 shrink-0" />
+                                        <span>
+                                            <strong className="text-midnight font-bold">Anexo IV – Cobrança e Renovação:</strong> Pagamento mensal, trimestral, semestral ou anual; necessidade de renovação para manter cobertura e sorteios.
+                                        </span>
+                                    </li>
+                                    <li className="flex gap-3 items-start">
+                                        <div className="size-2 rounded-full bg-emerald-500 mt-2 shrink-0" />
+                                        <span>
+                                            <strong className="text-midnight font-bold">Anexo V – Proteção de Dados (LGPD):</strong> Tratamento seguro e transparente das informações pessoais.
+                                        </span>
+                                    </li>
+                                    <li className="flex gap-3 items-start">
+                                        <div className="size-2 rounded-full bg-emerald-500 mt-2 shrink-0" />
+                                        <span>
+                                            <strong className="text-midnight font-bold">Anexo VI – Divulgação:</strong> Resultados dos sorteios comunicados por e-mail e dashboard; uso da imagem dos ganhadores mediante anuência.
+                                        </span>
+                                    </li>
+                                    <li className="flex gap-3 items-start">
+                                        <div className="size-2 rounded-full bg-emerald-500 mt-2 shrink-0" />
+                                        <span>
+                                            <strong className="text-midnight font-bold">Anexo VII – Cancelamento e Exclusão:</strong> Perda de direitos por inadimplência, fraude ou descumprimento das regras.
+                                        </span>
+                                    </li>
+                                    <li className="flex gap-3 items-start">
+                                        <div className="size-2 rounded-full bg-emerald-500 mt-2 shrink-0" />
+                                        <span>
+                                            <strong className="text-midnight font-bold">Anexo VIII – Comissionamento (MMN):</strong> Regras de comissões por indicações confirmadas e pagas.
+                                        </span>
+                                    </li>
+                                    <li className="flex gap-3 items-start">
+                                        <div className="size-2 rounded-full bg-emerald-500 mt-2 shrink-0" />
+                                        <span>
+                                            <strong className="text-midnight font-bold">Anexo IX – Telemedicina:</strong> Consultas online disponíveis enquanto a apólice estiver ativa e adimplente.
                                         </span>
                                     </li>
                                     <li className="flex gap-3 items-start">
                                         <div className="size-2 rounded-full bg-emerald-500 mt-2 shrink-0" />
                                         <div className="flex flex-col gap-1 w-full">
                                             <span>
-                                                <strong className="text-midnight font-bold">Cashback:</strong>
+                                                <strong className="text-midnight font-bold">Anexo X – Quantidade de Sorteios por Modalidade:</strong>
                                             </span>
-                                            <ul className="pl-6 space-y-2 list-disc text-slate-500">
-                                                <li><strong className="text-midnight font-bold">Mensal:</strong> 1,35% sobre compras até a 5ª geração.</li>
-                                                <li><strong className="text-midnight font-bold">Semanal:</strong> 0,20% para uso dentro da plataforma.</li>
-                                                <li><strong className="text-midnight font-bold">Anual:</strong> 0,20% pago em dezembro.</li>
-                                                <li><strong className="text-midnight font-bold">Condição:</strong> realizar ao menos uma compra mensal e confirmar retirada/serviço.</li>
+                                            <ul className="pl-6 space-y-1 list-disc text-slate-500">
+                                                <li><strong className="text-midnight font-bold">Mensal:</strong> 4 sorteios/mês</li>
+                                                <li><strong className="text-midnight font-bold">Trimestral:</strong> 12 sorteios/período</li>
+                                                <li><strong className="text-midnight font-bold">Semestral:</strong> 24 sorteios/período</li>
+                                                <li><strong className="text-midnight font-bold">Anual:</strong> 48 sorteios/período 👉 Renovação obrigatória via dashboard para continuidade nos sorteios.</li>
                                             </ul>
                                         </div>
                                     </li>
                                     <li className="flex gap-3 items-start">
                                         <div className="size-2 rounded-full bg-emerald-500 mt-2 shrink-0" />
                                         <span>
-                                            <strong className="text-midnight font-bold">Penalidades:</strong> Inatividade gera perda parcial ou total dos valores acumulados.
-                                        </span>
-                                    </li>
-                                    <li className="flex gap-3 items-start">
-                                        <div className="size-2 rounded-full bg-emerald-500 mt-2 shrink-0" />
-                                        <span>
-                                            <strong className="text-midnight font-bold">Taxas e Impostos:</strong> Cashback sofre taxa administrativa de 10% e retenção de IRRF quando aplicável.
-                                        </span>
-                                    </li>
-                                    <li className="flex gap-3 items-start">
-                                        <div className="size-2 rounded-full bg-emerald-500 mt-2 shrink-0" />
-                                        <span>
-                                            <strong className="text-midnight font-bold">Indicações:</strong> Válidas até a 5ª geração. Fraudes resultam em suspensão ou exclusão da conta.
-                                        </span>
-                                    </li>
-                                    <li className="flex gap-3 items-start">
-                                        <div className="size-2 rounded-full bg-emerald-500 mt-2 shrink-0" />
-                                        <span>
-                                            <strong className="text-midnight font-bold">Privacidade:</strong> Dados pessoais são tratados conforme a LGPD, usados apenas para funcionamento da plataforma e não são vendidos a terceiros.
-                                        </span>
-                                    </li>
-                                    <li className="flex gap-3 items-start">
-                                        <div className="size-2 rounded-full bg-emerald-500 mt-2 shrink-0" />
-                                        <span>
-                                            <strong className="text-midnight font-bold">Cookies:</strong> Utilizamos cookies para segurança, personalização e análise de desempenho. O usuário pode gerenciá-los no navegador, mas a desativação pode limitar funcionalidades.
-                                        </span>
-                                    </li>
-                                    <li className="flex gap-3 items-start">
-                                        <div className="size-2 rounded-full bg-emerald-500 mt-2 shrink-0" />
-                                        <span>
-                                            <strong className="text-midnight font-bold">Alterações:</strong> Os termos podem ser modificados mediante aviso prévio. O uso contínuo implica concordância.
-                                        </span>
-                                    </li>
-                                    <li className="flex gap-3 items-start">
-                                        <div className="size-2 rounded-full bg-emerald-500 mt-2 shrink-0" />
-                                        <span>
-                                            <strong className="text-midnight font-bold">Foro:</strong> Salvador/BA é o foro eleito para resolução de conflitos.
+                                            <strong className="text-midnight font-bold">Anexo XI – Documentos para Indenização:</strong> Formulário de Aviso de Sinistro, Certificado Individual, RG/CPF, laudos médicos, folha de anestesia (quando aplicável), atestado de óbito e demais documentos solicitados pela seguradora.
                                         </span>
                                     </li>
                                 </ul>

@@ -6,30 +6,17 @@ import Maintenance from './pages/Maintenance';
 import GanheDinheiro from './pages/GanheDinheiro';
 import Cadastro from './pages/Cadastro';
 import Login from './pages/Login';
-import Marketplace from './pages/Marketplace';
 import Ecossistema from './pages/Ecossistema';
-import Loja from './pages/Loja';
-import ProductDetail from './pages/ProductDetail';
 import Checkout from './pages/Checkout';
-import MerchantLogin from './pages/MerchantLogin';
-import MerchantDashboard from './pages/MerchantDashboard';
-import MerchantProducts from './pages/MerchantProducts';
-import MerchantOrders from './pages/MerchantOrders';
-import MerchantFinancials from './pages/MerchantFinancials';
-import MerchantCustomers from './pages/MerchantCustomers';
-import MerchantReports from './pages/MerchantReports';
-import MerchantSettings from './pages/MerchantSettings';
 import AdminLogin from './pages/AdminLogin';
 import AdminDashboard from './pages/AdminDashboard';
-import AdminPlatforms from './pages/AdminPlatforms';
 import AdminUsers from './pages/AdminUsers';
-import AdminMarketplace from './pages/AdminMarketplace';
 import AdminSettings from './pages/AdminSettings';
 import AdminReports from './pages/AdminReports';
-import AdminWaitlist from './pages/AdminWaitlist';
 import AdminWithdrawals from './pages/AdminWithdrawals';
-import AdminCategories from './pages/AdminCategories';
 import AdminFinancials from './pages/AdminFinancials';
+import AdminProducts from './pages/AdminProducts';
+import AdminOrders from './pages/AdminOrders';
 import AffiliateDashboard from './pages/AffiliateDashboard';
 import AffiliateNetwork from './pages/AffiliateNetwork';
 import AffiliateWallet from './pages/AffiliateWallet';
@@ -75,12 +62,8 @@ export default function App() {
             <Route path="/termos-uso" element={<TermosUso />} />
             <Route path="/esqueci-senha" element={<ForgotPassword />} />
             <Route path="/redefinir-senha" element={<ResetPassword />} />
-            <Route path="/marketplace" element={<Marketplace />} />
             <Route path="/ecossistema" element={<Ecossistema />} />
-            <Route path="/loja" element={<Loja />} />
-            <Route path="/produto/:id" element={<ProductDetail />} />
             <Route path="/checkout" element={<Checkout />} />
-            <Route path="/lojista/login" element={<MerchantLogin />} />
             
             {/* Admin Routes */}
             <Route path="/admin" element={<AdminLogin />} />
@@ -89,22 +72,17 @@ export default function App() {
               path="/admin/dashboard" 
               element={<ProtectedRoute allowedRoles={['admin']}><AdminDashboard /></ProtectedRoute>} 
             />
-
             <Route 
-              path="/admin/plataformas" 
-              element={<ProtectedRoute allowedRoles={['admin']}><AdminPlatforms /></ProtectedRoute>} 
+              path="/admin/produtos" 
+              element={<ProtectedRoute allowedRoles={['admin']}><AdminProducts /></ProtectedRoute>} 
+            />
+            <Route 
+              path="/admin/pedidos" 
+              element={<ProtectedRoute allowedRoles={['admin']}><AdminOrders /></ProtectedRoute>} 
             />
             <Route 
               path="/admin/usuarios" 
               element={<ProtectedRoute allowedRoles={['admin']}><AdminUsers /></ProtectedRoute>} 
-            />
-            <Route 
-              path="/admin/marketplace" 
-              element={<ProtectedRoute allowedRoles={['admin']}><AdminMarketplace /></ProtectedRoute>} 
-            />
-            <Route 
-              path="/admin/lista-espera" 
-              element={<ProtectedRoute allowedRoles={['admin']}><AdminWaitlist /></ProtectedRoute>} 
             />
             <Route 
               path="/admin/configuracoes" 
@@ -117,10 +95,6 @@ export default function App() {
             <Route 
               path="/admin/saques" 
               element={<ProtectedRoute allowedRoles={['admin']}><AdminWithdrawals /></ProtectedRoute>} 
-            />
-            <Route 
-              path="/admin/categorias" 
-              element={<ProtectedRoute allowedRoles={['admin']}><AdminCategories /></ProtectedRoute>} 
             />
             <Route 
               path="/admin/financeiro" 
@@ -157,7 +131,7 @@ export default function App() {
               element={<ProtectedRoute allowedRoles={['affiliate', 'owner', 'manager', 'admin', 'regional_reseller']}><AffiliateOrders /></ProtectedRoute>} 
             />
             <Route 
-              path="/afiliado/termo-adesao" 
+              path="/afiliado/termo-adesao/:section?" 
               element={<ProtectedRoute allowedRoles={['affiliate', 'owner', 'manager', 'admin', 'regional_reseller']}><AffiliateAdherenceTerm /></ProtectedRoute>} 
             />
             <Route 
@@ -175,36 +149,6 @@ export default function App() {
             <Route 
               path="/afiliado/telemedicina" 
               element={<ProtectedRoute allowedRoles={['affiliate', 'owner', 'manager', 'admin', 'regional_reseller']}><AffiliateTelemedicina /></ProtectedRoute>} 
-            />
-
-            {/* Merchant Routes */}
-            <Route 
-              path="/lojista/dashboard" 
-              element={<ProtectedRoute allowedRoles={['manager', 'owner', 'affiliate']}><MerchantDashboard /></ProtectedRoute>} 
-            />
-            <Route 
-              path="/lojista/produtos" 
-              element={<ProtectedRoute allowedRoles={['manager', 'owner', 'affiliate']}><MerchantProducts /></ProtectedRoute>} 
-            />
-            <Route 
-              path="/lojista/pedidos" 
-              element={<ProtectedRoute allowedRoles={['manager', 'owner', 'affiliate']}><MerchantOrders /></ProtectedRoute>} 
-            />
-            <Route 
-              path="/lojista/financeiro" 
-              element={<ProtectedRoute allowedRoles={['manager', 'owner', 'affiliate']}><MerchantFinancials /></ProtectedRoute>} 
-            />
-            <Route 
-              path="/lojista/clientes" 
-              element={<ProtectedRoute allowedRoles={['manager', 'owner', 'affiliate']}><MerchantCustomers /></ProtectedRoute>} 
-            />
-            <Route 
-              path="/lojista/relatorios" 
-              element={<ProtectedRoute allowedRoles={['manager', 'owner', 'affiliate']}><MerchantReports /></ProtectedRoute>} 
-            />
-            <Route 
-              path="/lojista/configuracoes" 
-              element={<ProtectedRoute allowedRoles={['manager', 'owner', 'affiliate']}><MerchantSettings /></ProtectedRoute>} 
             />
           </Routes>
         </BrowserRouter>

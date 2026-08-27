@@ -204,6 +204,43 @@ BEGIN
             RETURN NEW;
         END IF;
 
+        -- Ativar assinatura se o pedido contiver itens de assinatura
+        IF NEW.items IS NOT NULL THEN
+            DECLARE
+                item jsonb;
+                v_plan_type TEXT;
+                v_days INTEGER;
+                v_start_date TIMESTAMP WITH TIME ZONE := now();
+                v_end_date TIMESTAMP WITH TIME ZONE;
+                v_price NUMERIC;
+            BEGIN
+                FOR item IN SELECT * FROM jsonb_array_elements(NEW.items) LOOP
+                    IF (item->>'is_subscription') = 'true' THEN
+                        v_plan_type := item->>'plan_type';
+                        v_price := (item->>'price')::numeric;
+                        v_days := 30;
+                        IF v_plan_type = 'trimestral' THEN
+                            v_days := 90;
+                        ELSIF v_plan_type = 'semestral' THEN
+                            v_days := 180;
+                        ELSIF v_plan_type = 'anual' THEN
+                            v_days := 365;
+                        END IF;
+                        v_end_date := v_start_date + (v_days || ' days')::interval;
+
+                        -- Desativar assinaturas anteriores do mesmo usuário para evitar múltiplas ativas
+                        UPDATE public.subscriptions 
+                        SET status = 'inactive'
+                        WHERE profile_id = NEW.customer_id;
+
+                        -- Inserir nova assinatura ativa
+                        INSERT INTO public.subscriptions (profile_id, plan_type, amount, status, start_date, end_date)
+                        VALUES (NEW.customer_id, v_plan_type, v_price, 'active', v_start_date, v_end_date);
+                    END IF;
+                END LOOP;
+            END;
+        END IF;
+
         -- Pegar configurações de MMN
         SELECT depth, payment_type INTO mmn_depth, mmn_pay_type FROM public.mmn_config WHERE id = 1;
         
@@ -267,6 +304,7 @@ BEGIN
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
+
 
 -- Trigger para automatizar a distribuição de comissões
 DROP TRIGGER IF EXISTS on_order_completed ON public.orders;

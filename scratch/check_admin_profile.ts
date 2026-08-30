@@ -15,11 +15,11 @@ if (!supabaseUrl || !supabaseKey) {
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 async function run() {
-  console.log("Fetching order #1216...");
-  const { data: orders, error } = await supabase
-    .from('orders')
-    .select('*')
-    .eq('id', '1216')
+  console.log("Checking admin profile in database...");
+  const { data: profile, error } = await supabase
+    .from('profiles')
+    .select('id, full_name, email, role')
+    .eq('id', '510b0201-beea-48c5-a7f4-5ff8ee3c4e8f')
     .maybeSingle();
 
   if (error) {
@@ -27,8 +27,7 @@ async function run() {
     return;
   }
 
-  console.log("Order 1216 data:");
-  console.log(JSON.stringify(orders, null, 2));
+  console.log("Admin Profile result:", profile);
 }
 
 run().catch(console.error);

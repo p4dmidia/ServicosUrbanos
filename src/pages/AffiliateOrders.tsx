@@ -118,7 +118,7 @@ export default function AffiliateOrders() {
   }, [user]);
 
   const calculateCashbackBreakdown = (order: any) => {
-    if (!mmnConfig || !mmnLevels.length || !order) return { mensal: 0, digital: 0, anual: 0, total: 0 };
+    if (!mmnConfig || !order) return { mensal: 0, digital: 0, anual: 0, total: 0 };
     if (order.status === 'Cancelado') return { mensal: 0, digital: 0, anual: 0, total: 0 };
     
     const isPaid = order.status === 'Concluído' || order.status === 'Pago, Aguardando Retirada' || order.status === 'Enviado' || order.status === 'Entregue';
@@ -138,34 +138,18 @@ export default function AffiliateOrders() {
       }
     }
 
-    // 2. SE O PEDIDO NÃO FOI PAGO (Aguardando Pagamento): Lógica Live do Banco
-    // Pesos atuais definidos pelo Admin no Banco
-    const pMensal = Number(mmnConfig.cashbackMensal) || 0;
-    const pDigital = Number(mmnConfig.cashbackDigital) || 0;
-    const pAnual = Number(mmnConfig.cashbackAnual) || 0;
-    const totalRatios = (pMensal + pDigital + pAnual) || 4.5;
-
-    // Percentual atual do Nível 1 (G1) definido no Banco
-    const g1Level = mmnLevels.find(l => Number(l.level) === 1);
-    const g1Value = g1Level ? Number(g1Level.value) : 0.75;
-
-    let userTotalCashback = 0;
-    if (mmnConfig.paymentType === 'percent') {
-      userTotalCashback = totalOrderAmount * (g1Value / 100);
-    } else {
-      userTotalCashback = g1Value;
-    }
-
-    // Distribuição Proporcional baseada nos pesos ATUAIS (com compensação de resíduo no Cashback Anual)
-    const vMensal = Number((userTotalCashback * (pMensal / totalRatios)).toFixed(2));
-    const vDigital = Number((userTotalCashback * (pDigital / totalRatios)).toFixed(2));
-    const vAnual = Number((userTotalCashback - (vMensal + vDigital)).toFixed(2));
+    // 2. SE O PEDIDO NÃO FOI PAGO (Aguardando Pagamento): Alinhado com o Trigger MMN v4
+    // Cada nível (G0, G1, G2) recebe exatamente: 2% semanal + 2% mensal + 2% anual = 6% total.
+    const vMensal = Number((totalOrderAmount * 0.02).toFixed(2));
+    const vDigital = Number((totalOrderAmount * 0.02).toFixed(2));
+    const vAnual = Number((totalOrderAmount * 0.02).toFixed(2));
+    const total = Number((vMensal + vDigital + vAnual).toFixed(2));
     
     return {
       mensal: vMensal,
       digital: vDigital,
       anual: vAnual,
-      total: Number(userTotalCashback.toFixed(2))
+      total
     };
   };
 
@@ -252,7 +236,7 @@ export default function AffiliateOrders() {
     switch(status) {
       case 'Concluído': return <CheckCircle2 size={16} className="text-emerald-500" />;
       case 'Aguardando Pagamento': return <Clock size={16} className="text-amber-500" />;
-      case 'Pago, Aguardando Retirada': return <ShoppingBag size={16} className="text-indigo-500" />;
+      case 'Pago, Aguardando Retirada': return <CheckCircle2 size={16} className="text-emerald-500" />;
       case 'Processando': return <Clock size={16} className="text-blue-500" />;
       case 'Cancelado': return <XCircle size={16} className="text-red-500" />;
       default: return <Package size={16} className="text-slate-500" />;
@@ -263,7 +247,7 @@ export default function AffiliateOrders() {
     switch(status) {
       case 'Concluído': return 'bg-emerald-50 text-emerald-600 border-emerald-100';
       case 'Aguardando Pagamento': return 'bg-amber-50 text-amber-600 border-amber-100';
-      case 'Pago, Aguardando Retirada': return 'bg-indigo-50 text-indigo-600 border-indigo-100';
+      case 'Pago, Aguardando Retirada': return 'bg-emerald-50 text-emerald-600 border-emerald-100';
       case 'Processando': return 'bg-blue-50 text-blue-600 border-blue-100';
       case 'Cancelado': return 'bg-red-50 text-red-600 border-red-100';
       default: return 'bg-slate-50 text-slate-600 border-slate-100';
@@ -384,8 +368,8 @@ export default function AffiliateOrders() {
                       <div className="flex-1">
                         <div className="flex flex-wrap items-center gap-3 mb-1">
                           <h4 className="font-black text-midnight">Pedido #{order.id.length > 12 ? order.id.substring(0, 8).toUpperCase() : order.id}</h4>
-                          <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-widest border flex items-center gap-1.5 ${getStatusColor(order.status)}`}>
-                            {getStatusIcon(order.status)} {order.status || 'Pendente'}
+                           <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-widest border flex items-center gap-1.5 ${getStatusColor(order.status)}`}>
+                            {getStatusIcon(order.status)} {order.status === 'Pago, Aguardando Retirada' ? 'Pago' : (order.status || 'Pendente')}
                           </span>
                         </div>
                         <p className="text-xs text-slate-500 font-medium">
@@ -460,7 +444,7 @@ export default function AffiliateOrders() {
                   <div className="flex items-center gap-3">
                     <span className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">ID: {selectedOrder.id}</span>
                     <span className={`px-2 py-0.5 rounded-lg text-[9px] font-black uppercase tracking-widest ${getStatusColor(selectedOrder.status)}`}>
-                      {selectedOrder.status || 'Pendente'}
+                      {selectedOrder.status === 'Pago, Aguardando Retirada' ? 'Pago' : (selectedOrder.status || 'Pendente')}
                     </span>
                   </div>
                 </div>
@@ -491,21 +475,21 @@ export default function AffiliateOrders() {
                     <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Status do Pedido</p>
                     <div className="flex items-center gap-2">
                       {getStatusIcon(selectedOrder.status)}
-                      <span className="text-sm font-black text-midnight">{selectedOrder.status || 'Pendente'}</span>
+                      <span className="text-sm font-black text-midnight">{selectedOrder.status === 'Pago, Aguardando Retirada' ? 'Pago' : (selectedOrder.status || 'Pendente')}</span>
                     </div>
                   </div>
                   <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
                     <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Data da Compra</p>
                     <span className="text-sm font-black text-midnight">{new Date(selectedOrder.order_date).toLocaleDateString('pt-BR')}</span>
                   </div>
-                  <div className="p-4 bg-primary-blue/5 rounded-2xl border border-primary-blue/10">
-                    <p className="text-[9px] font-black text-primary-blue uppercase tracking-widest mb-1">Cód. Retirada</p>
-                    <span className={`text-sm font-black text-primary-blue ${['Pago, Aguardando Retirada', 'Concluído'].includes(selectedOrder.status) ? 'font-mono' : 'text-[10px] uppercase tracking-wider'}`}>
-                      {['Pago, Aguardando Retirada', 'Concluído'].includes(selectedOrder.status) 
-                        ? (extras[selectedOrder.id]?.withdrawal_code || '---') 
-                        : 'Liberado após pagamento'}
-                    </span>
-                  </div>
+                  {extras[selectedOrder.id]?.withdrawal_code && (
+                    <div className="p-4 bg-primary-blue/5 rounded-2xl border border-primary-blue/10">
+                      <p className="text-[9px] font-black text-primary-blue uppercase tracking-widest mb-1">Cód. Retirada</p>
+                      <span className="text-sm font-black text-primary-blue font-mono">
+                        {extras[selectedOrder.id].withdrawal_code}
+                      </span>
+                    </div>
+                  )}
                 </div>
 
                 {/* Itens do Pedido */}

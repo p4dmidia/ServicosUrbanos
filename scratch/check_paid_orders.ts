@@ -15,19 +15,18 @@ if (!supabaseUrl || !supabaseKey) {
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 async function run() {
-  console.log("Fetching order #1216...");
+  console.log("Fetching paid orders...");
   const { data: orders, error } = await supabase
     .from('orders')
-    .select('*')
-    .eq('id', '1216')
-    .maybeSingle();
+    .select('id, customer_id, customer_name, status, items, created_at')
+    .in('status', ['Pago, Aguardando Retirada', 'Concluído']);
 
   if (error) {
     console.error("Error:", error);
     return;
   }
 
-  console.log("Order 1216 data:");
+  console.log(`Found ${orders?.length} paid orders:`);
   console.log(JSON.stringify(orders, null, 2));
 }
 

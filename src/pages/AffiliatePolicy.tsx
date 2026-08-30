@@ -76,8 +76,8 @@ export default function AffiliatePolicy() {
 
               <div>
                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-2">Seguradora Parceira</p>
-                <p className="text-base font-black uppercase">Tokio Marine Seguros</p>
-                <p className="text-xs text-slate-400 mt-1">CNPJ: 33.164.021/0001-00</p>
+                <p className="text-base font-black uppercase">MBM SEGURADORA S/A</p>
+                <p className="text-xs text-slate-400 mt-1">CNPJ: 87.883.807/0001-06</p>
               </div>
             </div>
 

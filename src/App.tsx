@@ -18,6 +18,7 @@ import AdminFinancials from './pages/AdminFinancials';
 import AdminProducts from './pages/AdminProducts';
 import AdminOrders from './pages/AdminOrders';
 import AffiliateDashboard from './pages/AffiliateDashboard';
+import AffiliateResellerDashboard from './pages/AffiliateResellerDashboard';
 import AffiliateNetwork from './pages/AffiliateNetwork';
 import AffiliateWallet from './pages/AffiliateWallet';
 import AffiliateEcosystem from './pages/AffiliateEcosystem';
@@ -109,6 +110,10 @@ export default function App() {
             <Route 
               path="/afiliado/dashboard" 
               element={<ProtectedRoute allowedRoles={['affiliate', 'owner', 'manager', 'admin', 'regional_reseller']}><AffiliateDashboard /></ProtectedRoute>} 
+            />
+            <Route 
+              path="/afiliado/revendedor" 
+              element={<ProtectedRoute allowedRoles={['regional_reseller']}><AffiliateResellerDashboard /></ProtectedRoute>} 
             />
             <Route 
               path="/afiliado/rede" 

@@ -991,7 +991,8 @@ export const businessRules = {
         .reduce((acc, t) => acc + Number(t.amount || 0), 0);
 
       const walletBonus = transactions
-        .filter(t => (t.description?.includes('Digital') || t.description?.includes('(CD)') || t.description?.includes('Semanal')) && 
+        .filter(t => t.type === 'commission' && 
+                (t.description?.includes('Digital') || t.description?.includes('(CD)') || t.description?.includes('Semanal')) && 
                 (t.status === 'completed' || t.status === 'pago'))
         .reduce((acc, t) => acc + Number(t.amount || 0), 0);
 
@@ -2653,7 +2654,9 @@ export const businessRules = {
         .reduce((acc, t) => acc + Number(t.amount || 0), 0);
 
       const walletBonus = userTransactions
-        .filter(t => (t.description?.includes('Digital') || t.description?.includes('(CD)')) && (t.status === 'completed' || t.status === 'pago'))
+        .filter(t => t.type === 'commission' && 
+                (t.description?.includes('Digital') || t.description?.includes('(CD)') || t.description?.includes('Semanal')) && 
+                (t.status === 'completed' || t.status === 'pago'))
         .reduce((acc, t) => acc + Number(t.amount || 0), 0);
 
       // Subtrair pagamentos já realizados (withdrawals com descrição de pagamento)
@@ -3208,11 +3211,37 @@ export const businessRules = {
     const orderIdStr = String(orderId);
 
     const mapRows = (rows: any[], nameById: Record<string, string>) =>
-      rows.map((c: any) => ({
-        ...c,
-        affiliate_id: c.affiliate_id,
-        affiliateName: nameById[c.affiliate_id] || 'Desconhecido',
-      }));
+      rows.map((c: any) => {
+        const desc = c.description || '';
+        const isRegional = desc.includes('Regional');
+        
+        let level = Number(c.level) || 1;
+        if (isRegional) {
+          level = 99;
+        } else {
+          const gMatch = desc.match(/G(\d+)/i);
+          if (gMatch) {
+            level = parseInt(gMatch[1], 10) + 1;
+          } else {
+            const levelMatch = desc.match(/Nível\s+(\d+)/i);
+            if (levelMatch) {
+              level = parseInt(levelMatch[1], 10);
+            }
+          }
+        }
+
+        return {
+          id: c.id,
+          affiliate_id: c.affiliate_id || c.profile_id,
+          amount: c.amount,
+          status: c.status,
+          description: desc,
+          order_id: c.order_id || orderIdStr,
+          level,
+          isRegional,
+          affiliateName: nameById[c.affiliate_id || c.profile_id] || 'Desconhecido',
+        };
+      });
 
     const fetchAffiliateNames = async (affiliateIds: string[]) => {
       const unique = [...new Set(affiliateIds.filter(Boolean))];
@@ -3254,26 +3283,8 @@ export const businessRules = {
         return [];
       }
 
-      const normalized = (txRows || []).map((t: any) => {
-        const desc = t.description || '';
-        const levelMatch = desc.match(/Nível\s+(\d+)/i);
-        const levelNum = levelMatch ? parseInt(levelMatch[1], 10) : 0;
-        const level = desc.includes('Comissão MMN')
-          ? Math.max(levelNum, 1)
-          : Math.max(levelNum + 1, 1);
-        return {
-          id: t.id,
-          affiliate_id: t.profile_id,
-          amount: t.amount,
-          status: t.status,
-          description: desc,
-          order_id: t.order_id || orderIdStr,
-          level,
-        };
-      });
-
-      const names = await fetchAffiliateNames(normalized.map((c) => c.affiliate_id));
-      return mapRows(normalized, names);
+      const names = await fetchAffiliateNames(txRows.map((t: any) => t.profile_id));
+      return mapRows(txRows, names);
     } catch (error) {
       console.error('Error in getOrderCommissions:', error);
       return [];

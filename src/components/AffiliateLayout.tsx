@@ -18,7 +18,8 @@ import {
   Ticket,
   Package,
   RefreshCw,
-  HeartPulse
+  HeartPulse,
+  Target
 } from 'lucide-react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
@@ -108,6 +109,9 @@ export default function AffiliateLayout({ children, title }: AffiliateLayoutProp
 
   const menuItems = [
     { path: '/afiliado/dashboard', icon: LayoutGrid, label: 'Dashboard' },
+    ...(profile?.role === 'regional_reseller' ? [
+      { path: '/afiliado/revendedor', icon: Target, label: 'Liderança Regional' }
+    ] : []),
     { path: '/afiliado/rede', icon: Users, label: 'Cashback' },
     { path: '/afiliado/financeiro', icon: Wallet, label: 'Financeiro' },
     { path: '/afiliado/pedidos', icon: ShoppingBag, label: 'Meus Pedidos' },

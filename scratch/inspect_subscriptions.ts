@@ -15,20 +15,26 @@ if (!supabaseUrl || !supabaseKey) {
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 async function run() {
-  console.log("Fetching order #1216...");
-  const { data: orders, error } = await supabase
-    .from('orders')
-    .select('*')
-    .eq('id', '1216')
-    .maybeSingle();
+  console.log("Fetching all subscriptions...");
+  const { data: subs, error } = await supabase
+    .from('subscriptions')
+    .select(`
+      id,
+      profile_id,
+      plan_type,
+      amount,
+      status,
+      start_date,
+      end_date
+    `);
 
   if (error) {
     console.error("Error:", error);
     return;
   }
 
-  console.log("Order 1216 data:");
-  console.log(JSON.stringify(orders, null, 2));
+  console.log(`Found ${subs?.length} subscriptions:`);
+  console.log(JSON.stringify(subs, null, 2));
 }
 
 run().catch(console.error);

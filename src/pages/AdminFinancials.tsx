@@ -136,12 +136,15 @@ export default function AdminFinancials() {
         const payeeId = branch ? branch.merchant_id : 'matriz';
         const payee = payeeId !== 'matriz' ? payees[String(payeeId)] : null;
 
+        // Se for licenciamento digital, a ativação/entrega é Concluída automaticamente
+        const isDigital = !o.branchId || o.shipping_address === 'Licenciamento MMN Digital';
+
         const record = {
           orderId: String(o.id),
           buyerName: o.customerName || 'Cliente',
           payeeName: branch ? branch.name : 'Revendedor Matriz',
-          orderStatus: o.status === 'Concluído' || o.status === 'Pago' ? 'Pago' : o.status,
-          deliveryStatus: (extra?.status as any) || 'Pendente',
+          orderStatus: o.status === 'Concluído' || o.status === 'Pago' || o.status === 'Pago, Aguardando Retirada' ? 'Pago' : o.status,
+          deliveryStatus: isDigital ? 'Concluído' : ((extra?.status as any) || 'Pendente'),
           saleDate: saleDate.toLocaleDateString('pt-BR'),
           amount: o.amount,
           repasse: o.amount * (1 - (dynamicPlatformRate / 100)),
@@ -313,6 +316,9 @@ export default function AdminFinancials() {
       const firstDayOfMonth = new Date(targetYear, targetMonth - 1, 1).toISOString();
       const lastDayOfMonth = new Date(targetYear, targetMonth, 0, 23, 59, 59).toISOString();
 
+      console.log('[DEBUG-MBM] firstDayOfMonth:', firstDayOfMonth);
+      console.log('[DEBUG-MBM] lastDayOfMonth:', lastDayOfMonth);
+
       const { data: activeSubs, error: subsError } = await supabase
         .from('subscriptions')
         .select(`
@@ -330,6 +336,8 @@ export default function AdminFinancials() {
         .lte('start_date', lastDayOfMonth)
         .gte('end_date', firstDayOfMonth);
 
+      console.log('[DEBUG-MBM] Query result:', activeSubs, 'Error:', subsError);
+
       if (subsError) throw subsError;
 
       if (!activeSubs || activeSubs.length === 0) {
@@ -344,20 +352,26 @@ export default function AdminFinancials() {
       const workbook = new ExcelJS.Workbook();
       await workbook.xlsx.load(arrayBuffer);
 
+      // Manter a aba de cache/metadados oculta (o ExcelJS por padrão torna visível ao ler)
+      const cacheSheet = workbook.getWorksheet('Acerno_Cache_XXXXX');
+      if (cacheSheet) {
+        cacheSheet.state = 'hidden';
+      }
+
       const worksheet = workbook.getWorksheet('BASE ATIVA');
       if (!worksheet) {
         throw new Error('Aba "BASE ATIVA" não encontrada no modelo de planilha.');
       }
 
       // Preencher cabeçalhos
-      worksheet.getCell('C13').value = 'Serviços Urbanos';
-      worksheet.getCell('F13').value = '1';
-      worksheet.getCell('C15').value = referenceDate;
+      worksheet.getCell('C5').value = 'MA-9283-SU';
+      worksheet.getCell('E5').value = '1';
+      worksheet.getCell('C7').value = referenceDate;
       const todayFormatted = new Date().toLocaleDateString('pt-BR');
-      worksheet.getCell('C17').value = `Dados verificados em ${todayFormatted}`;
+      worksheet.getCell('B9').value = `Dados verificados em ${todayFormatted}`;
 
-      // Inserir segurados a partir da linha 18
-      let currentRowIndex = 18;
+      // Inserir segurados a partir da linha 11
+      let currentRowIndex = 11;
       
       activeSubs.forEach((sub: any) => {
         const prof = sub.profiles;
@@ -748,7 +762,7 @@ export default function AdminFinancials() {
               <div className="p-4 bg-indigo-50/50 rounded-2xl border border-indigo-100 flex gap-3 items-start">
                 <Info size={16} className="text-indigo-600 shrink-0 mt-0.5" />
                 <p className="text-[10px] text-indigo-800 font-bold uppercase leading-normal">
-                  * Apenas clientes com assinaturas válidas (dentro da vigência do plano Trimestral, Semestral ou Anual) serão exportados na planilha.
+                  * Apenas clientes com assinaturas válidas (dentro da vigência do plano Mensal, Trimestral, Semestral ou Anual) serão exportados na planilha.
                 </p>
               </div>
 

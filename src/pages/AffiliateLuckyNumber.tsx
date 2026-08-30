@@ -20,18 +20,56 @@ export default function AffiliateLuckyNumber() {
 
   const luckyNumber = getLuckyNumber(user?.id || '');
 
-  // Próximo sábado
-  const getNextSaturdayDate = () => {
+  // Próximo sorteio baseado na regra de sábados
+  const getNextDrawDate = () => {
     const today = new Date();
-    const resultDate = new Date(today.getTime());
-    resultDate.setDate(today.getDate() + (6 + 7 - today.getDay()) % 7);
-    if (resultDate.toDateString() === today.toDateString()) {
-      resultDate.setDate(resultDate.getDate() + 7);
+    const todayZero = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+
+    const getDrawingSaturdays = (year: number, month: number): Date[] => {
+      const saturdays: Date[] = [];
+      const dateRef = new Date(year, month, 1);
+      while (dateRef.getMonth() === month) {
+        if (dateRef.getDay() === 6) { // Sábado
+          saturdays.push(new Date(dateRef));
+        }
+        dateRef.setDate(dateRef.getDate() + 1);
+      }
+      
+      if (saturdays.length === 5) {
+        return saturdays.slice(1); // Desconsidera o primeiro se tiver 5 sábados no mês
+      }
+      return saturdays;
+    };
+
+    let currentYear = today.getFullYear();
+    let currentMonth = today.getMonth();
+
+    // Busca o primeiro sábado de sorteio válido a partir de hoje
+    for (let i = 0; i < 6; i++) {
+      const monthSaturdays = getDrawingSaturdays(currentYear, currentMonth);
+      const validSaturdays = monthSaturdays.filter(sat => {
+        const satZero = new Date(sat.getFullYear(), sat.getMonth(), sat.getDate());
+        return satZero >= todayZero;
+      });
+
+      if (validSaturdays.length > 0) {
+        return validSaturdays[0].toLocaleDateString('pt-BR');
+      }
+
+      currentMonth++;
+      if (currentMonth > 11) {
+        currentMonth = 0;
+        currentYear++;
+      }
     }
+
+    // Fallback
+    const resultDate = new Date(today);
+    resultDate.setDate(today.getDate() + (6 + 7 - today.getDay()) % 7);
     return resultDate.toLocaleDateString('pt-BR');
   };
 
-  const nextDrawDate = getNextSaturdayDate();
+  const nextDrawDate = getNextDrawDate();
 
   return (
     <AffiliateLayout title="Seu Número da Sorte">
@@ -64,7 +102,7 @@ export default function AffiliateLuckyNumber() {
                   <Sparkles size={12} />
                   Bilhete Ativo
                 </span>
-                <h2 className="text-3xl font-black italic uppercase text-white mt-4 tracking-tight">CUPOM DA SORTE</h2>
+                <h2 className="text-3xl font-black italic uppercase text-white mt-4 tracking-tight">NÚMERO DA SORTE</h2>
                 <p className="text-slate-400 font-medium text-xs">Ecosystem Services Urbanos S.A.</p>
               </div>
 
@@ -100,7 +138,7 @@ export default function AffiliateLuckyNumber() {
               >
                 {luckyNumber}
               </motion.div>
-              <p className="text-[9px] text-slate-400 mt-3 font-bold uppercase tracking-wider">Número gerado eletronicamente</p>
+              <p className="text-[9px] text-slate-400 mt-3 font-bold uppercase tracking-wider">Número gerado pela MBM SEGURADORA S/A</p>
             </div>
 
           </div>

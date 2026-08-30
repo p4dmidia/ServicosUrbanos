@@ -121,7 +121,7 @@ export default function FinancialReportTable({
   const addCommissionAmount = (row: GroupedCommission, description: string, amount: number) => {
     const desc = description || '';
     if (desc.includes('Mensal')) row.mensal += amount;
-    else if (desc.includes('Digital')) row.digital += amount;
+    else if (desc.includes('Digital') || desc.includes('Semanal')) row.digital += amount;
     else if (desc.includes('Anual')) row.anual += amount;
     else row.mensal += amount;
     row.total = row.mensal + row.digital + row.anual;
@@ -129,10 +129,11 @@ export default function FinancialReportTable({
 
   const groupedCommissions: GroupedCommission[] = React.useMemo(() => {
     const map = new Map<string, GroupedCommission>();
-    orderCommissions.forEach((comm) => {
+    orderCommissions.forEach((comm: any) => {
       const level = Number(comm.level) || 1;
+      const isRegional = comm.isRegional || false;
       const affiliateId = comm.affiliate_id || comm.affiliateId || 'unknown';
-      const key = `${level}-${affiliateId}`;
+      const key = `${level}-${affiliateId}-${isRegional ? 'reg' : 'aff'}`;
       if (!map.has(key)) {
         map.set(key, {
           key,
@@ -145,7 +146,8 @@ export default function FinancialReportTable({
           digital: 0,
           anual: 0,
           total: 0,
-        });
+          isRegional
+        } as any);
       }
       const row = map.get(key)!;
       addCommissionAmount(row, comm.description, Number(comm.amount) || 0);
@@ -792,13 +794,17 @@ export default function FinancialReportTable({
                                  <div key={row.key} className="p-5 hover:bg-white transition-all space-y-3">
                                     <div className="flex items-center justify-between gap-3">
                                        <div className="flex items-center gap-3 min-w-0">
-                                          <div className="size-8 bg-white rounded-lg flex items-center justify-center text-indigo-600 border border-slate-100 shadow-sm text-[10px] font-black shrink-0">
-                                             G{row.generation}
+                                          <div className={`size-8 bg-white rounded-lg flex items-center justify-center border border-slate-100 shadow-sm text-[10px] font-black shrink-0 ${
+                                            (row as any).isRegional ? 'text-purple-600 font-bold bg-purple-50/50' : 'text-indigo-600'
+                                          }`}>
+                                             {(row as any).isRegional ? 'REG' : `G${row.generation}`}
                                           </div>
                                           <div className="flex flex-col min-w-0">
                                              <span className="text-xs font-black text-midnight uppercase leading-none mb-1 truncate">{row.affiliateName}</span>
                                              <div className="flex items-center gap-2 flex-wrap">
-                                                <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">Geração G{row.generation}</span>
+                                                <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">
+                                                  {(row as any).isRegional ? 'Revendedor Regional' : `Geração G${row.generation}`}
+                                                </span>
                                                 <span className="text-slate-200">•</span>
                                                 <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">Pedido #{row.orderId}</span>
                                              </div>

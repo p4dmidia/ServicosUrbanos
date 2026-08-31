@@ -20,6 +20,9 @@ export default function AffiliateResellerDashboard() {
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState<any>(null);
   const [regionalEarnings, setRegionalEarnings] = useState(0);
+  const [regWeeklyEarnings, setRegWeeklyEarnings] = useState(0);
+  const [regMonthlyEarnings, setRegMonthlyEarnings] = useState(0);
+  const [regAnnualEarnings, setRegAnnualEarnings] = useState(0);
   const [regionalConfig, setRegionalConfig] = useState<any>(null);
   const [transactions, setTransactions] = useState<any[]>([]);
 
@@ -38,7 +41,7 @@ export default function AffiliateResellerDashboard() {
         const [regTransRes, regConfigRes, historyRes] = await Promise.all([
           supabase
             .from('transactions')
-            .select('amount')
+            .select('amount, description')
             .eq('profile_id', user.id)
             .like('description', '%Regional%'),
           supabase
@@ -53,8 +56,25 @@ export default function AffiliateResellerDashboard() {
             .order('created_at', { ascending: false })
         ]);
 
-        const totalReg = (regTransRes.data || []).reduce((acc, t) => acc + Number(t.amount || 0), 0);
+        const transactionsList = regTransRes.data || [];
+        const totalReg = transactionsList.reduce((acc, t) => acc + Number(t.amount || 0), 0);
+        
+        const weeklyReg = transactionsList
+          .filter(t => t.description?.includes('Semanal'))
+          .reduce((acc, t) => acc + Number(t.amount || 0), 0);
+        
+        const monthlyReg = transactionsList
+          .filter(t => t.description?.includes('Mensal'))
+          .reduce((acc, t) => acc + Number(t.amount || 0), 0);
+          
+        const annualReg = transactionsList
+          .filter(t => t.description?.includes('Anual'))
+          .reduce((acc, t) => acc + Number(t.amount || 0), 0);
+
         setRegionalEarnings(totalReg);
+        setRegWeeklyEarnings(weeklyReg);
+        setRegMonthlyEarnings(monthlyReg);
+        setRegAnnualEarnings(annualReg);
         setRegionalConfig(regConfigRes.data);
         setTransactions(historyRes.data || []);
 
@@ -117,6 +137,20 @@ export default function AffiliateResellerDashboard() {
             <h3 className="text-2xl font-black text-white tracking-tighter">
               R$ {regionalEarnings.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
             </h3>
+            <div className="flex gap-4 pt-4 border-t border-white/10 mt-4 font-black text-[10px] text-white/90">
+              <div>
+                <span className="text-white/50 block uppercase text-[7px]">Semanal</span>
+                <span className="font-mono text-xs">R$ {regWeeklyEarnings.toFixed(2).replace('.', ',')}</span>
+              </div>
+              <div>
+                <span className="text-white/50 block uppercase text-[7px]">Mensal</span>
+                <span className="font-mono text-xs">R$ {regMonthlyEarnings.toFixed(2).replace('.', ',')}</span>
+              </div>
+              <div>
+                <span className="text-white/50 block uppercase text-[7px]">Anual</span>
+                <span className="font-mono text-xs">R$ {regAnnualEarnings.toFixed(2).replace('.', ',')}</span>
+              </div>
+            </div>
           </motion.div>
 
           {/* Card 2: Taxas Ativas */}
@@ -168,7 +202,7 @@ export default function AffiliateResellerDashboard() {
             </div>
             <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Membros na Linhagem Regional</p>
             <h3 className="text-2xl font-black text-midnight tracking-tighter">
-              {stats?.total || 0} Membros
+              {stats?.networkSummary?.total || 0} Membros
             </h3>
           </motion.div>
         </div>
@@ -215,7 +249,7 @@ export default function AffiliateResellerDashboard() {
                           <span className={`px-2.5 py-1 rounded-full text-[8px] font-black uppercase tracking-widest ${
                             isPaid ? 'bg-emerald-100 text-emerald-600' : 'bg-amber-100 text-amber-600'
                           }`}>
-                            {isPaid ? 'Pago' : 'Pendente'}
+                            {isPaid ? 'Pago' : 'Confirmado'}
                           </span>
                         </td>
                         <td className="p-6 text-xs font-bold text-slate-500">

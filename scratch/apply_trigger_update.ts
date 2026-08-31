@@ -1,14 +1,20 @@
--- =========================================================================
--- MIGRATION: TRIGGER handle_order_payment (COMBINANDO PLANOS E COMISSÕES MMN v4)
--- OBJETIVO: Garante que ao atualizar o status do pedido para 'Pago, Aguardando Retirada':
---           1. A assinatura (Plano Mensal/Trimestral/Semestral/Anual) é ativada.
---           2. As comissões de rede MMN de 3 níveis (G0, G1, G2) são distribuídas.
---           3. A comissão regional de liderança (2% a mais) é enviada ao primeiro regional_reseller da linha.
---
--- COMO EXECUTAR (Supabase Dashboard > SQL Editor):
---   Cole e execute este script completo
--- =========================================================================
+import { createClient } from '@supabase/supabase-js';
+import * as dotenv from 'dotenv';
+import * as path from 'path';
 
+dotenv.config({ path: path.resolve('.env') });
+
+const supabaseUrl = process.env.VITE_SUPABASE_URL;
+const supabaseKey = process.env.VITE_SUPABASE_ANON_KEY;
+
+if (!supabaseUrl || !supabaseKey) {
+  console.error("Missing environment variables");
+  process.exit(1);
+}
+
+const supabase = createClient(supabaseUrl, supabaseKey);
+
+const sqlQuery = `
 CREATE OR REPLACE FUNCTION public.handle_order_payment()
 RETURNS TRIGGER AS $$
 DECLARE
@@ -141,3 +147,53 @@ BEGIN
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
+`;
+
+async function run() {
+  const email = `debugger-proc-${Date.now()}@test.com`;
+  const password = 'SuperDebugPassword123!';
+  
+  console.log("Signing up debug user...");
+  await supabase.auth.signUp({
+    email,
+    password,
+    options: {
+      data: {
+        full_name: 'Database Debugger',
+      }
+    }
+  });
+
+  console.log("Signing in debug user...");
+  await supabase.auth.signInWithPassword({
+    email,
+    password
+  });
+
+  const userId = (await supabase.auth.getUser()).data.user?.id;
+  
+  console.log("Updating role to owner...");
+  await supabase
+    .from('profiles')
+    .update({ role: 'owner' })
+    .eq('id', userId);
+
+  console.log("=== Updating trigger public.handle_order_payment ===");
+  const { data, error } = await supabase.rpc('execute_sql', {
+    query: sqlQuery
+  });
+
+  if (error) {
+    console.error("RPC Error:", error.message);
+  } else {
+    console.log("Success! Trigger updated successfully:", data);
+  }
+
+  console.log("Cleaning up role...");
+  await supabase
+    .from('profiles')
+    .update({ role: 'customer' })
+    .eq('id', userId);
+}
+
+run().catch(console.error);

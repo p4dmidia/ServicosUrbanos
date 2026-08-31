@@ -128,7 +128,7 @@ export default function AffiliateDashboard() {
                  Cashback Mensal
               </div>
             </div>
-            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Acúmulo por Nível</p>
+            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Total Recebido</p>
             <h3 className="text-2xl font-black text-midnight tracking-tighter text-blue-600">
               R$ {stats.monthlyBonus.toFixed(2)}
             </h3>
@@ -148,7 +148,7 @@ export default function AffiliateDashboard() {
                  Cashback Anual
               </div>
             </div>
-            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Acúmulo por Nível</p>
+            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Total Recebido</p>
             <h3 className="text-2xl font-black text-midnight tracking-tighter text-emerald-600">
               R$ {stats.annualBonus.toFixed(2)}
             </h3>

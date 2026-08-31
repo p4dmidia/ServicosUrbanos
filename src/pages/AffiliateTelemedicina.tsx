@@ -298,6 +298,140 @@ export default function AffiliateTelemedicina() {
           </div>
         </div>
 
+        {/* Instruções para Agendamento de Consultas */}
+        <div className="bg-white border border-slate-200/60 rounded-[2rem] overflow-hidden shadow-sm p-8 sm:p-10 space-y-8">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-slate-100">
+            <div>
+              <h3 className="text-lg font-black text-midnight tracking-tighter uppercase italic">
+                Instruções para Agendamento de Consultas
+              </h3>
+              <p className="text-xs text-slate-400 font-bold uppercase tracking-wider mt-1">
+                Parceiro – Racca Telemedicina
+              </p>
+            </div>
+            <div className="bg-emerald-50 text-emerald-600 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider self-start sm:self-auto">
+              Parceria Oficial
+            </div>
+          </div>
+
+          {/* Fluxo de Passos */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <div className="space-y-6">
+              <div className="flex gap-4">
+                <div className="size-8 rounded-xl bg-slate-50 border border-slate-200/60 text-slate-600 flex items-center justify-center font-mono font-black text-xs shrink-0 mt-0.5">
+                  01
+                </div>
+                <div>
+                  <h4 className="text-xs font-black text-midnight uppercase tracking-wider mb-1">Acesso Inicial</h4>
+                  <p className="text-slate-500 text-xs leading-relaxed">
+                    O afiliado clica no link da Racca Telemedicina e é direcionado para a página de contratação do serviço.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex gap-4">
+                <div className="size-8 rounded-xl bg-slate-50 border border-slate-200/60 text-slate-600 flex items-center justify-center font-mono font-black text-xs shrink-0 mt-0.5">
+                  02
+                </div>
+                <div>
+                  <h4 className="text-xs font-black text-midnight uppercase tracking-wider mb-1">Contratação e Pagamento</h4>
+                  <p className="text-slate-500 text-xs leading-relaxed font-bold">
+                    Contrate sua consulta, preencha seu cadastro com a Racca Telemedicina e realize o pagamento online.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex gap-4">
+                <div className="size-8 rounded-xl bg-slate-50 border border-slate-200/60 text-slate-600 flex items-center justify-center font-mono font-black text-xs shrink-0 mt-0.5">
+                  03
+                </div>
+                <div>
+                  <h4 className="text-xs font-black text-midnight uppercase tracking-wider mb-1">Confirmação Automática</h4>
+                  <p className="text-slate-500 text-xs leading-relaxed">
+                    Após o pagamento, você recebe um e-mail com informações de acesso à plataforma, contendo também a confirmação e as instruções para marcar a 1ª consulta.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-6">
+              <div className="flex gap-4">
+                <div className="size-8 rounded-xl bg-slate-50 border border-slate-200/60 text-slate-600 flex items-center justify-center font-mono font-black text-xs shrink-0 mt-0.5">
+                  04
+                </div>
+                <div>
+                  <h4 className="text-xs font-black text-midnight uppercase tracking-wider mb-1">Primeira Consulta (Clínico Geral)</h4>
+                  <p className="text-slate-500 text-xs leading-relaxed">
+                    O afiliado acessa a plataforma com os dados recebidos. A consulta inicial é realizada obrigatoriamente com um clínico geral, que avaliará se há necessidade de encaminhamento para especialista.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex gap-4">
+                <div className="size-8 rounded-xl bg-slate-50 border border-slate-200/60 text-slate-600 flex items-center justify-center font-mono font-black text-xs shrink-0 mt-0.5">
+                  05
+                </div>
+                <div>
+                  <h4 className="text-xs font-black text-midnight uppercase tracking-wider mb-1">Encaminhamento para Especialista</h4>
+                  <p className="text-slate-500 text-xs leading-relaxed">
+                    Caso o clínico identifique a necessidade, o sistema gera um novo e-mail automático com as instruções para marcar a 2ª consulta com especialista. <strong className="text-emerald-600 font-black">Essa segunda consulta é gratuita.</strong>
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex gap-4">
+                <div className="size-8 rounded-xl bg-slate-50 border border-slate-200/60 text-slate-600 flex items-center justify-center font-mono font-black text-xs shrink-0 mt-0.5">
+                  06
+                </div>
+                <div>
+                  <h4 className="text-xs font-black text-midnight uppercase tracking-wider mb-1">Encerramento e Acompanhamento</h4>
+                  <p className="text-slate-500 text-xs leading-relaxed">
+                    Após a consulta, o afiliado recebe o relatório, prescrição ou encaminhamento conforme avaliação, com a possibilidade de agendar retornos e receber acompanhamento digital.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Especialidades */}
+          <div className="bg-slate-50 p-6 rounded-[1.5rem] border border-slate-100 space-y-4">
+            <h4 className="text-xs font-black text-midnight uppercase tracking-wider flex items-center gap-2">
+              <span>📋</span> Especialidades disponíveis para encaminhamento
+            </h4>
+            <div className="flex flex-wrap gap-2">
+              {[
+                'Clínico Geral', 'Cardiologista', 'Dermatologista', 'Endocrinologista', 
+                'Geriatria', 'Ginecologista', 'Neurologista', 'Ortopedista', 
+                'Otorrinolaringologista', 'Pediatria', 'Psiquiatria', 'Psicologia', 
+                'Traumatologia', 'Urologista'
+              ].map((specialty) => (
+                <span 
+                  key={specialty} 
+                  className="bg-white border border-slate-200/60 text-slate-600 px-3 py-1.5 rounded-xl text-[10px] font-bold"
+                >
+                  {specialty}
+                </span>
+              ))}
+            </div>
+          </div>
+
+          {/* Observação e Botão Final */}
+          <div className="pt-4 border-t border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-6">
+            <p className="text-[11px] font-bold text-slate-400 max-w-md uppercase leading-relaxed">
+              ⚠️ Observação: As atualizações no corpo clínico serão informadas nesta tela, garantindo transparência aos afiliados.
+            </p>
+            <a 
+              href="https://raccasaude.com.br/parceiro/servicos-urbanos"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center justify-center gap-2.5 bg-midnight text-white hover:bg-slate-800 px-8 py-4 rounded-2xl font-black text-xs uppercase tracking-widest transition-all shadow-xl shadow-midnight/10 shrink-0 self-stretch md:self-auto"
+            >
+              <span>Acessar Racca Telemedicina</span>
+              <ExternalLink size={14} />
+            </a>
+          </div>
+        </div>
+
       </div>
 
       {/* Triagem / Consulta Modal */}

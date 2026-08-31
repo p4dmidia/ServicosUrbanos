@@ -980,30 +980,42 @@ export const businessRules = {
 
       // Cálculo Real baseado no PRD (Divisão Tripla)
       // Buscamos por palavras-chave na descrição ou tipo de forma mais flexível
+      // Para o Card Mensal e Anual: Exibir o Total Pago/Recebido (retiradas concluídas/pagas)
       const monthlyBonus = transactions
-        .filter(t => (t.description?.includes('Mensal')) && 
+        .filter(t => t.type === 'withdrawal' &&
+                (t.description?.includes('Mensal')) && 
                 (t.status === 'completed' || t.status === 'pago'))
-        .reduce((acc, t) => acc + Number(t.amount || 0), 0);
+        .reduce((acc, t) => acc + Math.abs(Number(t.amount || 0)), 0);
 
       const annualBonus = transactions
-        .filter(t => (t.description?.includes('Anual')) && 
+        .filter(t => t.type === 'withdrawal' &&
+                (t.description?.includes('Anual')) && 
                 (t.status === 'completed' || t.status === 'pago'))
-        .reduce((acc, t) => acc + Number(t.amount || 0), 0);
+        .reduce((acc, t) => acc + Math.abs(Number(t.amount || 0)), 0);
 
+      // Carteira Semanal (CD): soma de todas as comissões semanais (pending, completed ou pago)
       const walletBonus = transactions
         .filter(t => t.type === 'commission' && 
                 (t.description?.includes('Digital') || t.description?.includes('(CD)') || t.description?.includes('Semanal')) && 
-                (t.status === 'completed' || t.status === 'pago'))
+                (t.status === 'completed' || t.status === 'pago' || t.status === 'pending'))
         .reduce((acc, t) => acc + Number(t.amount || 0), 0);
 
-      const totalEarnings = monthlyBonus + annualBonus + walletBonus;
+      // totalEarnings: soma de todas as comissões (ganhos históricos acumulados)
+      const monthlyCommissions = transactions
+        .filter(t => t.type === 'commission' && t.description?.includes('Mensal') && (t.status === 'completed' || t.status === 'pago' || t.status === 'pending'))
+        .reduce((acc, t) => acc + Number(t.amount || 0), 0);
+      const annualCommissions = transactions
+        .filter(t => t.type === 'commission' && t.description?.includes('Anual') && (t.status === 'completed' || t.status === 'pago' || t.status === 'pending'))
+        .reduce((acc, t) => acc + Number(t.amount || 0), 0);
+      const totalEarnings = monthlyCommissions + annualCommissions + walletBonus;
       
       // O Saldo Disponível conforme o PRD é o da Carteira Digital (CD)
       // Exclui resgates/pagamentos de Cashback Mensal e Anual para manter as carteiras independentes
       const totalWithdrawn = transactions
         .filter(t => t.type === 'withdrawal' && 
                  !t.description?.includes('Mensal') && 
-                 !t.description?.includes('Anual'))
+                 !t.description?.includes('Anual') &&
+                 (t.status === 'completed' || t.status === 'pago'))
         .reduce((acc, t) => acc + Math.abs(Number(t.amount)), 0);
 
       const availableBalance = walletBonus - totalWithdrawn;
@@ -1595,7 +1607,7 @@ export const businessRules = {
   async getPayeeDetails(userIds: string[]) {
     const { data, error } = await supabase
       .from('profiles')
-      .select('id, full_name, pix_key, cpf, whatsapp')
+      .select('id, full_name, pix_key, cpf, whatsapp, commission_rate')
       .in('id', userIds);
     
     if (error) throw error;
@@ -2018,7 +2030,7 @@ export const businessRules = {
       const { data: transactions, error: txError } = await supabase
         .from('transactions')
         .select('id, profile_id, amount, created_at, status, type, description')
-        .in('status', ['completed', 'pago'])
+        .in('status', ['completed', 'pago', 'pending'])
         .in('type', ['commission', 'withdrawal'])
         .gte('created_at', startDate)
         .lte('created_at', endDate);
@@ -2646,17 +2658,17 @@ export const businessRules = {
       const userTransactions = transactions.filter(t => t.profile_id === profile.id);
       
       const monthlyBonus = userTransactions
-        .filter(t => t.type === 'commission' && t.description?.includes('Mensal') && (t.status === 'completed' || t.status === 'pago'))
+        .filter(t => t.type === 'commission' && t.description?.includes('Mensal') && (t.status === 'completed' || t.status === 'pago' || t.status === 'pending'))
         .reduce((acc, t) => acc + Number(t.amount || 0), 0);
 
       const annualBonus = userTransactions
-        .filter(t => t.type === 'commission' && t.description?.includes('Anual') && (t.status === 'completed' || t.status === 'pago'))
+        .filter(t => t.type === 'commission' && t.description?.includes('Anual') && (t.status === 'completed' || t.status === 'pago' || t.status === 'pending'))
         .reduce((acc, t) => acc + Number(t.amount || 0), 0);
 
       const walletBonus = userTransactions
         .filter(t => t.type === 'commission' && 
                 (t.description?.includes('Digital') || t.description?.includes('(CD)') || t.description?.includes('Semanal')) && 
-                (t.status === 'completed' || t.status === 'pago'))
+                (t.status === 'completed' || t.status === 'pago' || t.status === 'pending'))
         .reduce((acc, t) => acc + Number(t.amount || 0), 0);
 
       // Subtrair pagamentos já realizados (withdrawals com descrição de pagamento)

@@ -231,7 +231,7 @@ export default function AffiliateWallet() {
               
               <div className="relative z-10 flex justify-between items-start">
                  <div>
-                    <p className="text-[10px] font-black text-blue-200/60 uppercase tracking-widest mb-1">Saldo Disponível</p>
+                    <p className="text-[10px] font-black text-blue-200/60 uppercase tracking-widest mb-1">Total Recebido</p>
                     <p className="text-[8px] font-bold text-blue-300/40 uppercase tracking-[0.2em]">Cashback Mensal</p>
                  </div>
                  <div className={`size-10 rounded-xl flex items-center justify-center border transition-colors ${
@@ -317,7 +317,7 @@ export default function AffiliateWallet() {
               
               <div className="relative z-10 flex justify-between items-start">
                  <div>
-                    <p className="text-[10px] font-black text-emerald-200/60 uppercase tracking-widest mb-1">Saldo Disponível</p>
+                    <p className="text-[10px] font-black text-emerald-200/60 uppercase tracking-widest mb-1">Total Recebido</p>
                     <p className="text-[8px] font-bold text-emerald-300/40 uppercase tracking-[0.2em]">Cashback Anual</p>
                  </div>
                  <div className={`size-10 rounded-xl flex items-center justify-center border transition-colors ${
@@ -524,7 +524,11 @@ export default function AffiliateWallet() {
                                   (t.status === 'Concluído' || t.status === 'Pago' || t.status === 'Pago, Aguardando Retirada') ? 'bg-emerald-50 text-emerald-600' : 
                                   'bg-amber-50 text-amber-600'
                                 }`}>
-                                  {t.status}
+                                  {t.status === 'pending' 
+                                    ? 'Confirmado' 
+                                    : (t.status === 'completed' || t.status === 'pago' || t.status === 'Concluído' || t.status === 'Pago') 
+                                      ? 'Pago' 
+                                      : t.status}
                                 </span>
                               </td>
                             </motion.tr>

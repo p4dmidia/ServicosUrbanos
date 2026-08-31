@@ -48,6 +48,7 @@ export interface FinancialRecord {
   paymentMethod?: string;
   items?: any[];
   payoutStatus?: string;
+  payoutRate?: number;
 }
 
 interface FinancialReportTableProps {
@@ -570,7 +571,14 @@ export default function FinancialReportTable({
                     <td className="p-6 text-[11px] font-bold text-slate-500 whitespace-nowrap">{record.saleDate}</td>
                     <td className="p-6 text-right text-xs font-bold text-slate-600 whitespace-nowrap">R$ {record.amount.toFixed(2).replace('.', ',')}</td>
                     <td className="p-6 text-right whitespace-nowrap">
-                      <span className="text-xs font-black text-indigo-600 italic">R$ {record.repasse.toFixed(2).replace('.', ',')}</span>
+                      <div className="flex flex-col items-end">
+                        <span className="text-xs font-black text-indigo-600 italic">R$ {record.repasse.toFixed(2).replace('.', ',')}</span>
+                        {record.payoutRate !== undefined && (
+                          <span className="text-[8px] text-slate-400 font-bold uppercase tracking-tighter mt-0.5">
+                            ({record.payoutRate}% líquido)
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td className="p-6 text-center">
                        <div className="flex flex-col items-center">

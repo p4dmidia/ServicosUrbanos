@@ -51,6 +51,7 @@ export default function AdminFinancials() {
     end: new Date().toISOString().split('T')[0]
   });
   const [affiliateReport, setAffiliateReport] = useState<any[]>([]);
+  const [orderRegionalMap, setOrderRegionalMap] = useState<Record<string, string>>({});
 
   useEffect(() => {
     if (viewType === 'fiscal') {
@@ -82,11 +83,35 @@ export default function AdminFinancials() {
 
       // Somente pedidos com repasse pendente
       const pendingOrders = ordersData.filter(o => o.payoutStatus === 'pending');
-      
-      // Coletar todos os IDs de proprietários de filiais associados a estes pedidos
+      const pendingOrderIds = pendingOrders.map(o => String(o.id));
+
+      // Buscar transações de comissão regional para estes pedidos para identificar o regional_reseller da rede
+      const mappedRegionals: Record<string, string> = {};
+      if (pendingOrderIds.length > 0) {
+        const { data: regionalTxs } = await supabase
+          .from('transactions')
+          .select('profile_id, order_id')
+          .eq('type', 'commission')
+          .ilike('description', '%Regional%')
+          .in('order_id', pendingOrderIds);
+
+        regionalTxs?.forEach(t => {
+          if (t.order_id && t.profile_id) {
+            mappedRegionals[String(t.order_id)] = String(t.profile_id);
+          }
+        });
+      }
+      setOrderRegionalMap(mappedRegionals);
+
+      // Coletar todos os IDs de proprietários de filiais ou regional_resellers associados a estes pedidos
       const merchantOwnerIds = pendingOrders.map(o => {
         const branch = branchesList.find(b => b.id === o.branchId);
-        return branch ? branch.merchant_id : null;
+        if (branch) return String(branch.merchant_id);
+
+        const regionalId = mappedRegionals[String(o.id)];
+        if (regionalId) return regionalId;
+
+        return null;
       }).filter(Boolean);
       
       const potentialPayeeIds = [...new Set(merchantOwnerIds)].map(id => String(id));
@@ -133,21 +158,32 @@ export default function AdminFinancials() {
         payDate.setDate(payDate.getDate() + 1);
 
         const branch = branches.find(b => b.id === o.branchId);
-        const payeeId = branch ? branch.merchant_id : 'matriz';
+        const regionalId = orderRegionalMap[String(o.id)];
+        const payeeId = branch ? branch.merchant_id : (regionalId || 'matriz');
         const payee = payeeId !== 'matriz' ? payees[String(payeeId)] : null;
 
         // Se for licenciamento digital, a ativação/entrega é Concluída automaticamente
         const isDigital = !o.branchId || o.shipping_address === 'Licenciamento MMN Digital';
 
+        // Taxas e repasses calculados dinamicamente
+        const payoutRate = branch 
+          ? (100 - dynamicPlatformRate) 
+          : (payee ? (payee.commission_rate || 6) : 0);
+
+        const repasse = o.amount * (payoutRate / 100);
+
         const record = {
           orderId: String(o.id),
           buyerName: o.customerName || 'Cliente',
-          payeeName: branch ? branch.name : 'Revendedor Matriz',
+          payeeName: branch 
+            ? branch.name 
+            : (payee ? `${payee.full_name} (Regional)` : 'Revendedor Matriz'),
           orderStatus: o.status === 'Concluído' || o.status === 'Pago' || o.status === 'Pago, Aguardando Retirada' ? 'Pago' : o.status,
           deliveryStatus: isDigital ? 'Concluído' : ((extra?.status as any) || 'Pendente'),
           saleDate: saleDate.toLocaleDateString('pt-BR'),
           amount: o.amount,
-          repasse: o.amount * (1 - (dynamicPlatformRate / 100)),
+          repasse: repasse,
+          payoutRate: payoutRate,
           payDate: payDate.toLocaleDateString('pt-BR'),
           payeeId: String(payeeId),
           payeePixKey: payee?.pix_key || (payeeId === 'matriz' ? profile?.pix_key || matrixPixKey || '' : ''),
@@ -163,7 +199,7 @@ export default function AdminFinancials() {
 
     console.log('[DEBUG-FINANCEIRO] Dados Mapeados:', mapped);
     return mapped;
-  }, [orders, extras, payees, profile, matrixPixKey, matrixCpf, dynamicPlatformRate, branches]);
+  }, [orders, extras, payees, profile, matrixPixKey, matrixCpf, dynamicPlatformRate, branches, orderRegionalMap]);
 
   // Filtro para mostrar apenas afiliados com saldo pendente e define a data prevista de pagamento (hoje)
   const filteredAffiliateData = useMemo(() => {
@@ -373,9 +409,14 @@ export default function AdminFinancials() {
       // Inserir segurados a partir da linha 11
       let currentRowIndex = 11;
       
+      const seenProfiles = new Set<string>();
       activeSubs.forEach((sub: any) => {
         const prof = sub.profiles;
-        if (!prof) return;
+        if (!prof || !sub.profile_id) return;
+
+        // Evitar duplicados na planilha
+        if (seenProfiles.has(sub.profile_id)) return;
+        seenProfiles.add(sub.profile_id);
 
         const row = worksheet.getRow(currentRowIndex);
         
@@ -390,7 +431,7 @@ export default function AdminFinancials() {
         row.getCell(4).value = formattedBirthDate;
         row.getCell(5).value = prof.gender || '';
         row.getCell(6).value = 5000.00;
-        row.getCell(7).value = `Plano ${sub.plan_type.toUpperCase()}`;
+        row.getCell(7).value = ''; // Removido informações da coluna de observações conforme solicitado
 
         row.commit();
         currentRowIndex++;

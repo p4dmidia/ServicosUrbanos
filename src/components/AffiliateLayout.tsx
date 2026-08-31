@@ -112,7 +112,7 @@ export default function AffiliateLayout({ children, title }: AffiliateLayoutProp
     ...(profile?.role === 'regional_reseller' ? [
       { path: '/afiliado/revendedor', icon: Target, label: 'Liderança Regional' }
     ] : []),
-    { path: '/afiliado/rede', icon: Users, label: 'Cashback' },
+    { path: '/afiliado/rede', icon: Users, label: 'Cashback de rede' },
     { path: '/afiliado/financeiro', icon: Wallet, label: 'Financeiro' },
     { path: '/afiliado/pedidos', icon: ShoppingBag, label: 'Meus Pedidos' },
     { path: '/afiliado/renovacoes', icon: RefreshCw, label: 'Minhas Renovações' },

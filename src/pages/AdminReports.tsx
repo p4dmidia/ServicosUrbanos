@@ -27,64 +27,33 @@ import FinancialReportTable, { FinancialRecord } from '../components/FinancialRe
 import BIInsightsModal from '../components/BIInsightsModal';
 
 export default function AdminReports() {
-  const todayStr = new Date().toISOString().split('T')[0];
-  const thirtyDaysAgo = new Date();
-  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-  const thirtyDaysAgoStr = thirtyDaysAgo.toISOString().split('T')[0];
-
-  const [startDate, setStartDate] = useState(thirtyDaysAgoStr);
-  const [endDate, setEndDate] = useState(todayStr);
-  const [loading, setLoading] = useState(true);
   const [reportData, setReportData] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [startDate, setStartDate] = useState(
+    new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0]
+  );
+  const [endDate, setEndDate] = useState(new Date().toISOString().split('T')[0]);
   const [orders, setOrders] = useState<any[]>([]);
   const [extras, setExtras] = useState<any[]>([]);
   const [payees, setPayees] = useState<Record<string, any>>({});
   const [branches, setBranches] = useState<any[]>([]);
   const [isBIModalOpen, setIsBIModalOpen] = useState(false);
-  const [viewType, setViewType] = useState<'merchants' | 'affiliates'>('merchants');
+  const [viewType, setViewType] = useState<'affiliates' | 'orders'>('affiliates');
   const [affiliatePayouts, setAffiliatePayouts] = useState<any[]>([]);
   const [platformRate, setPlatformRate] = useState(18);
 
   const loadData = async () => {
     setLoading(true);
     try {
-      const [reports, ordersData, extrasData, affiliatePayoutsData, marketConfig, branchesRes] = await Promise.all([
+      const [reports, ordersData, affiliatePayoutsData] = await Promise.all([
         businessRules.getAdminReportsData('custom', startDate, endDate),
         businessRules.getAllOrders(),
-        businessRules.getAllOrderExtras(),
-        businessRules.getAffiliatePayouts(),
-        businessRules.getMarketplaceConfig(),
-        supabase.from('branches').select('id, name, merchant_id')
+        businessRules.getAffiliatePayouts()
       ]);
       
-      const branchesList = branchesRes.data || [];
-      setBranches(branchesList);
-
-      setAffiliatePayouts(affiliatePayoutsData);
-      // Somente pedidos com repasse pago
-      const paidOrders = ordersData.filter(o => o.payoutStatus === 'paid');
-      
-      // Coletar todos os IDs de proprietários de filiais associados a estes pedidos pagos
-      const merchantOwnerIds = paidOrders.map(o => {
-        const branch = branchesList.find(b => b.id === o.branchId);
-        return branch ? branch.merchant_id : null;
-      }).filter(Boolean);
-      
-      const potentialPayeeIds = [...new Set(merchantOwnerIds)].map(id => String(id));
-      
-      if (potentialPayeeIds.length > 0) {
-        const payeesData = await businessRules.getPayeeDetails(potentialPayeeIds);
-        const payeesMap: Record<string, any> = {};
-        payeesData.forEach((p: any) => {
-          payeesMap[p.id] = p;
-        });
-        setPayees(payeesMap);
-      }
-
+      setAffiliatePayouts(affiliatePayoutsData || []);
       setReportData(reports);
-      setOrders(ordersData);
-      setExtras(extrasData);
-      setPlatformRate(marketConfig?.commissionRate || 12);
+      setOrders(ordersData || []);
     } catch (error) {
       console.error('Erro ao carregar relatórios:', error);
       toast.error('Ocorreu um erro ao carregar os dados do relatório.');
@@ -125,36 +94,26 @@ export default function AdminReports() {
   };
 
   const financialReportData: FinancialRecord[] = useMemo(() => {
-    if (viewType === 'merchants') {
-      // No Relatório, mostramos apenas o que JÁ FOI PAGO (Lojistas)
+    if (viewType === 'orders') {
+      // Vendas Digitais Pagas
       return orders
-        .filter(o => o.payoutStatus === 'paid' && o.status !== 'Cancelado')
+        .filter(o => o.status !== 'Cancelado' && (o.status === 'Pago' || o.status === 'Concluído' || o.status === 'Pago, Aguardando Retirada'))
         .map(o => {
-          const extra = extras.find(e => e.id === o.id);
-          const saleDate = new Date(o.date || o.created_at);
-          
-          const payDate = o.payoutDate ? new Date(o.payoutDate) : new Date(saleDate);
-          if (!o.payoutDate) payDate.setDate(payDate.getDate() + 1);
-
-          const branch = branches.find(b => b.id === o.branchId);
-          const payeeId = branch ? branch.merchant_id : 'matriz';
-          const payee = payeeId !== 'matriz' ? payees[String(payeeId)] : null;
-
+          const saleDate = new Date(o.date || o.created_at || o.order_date);
           return {
             orderId: String(o.id),
             buyerName: o.customerName || 'Cliente',
-            orderStatus: o.status === 'Concluído' ? 'Pago' : o.status,
-            deliveryStatus: (extra?.status as any) || 'Pendente',
-            saleDate: saleDate.toLocaleDateString('pt-BR'),
-            amount: o.amount,
-            repasse: o.amount * (1 - (platformRate / 100)),
-            payDate: payDate.toLocaleDateString('pt-BR'),
-            payeeId: String(payeeId),
-            payeeName: branch ? branch.name : 'Revendedor Matriz',
-            payeePixKey: payee?.pix_key || '',
-            payeeCpf: payee?.cpf || '',
+            payeeName: o.items?.[0]?.name || 'Licenciamento MMN Digital',
+            orderStatus: 'Pago',
+            deliveryStatus: 'Ativado',
+            saleDate: isNaN(saleDate.getTime()) ? '---' : saleDate.toLocaleDateString('pt-BR'),
+            amount: Number(o.amount || 0),
+            repasse: Number(o.amount || 0),
+            payDate: isNaN(saleDate.getTime()) ? '---' : saleDate.toLocaleDateString('pt-BR'),
+            payeeId: o.customer_id,
             paymentMethod: o.paymentMethod || 'PIX',
-            payoutStatus: o.payoutStatus
+            payoutStatus: o.payoutStatus || 'completed',
+            items: o.items || []
           };
         });
     } else {
@@ -178,7 +137,7 @@ export default function AdminReports() {
         cpf: p.profiles?.cpf || '---'
       }));
     }
-  }, [orders, extras, payees, viewType, affiliatePayouts, platformRate, branches]);
+  }, [orders, viewType, affiliatePayouts]);
 
   if (loading) {
     return (
@@ -343,32 +302,31 @@ export default function AdminReports() {
         {/* Toggle de Visualização de Repasses */}
         <div className="flex bg-white p-2 rounded-2xl shadow-sm border border-slate-100 w-fit">
           <button
-            onClick={() => setViewType('merchants')}
-            className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
-              viewType === 'merchants' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-slate-600'
-            }`}
-          >
-            Revendedores
-          </button>
-          <button
             onClick={() => setViewType('affiliates')}
             className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
               viewType === 'affiliates' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-slate-600'
             }`}
           >
-            Afiliados
+            Comissões Liquidadas (Afiliados / MMN)
+          </button>
+          <button
+            onClick={() => setViewType('orders')}
+            className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
+              viewType === 'orders' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-slate-600'
+            }`}
+          >
+            Vendas Digitais Pagas
           </button>
         </div>
 
         {/* Detalhamento Financeiro - Apenas Pagos */}
         <div className="bg-white rounded-[2.5rem] overflow-hidden shadow-2xl">
            <FinancialReportTable 
-              data={viewType === 'merchants' ? financialReportData : []} 
+              data={viewType === 'orders' ? financialReportData : []} 
               affiliateData={viewType === 'affiliates' ? financialReportData : []}
-              title={viewType === 'merchants' ? "Repasses Liquidados (Revendedores)" : "Repasses Liquidados (Afiliados)"} 
+              title={viewType === 'orders' ? "Auditoria de Vendas Digitais Liquidadas" : "Comissões MMN Liquidadas"} 
               isAdmin={true} 
               mode={viewType}
-              platformRate={platformRate}
            />
         </div>
 

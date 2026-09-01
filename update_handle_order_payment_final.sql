@@ -99,8 +99,10 @@ BEGIN
         END LOOP;
 
         -- ==========================================
-        -- 2. DISTRIBUIR COMISSÕES DE AFILIADO (NÍVEIS G0, G1)
-        -- Cada nível (G0, G1) recebe exatamente: 2% semanal + 2% mensal + 2% anual
+        -- 2. DISTRIBUIR COMISSÕES DE AFILIADO (NÍVEIS G1, G2)
+        -- Cada nível (G1, G2) recebe exatamente: 2% semanal + 2% mensal + 2% anual
+        -- G1 = Indicador Direto (1º nível acima do comprador)
+        -- G2 = Indicador Indireto (2º nível acima do comprador)
         -- ==========================================
         v_current_id := NEW.customer_id;
         SELECT referred_by INTO v_upline_id FROM public.profiles WHERE id = v_current_id;
@@ -109,9 +111,9 @@ BEGIN
         WHILE v_upline_id IS NOT NULL AND v_level <= 2 LOOP
             INSERT INTO public.transactions (profile_id, type, description, amount, status, order_id)
             VALUES 
-            (v_upline_id, 'commission', 'Comissão Semanal G' || (v_level - 1) || ' (2%) - Pedido #' || NEW.id, ROUND(v_amount * 0.02, 2), 'pending', NEW.id),
-            (v_upline_id, 'commission', 'Comissão Mensal G' || (v_level - 1) || ' (2%) - Pedido #' || NEW.id, ROUND(v_amount * 0.02, 2), 'pending', NEW.id),
-            (v_upline_id, 'commission', 'Comissão Anual G' || (v_level - 1) || ' (2%) - Pedido #' || NEW.id, ROUND(v_amount * 0.02, 2), 'pending', NEW.id);
+            (v_upline_id, 'commission', 'Comissão Semanal G' || v_level || ' (2%) - Pedido #' || NEW.id, ROUND(v_amount * 0.02, 2), 'pending', NEW.id),
+            (v_upline_id, 'commission', 'Comissão Mensal G' || v_level || ' (2%) - Pedido #' || NEW.id, ROUND(v_amount * 0.02, 2), 'pending', NEW.id),
+            (v_upline_id, 'commission', 'Comissão Anual G' || v_level || ' (2%) - Pedido #' || NEW.id, ROUND(v_amount * 0.02, 2), 'pending', NEW.id);
 
             v_current_id := v_upline_id;
             SELECT referred_by INTO v_upline_id FROM public.profiles WHERE id = v_current_id;

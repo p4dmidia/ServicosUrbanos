@@ -92,15 +92,20 @@ export default function AdminOrders() {
   const filteredOrders = orders.filter(o => {
     const matchesSearch = o.id.toLowerCase().includes(searchTerm.toLowerCase()) || 
                           o.customer_name.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesStatus = statusFilter === 'Todos' || o.status === statusFilter;
+    const matchesStatus = statusFilter === 'Todos' 
+      ? true 
+      : statusFilter === 'Pago'
+        ? (o.status === 'Pago' || o.status === 'Pago, Aguardando Retirada' || o.status === 'Concluído')
+        : o.status === statusFilter;
     return matchesSearch && matchesStatus;
   });
 
   const getStatusBadge = (status: string) => {
     switch (status) {
+      case 'Pago':
       case 'Pago, Aguardando Retirada':
       case 'Concluído':
-        return <span className="flex items-center gap-1.5 text-emerald-500 text-[10px] font-black uppercase tracking-widest"><div className="size-1.5 rounded-full bg-emerald-500" /> Pago</span>;
+        return <span className="flex items-center gap-1.5 text-emerald-500 text-[10px] font-black uppercase tracking-widest"><div className="size-1.5 rounded-full bg-emerald-500" /> Ativo / Pago</span>;
       case 'Cancelado':
         return <span className="flex items-center gap-1.5 text-red-500 text-[10px] font-black uppercase tracking-widest"><div className="size-1.5 rounded-full bg-red-500" /> Cancelado</span>;
       case 'Aguardando Pagamento':
@@ -136,7 +141,7 @@ export default function AdminOrders() {
               >
                 <option value="Todos" className="bg-[#0a0e17]">Status: Todos</option>
                 <option value="Aguardando Pagamento" className="bg-[#0a0e17]">Status: Pendentes</option>
-                <option value="Pago, Aguardando Retirada" className="bg-[#0a0e17]">Status: Pagos</option>
+                <option value="Pago" className="bg-[#0a0e17]">Status: Pagos / Ativos</option>
                 <option value="Cancelado" className="bg-[#0a0e17]">Status: Cancelados</option>
               </select>
             </div>
@@ -206,7 +211,7 @@ export default function AdminOrders() {
                           {(order.status === 'Aguardando Pagamento' || order.status === 'Pendente') && (
                             <>
                               <button 
-                                onClick={() => handleUpdateStatus(order.id, 'Pago, Aguardando Retirada')}
+                                onClick={() => handleUpdateStatus(order.id, 'Pago')}
                                 disabled={actionLoading === order.id}
                                 className="p-2 hover:bg-emerald-500/10 text-emerald-500 rounded-xl transition-all"
                                 title="Aprovar Pagamento"
@@ -341,7 +346,7 @@ export default function AdminOrders() {
                       Recusar / Cancelar
                     </button>
                     <button 
-                      onClick={() => handleUpdateStatus(selectedOrder.id, 'Pago, Aguardando Retirada')}
+                      onClick={() => handleUpdateStatus(selectedOrder.id, 'Pago')}
                       className="flex-1 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest transition-all shadow-xl shadow-emerald-600/20"
                     >
                       Aprovar e Ativar Plano

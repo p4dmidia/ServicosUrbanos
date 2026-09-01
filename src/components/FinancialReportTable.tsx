@@ -21,7 +21,8 @@ import {
   Shield,
   ChevronLeft,
   ChevronRight,
-  Calendar
+  Calendar,
+  Lock
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import jsPDF from 'jspdf';
@@ -56,7 +57,7 @@ interface FinancialReportTableProps {
   affiliateData?: any[];
   title?: string;
   isAdmin?: boolean;
-  mode?: 'merchants' | 'affiliates';
+  mode?: 'orders' | 'affiliates' | 'merchants';
   onGeneratePayments?: (selected: FinancialRecord[]) => void;
   hideReceiptButton?: boolean;
   hidePdfButton?: boolean;
@@ -68,7 +69,7 @@ export default function FinancialReportTable({
   affiliateData = [],
   title = "Relatório Financeiro", 
   isAdmin = false,
-  mode = 'merchants',
+  mode = 'affiliates',
   onGeneratePayments,
   hideReceiptButton = false,
   hidePdfButton = false,
@@ -139,7 +140,7 @@ export default function FinancialReportTable({
         map.set(key, {
           key,
           level,
-          generation: Math.max(level - 1, 0),
+          generation: level,
           affiliateId,
           affiliateName: comm.affiliateName || 'Desconhecido',
           orderId: comm.order_id || viewingOrder?.orderId || '',
@@ -346,17 +347,15 @@ export default function FinancialReportTable({
   };
 
   const isEligibleForPayment = (record: any) => {
-    if (mode === 'merchants') {
-      const isPaid = record.orderStatus === 'Pago' || record.orderStatus === 'Concluído';
-      const isDelivered = record.deliveryStatus === 'Concluído';
-      return isPaid && isDelivered;
+    if (mode === 'affiliates') {
+      return (Number(record.mensal) || 0) > 0.01;
     }
-    return true;
+    return false;
   };
 
   const toggleSelectAll = () => {
     const eligibleFiltered = filteredData.filter(isEligibleForPayment);
-    const eligibleIds = eligibleFiltered.map(r => mode === 'merchants' ? r.orderId : r.id);
+    const eligibleIds = eligibleFiltered.map(r => r.id);
     const allEligibleSelected = eligibleIds.length > 0 && eligibleIds.every(id => selectedRecords.includes(id));
 
     if (allEligibleSelected) {
@@ -368,7 +367,7 @@ export default function FinancialReportTable({
 
   const toggleSelect = (record: any) => {
     if (!isEligibleForPayment(record)) return;
-    const id = mode === 'merchants' ? record.orderId : record.id;
+    const id = record.id;
     if (selectedRecords.includes(id)) {
       setSelectedRecords(prev => prev.filter(item => item !== id));
     } else {
@@ -479,27 +478,28 @@ export default function FinancialReportTable({
                   </button>
                 </th>
               )}
-              {mode === 'merchants' ? (
+              {mode === 'merchants' || mode === ('orders' as any) ? (
                 <>
                   <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">ID do Pedido</th>
-                  <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Revendedor / Beneficiário</th>
-                  <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Status</th>
-                  <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Data</th>
-                  <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Valor Bruto</th>
-                  <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Líquido ({100 - platformRate}%)</th>
-                  <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Data Pagamento</th>
+                  <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Cliente Comprador (G0)</th>
+                  <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Plano / Produto Digital</th>
+                  <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Status Pagamento</th>
+                  <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Data da Adesão</th>
+                  <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Valor da Adesão</th>
+                  <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Auditoria MMN</th>
                 </>
               ) : (
                 <>
-                  <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-left">Afiliado</th>
+                  <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-left">Afiliado / Beneficiário</th>
+                  <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Status do Plano</th>
                   <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Cashback Mensal <br/><span className="text-[7px] text-emerald-500">(PAGO TODO MÊS)</span></th>
-                  <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Cashback Semanal <br/><span className="text-[7px] text-blue-500">(CARTEIRA)</span></th>
+                  <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Cashback Semanal <br/><span className="text-[7px] text-blue-500">(CARTEIRA DIGITAL)</span></th>
                   <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Cashback Anual <br/><span className="text-[7px] text-indigo-500">(PAGO 10/DEZ)</span></th>
                   <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right bg-slate-50/50">
                     {hideReceiptButton ? (
-                      <>Total Líquido <br/><span className="text-[7px] text-slate-500">(A PAGAR AGORA)</span></>
+                      <>Total Apto <br/><span className="text-[7px] text-emerald-600 font-bold">(LIBERADO PIX)</span></>
                     ) : (
-                      <>Total Pago <br/><span className="text-[7px] text-emerald-500">(CONCLUÍDO)</span></>
+                      <>Total Pago <br/><span className="text-[7px] text-emerald-500 font-bold">(CONCLUÍDO)</span></>
                     )}
                   </th>
                   <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Chave PIX</th>
@@ -511,7 +511,7 @@ export default function FinancialReportTable({
           <tbody>
             {paginatedData.map((record: any, idx: number) => (
               <tr 
-                key={mode === 'merchants' ? record.orderId : `aff-${idx}`} 
+                key={mode === 'merchants' || mode === ('orders' as any) ? record.orderId : `aff-${idx}`} 
                 className={`border-b border-slate-50 hover:bg-slate-50/80 transition-colors ${selectedRecords.includes(record.orderId) ? 'bg-indigo-50/40' : ''}`}
               >
                 {isAdmin && onGeneratePayments && (
@@ -519,18 +519,25 @@ export default function FinancialReportTable({
                     {isEligibleForPayment(record) ? (
                       <button 
                         onClick={() => toggleSelect(record)} 
-                        className="text-slate-300 hover:text-indigo-600 transition-colors"
+                        className="text-slate-300 hover:text-indigo-600 transition-colors cursor-pointer"
                       >
-                        {selectedRecords.includes(mode === 'merchants' ? record.orderId : record.id) 
+                        {selectedRecords.includes(record.id) 
                           ? <CheckSquare size={22} className="text-indigo-600" /> 
                           : <Square size={22} />
                         }
                       </button>
-                    ) : null}
+                    ) : (
+                      <div 
+                        title={record.is_active === false ? "Afiliado inativo: não pode receber pagamentos" : "Sem saldo mensal disponível"}
+                        className="p-1 text-slate-200 cursor-not-allowed flex items-center justify-center"
+                      >
+                        <Lock size={16} className="text-slate-300" />
+                      </div>
+                    )}
                   </td>
                 )}
                 
-                {mode === 'merchants' ? (
+                {mode === 'merchants' || mode === ('orders' as any) ? (
                   <>
                     <td className="p-6">
                        <button 
@@ -544,72 +551,49 @@ export default function FinancialReportTable({
                     <td className="p-6">
                       <div className="flex items-center gap-3">
                         <div className="size-8 bg-indigo-50 rounded-lg flex items-center justify-center text-indigo-600 shrink-0">
-                           <Building2 size={16} />
+                           <User size={16} />
                         </div>
                         <div className="flex flex-col">
-                          <span className="text-xs font-black text-midnight uppercase tracking-tight">{record.payeeName}</span>
-                          <div className="flex items-center gap-1 text-[9px] text-slate-400 font-bold italic">
-                            <User size={8} /> Comprador: {record.buyerName}
-                          </div>
+                          <span className="text-xs font-black text-midnight uppercase tracking-tight">{record.buyerName}</span>
+                          <span className="text-[9px] text-slate-400 font-bold uppercase tracking-widest">Titular (G0)</span>
                         </div>
                       </div>
                     </td>
-                    <td className="p-6 text-center">
-                      <div className="flex flex-col items-center gap-1">
-                        <span className={`px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-widest ${
-                          record.orderStatus === 'Pago' || record.orderStatus === 'Concluído' ? 'bg-emerald-100 text-emerald-600' : 'bg-slate-100 text-slate-500'
-                        }`}>
-                          {record.orderStatus}
+                    <td className="p-6">
+                      <div className="flex flex-col">
+                        <span className="text-xs font-black text-midnight uppercase">
+                          {record.items?.[0]?.name || record.payeeName || 'Licenciamento MMN Digital'}
                         </span>
-                        <span className={`px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-widest ${
-                          record.deliveryStatus === 'Concluído' ? 'bg-emerald-100 text-emerald-600' : 'bg-amber-100 text-amber-600'
-                        }`}>
-                          {record.deliveryStatus}
-                        </span>
+                        <span className="text-[9px] text-emerald-600 font-bold uppercase tracking-widest">Produto 100% Digital</span>
                       </div>
+                    </td>
+                    <td className="p-6 text-center">
+                      <span className={`px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-widest ${
+                        record.orderStatus === 'Pago' || record.orderStatus === 'Concluído' ? 'bg-emerald-100 text-emerald-600' : 'bg-amber-100 text-amber-600'
+                      }`}>
+                        {record.orderStatus === 'Pago, Aguardando Retirada' ? 'Pago' : record.orderStatus}
+                      </span>
                     </td>
                     <td className="p-6 text-[11px] font-bold text-slate-500 whitespace-nowrap">{record.saleDate}</td>
-                    <td className="p-6 text-right text-xs font-bold text-slate-600 whitespace-nowrap">R$ {record.amount.toFixed(2).replace('.', ',')}</td>
-                    <td className="p-6 text-right whitespace-nowrap">
-                      <div className="flex flex-col items-end">
-                        <span className="text-xs font-black text-indigo-600 italic">R$ {record.repasse.toFixed(2).replace('.', ',')}</span>
-                        {record.payoutRate !== undefined && (
-                          <span className="text-[8px] text-slate-400 font-bold uppercase tracking-tighter mt-0.5">
-                            ({record.payoutRate}% líquido)
-                          </span>
-                        )}
-                      </div>
+                    <td className="p-6 text-right text-xs font-black text-indigo-600 whitespace-nowrap">
+                      R$ {record.amount.toFixed(2).replace('.', ',')}
                     </td>
                     <td className="p-6 text-center">
-                       <div className="flex flex-col items-center">
-                          <span className="text-[10px] font-black text-indigo-600 italic tracking-tighter underline">{record.payDate}</span>
-                          <span className="text-[8px] text-slate-300 font-bold uppercase tracking-widest mt-1">
-                            {record.payoutStatus === 'paid' ? 'Pago' : 'Previsto'}
-                          </span>
-                          {(record.orderStatus === 'Pago' || record.orderStatus === 'Concluído') && (
-                            record.payoutStatus === 'paid' ? (
-                              !hideReceiptButton && (
-                                <button 
-                                  onClick={() => setViewingReceipt(record)}
-                                  className="mt-2 flex items-center gap-1.5 bg-emerald-50 text-emerald-600 px-3 py-1.5 rounded-lg border border-emerald-100 hover:bg-emerald-100 transition-all text-[9px] font-black uppercase tracking-tighter"
-                                >
-                                  <FileText size={10} /> Comprovante
-                                </button>
-                              )
-                            ) : (
-                              <span className="mt-2 text-[8px] font-black text-amber-500 bg-amber-50 border border-amber-100 px-2 py-1 rounded-lg uppercase tracking-tighter text-center leading-tight">
-                                {mode === 'merchants' ? 'Aguardando Pagamento do Repasse' : 'Aguardando Pagamento da Comissão'}
-                              </span>
-                            )
-                          )}
-                       </div>
+                      <button 
+                        onClick={() => setViewingOrder(record)}
+                        className="inline-flex items-center gap-1.5 bg-indigo-50 text-indigo-600 px-3 py-1.5 rounded-xl border border-indigo-100 hover:bg-indigo-100 transition-all text-[9px] font-black uppercase tracking-tight"
+                      >
+                        <Eye size={12} /> Extrato MMN
+                      </button>
                     </td>
                 </>
               ) : (
                 <>
                   <td className="p-6">
                       <div className="flex items-center gap-3">
-                        <div className="size-8 bg-purple-50 rounded-lg flex items-center justify-center text-purple-600 shrink-0">
+                        <div className={`size-8 rounded-lg flex items-center justify-center shrink-0 ${
+                          record.is_active ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-100 text-slate-400'
+                        }`}>
                            <User size={16} />
                         </div>
                         <div className="flex flex-col">
@@ -618,13 +602,43 @@ export default function FinancialReportTable({
                         </div>
                       </div>
                     </td>
-                    <td className="p-6 text-right text-xs font-black text-emerald-600 italic tracking-tighter">R$ {(record.mensal || 0).toFixed(2).replace('.', ',')}</td>
-                    <td className="p-6 text-right text-xs font-bold text-blue-500 tracking-tighter">R$ {(record.digital || 0).toFixed(2).replace('.', ',')}</td>
-                    <td className="p-6 text-right text-xs font-bold text-indigo-500 tracking-tighter">R$ {(record.anual || 0).toFixed(2).replace('.', ',')}</td>
+                    <td className="p-6 text-center">
+                      {record.is_active ? (
+                        <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-50 text-emerald-600 rounded-full text-[9px] font-black uppercase tracking-wider border border-emerald-100">
+                          <span className="size-1.5 rounded-full bg-emerald-500" />
+                          {record.plan_name || 'Plano Ativo'}
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-red-50 text-red-600 rounded-full text-[9px] font-black uppercase tracking-wider border border-red-100">
+                          <span className="size-1.5 rounded-full bg-red-500" />
+                          Inativo / Sem Plano
+                        </span>
+                      )}
+                    </td>
+                    <td className="p-6 text-right text-xs font-black text-emerald-600 italic tracking-tighter">
+                      R$ {(record.mensal || 0).toFixed(2).replace('.', ',')}
+                    </td>
+                    <td className="p-6 text-right text-xs font-bold text-blue-500 tracking-tighter">
+                      R$ {(record.digital || 0).toFixed(2).replace('.', ',')}
+                    </td>
+                    <td className="p-6 text-right text-xs font-bold text-indigo-500 tracking-tighter">
+                      R$ {(record.anual || 0).toFixed(2).replace('.', ',')}
+                    </td>
                     <td className="p-6 text-right bg-slate-50/50">
-                      <span className="text-sm font-black text-primary-blue italic">
-                        R$ {((hideReceiptButton ? (record.mensal || 0) : (record.amount || record.repasse || 0))).toFixed(2).replace('.', ',')}
-                      </span>
+                      {record.is_active ? (
+                        <span className="text-sm font-black text-emerald-600 italic">
+                          R$ {((hideReceiptButton ? (record.mensal || 0) : (record.amount || record.repasse || 0))).toFixed(2).replace('.', ',')}
+                        </span>
+                      ) : (
+                        <div className="flex flex-col items-end">
+                          <span className="text-xs font-black text-slate-400 italic line-through">
+                            R$ {(record.mensal || 0).toFixed(2).replace('.', ',')}
+                          </span>
+                          <span className="text-[8px] font-bold text-red-500 uppercase tracking-tighter">
+                            Bloqueado (Inativo)
+                          </span>
+                        </div>
+                      )}
                     </td>
                     <td className="p-6 text-center">
                       <div className="flex flex-col items-center">
@@ -760,7 +774,7 @@ export default function FinancialReportTable({
                          <User size={20} />
                       </div>
                       <div>
-                         <p className="text-[9px] text-slate-400 font-black uppercase tracking-widest mb-0.5">Cliente Comprador</p>
+                         <p className="text-[9px] text-slate-400 font-black uppercase tracking-widest mb-0.5">Cliente Comprador (G0 - Titular)</p>
                          <p className="text-sm font-black text-midnight uppercase">{viewingOrder.buyerName}</p>
                       </div>
                    </div>
@@ -802,8 +816,12 @@ export default function FinancialReportTable({
                                  <div key={row.key} className="p-5 hover:bg-white transition-all space-y-3">
                                     <div className="flex items-center justify-between gap-3">
                                        <div className="flex items-center gap-3 min-w-0">
-                                          <div className={`size-8 bg-white rounded-lg flex items-center justify-center border border-slate-100 shadow-sm text-[10px] font-black shrink-0 ${
-                                            (row as any).isRegional ? 'text-purple-600 font-bold bg-purple-50/50' : 'text-indigo-600'
+                                          <div className={`size-8 rounded-lg flex items-center justify-center border shadow-sm text-[10px] font-black shrink-0 ${
+                                            (row as any).isRegional 
+                                              ? 'text-purple-600 font-bold bg-purple-50 border-purple-100' 
+                                              : row.generation === 1
+                                              ? 'text-emerald-600 font-bold bg-emerald-50 border-emerald-100'
+                                              : 'text-blue-600 font-bold bg-blue-50 border-blue-100'
                                           }`}>
                                              {(row as any).isRegional ? 'REG' : `G${row.generation}`}
                                           </div>
@@ -811,7 +829,11 @@ export default function FinancialReportTable({
                                              <span className="text-xs font-black text-midnight uppercase leading-none mb-1 truncate">{row.affiliateName}</span>
                                              <div className="flex items-center gap-2 flex-wrap">
                                                 <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">
-                                                  {(row as any).isRegional ? 'Revendedor Regional' : `Geração G${row.generation}`}
+                                                  {(row as any).isRegional 
+                                                    ? 'Revendedor Regional' 
+                                                    : row.generation === 1 
+                                                    ? 'Geração G1 (Indicador Direto)' 
+                                                    : `Geração G${row.generation} (Indicador Indireto)`}
                                                 </span>
                                                 <span className="text-slate-200">•</span>
                                                 <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">Pedido #{row.orderId}</span>

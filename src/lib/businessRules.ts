@@ -2041,19 +2041,63 @@ export const businessRules = {
       // 2. Coleta IDs únicos de afiliados
       const affiliateIds = [...new Set(transactions.map(t => t.profile_id).filter(Boolean))];
 
-      // 3. Busca os perfis (tabela 'profiles')
-      const { data: profiles, error: profError } = await supabase
-        .from('profiles')
-        .select('id, full_name, pix_key, pix_type, cpf, whatsapp')
-        .in('id', affiliateIds);
+      // 3. Busca perfis, assinaturas e pedidos pagos para apurar status ativo/inativo
+      const [{ data: profiles, error: profError }, { data: subsData }, { data: ordersData }] = await Promise.all([
+        supabase
+          .from('profiles')
+          .select('id, full_name, pix_key, pix_type, cpf, whatsapp, role')
+          .in('id', affiliateIds),
+        supabase
+          .from('subscriptions')
+          .select('profile_id, status, end_date, plan_type')
+          .in('profile_id', affiliateIds),
+        supabase
+          .from('orders')
+          .select('customer_id, status, created_at, order_date, items')
+          .in('customer_id', affiliateIds)
+          .in('status', ['Pago', 'Pago, Aguardando Retirada', 'Concluído'])
+      ]);
 
       if (profError) {
         console.error('Error fetching user_profiles for report:', profError);
       }
 
+      const now = new Date();
       const profilesMap: Record<string, any> = {};
       profiles?.forEach(p => {
-        profilesMap[String(p.id)] = p;
+        const userSubs = subsData?.filter(s => s.profile_id === p.id) || [];
+        const userOrders = ordersData?.filter(o => o.customer_id === p.id) || [];
+
+        const hasActiveSub = userSubs.some(s => s.status === 'active' && new Date(s.end_date) >= now);
+
+        let hasPaidSubOrder = false;
+        let planName = '';
+        userOrders.forEach(o => {
+          const items = Array.isArray(o.items) ? o.items : [];
+          items.forEach(item => {
+            if (item.is_subscription) {
+              const oDate = new Date(o.order_date || o.created_at);
+              let days = 365;
+              if (item.plan_type === 'mensal') days = 30;
+              else if (item.plan_type === 'trimestral') days = 90;
+              else if (item.plan_type === 'semestral') days = 180;
+              const expDate = new Date(oDate.getTime() + days * 24 * 60 * 60 * 1000);
+              if (expDate >= now) {
+                hasPaidSubOrder = true;
+                planName = item.name || `Plano ${item.plan_type}`;
+              }
+            }
+          });
+        });
+
+        const isRegional = p.role === 'regional_reseller';
+        const isActive = hasActiveSub || hasPaidSubOrder || isRegional;
+
+        profilesMap[String(p.id)] = {
+          ...p,
+          is_active: isActive,
+          plan_name: planName || (isRegional ? 'Líder Regional' : (isActive ? 'Plano Ativo' : 'Inativo / Sem Plano'))
+        };
       });
 
       // 4. Agrupa e une os dados
@@ -2073,6 +2117,9 @@ export const businessRules = {
             pix_type: profile?.pix_type || '---',
             cpf: profile?.cpf || '---',
             whatsapp: profile?.whatsapp || '',
+            role: profile?.role || 'affiliate',
+            is_active: Boolean(profile?.is_active),
+            plan_name: profile?.plan_name || 'Inativo',
             mensal: 0,
             anual: 0,
             digital: 0,
@@ -2112,6 +2159,7 @@ export const businessRules = {
         r.anual = Math.max(0, Math.round(r.anual * 100) / 100);
         r.digital = Math.max(0, Math.round(r.digital * 100) / 100);
         r.total = Math.round((r.mensal + r.anual + r.digital) * 100) / 100;
+        r.payable_amount = r.is_active ? r.mensal : 0;
       });
 
       return Object.values(report).sort((a: any, b: any) => b.total - a.total);
@@ -3233,7 +3281,8 @@ export const businessRules = {
         } else {
           const gMatch = desc.match(/G(\d+)/i);
           if (gMatch) {
-            level = parseInt(gMatch[1], 10) + 1;
+            level = parseInt(gMatch[1], 10);
+            if (level === 0) level = 1;
           } else {
             const levelMatch = desc.match(/Nível\s+(\d+)/i);
             if (levelMatch) {

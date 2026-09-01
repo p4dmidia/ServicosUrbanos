@@ -28,12 +28,8 @@ import ExcelJS from 'exceljs';
 export default function AdminFinancials() {
   const { profile, loading: authLoading } = useAuth();
   const [orders, setOrders] = useState<any[]>([]);
-  const [extras, setExtras] = useState<any[]>([]);
-  const [branches, setBranches] = useState<any[]>([]);
-  const [payees, setPayees] = useState<Record<string, any>>({});
   const [matrixPixKey, setMatrixPixKey] = useState('31998007412');
   const [matrixCpf, setMatrixCpf] = useState('123.456.789-00');
-  const [dynamicPlatformRate, setDynamicPlatformRate] = useState(18);
   const [loading, setLoading] = useState(true);
   
   // Payment Flow State
@@ -41,8 +37,8 @@ export default function AdminFinancials() {
   const [selectedForPayment, setSelectedForPayment] = useState<FinancialRecord[]>([]);
   const [tableRefreshKey, setTableRefreshKey] = useState(0);
   
-  // View State
-  const [viewType, setViewType] = useState<'merchants' | 'affiliates' | 'insurance' | 'fiscal'>('merchants');
+  // View State - 100% Digital: Afiliados/MMN, Vendas Digitais, Seguro MBM, Módulo Fiscal
+  const [viewType, setViewType] = useState<'affiliates' | 'orders' | 'insurance' | 'fiscal'>('affiliates');
   const [fiscalRecords, setFiscalRecords] = useState<any[]>([]);
   const [loadingFiscal, setLoadingFiscal] = useState(false);
 
@@ -51,7 +47,6 @@ export default function AdminFinancials() {
     end: new Date().toISOString().split('T')[0]
   });
   const [affiliateReport, setAffiliateReport] = useState<any[]>([]);
-  const [orderRegionalMap, setOrderRegionalMap] = useState<Record<string, string>>({});
 
   useEffect(() => {
     if (viewType === 'fiscal') {
@@ -62,13 +57,10 @@ export default function AdminFinancials() {
   async function loadAdminData(silent = false) {
     try {
       if (!silent) setLoading(true);
-      const [ordersData, extrasData, settingsData, affiliateData, marketConfig, branchesRes] = await Promise.all([
+      const [ordersData, settingsData, affiliateData] = await Promise.all([
         businessRules.getAllOrders(),
-        businessRules.getAllOrderExtras(),
         supabase.from('system_settings').select('key, value').in('key', ['matrix_pix_key', 'matrix_cpf']),
-        businessRules.getAffiliateCashbackReport(dateRange.start, `${dateRange.end}T23:59:59`),
-        businessRules.getMarketplaceConfig(),
-        supabase.from('branches').select('id, name, merchant_id')
+        businessRules.getAffiliateCashbackReport(dateRange.start, `${dateRange.end}T23:59:59`)
       ]);
 
       if (settingsData.data) {
@@ -78,59 +70,8 @@ export default function AdminFinancials() {
         setMatrixCpf(cpf);
       }
 
-      const branchesList = branchesRes.data || [];
-      setBranches(branchesList);
-
-      // Somente pedidos com repasse pendente
-      const pendingOrders = ordersData.filter(o => o.payoutStatus === 'pending');
-      const pendingOrderIds = pendingOrders.map(o => String(o.id));
-
-      // Buscar transações de comissão regional para estes pedidos para identificar o regional_reseller da rede
-      const mappedRegionals: Record<string, string> = {};
-      if (pendingOrderIds.length > 0) {
-        const { data: regionalTxs } = await supabase
-          .from('transactions')
-          .select('profile_id, order_id')
-          .eq('type', 'commission')
-          .ilike('description', '%Regional%')
-          .in('order_id', pendingOrderIds);
-
-        regionalTxs?.forEach(t => {
-          if (t.order_id && t.profile_id) {
-            mappedRegionals[String(t.order_id)] = String(t.profile_id);
-          }
-        });
-      }
-      setOrderRegionalMap(mappedRegionals);
-
-      // Coletar todos os IDs de proprietários de filiais ou regional_resellers associados a estes pedidos
-      const merchantOwnerIds = pendingOrders.map(o => {
-        const branch = branchesList.find(b => b.id === o.branchId);
-        if (branch) return String(branch.merchant_id);
-
-        const regionalId = mappedRegionals[String(o.id)];
-        if (regionalId) return regionalId;
-
-        return null;
-      }).filter(Boolean);
-      
-      const potentialPayeeIds = [...new Set(merchantOwnerIds)].map(id => String(id));
-      
-      if (potentialPayeeIds.length > 0) {
-        const payeesData = await businessRules.getPayeeDetails(potentialPayeeIds);
-        const payeesMap: Record<string, any> = {};
-        payeesData.forEach((p: any) => {
-          payeesMap[String(p.id)] = p;
-        });
-        setPayees(payeesMap);
-      }
-
-      setOrders(ordersData);
-      setExtras(extrasData);
-      setAffiliateReport(affiliateData);
-      const rateFromDb = marketConfig?.commissionRate || 12; // Mudei para 12 como fallback
-      console.log('!!! DEBUG V2 - TAXA DO BANCO:', rateFromDb);
-      setDynamicPlatformRate(rateFromDb);
+      setOrders(ordersData || []);
+      setAffiliateReport(affiliateData || []);
     } catch (error) {
       console.error('Erro ao carregar dados financeiros admin:', error);
       toast.error('Erro ao carregar dados financeiros');
@@ -145,63 +86,32 @@ export default function AdminFinancials() {
     }
   }, [profile, authLoading, dateRange]);
 
+  // Auditoria de Vendas e Adesões 100% Digitais
   const reportData: FinancialRecord[] = useMemo(() => {
-    console.log('[DEBUG-FINANCEIRO] Profile Atual:', profile);
-    
-    const mapped = orders
-      .filter(o => o.payoutStatus === 'pending' && o.status !== 'Cancelado')
+    return orders
+      .filter(o => o.status !== 'Cancelado')
       .map(o => {
-        const extra = extras.find(e => e.id === o.id);
-        const saleDate = new Date(o.date || o.created_at);
-        
-        const payDate = new Date(saleDate);
-        payDate.setDate(payDate.getDate() + 1);
-
-        const branch = branches.find(b => b.id === o.branchId);
-        const regionalId = orderRegionalMap[String(o.id)];
-        const payeeId = branch ? branch.merchant_id : (regionalId || 'matriz');
-        const payee = payeeId !== 'matriz' ? payees[String(payeeId)] : null;
-
-        // Se for licenciamento digital, a ativação/entrega é Concluída automaticamente
-        const isDigital = !o.branchId || o.shipping_address === 'Licenciamento MMN Digital';
-
-        // Taxas e repasses calculados dinamicamente
-        const payoutRate = branch 
-          ? (100 - dynamicPlatformRate) 
-          : (payee ? (payee.commission_rate || 6) : 0);
-
-        const repasse = o.amount * (payoutRate / 100);
-
-        const record = {
+        const saleDate = new Date(o.date || o.created_at || o.order_date);
+        return {
           orderId: String(o.id),
           buyerName: o.customerName || 'Cliente',
-          payeeName: branch 
-            ? branch.name 
-            : (payee ? `${payee.full_name} (Regional)` : 'Revendedor Matriz'),
-          orderStatus: o.status === 'Concluído' || o.status === 'Pago' || o.status === 'Pago, Aguardando Retirada' ? 'Pago' : o.status,
-          deliveryStatus: isDigital ? 'Concluído' : ((extra?.status as any) || 'Pendente'),
-          saleDate: saleDate.toLocaleDateString('pt-BR'),
-          amount: o.amount,
-          repasse: repasse,
-          payoutRate: payoutRate,
-          payDate: payDate.toLocaleDateString('pt-BR'),
-          payeeId: String(payeeId),
-          payeePixKey: payee?.pix_key || (payeeId === 'matriz' ? profile?.pix_key || matrixPixKey || '' : ''),
-          payeeCpf: payee?.cpf || (payeeId === 'matriz' ? profile?.cpf || matrixCpf || '' : ''),
-          payeeWhatsapp: payee?.whatsapp || (payeeId === 'matriz' ? profile?.whatsapp || '' : ''),
+          payeeName: o.items?.[0]?.name || 'Licenciamento MMN Digital',
+          orderStatus: o.status === 'Concluído' || o.status === 'Pago' || o.status === 'Pago, Aguardando Retirada' ? 'Pago' : (o.status || 'Pendente'),
+          deliveryStatus: 'Ativado',
+          saleDate: isNaN(saleDate.getTime()) ? 'Data não informada' : saleDate.toLocaleDateString('pt-BR'),
+          amount: Number(o.amount || 0),
+          repasse: Number(o.amount || 0),
+          payoutRate: 100,
+          payDate: isNaN(saleDate.getTime()) ? '---' : saleDate.toLocaleDateString('pt-BR'),
+          payeeId: o.customer_id,
           paymentMethod: o.paymentMethod || 'PIX',
-          payoutStatus: o.payoutStatus,
+          payoutStatus: o.payoutStatus || 'completed',
           items: o.items || []
         };
-        
-        return record;
       });
+  }, [orders]);
 
-    console.log('[DEBUG-FINANCEIRO] Dados Mapeados:', mapped);
-    return mapped;
-  }, [orders, extras, payees, profile, matrixPixKey, matrixCpf, dynamicPlatformRate, branches, orderRegionalMap]);
-
-  // Filtro para mostrar apenas afiliados com saldo pendente e define a data prevista de pagamento (hoje)
+  // Filtro para mostrar apenas afiliados/regionais com saldo pendente e define a data prevista de pagamento
   const filteredAffiliateData = useMemo(() => {
     const todayStr = new Date().toLocaleDateString('pt-BR');
     return affiliateReport
@@ -212,110 +122,97 @@ export default function AdminFinancials() {
       }));
   }, [affiliateReport]);
 
-  // Soma dos repasses para lojistas que vencem hoje (payDate === hoje)
-  const totalLojistasHoje = useMemo(() => {
-    const todayStr = new Date().toLocaleDateString('pt-BR');
+  // Soma do faturamento total em vendas digitais no período
+  const totalFaturamentoDigital = useMemo(() => {
     return reportData
-      .filter(r => r.payDate === todayStr)
-      .reduce((a, b) => a + b.repasse, 0);
+      .filter(r => r.orderStatus === 'Pago')
+      .reduce((a, b) => a + b.amount, 0);
   }, [reportData]);
 
-  // Soma dos cashbacks mensais de afiliados a pagar hoje (mensal de todos os afiliados pendentes)
+  // Soma dos cashbacks mensais de afiliados ATIVOS a pagar hoje (mensal de todos os afiliados ativos pendentes)
   const totalAfiliadosHoje = useMemo(() => {
-    return filteredAffiliateData.reduce((a, b) => a + (b.mensal || 0), 0);
+    return filteredAffiliateData
+      .filter(r => r.is_active)
+      .reduce((a, b) => a + (b.mensal || 0), 0);
   }, [filteredAffiliateData]);
 
   const handleGeneratePayments = (selectedItems: any[]) => {
     if (selectedItems.length === 0) {
-      toast.error('Nenhum registro selecionado para pagamento.');
+      toast.error('Nenhum afiliado selecionado para pagamento.');
       return;
     }
 
-    // Se estiver no modo afiliados, transformamos para o formato que o PaymentModal espera
-    if (viewType === 'affiliates') {
-      const transformed = selectedItems.map(r => ({
-        orderId: `CASH-${r.id.substring(0, 5)}`,
-        buyerName: 'Rede MMN',
-        payeeName: r.name,
-        orderStatus: 'Concluído',
-        deliveryStatus: 'Concluído',
-        saleDate: new Date().toLocaleDateString('pt-BR'),
-        amount: r.mensal,
-        repasse: r.mensal, // No modo afiliado, o repasse líquido a pagar é apenas o mensal
-        payDate: new Date().toLocaleDateString('pt-BR'),
-        payeeId: r.id,
-        payeePixKey: r.pix_key,
-        payeeCpf: r.cpf,
-        payeeWhatsapp: r.whatsapp,
-        paymentMethod: 'PIX',
-        items: [
-          { name: 'Cashback Mensal', price: r.mensal },
-          { name: 'Cashback Semanal', price: r.digital },
-          { name: 'Cashback Anual', price: r.anual }
-        ]
-      }));
-      setSelectedForPayment(transformed);
-    } else {
-      setSelectedForPayment(selectedItems);
+    // Regra fundamental: Afiliado INATIVO NÃO pode receber comissões nem gerar QR Code PIX
+    const inactiveUsers = selectedItems.filter(r => !r.is_active);
+    if (inactiveUsers.length > 0) {
+      toast.error(`O afiliado "${inactiveUsers[0].name}" está INATIVO e não está apto a receber comissões.`);
+      return;
     }
+
+    // Transforma para o formato que o PaymentModal espera (liquidação estritamente do Cashback Mensal apto)
+    const transformed = selectedItems.map(r => ({
+      orderId: `CASH-${r.id.substring(0, 5)}`,
+      buyerName: 'Rede MMN',
+      payeeName: r.name,
+      orderStatus: 'Concluído',
+      deliveryStatus: 'Concluído',
+      saleDate: new Date().toLocaleDateString('pt-BR'),
+      amount: r.mensal,
+      repasse: r.mensal, // Liquida estritamente o valor mensal apto
+      payDate: new Date().toLocaleDateString('pt-BR'),
+      payeeId: r.id,
+      payeePixKey: r.pix_key,
+      payeeCpf: r.cpf,
+      payeeWhatsapp: r.whatsapp,
+      paymentMethod: 'PIX',
+      is_active: r.is_active,
+      plan_name: r.plan_name,
+      items: [
+        { name: 'Cashback Mensal (Apto a Receber)', price: r.mensal },
+        { name: 'Cashback Semanal (Carteira Digital)', price: r.digital },
+        { name: 'Cashback Anual (Bônus 10/Dez)', price: r.anual }
+      ]
+    }));
     
+    setSelectedForPayment(transformed);
     setIsPaymentModalOpen(true);
   };
 
   const handleConfirmPayment = async (payeeGroup: any) => {
     try {
-      if (viewType === 'merchants') {
-        const orderIds = payeeGroup.orders.map((o: any) => o.orderId);
-        await businessRules.updateOrderPayoutStatus(orderIds, 'paid');
-        
-        setOrders(prev => prev.map(o => 
-          orderIds.includes(String(o.id)) ? { ...o, payoutStatus: 'paid' } : o
-        ));
+      // 1. Registramos o histórico na tabela de relatórios
+      await businessRules.registerAffiliatePayout({
+        profile_id: payeeGroup.payeeId,
+        amount: payeeGroup.totalAmount,
+        mensal: payeeGroup.orders[0]?.items?.find((i: any) => i.name.includes('Mensal'))?.price || 0,
+        digital: payeeGroup.orders[0]?.items?.find((i: any) => i.name.includes('Digital') || i.name.includes('Semanal'))?.price || 0,
+        anual: payeeGroup.orders[0]?.items?.find((i: any) => i.name.includes('Anual'))?.price || 0,
+        pix_key: payeeGroup.payeePixKey
+      });
 
-        // Enviar notificação WhatsApp para lojista
-        if (payeeGroup.payeeWhatsapp && payeeGroup.payeeWhatsapp.trim() !== '') {
-          try {
-            const msg = `Olá, parceiro! O repasse de suas vendas no valor de R$ ${payeeGroup.totalAmount.toFixed(2).replace('.', ',')} foi pago com sucesso em sua chave PIX cadastrada. Obrigado pela parceria!`;
-            await businessRules.sendTestWhatsAppMessage(payeeGroup.payeeWhatsapp, msg);
-          } catch (whatsappErr) {
-            console.error('Erro ao enviar notificação WhatsApp para lojista:', whatsappErr);
-          }
-        }
-      } else {
-        // 1. Registramos o histórico na tabela de relatórios
-        await businessRules.registerAffiliatePayout({
+      // 2. Registramos uma transação de saque/saída na tabela transactions para abater do saldo mensal
+      const { error: txInsertError } = await supabase
+        .from('transactions')
+        .insert([{
           profile_id: payeeGroup.payeeId,
-          amount: payeeGroup.totalAmount,
-          mensal: payeeGroup.orders[0]?.items?.find((i: any) => i.name.includes('Mensal'))?.price || 0,
-          digital: payeeGroup.orders[0]?.items?.find((i: any) => i.name.includes('Digital'))?.price || 0,
-          anual: payeeGroup.orders[0]?.items?.find((i: any) => i.name.includes('Anual'))?.price || 0,
-          pix_key: payeeGroup.payeePixKey
-        });
+          type: 'withdrawal',
+          amount: -Math.abs(payeeGroup.totalAmount),
+          description: `Pagamento Cashback Mensal - Ref CASH-${payeeGroup.payeeId.substring(0, 5)}`,
+          status: 'completed'
+        }]);
 
-        // 2. Registramos uma transação de saque/saída na tabela transactions para abater do saldo
-        const { error: txInsertError } = await supabase
-          .from('transactions')
-          .insert([{
-            profile_id: payeeGroup.payeeId,
-            type: 'withdrawal',
-            amount: -Math.abs(payeeGroup.totalAmount),
-            description: `Pagamento Cashback Mensal - Ref CASH-${payeeGroup.payeeId.substring(0, 5)}`,
-            status: 'completed'
-          }]);
+      if (txInsertError) throw txInsertError;
+      
+      // 3. Recarrega os dados silenciosamente
+      await loadAdminData(true);
 
-        if (txInsertError) throw txInsertError;
-        
-        // 3. Recarrega os dados silenciosamente
-        await loadAdminData(true);
-
-        // Enviar notificação WhatsApp para afiliado (Cashback Mensal)
-        if (payeeGroup.payeeWhatsapp && payeeGroup.payeeWhatsapp.trim() !== '') {
-          try {
-            const msg = `Olá! Seu cashback mensal no valor de R$ ${payeeGroup.totalAmount.toFixed(2).replace('.', ',')} foi pago com sucesso em sua chave PIX cadastrada.`;
-            await businessRules.sendTestWhatsAppMessage(payeeGroup.payeeWhatsapp, msg);
-          } catch (whatsappErr) {
-            console.error('Erro ao enviar notificação WhatsApp para afiliado:', whatsappErr);
-          }
+      // Enviar notificação WhatsApp para afiliado (Cashback Mensal)
+      if (payeeGroup.payeeWhatsapp && payeeGroup.payeeWhatsapp.trim() !== '') {
+        try {
+          const msg = `Olá! Seu cashback mensal no valor de R$ ${payeeGroup.totalAmount.toFixed(2).replace('.', ',')} foi pago com sucesso em sua chave PIX cadastrada.`;
+          await businessRules.sendTestWhatsAppMessage(payeeGroup.payeeWhatsapp, msg);
+        } catch (whatsappErr) {
+          console.error('Erro ao enviar notificação WhatsApp para afiliado:', whatsappErr);
         }
       }
 
@@ -326,7 +223,7 @@ export default function AdminFinancials() {
         if (nextList.length === 0) {
           setIsPaymentModalOpen(false);
           setTableRefreshKey(prevKey => prevKey + 1);
-          toast.success('Todos os pagamentos foram finalizados com sucesso!');
+          toast.success('Todos os pagamentos de cashback mensal foram finalizados com sucesso!');
         } else {
           toast.success(`Pagamento de R$ ${payeeGroup.totalAmount.toFixed(2)} para ${payeeGroup.payeeName} liquidado.`);
         }
@@ -654,20 +551,20 @@ export default function AdminFinancials() {
         <div className="flex flex-col md:flex-row items-center justify-between gap-6 bg-white p-6 rounded-[2.5rem] shadow-xl border border-slate-100">
           <div className="flex bg-slate-100 p-1.5 rounded-2xl w-full md:w-auto">
             <button
-              onClick={() => setViewType('merchants')}
-              className={`flex-1 md:flex-none px-8 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
-                viewType === 'merchants' ? 'bg-white text-indigo-600 shadow-md' : 'text-slate-400 hover:text-slate-600'
-              }`}
-            >
-              Revendedores
-            </button>
-            <button
               onClick={() => setViewType('affiliates')}
               className={`flex-1 md:flex-none px-8 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
                 viewType === 'affiliates' ? 'bg-white text-indigo-600 shadow-md' : 'text-slate-400 hover:text-slate-600'
               }`}
             >
-              Afiliados
+              Comissões & Cashback MMN
+            </button>
+            <button
+              onClick={() => setViewType('orders')}
+              className={`flex-1 md:flex-none px-8 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
+                viewType === 'orders' ? 'bg-white text-indigo-600 shadow-md' : 'text-slate-400 hover:text-slate-600'
+              }`}
+            >
+              Vendas & Adesões Digitais
             </button>
             <button
               onClick={() => setViewType('insurance')}
@@ -720,25 +617,25 @@ export default function AdminFinancials() {
           </div>
         </div>
         
-        {/* Banner de Regras */}
+        {/* Banner de Regras 100% Digital MMN */}
         <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-           <div className="xl:col-span-2 bg-amber-50/50 border border-amber-200/50 p-8 rounded-[2.5rem] flex gap-6 items-start shadow-sm">
-              <div className="size-14 bg-amber-500 rounded-2xl flex items-center justify-center text-white shadow-lg shadow-amber-500/20 shrink-0">
+           <div className="xl:col-span-2 bg-indigo-50/50 border border-indigo-200/50 p-8 rounded-[2.5rem] flex gap-6 items-start shadow-sm">
+              <div className="size-14 bg-indigo-600 rounded-2xl flex items-center justify-center text-white shadow-lg shadow-indigo-600/20 shrink-0">
                  <ShieldCheck size={32} />
               </div>
               <div className="space-y-4">
-                 <h4 className="text-lg font-black text-amber-900 italic uppercase tracking-tighter">Regras de Liberação de Valores</h4>
+                 <h4 className="text-lg font-black text-midnight italic uppercase tracking-tighter">Regras de Comissionamento MMN 100% Digital</h4>
                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                     <div>
-                       <p className="text-[10px] text-amber-700 font-black uppercase tracking-widest mb-1">Condição de Repasse</p>
-                       <p className="text-xs text-amber-800 leading-relaxed font-medium">
-                          Os valores só serão liberados ao revendedor quando o status do pedido e status da entrega estiverem <span className="font-black">PAGOS E ENTREGUES</span>.
+                       <p className="text-[10px] text-indigo-700 font-black uppercase tracking-widest mb-1">Divisão Tripla (6% Total)</p>
+                       <p className="text-xs text-slate-600 leading-relaxed font-medium">
+                          Cada nível de indicação (G1, G2 e Regional) recebe 2% Semanal (Carteira Digital) + 2% Mensal (PIX) + 2% Anual (10/Dez).
                        </p>
                     </div>
-                    <div className="bg-amber-100/50 p-4 rounded-2xl border border-amber-200">
-                       <p className="text-[10px] text-amber-700 font-black uppercase tracking-widest mb-1">Padrão de Liquidação</p>
-                        <p className="text-[10px] text-amber-800 font-bold leading-tight uppercase">
-                          Repasses automáticos em D+1. <br/> Taxa de Administração: {dynamicPlatformRate}%.
+                    <div className="bg-white/80 p-4 rounded-2xl border border-indigo-100">
+                       <p className="text-[10px] text-indigo-700 font-black uppercase tracking-widest mb-1">Liquidação Mensal Apta</p>
+                        <p className="text-[10px] text-slate-700 font-bold leading-tight uppercase">
+                          O botão "Gerar Pagamentos" liquida exclusivamente o Cashback Mensal acumulado no período.
                         </p>
                     </div>
                  </div>
@@ -751,14 +648,16 @@ export default function AdminFinancials() {
                 </div>
                 <div>
                   <p className="text-[10px] text-indigo-100 font-bold uppercase tracking-widest mb-1">
-                    {viewType === 'merchants' ? 'Total a Pagar Revendedores Hoje' : 'Total a Pagar Afiliados Hoje'}
+                    {viewType === 'orders' ? 'Total Faturamento Digital (Mês)' : 'Total Cashback Mensal a Pagar Hoje'}
                   </p>
                   <h3 className="text-4xl font-black text-white tracking-tighter italic leading-none">
-                     R$ {(viewType === 'merchants' ? totalLojistasHoje : totalAfiliadosHoje).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                     R$ {(viewType === 'orders' ? totalFaturamentoDigital : totalAfiliadosHoje).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                   </h3>
                 </div>
                 <div className="mt-4">
-                   <span className="text-[9px] text-indigo-100 font-black uppercase tracking-[0.2em] border border-white/20 px-4 py-2 rounded-full backdrop-blur-sm">Sistema PIX Pronto</span>
+                   <span className="text-[9px] text-indigo-100 font-black uppercase tracking-[0.2em] border border-white/20 px-4 py-2 rounded-full backdrop-blur-sm">
+                     {viewType === 'orders' ? 'Plataforma 100% Digital' : 'Lote PIX Mensal'}
+                   </span>
                 </div>
             </div>
         </div>
@@ -924,15 +823,14 @@ export default function AdminFinancials() {
         ) : (
           <div key={`${viewType}-${tableRefreshKey}`} className="bg-white rounded-[3rem] overflow-hidden shadow-2xl border border-slate-100">
               <FinancialReportTable 
-                data={viewType === 'merchants' ? reportData : []} 
+                data={viewType === 'orders' ? reportData : []} 
                 affiliateData={viewType === 'affiliates' ? filteredAffiliateData : []}
-                title={viewType === 'merchants' ? "Auditoria de Pedidos Pendentes" : "Relatório de Cashbacks por Afiliado"} 
+                title={viewType === 'orders' ? "Auditoria de Vendas & Adesões Digitais" : "Relatório de Comissões & Cashback MMN"} 
                 isAdmin={true} 
-                mode={viewType}
-                onGeneratePayments={handleGeneratePayments}
+                mode={viewType === 'orders' ? 'orders' : 'affiliates'}
+                onGeneratePayments={viewType === 'affiliates' ? handleGeneratePayments : undefined}
                 hideReceiptButton={true}
                 hidePdfButton={true}
-                platformRate={dynamicPlatformRate}
               />
           </div>
         )}

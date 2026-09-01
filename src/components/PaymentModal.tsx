@@ -189,7 +189,11 @@ export default function PaymentModal({ isOpen, onClose, selectedRecords, onConfi
            <div className="flex items-center justify-between">
               <div className="flex flex-col">
                 <div className="flex items-center gap-2">
-                  <h2 className="text-3xl font-black text-midnight italic uppercase tracking-tighter">Liquidando Repasse</h2>
+                  <h2 className="text-3xl font-black text-midnight italic uppercase tracking-tighter">
+                    {currentRecord.buyerName === 'Rede MMN' || currentRecord.orderId?.startsWith('CASH-') 
+                      ? 'Liquidando Cashback Mensal' 
+                      : 'Liquidando Repasse Lojista'}
+                  </h2>
                   <div className="flex items-center gap-1 bg-slate-100 px-3 py-1 rounded-full border border-slate-200">
                     <Hash size={12} className="text-slate-400" />
                     <span className="text-[10px] font-black text-slate-500 uppercase">
@@ -200,7 +204,9 @@ export default function PaymentModal({ isOpen, onClose, selectedRecords, onConfi
                 <div className="flex items-center gap-3 mt-2">
                   <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">{currentRecord.payeeName}</span>
                   <span className="text-xs text-slate-300">•</span>
-                  <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">Pagamento Único</span>
+                  <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">
+                    {currentRecord.buyerName === 'Rede MMN' ? 'Fechamento Mensal' : 'Pagamento Único'}
+                  </span>
                   {currentRecord.payeeCpf && (
                     <>
                       <span className="text-xs text-slate-300">•</span>
@@ -213,18 +219,20 @@ export default function PaymentModal({ isOpen, onClose, selectedRecords, onConfi
                 </div>
               </div>
               <div className="text-right">
-                 <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest mb-1">Valor do Repasse</p>
+                 <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest mb-1">
+                   {currentRecord.buyerName === 'Rede MMN' ? 'Valor Apto (Mensal)' : 'Valor do Repasse'}
+                 </p>
                  <p className="text-4xl font-black text-indigo-600 italic tracking-tighter">R$ {currentRecord.repasse.toFixed(2).replace('.', ',')}</p>
                  
                  {/* Detalhamento para Afiliados */}
-                 {currentRecord.buyerName === 'Rede MMN' && (
+                 {(currentRecord.buyerName === 'Rede MMN' || currentRecord.orderId?.startsWith('CASH-')) && (
                    <div className="flex flex-col items-end gap-1 mt-3 border-t border-slate-100 pt-3">
                      {currentRecord.items?.map((item: any, i: number) => (
                        <div key={i} className="flex items-center gap-2">
                          <span className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">{item.name}:</span>
                          <span className={`text-[9px] font-black ${
-                           item.name.includes('Mensal') ? 'text-emerald-500' : 
-                           item.name.includes('Digital') ? 'text-blue-500' : 'text-indigo-400'
+                           item.name.includes('Mensal') ? 'text-emerald-600 font-black' : 
+                           item.name.includes('Semanal') || item.name.includes('Digital') ? 'text-blue-500' : 'text-indigo-400'
                          }`}>
                            R$ {Number(item.price || 0).toFixed(2).replace('.', ',')}
                          </span>
@@ -287,26 +295,42 @@ export default function PaymentModal({ isOpen, onClose, selectedRecords, onConfi
            </div>
 
            {/* Área do QR Code */}
-           <div className="flex flex-col items-center justify-center py-8 bg-slate-50/50 rounded-[2.5rem] border border-dashed border-slate-200">
-              {manualPixKey ? (
-                <div className="space-y-6 flex flex-col items-center">
-                   <div className="bg-white p-6 rounded-[2rem] shadow-xl border border-slate-100">
-                      {qrCodePayload && <QRCodeSVG value={qrCodePayload} size={200} />}
-                   </div>
-                   <button 
-                     onClick={copyPayload}
-                     className="flex items-center gap-2 text-[10px] font-black text-slate-500 uppercase tracking-widest hover:text-midnight transition-colors"
-                   >
-                      <Copy size={14} /> Copiar Código Copia e Cola
-                   </button>
+           {currentRecord.is_active === false ? (
+             <div className="flex flex-col items-center justify-center py-12 px-6 bg-red-50/70 rounded-[2.5rem] border border-red-200 text-center space-y-4">
+                <div className="size-16 rounded-full bg-red-100 flex items-center justify-center text-red-600">
+                   <AlertCircle size={32} />
                 </div>
-              ) : (
-                <div className="flex flex-col items-center gap-4 text-slate-300 py-12">
-                   <AlertCircle size={48} className="opacity-20" />
-                   <p className="text-xs font-black uppercase tracking-widest text-center max-w-xs">Insira uma chave PIX acima para gerar o código de pagamento.</p>
+                <div className="space-y-1">
+                   <h4 className="text-sm font-black text-red-700 uppercase tracking-widest">
+                     Pagamento Bloqueado — Usuário Inativo
+                   </h4>
+                   <p className="text-xs text-red-600 max-w-md font-medium leading-relaxed">
+                     O afiliado <strong className="font-black">{currentRecord.payeeName}</strong> está inativo (sem plano de licenciamento válido) e não está apto a receber repasses de comissão até regularizar seu plano.
+                   </p>
                 </div>
-              )}
-           </div>
+             </div>
+           ) : (
+             <div className="flex flex-col items-center justify-center py-8 bg-slate-50/50 rounded-[2.5rem] border border-dashed border-slate-200">
+                {manualPixKey ? (
+                  <div className="space-y-6 flex flex-col items-center">
+                     <div className="bg-white p-6 rounded-[2rem] shadow-xl border border-slate-100">
+                        {qrCodePayload && <QRCodeSVG value={qrCodePayload} size={200} />}
+                     </div>
+                     <button 
+                       onClick={copyPayload}
+                       className="flex items-center gap-2 text-[10px] font-black text-slate-500 uppercase tracking-widest hover:text-midnight transition-colors cursor-pointer"
+                     >
+                        <Copy size={14} /> Copiar Código Copia e Cola
+                     </button>
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center gap-4 text-slate-300 py-12">
+                     <AlertCircle size={48} className="opacity-20" />
+                     <p className="text-xs font-black uppercase tracking-widest text-center max-w-xs">Insira uma chave PIX acima para gerar o código de pagamento.</p>
+                  </div>
+                )}
+             </div>
+           )}
 
            {/* Controles de Navegação */}
            <div className="flex items-center justify-between pt-8 border-t border-slate-100">
@@ -314,14 +338,14 @@ export default function PaymentModal({ isOpen, onClose, selectedRecords, onConfi
                  <button 
                    onClick={handlePrev}
                    disabled={currentIndex === 0}
-                   className="p-4 rounded-2xl bg-slate-100 text-slate-400 hover:bg-slate-200 disabled:opacity-30 transition-all"
+                   className="p-4 rounded-2xl bg-slate-100 text-slate-400 hover:bg-slate-200 disabled:opacity-30 transition-all cursor-pointer"
                  >
                    <ChevronLeft size={20} />
                  </button>
                  <button 
                    onClick={handleNext}
                    disabled={currentIndex === selectedRecords.length - 1}
-                   className="p-4 rounded-2xl bg-slate-100 text-slate-400 hover:bg-slate-200 disabled:opacity-30 transition-all"
+                   className="p-4 rounded-2xl bg-slate-100 text-slate-400 hover:bg-slate-200 disabled:opacity-30 transition-all cursor-pointer"
                  >
                    <ChevronRight size={20} />
                  </button>
@@ -334,8 +358,8 @@ export default function PaymentModal({ isOpen, onClose, selectedRecords, onConfi
                  </div>
                  <button 
                    onClick={confirmCurrent}
-                   disabled={isProcessing || !manualPixKey}
-                   className="bg-indigo-600 text-white px-8 py-5 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-indigo-700 disabled:opacity-50 transition-all flex items-center gap-2 shadow-xl shadow-indigo-600/20 active:scale-95"
+                   disabled={isProcessing || !manualPixKey || currentRecord.is_active === false}
+                   className="bg-indigo-600 text-white px-8 py-5 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-indigo-700 disabled:opacity-30 disabled:pointer-events-none transition-all flex items-center gap-2 shadow-xl shadow-indigo-600/20 active:scale-95 cursor-pointer"
                  >
                    {isProcessing ? <Loader2 size={18} className="animate-spin" /> : <CheckCircle2 size={18} />}
                    Marcar como Pago

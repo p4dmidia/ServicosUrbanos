@@ -346,19 +346,27 @@ export default function AffiliateWallet() {
            
            {/* Eligibility Warning if blocked */}
            {!stats.isEligible && (
-              <div className="lg:col-span-2 bg-amber-50 border border-amber-100 p-8 rounded-[2.5rem] flex items-center gap-6">
-                 <div className="size-16 bg-amber-500/10 rounded-3xl flex items-center justify-center text-amber-600 shrink-0">
-                    <Clock size={32} />
+              <div className="lg:col-span-2 bg-rose-50 border border-rose-200 p-8 rounded-[2.5rem] flex flex-col md:flex-row items-start md:items-center justify-between gap-6 shadow-sm">
+                 <div className="flex items-center gap-6">
+                    <div className="size-16 bg-rose-500/10 rounded-3xl flex items-center justify-center text-rose-600 shrink-0">
+                       <Clock size={32} />
+                    </div>
+                    <div>
+                       <div className="inline-flex items-center gap-2 px-3 py-1 bg-rose-100 text-rose-700 rounded-full text-[9px] font-black uppercase tracking-widest mb-1.5">
+                          🔒 Conta Inadimplente
+                       </div>
+                       <h4 className="text-xl font-black text-rose-900 uppercase tracking-tight">Pagamentos e Saques Bloqueados</h4>
+                       <p className="text-xs font-medium text-rose-700/90 mt-1 max-w-lg">
+                          Seu plano de assinatura está inativo ou expirado. De acordo com as normas da plataforma, usuários inadimplentes estão bloqueados para receber repasses e solicitar saques.
+                       </p>
+                    </div>
                  </div>
-                 <div>
-                    <h4 className="text-lg font-black text-amber-800 uppercase tracking-tighter">Resgate Bloqueado</h4>
-                    <p className="text-sm font-medium text-amber-700/80">
-                       Sua assinatura do plano está inativa ou vencida. Pague a fatura pendente na sua tela inicial para liberar seus bônus e resgates.
-                    </p>
-                    <Link to="/afiliado/ecossistema" className="inline-flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-amber-800 mt-4 hover:underline">
-                       Explorar Ecossistema <ChevronRight size={12} />
-                    </Link>
-                 </div>
+                 <Link 
+                   to="/afiliado/renovacoes" 
+                   className="bg-rose-600 hover:bg-rose-700 text-white font-black px-6 py-3.5 rounded-2xl text-xs uppercase tracking-widest transition-all shadow-lg shadow-rose-600/20 whitespace-nowrap active:scale-95 shrink-0 flex items-center gap-2"
+                 >
+                    Regularizar Plano <ChevronRight size={14} />
+                 </Link>
               </div>
            )}
 

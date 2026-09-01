@@ -1,24 +1,29 @@
 -- =========================================================================
--- MIGRATION: NOVO MODELO DE REVENDEDOR E FECHAMENTO DIRETO
+-- MIGRATION: COMISSIONAMENTO DINÂMICO MMN (G0 TITULAR + REDE + REVENDEDOR)
 -- OBJETIVO: 
---   1. Adiciona a coluna 'reseller_id' em profiles e orders.
---   2. Realiza o backfill de todos os cadastros existentes, associando-os
---      ao Revendedor Regional responsável da sua linha.
---   3. Atualiza o trigger 'handle_order_payment' para creditar a comissão de 
---      Revendedor (2% Semanal, 2% Mensal, 2% Anual) DIRETO ao revendedor_id do fechamento.
+--   1. Lê todas as configurações definidas pelo Administrador em:
+--      - public.mmn_config (profundidade, tipo percentual/fixo, comissões regionais)
+--      - public.mmn_levels (valores específicos configurados para G0, G1, G2...)
+--   2. Credita a comissão de G0 (Nível 0) para o PRÓPRIO COMPRADOR (Titular)
+--      dividida na Regra Tripla (Semanal, Mensal, Anual).
+--   3. Distribui as comissões de Rede para os Uplines (G1, G2...) conforme a profundidade.
+--   4. Credita a comissão de Revendedor (6%) DIRETO ao Revendedor do fechamento (reseller_id).
 --
 -- COMO EXECUTAR:
---   Abra o Supabase Dashboard > SQL Editor > Cole e execute este script completo.
+--   Abra o Supabase Dashboard > SQL Editor > Cole e execute este script.
 -- =========================================================================
 
--- 1. ADICIONAR AS COLUNAS reseller_id
+-- 1. ADICIONAR AS COLUNAS reseller_id E ATUALIZAR CONSTRAINT DE STATUS
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS reseller_id UUID REFERENCES public.profiles(id);
 ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS reseller_id UUID REFERENCES public.profiles(id);
 
+-- Atualizar restrição de status para aceitar todos os status válidos
+ALTER TABLE public.orders DROP CONSTRAINT IF EXISTS orders_status_check;
+ALTER TABLE public.orders ADD CONSTRAINT orders_status_check 
+  CHECK (status IN ('Aguardando Pagamento', 'Pendente', 'Processando', 'Pago', 'Pago, Aguardando Retirada', 'Concluído', 'Cancelado', 'Entregue'));
+
 -- 2. BACKFILL DE CADASTROS ATUAIS (Associar ao Revendedor da Linha Ascendente)
--- Para cada perfil, busca o primeiro regional_reseller subindo a árvore de indicação
 WITH RECURSIVE referral_tree AS (
-    -- Base: todos os perfis
     SELECT 
         id AS profile_id, 
         referred_by, 
@@ -29,7 +34,6 @@ WITH RECURSIVE referral_tree AS (
     
     UNION ALL
     
-    -- Recursão: sobe a árvore
     SELECT 
         t.profile_id,
         p.referred_by,
@@ -60,22 +64,29 @@ SET reseller_id = p.reseller_id
 FROM public.profiles p
 WHERE o.customer_id = p.id AND o.reseller_id IS NULL;
 
--- 3. TRIGGER ATUALIZADO: handle_order_payment
+-- 3. TRIGGER DINÂMICO: handle_order_payment
 CREATE OR REPLACE FUNCTION public.handle_order_payment()
 RETURNS TRIGGER AS $$
 DECLARE
-    v_level INTEGER := 1;
+    v_depth INTEGER := 3;
+    v_payment_type TEXT := 'percent';
+    v_reg_semanal NUMERIC := 2.00;
+    v_reg_mensal NUMERIC := 2.00;
+    v_reg_anual NUMERIC := 2.00;
+    
+    -- Valores calculados por nível
+    v_level_val NUMERIC := 0;
+    v_level_semanal NUMERIC := 0;
+    v_level_mensal NUMERIC := 0;
+    v_level_anual NUMERIC := 0;
+    
+    v_current_level INTEGER := 1;
     v_upline_id UUID;
     v_amount NUMERIC := NEW.amount;
     v_reseller_id UUID := NULL;
     v_current_id UUID := NEW.customer_id;
-    -- Variáveis para comissão de revendedor
-    v_reg_semanal NUMERIC;
-    v_reg_mensal NUMERIC;
-    v_reg_anual NUMERIC;
 BEGIN
     -- [CONDIÇÃO DE DISPARO]
-    -- Processa quando o status for alterado para 'Pago', 'Pago, Aguardando Retirada' ou 'Concluído'
     IF (
         (NEW.status IN ('Pago', 'Pago, Aguardando Retirada', 'Concluído')) 
         AND 
@@ -92,7 +103,25 @@ BEGIN
         END IF;
 
         -- ==========================================
-        -- ATIVAR ASSINATURA AUTOMATICAMENTE SE HOUVER ITENS DE PLANO
+        -- 1. CARREGAR PARÂMETROS CONFIGURADOS NO ADMIN (mmn_config)
+        -- ==========================================
+        SELECT 
+            COALESCE(depth, 3),
+            COALESCE(payment_type, 'percent'),
+            COALESCE(commission_regional_semanal, 2.00),
+            COALESCE(commission_regional_mensal, 2.00),
+            COALESCE(commission_regional_anual, 2.00)
+        INTO 
+            v_depth,
+            v_payment_type,
+            v_reg_semanal,
+            v_reg_mensal,
+            v_reg_anual
+        FROM public.mmn_config
+        WHERE id = 1;
+
+        -- ==========================================
+        -- 2. ATIVAR ASSINATURA AUTOMATICAMENTE
         -- ==========================================
         IF NEW.items IS NOT NULL THEN
             DECLARE
@@ -130,10 +159,78 @@ BEGIN
         END IF;
 
         -- ==========================================
-        -- 1. IDENTIFICAR O REVENDEDOR RESPONSÁVEL PELO FECHAMENTO
-        -- Prioridade 1: NEW.reseller_id do pedido
-        -- Prioridade 2: profiles.reseller_id do comprador
-        -- Prioridade 3: Primeiro regional_reseller subindo a árvore de indicação (legado)
+        -- 3. DISTRIBUIR COMISSÃO G0 (TITULAR / PRÓPRIO COMPRADOR)
+        -- Lê o valor configurado para level = 1 (G0) em mmn_levels
+        -- ==========================================
+        SELECT COALESCE(value, 8.00) INTO v_level_val 
+        FROM public.mmn_levels 
+        WHERE level = 1;
+
+        IF v_level_val IS NULL OR v_level_val = 0 THEN
+            v_level_val := 8.00;
+        END IF;
+
+        -- Calcula as 3 partes (Semanal, Mensal, Anual)
+        IF v_payment_type = 'percent' THEN
+            -- Ex: 8% total dividido em 3 partes = ~2.67% cada ou arredondado
+            v_level_semanal := ROUND(v_amount * (v_level_val / 3.0 / 100.0), 2);
+            v_level_mensal := ROUND(v_amount * (v_level_val / 3.0 / 100.0), 2);
+            v_level_anual := ROUND(v_amount * (v_level_val / 3.0 / 100.0), 2);
+        ELSE
+            -- Valor fixo R$
+            v_level_semanal := ROUND(v_level_val / 3.0, 2);
+            v_level_mensal := ROUND(v_level_val / 3.0, 2);
+            v_level_anual := ROUND(v_level_val / 3.0, 2);
+        END IF;
+
+        -- Credita para o Titular (NEW.customer_id)
+        INSERT INTO public.transactions (profile_id, type, description, amount, status, order_id)
+        VALUES 
+        (NEW.customer_id, 'commission', 'Comissão Semanal G0 (Titular) - Pedido #' || NEW.id, v_level_semanal, 'pending', NEW.id),
+        (NEW.customer_id, 'commission', 'Comissão Mensal G0 (Titular) - Pedido #' || NEW.id, v_level_mensal, 'pending', NEW.id),
+        (NEW.customer_id, 'commission', 'Comissão Anual G0 (Titular) - Pedido #' || NEW.id, v_level_anual, 'pending', NEW.id);
+
+        -- ==========================================
+        -- 4. DISTRIBUIR COMISSÕES DE REDE PARA OS UPLINES (G1, G2... até v_depth)
+        -- ==========================================
+        v_current_id := NEW.customer_id;
+        SELECT referred_by INTO v_upline_id FROM public.profiles WHERE id = v_current_id;
+        v_current_level := 1; -- Começa no G1 (indicador direto)
+
+        WHILE v_upline_id IS NOT NULL AND v_current_level < v_depth LOOP
+            -- Busca o valor do nível em mmn_levels (level = v_current_level + 1)
+            SELECT COALESCE(value, 8.00) INTO v_level_val 
+            FROM public.mmn_levels 
+            WHERE level = (v_current_level + 1);
+
+            IF v_level_val IS NULL OR v_level_val = 0 THEN
+                v_level_val := 8.00;
+            END IF;
+
+            IF v_payment_type = 'percent' THEN
+                v_level_semanal := ROUND(v_amount * (v_level_val / 3.0 / 100.0), 2);
+                v_level_mensal := ROUND(v_amount * (v_level_val / 3.0 / 100.0), 2);
+                v_level_anual := ROUND(v_amount * (v_level_val / 3.0 / 100.0), 2);
+            ELSE
+                v_level_semanal := ROUND(v_level_val / 3.0, 2);
+                v_level_mensal := ROUND(v_level_val / 3.0, 2);
+                v_level_anual := ROUND(v_level_val / 3.0, 2);
+            END IF;
+
+            -- Credita para o Upline G1, G2...
+            INSERT INTO public.transactions (profile_id, type, description, amount, status, order_id)
+            VALUES 
+            (v_upline_id, 'commission', 'Comissão Semanal G' || v_current_level || ' - Pedido #' || NEW.id, v_level_semanal, 'pending', NEW.id),
+            (v_upline_id, 'commission', 'Comissão Mensal G' || v_current_level || ' - Pedido #' || NEW.id, v_level_mensal, 'pending', NEW.id),
+            (v_upline_id, 'commission', 'Comissão Anual G' || v_current_level || ' - Pedido #' || NEW.id, v_level_anual, 'pending', NEW.id);
+
+            v_current_id := v_upline_id;
+            SELECT referred_by INTO v_upline_id FROM public.profiles WHERE id = v_current_id;
+            v_current_level := v_current_level + 1;
+        END LOOP;
+
+        -- ==========================================
+        -- 5. IDENTIFICAR E DISTRIBUIR COMISSÃO DE REVENDEDOR (reseller_id)
         -- ==========================================
         v_reseller_id := NEW.reseller_id;
         
@@ -152,39 +249,7 @@ BEGIN
             END LOOP;
         END IF;
 
-        -- ==========================================
-        -- 2. DISTRIBUIR COMISSÕES DE AFILIADO (NÍVEIS G1 e G2)
-        -- G1 = Indicador Direto (referred_by de NEW.customer_id) -> Ganha 2% Semanal, 2% Mensal, 2% Anual
-        -- G2 = Indicador Indireto (referred_by de G1) -> Ganha 2% Semanal, 2% Mensal, 2% Anual
-        -- ==========================================
-        v_current_id := NEW.customer_id;
-        SELECT referred_by INTO v_upline_id FROM public.profiles WHERE id = v_current_id;
-        v_level := 1;
-
-        WHILE v_upline_id IS NOT NULL AND v_level <= 2 LOOP
-            INSERT INTO public.transactions (profile_id, type, description, amount, status, order_id)
-            VALUES 
-            (v_upline_id, 'commission', 'Comissão Semanal G' || v_level || ' (2%) - Pedido #' || NEW.id, ROUND(v_amount * 0.02, 2), 'pending', NEW.id),
-            (v_upline_id, 'commission', 'Comissão Mensal G' || v_level || ' (2%) - Pedido #' || NEW.id, ROUND(v_amount * 0.02, 2), 'pending', NEW.id),
-            (v_upline_id, 'commission', 'Comissão Anual G' || v_level || ' (2%) - Pedido #' || NEW.id, ROUND(v_amount * 0.02, 2), 'pending', NEW.id);
-
-            v_current_id := v_upline_id;
-            SELECT referred_by INTO v_upline_id FROM public.profiles WHERE id = v_current_id;
-            v_level := v_level + 1;
-        END LOOP;
-
-        -- ==========================================
-        -- 3. DISTRIBUIR COMISSÃO DE REVENDEDOR (6% DIRETO PARA O REVENDEDOR DO FECHAMENTO)
-        -- Ganha 2% Semanal + 2% Mensal + 2% Anual sobre cada fechamento que realizar
-        -- ==========================================
         IF v_reseller_id IS NOT NULL THEN
-            SELECT COALESCE(commission_regional_semanal, 2.00),
-                   COALESCE(commission_regional_mensal, 2.00),
-                   COALESCE(commission_regional_anual, 2.00)
-            INTO v_reg_semanal, v_reg_mensal, v_reg_anual
-            FROM public.mmn_config
-            WHERE id = 1;
-
             INSERT INTO public.transactions (profile_id, type, description, amount, status, order_id)
             VALUES 
             (v_reseller_id, 'commission', 'Comissão Revendedor Semanal (' || v_reg_semanal || '%) - Pedido #' || NEW.id, ROUND(v_amount * (v_reg_semanal / 100), 2), 'pending', NEW.id),
@@ -197,7 +262,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Reanexar o trigger caso necessário
+-- Reanexar trigger
 DROP TRIGGER IF EXISTS trg_handle_order_payment ON public.orders;
 CREATE TRIGGER trg_handle_order_payment
 AFTER INSERT OR UPDATE OF status ON public.orders

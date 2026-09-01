@@ -317,6 +317,15 @@ export default function AdminWithdrawals() {
                         <div className="flex items-center gap-3 mb-1">
                           <h3 className="text-xl font-black text-white italic uppercase tracking-tighter">{w.userName}</h3>
                           {getRoleBadge(w.role)}
+                          {w.isEligible ? (
+                            <span className="px-2.5 py-1 bg-emerald-500/10 text-emerald-400 rounded-lg text-[8px] font-black uppercase tracking-widest border border-emerald-500/20">
+                              🟢 Adimplente
+                            </span>
+                          ) : (
+                            <span className="px-2.5 py-1 bg-rose-500/10 text-rose-400 rounded-lg text-[8px] font-black uppercase tracking-widest border border-rose-500/20 flex items-center gap-1">
+                              🔒 Inadimplente (Bloqueado)
+                            </span>
+                          )}
                         </div>
                         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-slate-500 font-bold text-[10px] uppercase tracking-widest">
                           <span className="flex items-center gap-1.5"><User size={12} className="text-slate-600" /> {w.userEmail}</span>
@@ -333,10 +342,20 @@ export default function AdminWithdrawals() {
                              R$ {w.monthlyPending.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                            </p>
                            <button 
-                             onClick={() => setSelectedPayout({ ...w, currentType: 'mensal' })}
-                             className="mt-2 text-[8px] font-black uppercase text-emerald-400 hover:text-white transition-colors"
+                             onClick={() => {
+                               if (!w.isEligible) {
+                                 toast.error("Usuário inadimplente: pagamentos bloqueados até a renovação do plano.");
+                                 return;
+                               }
+                               setSelectedPayout({ ...w, currentType: 'mensal' });
+                             }}
+                             className={`mt-2 text-[8px] font-black uppercase transition-colors ${
+                               w.isEligible 
+                                 ? 'text-emerald-400 hover:text-white cursor-pointer' 
+                                 : 'text-slate-500 cursor-not-allowed opacity-50'
+                             }`}
                            >
-                             Dar Baixa
+                             {w.isEligible ? 'Dar Baixa' : '🔒 Bloqueado'}
                            </button>
                         </div>
                         <div className="text-center md:text-left border-r border-white/10 pr-8">
@@ -345,10 +364,20 @@ export default function AdminWithdrawals() {
                              R$ {(w.digitalPending || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                            </p>
                            <button 
-                             onClick={() => setSelectedPayout({ ...w, currentType: 'digital' })}
-                             className="mt-2 text-[8px] font-black uppercase text-purple-400 hover:text-white transition-colors"
+                             onClick={() => {
+                               if (!w.isEligible) {
+                                 toast.error("Usuário inadimplente: pagamentos bloqueados até a renovação do plano.");
+                                 return;
+                               }
+                               setSelectedPayout({ ...w, currentType: 'digital' });
+                             }}
+                             className={`mt-2 text-[8px] font-black uppercase transition-colors ${
+                               w.isEligible 
+                                 ? 'text-purple-400 hover:text-white cursor-pointer' 
+                                 : 'text-slate-500 cursor-not-allowed opacity-50'
+                             }`}
                            >
-                             Dar Baixa
+                             {w.isEligible ? 'Dar Baixa' : '🔒 Bloqueado'}
                            </button>
                         </div>
                         <div className="text-center md:text-left">
@@ -357,10 +386,20 @@ export default function AdminWithdrawals() {
                              R$ {w.annualPending.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                            </p>
                            <button 
-                             onClick={() => setSelectedPayout({ ...w, currentType: 'anual' })}
-                             className="mt-2 text-[8px] font-black uppercase text-blue-400 hover:text-white transition-colors"
+                             onClick={() => {
+                               if (!w.isEligible) {
+                                 toast.error("Usuário inadimplente: pagamentos bloqueados até a renovação do plano.");
+                                 return;
+                               }
+                               setSelectedPayout({ ...w, currentType: 'anual' });
+                             }}
+                             className={`mt-2 text-[8px] font-black uppercase transition-colors ${
+                               w.isEligible 
+                                 ? 'text-blue-400 hover:text-white cursor-pointer' 
+                                 : 'text-slate-500 cursor-not-allowed opacity-50'
+                             }`}
                            >
-                             Dar Baixa
+                             {w.isEligible ? 'Dar Baixa' : '🔒 Bloqueado'}
                            </button>
                         </div>
                       </div>
@@ -484,12 +523,28 @@ export default function AdminWithdrawals() {
                     </p>
                   </div>
 
+                  {!selectedPayout.isEligible && (
+                    <div className="p-4 bg-rose-500/10 border border-rose-500/20 rounded-2xl flex items-center gap-3 text-rose-400">
+                      <span className="text-xl">🔒</span>
+                      <p className="text-xs font-black uppercase tracking-wider">
+                        Pagamento Bloqueado: Usuário inadimplente (plano inativo ou vencido).
+                      </p>
+                    </div>
+                  )}
+
                   <div className="space-y-4">
                     <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Anexar Comprovante (Obrigatório)</label>
                     <div 
-                      onClick={() => fileInputRef.current?.click()}
+                      onClick={() => {
+                        if (!selectedPayout.isEligible) return;
+                        fileInputRef.current?.click();
+                      }}
                       className={`w-full aspect-video rounded-3xl border-2 border-dashed transition-all flex flex-col items-center justify-center cursor-pointer gap-4 ${
-                        receiptFile ? 'border-emerald-500/50 bg-emerald-500/5' : 'border-white/10 bg-white/5 hover:border-indigo-500/30'
+                        !selectedPayout.isEligible 
+                          ? 'border-rose-500/20 bg-rose-500/5 cursor-not-allowed opacity-50'
+                          : receiptFile 
+                            ? 'border-emerald-500/50 bg-emerald-500/5' 
+                            : 'border-white/10 bg-white/5 hover:border-indigo-500/30'
                       }`}
                     >
                       {receiptFile ? (
@@ -518,7 +573,7 @@ export default function AdminWithdrawals() {
                   </div>
 
                   <button
-                    disabled={!receiptFile || uploading}
+                    disabled={!selectedPayout.isEligible || !receiptFile || uploading}
                     onClick={() => handleProcessPayout(selectedPayout.currentType)}
                     className="w-full py-6 bg-emerald-600 hover:bg-emerald-500 text-white rounded-2xl font-black text-sm uppercase tracking-widest shadow-xl shadow-emerald-600/20 transition-all flex items-center justify-center gap-3 disabled:opacity-50 disabled:grayscale"
                   >
@@ -526,6 +581,11 @@ export default function AdminWithdrawals() {
                       <>
                         <Loader2 size={20} className="animate-spin" />
                         Processando...
+                      </>
+                    ) : !selectedPayout.isEligible ? (
+                      <>
+                        <span>🔒</span>
+                        Pagamento Bloqueado por Inadimplência
                       </>
                     ) : (
                       <>

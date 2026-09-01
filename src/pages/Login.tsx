@@ -37,26 +37,27 @@ export default function Login() {
         try {
             let loginEmail = email;
 
-            // Se o input não parece um e-mail (não tem @), tentamos buscar por CPF no banco
+            // Se o input não parece um e-mail (não tem @), tentamos buscar por CPF ou CNPJ no banco
             if (!email.includes('@')) {
-                const cleanCpf = email.replace(/\D/g, '');
+                const cleanDoc = email.replace(/\D/g, '');
                 
-                if (cleanCpf.length === 11) {
+                if (cleanDoc.length === 11) {
+                    // CPF (11 dígitos)
                     let emailResult = null;
                     
-                    // 1. Tenta buscar pela função RPC (ignora RLS e sincroniza no banco se necessário)
+                    // 1. Tenta buscar pela função RPC
                     const { data: rpcEmail, error: rpcError } = await supabase
-                        .rpc('get_email_by_cpf', { search_cpf: cleanCpf });
+                        .rpc('get_email_by_cpf', { search_cpf: cleanDoc });
                     
                     if (!rpcError && rpcEmail) {
                         emailResult = rpcEmail;
                     } else {
-                        // 2. Fallback: busca direta no banco caso a RPC não esteja ativa
+                        // 2. Fallback: busca direta na tabela profiles
                         const { data: profile, error: profileError } = await supabase
                             .from('profiles')
                             .select('email')
-                            .eq('cpf', cleanCpf)
-                            .single();
+                            .eq('cpf', cleanDoc)
+                            .maybeSingle();
                         
                         if (!profileError && profile?.email) {
                             emailResult = profile.email;
@@ -68,8 +69,39 @@ export default function Login() {
                     }
                     
                     loginEmail = emailResult;
+                } else if (cleanDoc.length === 14) {
+                    // CNPJ (14 dígitos)
+                    let emailResult = null;
+
+                    // Busca direta em profiles por cnpj ou cpf
+                    const { data: profile, error: profileError } = await supabase
+                        .from('profiles')
+                        .select('email')
+                        .or(`cnpj.eq.${cleanDoc},cpf.eq.${cleanDoc}`)
+                        .maybeSingle();
+
+                    if (!profileError && profile?.email) {
+                        emailResult = profile.email;
+                    }
+
+                    if (!emailResult) {
+                        throw new Error('CNPJ não encontrado ou sem e-mail vinculado');
+                    }
+
+                    loginEmail = emailResult;
                 } else {
-                    throw new Error('Formato de E-mail ou CPF inválido');
+                    // Tentativa direta caso o documento tenha sido salvo sem pontuação
+                    const { data: profile } = await supabase
+                        .from('profiles')
+                        .select('email')
+                        .or(`cnpj.eq.${cleanDoc},cpf.eq.${cleanDoc}`)
+                        .maybeSingle();
+
+                    if (profile?.email) {
+                        loginEmail = profile.email;
+                    } else {
+                        throw new Error('Formato de E-mail, CPF (11 dígitos) ou CNPJ (14 dígitos) inválido');
+                    }
                 }
             }
 
@@ -80,14 +112,13 @@ export default function Login() {
 
             if (authError) throw authError;
 
-            // Sincroniza o e-mail no perfil (garante que o login por CPF funcione na próxima vez)
+            // Sincroniza o e-mail no perfil (garante que o login por CPF/CNPJ funcione na próxima vez)
             if (data?.user?.email) {
                 await supabase
                     .from('profiles')
                     .update({ email: data.user.email })
                     .eq('id', data.user.id);
             }
-
 
             // Buscar o perfil para saber para onde redirecionar
             const { data: profile } = await supabase
@@ -99,12 +130,19 @@ export default function Login() {
             // Redireciona para o dashboard do afiliado
             if (profile?.role === 'admin') {
                 navigate('/admin/dashboard');
+            } else if (profile?.role === 'merchant' || profile?.role === 'owner' || profile?.role === 'manager') {
+                navigate('/lojista/dashboard');
             } else {
                 navigate('/afiliado/dashboard');
             }
-
         } catch (err: any) {
-            setError(err.message || 'Erro ao realizar login');
+            console.error('Login error:', err);
+            if (err.message === 'Invalid login credentials') {
+                setError('Credenciais inválidas. Verifique seu e-mail/CPF/CNPJ e senha.');
+            } else {
+                setError(err.message || 'Erro ao realizar login. Tente novamente.');
+            }
+        } finally {
             setLoading(false);
         }
     };
@@ -141,15 +179,15 @@ export default function Login() {
 
                         <form className="space-y-6" onSubmit={handleSubmit} noValidate>
 
-                            {/* Input: Email/CPF */}
+                            {/* Input: Email/CPF/CNPJ */}
                             <div className="space-y-2">
-                                <label className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1">E-mail ou CPF</label>
+                                <label className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1">E-mail, CPF ou CNPJ</label>
                                 <div className="relative group">
                                     <User className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-emerald-500 transition-colors" size={20} />
 
                                     <input
                                         type="text"
-                                        placeholder="E-mail ou CPF"
+                                        placeholder="E-mail, CPF ou CNPJ"
                                         value={email}
                                         onChange={e => setEmail(e.target.value)}
                                         className="w-full bg-white/5 border border-white/10 rounded-2xl py-4 pl-12 pr-4 focus:outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 transition-all font-medium text-white placeholder:text-slate-600"

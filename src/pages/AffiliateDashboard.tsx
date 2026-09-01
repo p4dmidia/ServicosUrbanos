@@ -112,6 +112,32 @@ export default function AffiliateDashboard() {
             Planos de Licenciamento
           </Link>
         </div>
+
+        {/* Delinquency Alert Banner */}
+        {!stats.isEligible && (
+          <div className="bg-rose-50 border border-rose-200 p-6 rounded-[2rem] flex flex-col md:flex-row items-start md:items-center justify-between gap-6 shadow-sm">
+            <div className="flex items-center gap-4">
+              <div className="size-12 bg-rose-500/10 text-rose-600 rounded-2xl flex items-center justify-center shrink-0 font-black text-lg">
+                🔒
+              </div>
+              <div>
+                <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 bg-rose-100 text-rose-700 rounded-full text-[8px] font-black uppercase tracking-widest mb-1">
+                  Conta Inadimplente
+                </div>
+                <h4 className="text-base font-black text-rose-900 uppercase tracking-tight">Pagamentos e Saques Bloqueados</h4>
+                <p className="text-xs text-rose-700/90 font-medium">
+                  Sua assinatura está inativa ou expirada. Regularize seu plano para desbloquear repasses e saques.
+                </p>
+              </div>
+            </div>
+            <Link 
+              to="/afiliado/renovacoes" 
+              className="bg-rose-600 hover:bg-rose-700 text-white font-black px-6 py-3 rounded-xl text-xs uppercase tracking-widest transition-all shadow-md shadow-rose-600/20 whitespace-nowrap active:scale-95 shrink-0"
+            >
+              Ativar Plano Agora
+            </Link>
+          </div>
+        )}
         
         {/* Top Stats Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">

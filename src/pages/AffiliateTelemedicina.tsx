@@ -6,85 +6,26 @@ import {
   Calendar, 
   Lock, 
   CheckCircle2, 
-  PhoneCall, 
   ArrowUpRight,
   ExternalLink,
   ShieldCheck,
-  User,
-  Clock
+  Clock,
+  Sparkles,
+  PhoneCall
 } from 'lucide-react';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion } from 'motion/react';
 import { Link } from 'react-router-dom';
 import AffiliateLayout from '../components/AffiliateLayout';
 import { businessRules } from '../lib/businessRules';
 import { useAuth } from '../contexts/AuthContext';
-import { toast } from 'react-hot-toast';
-
-interface Doctor {
-  id: string;
-  name: string;
-  specialty: string;
-  crm: string;
-  status: 'Online' | 'Offline' | 'Disponível' | 'Agendamento';
-  image: string;
-  whatsapp: string;
-}
 
 export default function AffiliateTelemedicina() {
   const { user, profile } = useAuth();
   const [loading, setLoading] = useState(true);
   const [isEligible, setIsEligible] = useState(false);
   const [stats, setStats] = useState<any>(null);
-  const [showCallModal, setShowCallModal] = useState(false);
-  const [selectedDoctor, setSelectedDoctor] = useState<Doctor | null>(null);
 
-  const doctors: Doctor[] = [
-    {
-      id: 'doc-1',
-      name: 'Dr. Rodrigo Silva',
-      specialty: 'Clínico Geral',
-      crm: 'CRM-SP 189201',
-      status: 'Online',
-      image: 'https://images.unsplash.com/photo-1622253692010-333f2da6031d?auto=format&fit=crop&q=80&w=120',
-      whatsapp: 'https://wa.me/5511999999999?text=Ol%C3%A1%2C%20gostaria%20de%20iniciar%20uma%20triagem%20para%20teleconsulta%20de%20Cl%C3%ADnico%20Geral.'
-    },
-    {
-      id: 'doc-2',
-      name: 'Dra. Marina Costa',
-      specialty: 'Pediatria',
-      crm: 'CRM-RJ 249102',
-      status: 'Disponível',
-      image: 'https://images.unsplash.com/photo-1594824813573-246434de83fb?auto=format&fit=crop&q=80&w=120',
-      whatsapp: 'https://wa.me/5511999999999?text=Ol%C3%A1%2C%20gostaria%20de%20agendar%20uma%20consulta%20de%20Pediatria.'
-    },
-    {
-      id: 'doc-3',
-      name: 'Dr. Carlos Eduardo',
-      specialty: 'Cardiologia',
-      crm: 'CRM-MG 912803',
-      status: 'Agendamento',
-      image: 'https://images.unsplash.com/photo-1537368910025-700350fe46c7?auto=format&fit=crop&q=80&w=120',
-      whatsapp: 'https://wa.me/5511999999999?text=Ol%C3%A1%2C%20gostaria%20de%20solicitar%20agendamento%20com%20o%20Cardiologista.'
-    },
-    {
-      id: 'doc-4',
-      name: 'Dra. Vanessa Lins',
-      specialty: 'Psicologia',
-      crm: 'CRP-SP 06/158309',
-      status: 'Online',
-      image: 'https://images.unsplash.com/photo-1559839734-2b71ea197ec2?auto=format&fit=crop&q=80&w=120',
-      whatsapp: 'https://wa.me/5511999999999?text=Ol%C3%A1%2C%20gostaria%20de%20agendar%20uma%20sess%C3%A3o%20de%20Psicoterapia.'
-    },
-    {
-      id: 'doc-5',
-      name: 'Dr. Felipe Santos',
-      specialty: 'Ortopedia',
-      crm: 'CRM-BA 491023',
-      status: 'Agendamento',
-      image: 'https://images.unsplash.com/photo-1612349317150-e413f6a5b16d?auto=format&fit=crop&q=80&w=120',
-      whatsapp: 'https://wa.me/5511999999999?text=Ol%C3%A1%2C%20gostaria%20de%20agendar%20consulta%20de%20Ortopedia.'
-    }
-  ];
+  const raccaTelemedicinaUrl = 'https://raccasaude.com.br/parceiro/servicos-urbanos';
 
   useEffect(() => {
     async function loadStats() {
@@ -102,19 +43,6 @@ export default function AffiliateTelemedicina() {
     }
     loadStats();
   }, [user]);
-
-  const handleCallDoctor = (doc: Doctor) => {
-    setSelectedDoctor(doc);
-    setShowCallModal(true);
-  };
-
-  const handleConfirmCall = () => {
-    if (selectedDoctor) {
-      window.open(selectedDoctor.whatsapp, '_blank');
-      setShowCallModal(false);
-      toast.success('Direcionando você para a sala de triagem...');
-    }
-  };
 
   if (loading) {
     return (
@@ -140,17 +68,17 @@ export default function AffiliateTelemedicina() {
             <div className="absolute -top-20 -right-20 size-60 bg-red-500/5 rounded-full blur-3xl pointer-events-none"></div>
             <div className="absolute -bottom-20 -left-20 size-60 bg-primary-blue/5 rounded-full blur-3xl pointer-events-none"></div>
 
-            <div className="size-20 bg-red-50 text-red-500 rounded-3xl flex items-center justify-center shadow-lg shadow-red-500/10 mx-auto animate-bounce">
+            <div className="size-20 bg-rose-50 text-rose-500 rounded-3xl flex items-center justify-center shadow-lg shadow-rose-500/10 mx-auto animate-bounce">
               <Lock size={36} />
             </div>
 
             <div className="space-y-4">
               <h2 className="text-3xl font-black text-midnight tracking-tight uppercase italic">Acesso Bloqueado</h2>
               <p className="text-slate-500 font-bold uppercase tracking-wider text-xs">
-                Benefício Exclusivo para Segurados Ativos
+                Benefício Exclusivo para Membros Ativos
               </p>
-              <p className="text-slate-600 leading-relaxed max-w-lg mx-auto">
-                A telemedicina 24/7 com atendimento médico imediato e agendamento de especialistas está bloqueada. Regularize seu plano de seguro premiável ou ative sua assinatura para desbloquear consultas ilimitadas para você e sua família.
+              <p className="text-slate-600 leading-relaxed max-w-lg mx-auto text-sm">
+                A telemedicina 24/7 com atendimento médico de urgência e agendamento com especialistas está bloqueada. Regularize seu plano de licenciamento para desbloquear consultas ilimitadas para você e sua família.
               </p>
             </div>
 
@@ -193,28 +121,30 @@ export default function AffiliateTelemedicina() {
             <div className="space-y-4 max-w-xl">
               <span className="bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-3 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest flex items-center gap-1.5 w-fit">
                 <ShieldCheck size={12} className="animate-pulse" />
-                Segurado Ativo • Acesso Liberado
+                Membro Ativo • Acesso Liberado
               </span>
               <h1 className="text-3xl sm:text-4xl font-black tracking-tight italic uppercase">Telemedicina 24/7</h1>
               <p className="text-slate-300 leading-relaxed text-sm">
-                Consulte-se com médicos plantonistas por videoconferência ou agende sessões com psicólogos e especialistas direto pelo celular. Sem filas e sem coparticipação!
+                Consulte-se com médicos de plantão ou agende sessões com psicólogos e especialistas parceiros diretamente pela plataforma da <strong>Racca Telemedicina</strong>. Sem filas e sem coparticipação!
               </p>
             </div>
             
-            <button 
-              onClick={() => handleCallDoctor(doctors[0])} // Dr. Rodrigo Silva (Clínico Geral Online)
-              className="bg-emerald-500 hover:bg-emerald-600 text-white px-8 py-5 rounded-2xl font-black text-xs uppercase tracking-widest transition-all shadow-xl shadow-emerald-500/30 flex items-center justify-center gap-3 shrink-0"
+            <a 
+              href={raccaTelemedicinaUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="bg-emerald-500 hover:bg-emerald-600 text-white px-8 py-5 rounded-2xl font-black text-xs uppercase tracking-widest transition-all shadow-xl shadow-emerald-500/30 flex items-center justify-center gap-3 shrink-0 active:scale-95"
             >
-              <Video size={18} className="animate-pulse" />
-              Consulta Urgente 24h
-            </button>
+              <ExternalLink size={18} />
+              Acessar Portal Racca Saúde
+            </a>
           </div>
         </div>
 
-        {/* Informações rápidas / Instruções */}
+        {/* Informações rápidas / Benefícios */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm flex gap-4 items-start">
-            <div className="p-3 bg-emerald-50 text-emerald-600 rounded-2xl">
+            <div className="p-3 bg-emerald-50 text-emerald-600 rounded-2xl shrink-0">
               <CheckCircle2 size={20} />
             </div>
             <div>
@@ -224,131 +154,88 @@ export default function AffiliateTelemedicina() {
           </div>
           
           <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm flex gap-4 items-start">
-            <div className="p-3 bg-blue-50 text-blue-600 rounded-2xl">
+            <div className="p-3 bg-blue-50 text-blue-600 rounded-2xl shrink-0">
               <Calendar size={20} />
             </div>
             <div>
-              <h4 className="text-xs font-black text-midnight uppercase tracking-wider mb-1">Especialistas</h4>
-              <p className="text-slate-500 text-xs leading-relaxed">Pediatria, Psicologia, Cardiologia e Ortopedia disponíveis para agendamentos de forma 100% digital.</p>
+              <h4 className="text-xs font-black text-midnight uppercase tracking-wider mb-1">Especialistas com Agendamento</h4>
+              <p className="text-slate-500 text-xs leading-relaxed">Pediatria, Psicologia, Cardiologia, Ortopedia e diversas outras especialidades 100% online.</p>
             </div>
           </div>
 
           <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm flex gap-4 items-start">
-            <div className="p-3 bg-purple-50 text-purple-600 rounded-2xl">
+            <div className="p-3 bg-purple-50 text-purple-600 rounded-2xl shrink-0">
               <Stethoscope size={20} />
             </div>
             <div>
-              <h4 className="text-xs font-black text-midnight uppercase tracking-wider mb-1">Receita Digital</h4>
+              <h4 className="text-xs font-black text-midnight uppercase tracking-wider mb-1">Receita e Atestado Digital</h4>
               <p className="text-slate-500 text-xs leading-relaxed">Receba atestados, pedidos de exames e receitas médicas com assinatura digital válidos em todo o país.</p>
             </div>
           </div>
         </div>
 
-        {/* Lista de médicos credenciados */}
-        <div className="space-y-6">
-          <div>
-            <h3 className="text-lg font-black text-midnight tracking-tighter uppercase italic">Profissionais Credenciados</h3>
-            <p className="text-xs text-slate-400 font-bold uppercase tracking-wider mt-1">Nossos profissionais qualificados de plantão e agendamento</p>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {doctors.map((doc) => (
-              <div 
-                key={doc.id} 
-                className="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm hover:shadow-xl transition-all flex flex-col justify-between group gap-6"
-              >
-                <div className="flex gap-4">
-                  <div className="size-16 rounded-2xl overflow-hidden border border-slate-100 shrink-0 bg-slate-50">
-                    {doc.image ? (
-                      <img src={doc.image} alt={doc.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
-                    ) : (
-                      <div className="size-full flex items-center justify-center text-slate-300"><User size={24} /></div>
-                    )}
-                  </div>
-                  
-                  <div className="space-y-1">
-                    <span className={`inline-flex px-2 py-0.5 rounded-lg text-[8px] font-black uppercase tracking-wider ${
-                      doc.status === 'Online' 
-                        ? 'bg-emerald-50 text-emerald-600 border border-emerald-100 animate-pulse'
-                        : doc.status === 'Disponível'
-                          ? 'bg-blue-50 text-blue-600 border border-blue-100'
-                          : 'bg-slate-50 text-slate-400 border border-slate-100'
-                    }`}>
-                      {doc.status}
-                    </span>
-                    <h4 className="font-black text-midnight text-sm tracking-tight">{doc.name}</h4>
-                    <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">{doc.specialty}</p>
-                    <p className="text-[9px] text-slate-400 font-medium">{doc.crm}</p>
-                  </div>
-                </div>
-
-                <button 
-                  onClick={() => handleCallDoctor(doc)}
-                  className={`w-full py-3.5 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all flex items-center justify-center gap-2 border ${
-                    doc.status === 'Online'
-                      ? 'bg-emerald-500 text-white hover:bg-emerald-600 border-emerald-500 shadow-lg shadow-emerald-500/10'
-                      : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50 hover:border-slate-300'
-                  }`}
-                >
-                  <PhoneCall size={12} />
-                  {doc.status === 'Online' ? 'Falar Agora' : 'Solicitar Horário'}
-                </button>
-              </div>
-            ))}
-          </div>
-        </div>
-
         {/* Instruções para Agendamento de Consultas */}
-        <div className="bg-white border border-slate-200/60 rounded-[2rem] overflow-hidden shadow-sm p-8 sm:p-10 space-y-8">
+        <div className="bg-white border border-slate-200/60 rounded-[2.5rem] overflow-hidden shadow-sm p-8 sm:p-12 space-y-10">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-slate-100">
             <div>
-              <h3 className="text-lg font-black text-midnight tracking-tighter uppercase italic">
+              <div className="inline-flex items-center gap-2 px-3 py-1 bg-emerald-50 text-emerald-700 rounded-full text-[9px] font-black uppercase tracking-widest mb-2">
+                <Sparkles size={12} />
+                Parceiro Oficial
+              </div>
+              <h3 className="text-2xl font-black text-midnight tracking-tighter uppercase italic">
                 Instruções para Agendamento de Consultas
               </h3>
               <p className="text-xs text-slate-400 font-bold uppercase tracking-wider mt-1">
-                Parceiro – Racca Telemedicina
+                Passo a passo oficial de atendimento via Racca Telemedicina
               </p>
             </div>
-            <div className="bg-emerald-50 text-emerald-600 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider self-start sm:self-auto">
-              Parceria Oficial
-            </div>
+            
+            <a 
+              href={raccaTelemedicinaUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 px-5 py-3 bg-slate-900 hover:bg-slate-800 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all self-start sm:self-auto shadow-md"
+            >
+              <span>Abrir Plataforma</span>
+              <ExternalLink size={14} />
+            </a>
           </div>
 
           {/* Fluxo de Passos */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
             <div className="space-y-6">
               <div className="flex gap-4">
-                <div className="size-8 rounded-xl bg-slate-50 border border-slate-200/60 text-slate-600 flex items-center justify-center font-mono font-black text-xs shrink-0 mt-0.5">
+                <div className="size-10 rounded-2xl bg-indigo-50 border border-indigo-100 text-indigo-600 flex items-center justify-center font-mono font-black text-sm shrink-0 mt-0.5">
                   01
                 </div>
                 <div>
                   <h4 className="text-xs font-black text-midnight uppercase tracking-wider mb-1">Acesso Inicial</h4>
                   <p className="text-slate-500 text-xs leading-relaxed">
-                    O afiliado clica no link da Racca Telemedicina e é direcionado para a página de contratação do serviço.
+                    O afiliado clica no link oficial da <strong>Racca Telemedicina</strong> e é direcionado para a página de contratação e acesso do serviço.
                   </p>
                 </div>
               </div>
 
               <div className="flex gap-4">
-                <div className="size-8 rounded-xl bg-slate-50 border border-slate-200/60 text-slate-600 flex items-center justify-center font-mono font-black text-xs shrink-0 mt-0.5">
+                <div className="size-10 rounded-2xl bg-indigo-50 border border-indigo-100 text-indigo-600 flex items-center justify-center font-mono font-black text-sm shrink-0 mt-0.5">
                   02
                 </div>
                 <div>
-                  <h4 className="text-xs font-black text-midnight uppercase tracking-wider mb-1">Contratação e Pagamento</h4>
-                  <p className="text-slate-500 text-xs leading-relaxed font-bold">
-                    Contrate sua consulta, preencha seu cadastro com a Racca Telemedicina e realize o pagamento online.
+                  <h4 className="text-xs font-black text-midnight uppercase tracking-wider mb-1">Contratação e Cadastro</h4>
+                  <p className="text-slate-500 text-xs leading-relaxed">
+                    Selecione sua consulta, preencha seu cadastro de paciente junto à Racca Telemedicina e realize a confirmação online.
                   </p>
                 </div>
               </div>
 
               <div className="flex gap-4">
-                <div className="size-8 rounded-xl bg-slate-50 border border-slate-200/60 text-slate-600 flex items-center justify-center font-mono font-black text-xs shrink-0 mt-0.5">
+                <div className="size-10 rounded-2xl bg-indigo-50 border border-indigo-100 text-indigo-600 flex items-center justify-center font-mono font-black text-sm shrink-0 mt-0.5">
                   03
                 </div>
                 <div>
-                  <h4 className="text-xs font-black text-midnight uppercase tracking-wider mb-1">Confirmação Automática</h4>
+                  <h4 className="text-xs font-black text-midnight uppercase tracking-wider mb-1">Confirmação por E-mail</h4>
                   <p className="text-slate-500 text-xs leading-relaxed">
-                    Após o pagamento, você recebe um e-mail com informações de acesso à plataforma, contendo também a confirmação e as instruções para marcar a 1ª consulta.
+                    Após a confirmação, você recebe um e-mail com as informações de acesso à sala de teleconsulta, contendo o link direto e orientações para a 1ª consulta.
                   </p>
                 </div>
               </div>
@@ -356,58 +243,59 @@ export default function AffiliateTelemedicina() {
 
             <div className="space-y-6">
               <div className="flex gap-4">
-                <div className="size-8 rounded-xl bg-slate-50 border border-slate-200/60 text-slate-600 flex items-center justify-center font-mono font-black text-xs shrink-0 mt-0.5">
+                <div className="size-10 rounded-2xl bg-emerald-50 border border-emerald-100 text-emerald-600 flex items-center justify-center font-mono font-black text-sm shrink-0 mt-0.5">
                   04
                 </div>
                 <div>
-                  <h4 className="text-xs font-black text-midnight uppercase tracking-wider mb-1">Primeira Consulta (Clínico Geral)</h4>
+                  <h4 className="text-xs font-black text-midnight uppercase tracking-wider mb-1">Triagem / Consulta Inicial</h4>
                   <p className="text-slate-500 text-xs leading-relaxed">
-                    O afiliado acessa a plataforma com os dados recebidos. A consulta inicial é realizada obrigatoriamente com um clínico geral, que avaliará se há necessidade de encaminhamento para especialista.
+                    A consulta inicial é realizada com um médico clínico geral por chamada de vídeo, que fará o atendimento imediato ou o encaminhamento para o especialista necessário.
                   </p>
                 </div>
               </div>
 
               <div className="flex gap-4">
-                <div className="size-8 rounded-xl bg-slate-50 border border-slate-200/60 text-slate-600 flex items-center justify-center font-mono font-black text-xs shrink-0 mt-0.5">
+                <div className="size-10 rounded-2xl bg-emerald-50 border border-emerald-100 text-emerald-600 flex items-center justify-center font-mono font-black text-sm shrink-0 mt-0.5">
                   05
                 </div>
                 <div>
-                  <h4 className="text-xs font-black text-midnight uppercase tracking-wider mb-1">Encaminhamento para Especialista</h4>
+                  <h4 className="text-xs font-black text-midnight uppercase tracking-wider mb-1">Atendimento Especializado</h4>
                   <p className="text-slate-500 text-xs leading-relaxed">
-                    Caso o clínico identifique a necessidade, o sistema gera um novo e-mail automático com as instruções para marcar a 2ª consulta com especialista. <strong className="text-emerald-600 font-black">Essa segunda consulta é gratuita.</strong>
+                    Caso haja encaminhamento, você poderá agendar a data e o horário mais convenientes para o atendimento com o especialista desejado.
                   </p>
                 </div>
               </div>
 
               <div className="flex gap-4">
-                <div className="size-8 rounded-xl bg-slate-50 border border-slate-200/60 text-slate-600 flex items-center justify-center font-mono font-black text-xs shrink-0 mt-0.5">
+                <div className="size-10 rounded-2xl bg-emerald-50 border border-emerald-100 text-emerald-600 flex items-center justify-center font-mono font-black text-sm shrink-0 mt-0.5">
                   06
                 </div>
                 <div>
-                  <h4 className="text-xs font-black text-midnight uppercase tracking-wider mb-1">Encerramento e Acompanhamento</h4>
+                  <h4 className="text-xs font-black text-midnight uppercase tracking-wider mb-1">Receituário e Documentos</h4>
                   <p className="text-slate-500 text-xs leading-relaxed">
-                    Após a consulta, o afiliado recebe o relatório, prescrição ou encaminhamento conforme avaliação, com a possibilidade de agendar retornos e receber acompanhamento digital.
+                    Ao término da consulta, prescrições, receitas e atestados médicos são enviados instantaneamente por SMS ou e-mail com QR Code e assinatura digital válida.
                   </p>
                 </div>
               </div>
             </div>
           </div>
 
-          {/* Especialidades */}
-          <div className="bg-slate-50 p-6 rounded-[1.5rem] border border-slate-100 space-y-4">
+          {/* Especialidades Atendidas */}
+          <div className="p-8 bg-slate-50/80 rounded-3xl border border-slate-100 space-y-4">
             <h4 className="text-xs font-black text-midnight uppercase tracking-wider flex items-center gap-2">
-              <span>📋</span> Especialidades disponíveis para encaminhamento
+              <HeartPulse size={16} className="text-emerald-500" />
+              Especialidades Disponíveis na Plataforma
             </h4>
             <div className="flex flex-wrap gap-2">
               {[
-                'Clínico Geral', 'Cardiologista', 'Dermatologista', 'Endocrinologista', 
-                'Geriatria', 'Ginecologista', 'Neurologista', 'Ortopedista', 
-                'Otorrinolaringologista', 'Pediatria', 'Psiquiatria', 'Psicologia', 
-                'Traumatologia', 'Urologista'
+                'Clínico Geral 24h', 'Cardiologia', 'Dermatologia', 'Endocrinologia', 
+                'Geriatria', 'Ginecologia', 'Neurologia', 'Ortopedia', 
+                'Otorrinolaringologia', 'Pediatria', 'Psiquiatria', 'Psicologia', 
+                'Traumatologia', 'Urologia'
               ].map((specialty) => (
                 <span 
                   key={specialty} 
-                  className="bg-white border border-slate-200/60 text-slate-600 px-3 py-1.5 rounded-xl text-[10px] font-bold"
+                  className="bg-white border border-slate-200/80 text-slate-700 px-3.5 py-2 rounded-xl text-xs font-bold shadow-2xs"
                 >
                   {specialty}
                 </span>
@@ -415,82 +303,24 @@ export default function AffiliateTelemedicina() {
             </div>
           </div>
 
-          {/* Observação e Botão Final */}
-          <div className="pt-4 border-t border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-6">
+          {/* Botão de Ação Direto */}
+          <div className="pt-6 border-t border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-6">
             <p className="text-[11px] font-bold text-slate-400 max-w-md uppercase leading-relaxed">
-              ⚠️ Observação: As atualizações no corpo clínico serão informadas nesta tela, garantindo transparência aos afiliados.
+              ⚠️ Observação: Os atendimentos médicos e prontuários são de responsabilidade da parceira técnica Racca Telemedicina.
             </p>
             <a 
-              href="https://raccasaude.com.br/parceiro/servicos-urbanos"
+              href={raccaTelemedicinaUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center justify-center gap-2.5 bg-midnight text-white hover:bg-slate-800 px-8 py-4 rounded-2xl font-black text-xs uppercase tracking-widest transition-all shadow-xl shadow-midnight/10 shrink-0 self-stretch md:self-auto"
+              className="inline-flex items-center justify-center gap-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white px-10 py-5 rounded-2xl font-black text-xs uppercase tracking-widest transition-all shadow-xl shadow-emerald-600/20 shrink-0 self-stretch md:self-auto active:scale-95"
             >
-              <span>Acessar Racca Telemedicina</span>
-              <ExternalLink size={14} />
+              <span>Acessar Portal Racca Telemedicina</span>
+              <ExternalLink size={16} />
             </a>
           </div>
         </div>
 
       </div>
-
-      {/* Triagem / Consulta Modal */}
-      <AnimatePresence>
-        {showCallModal && selectedDoctor && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            <motion.div 
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="absolute inset-0 bg-midnight/80 backdrop-blur-sm"
-              onClick={() => setShowCallModal(false)}
-            />
-            
-            <motion.div 
-              initial={{ opacity: 0, scale: 0.95, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="relative w-full max-w-md bg-white rounded-[2.5rem] shadow-2xl p-8 text-center space-y-6"
-            >
-              <div className="size-16 bg-emerald-50 text-emerald-500 rounded-2xl flex items-center justify-center shadow-lg shadow-emerald-500/10 mx-auto">
-                <Video size={28} className="animate-pulse" />
-              </div>
-
-              <div className="space-y-2">
-                <h3 className="text-xl font-black text-midnight tracking-tight uppercase italic">Triagem Virtual</h3>
-                <p className="text-slate-500 text-xs leading-relaxed">
-                  Você está prestes a iniciar seu atendimento com <strong>{selectedDoctor.name}</strong> ({selectedDoctor.specialty}).
-                </p>
-                <p className="text-slate-500 text-xs leading-relaxed">
-                  Nossos médicos atendem por chamada de vídeo segura. Tenha em mãos seu documento de identidade.
-                </p>
-              </div>
-
-              <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 flex items-center gap-3 text-left">
-                <Clock size={16} className="text-primary-blue" />
-                <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">
-                  Tempo estimado de espera: ~5 minutos
-                </span>
-              </div>
-
-              <div className="flex gap-4">
-                <button 
-                  onClick={() => setShowCallModal(false)}
-                  className="flex-1 py-4 border border-slate-200 text-slate-500 hover:bg-slate-50 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all"
-                >
-                  Voltar
-                </button>
-                <button 
-                  onClick={handleConfirmCall}
-                  className="flex-1 py-4 bg-emerald-500 hover:bg-emerald-600 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-lg shadow-emerald-500/15 transition-all"
-                >
-                  Iniciar Triagem
-                </button>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
     </AffiliateLayout>
   );
 }

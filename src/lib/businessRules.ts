@@ -2635,7 +2635,15 @@ export const businessRules = {
   },
 
   requestWithdrawal: async (profileId: string, amount: number) => {
-    // 1. Verificar saldo (opcional, mas bom ter no cliente também)
+    // 1. Verificar se o afiliado/revendedor está ATIVO e ADIMPLENTE
+    const stats = await businessRules.getAffiliateStats(profileId);
+    if (!stats.isEligible) {
+      throw new Error('Sua conta está inadimplente (plano inativo ou vencido). Regularize sua assinatura para desbloquear saques.');
+    }
+    if (amount > stats.availableBalance) {
+      throw new Error('Saldo insuficiente para realizar este saque.');
+    }
+
     // 2. Criar registro de transação negativa pendente
     const { error } = await supabase
       .from('transactions')
@@ -2643,7 +2651,7 @@ export const businessRules = {
         profile_id: profileId,
         type: 'withdrawal',
         amount: -Math.abs(amount),
-        description: 'Solicitação de Saque',
+        description: 'Solicitação de Saque (Carteira Digital)',
         status: 'pending'
       }]);
 
@@ -2688,23 +2696,53 @@ export const businessRules = {
 
   getPayableBalances: async () => {
     // 1. Buscar todos os perfis
-    const { data: profiles, error: pError } = await supabase
-      .from('profiles')
-      .select('id, full_name, email, pix_key, bank_name, bank_branch, bank_account, whatsapp, role');
+    const [{ data: profiles, error: pError }, { data: subsData }, { data: ordersData }, { data: transactions, error: tError }] = await Promise.all([
+      supabase
+        .from('profiles')
+        .select('id, full_name, email, pix_key, bank_name, bank_branch, bank_account, whatsapp, role'),
+      supabase
+        .from('subscriptions')
+        .select('profile_id, status, end_date, plan_type'),
+      supabase
+        .from('orders')
+        .select('customer_id, status, created_at, order_date, items')
+        .in('status', ['Pago', 'Pago, Aguardando Retirada', 'Concluído']),
+      supabase
+        .from('transactions')
+        .select('*')
+    ]);
     
     if (pError) throw pError;
-
-    // 2. Buscar todas as transações para calcular saldos de cashback
-    const { data: transactions, error: tError } = await supabase
-      .from('transactions')
-      .select('*');
-    
     if (tError) throw tError;
 
-    // 3. Processar saldos por usuário
-    const payableList = profiles.map(profile => {
-      const userTransactions = transactions.filter(t => t.profile_id === profile.id);
+    const now = new Date();
+
+    // 3. Processar saldos e status de adimplência por usuário
+    const payableList = (profiles || []).map(profile => {
+      const userTransactions = (transactions || []).filter(t => t.profile_id === profile.id);
       
+      const userSubs = (subsData || []).filter(s => s.profile_id === profile.id);
+      const userOrders = (ordersData || []).filter(o => o.customer_id === profile.id);
+
+      const hasActiveSub = userSubs.some(s => s.status === 'active' && new Date(s.end_date) >= now);
+      let hasPaidSubOrder = false;
+      userOrders.forEach(o => {
+        const items = Array.isArray(o.items) ? o.items : [];
+        items.forEach(item => {
+          if (item.is_subscription) {
+            const oDate = new Date(o.order_date || o.created_at);
+            let days = 365;
+            if (item.plan_type === 'mensal') days = 30;
+            else if (item.plan_type === 'trimestral') days = 90;
+            else if (item.plan_type === 'semestral') days = 180;
+            const expDate = new Date(oDate.getTime() + days * 24 * 60 * 60 * 1000);
+            if (expDate >= now) hasPaidSubOrder = true;
+          }
+        });
+      });
+
+      const isEligible = hasActiveSub || hasPaidSubOrder || profile.role === 'regional_reseller';
+
       const monthlyBonus = userTransactions
         .filter(t => t.type === 'commission' && t.description?.includes('Mensal') && (t.status === 'completed' || t.status === 'pago' || t.status === 'pending'))
         .reduce((acc, t) => acc + Number(t.amount || 0), 0);
@@ -2719,7 +2757,7 @@ export const businessRules = {
                 (t.status === 'completed' || t.status === 'pago' || t.status === 'pending'))
         .reduce((acc, t) => acc + Number(t.amount || 0), 0);
 
-      // Subtrair pagamentos já realizados (withdrawals com descrição de pagamento)
+      // Subtrair pagamentos já realizados
       const monthlyPaid = userTransactions
         .filter(t => t.type === 'withdrawal' && t.description?.includes('Pagamento Cashback Mensal') && (t.status === 'completed' || t.status === 'pago'))
         .reduce((acc, t) => acc + Math.abs(Number(t.amount || 0)), 0);
@@ -2728,7 +2766,6 @@ export const businessRules = {
         .filter(t => t.type === 'withdrawal' && t.description?.includes('Pagamento Cashback Anual') && (t.status === 'completed' || t.status === 'pago'))
         .reduce((acc, t) => acc + Math.abs(Number(t.amount || 0)), 0);
 
-      // O total retirado da carteira digital inclui saques (withdrawal) que NÃO são Mensal/Anual
       const totalWithdrawn = userTransactions
         .filter(t => t.type === 'withdrawal' && !t.description?.includes('Mensal') && !t.description?.includes('Anual'))
         .reduce((acc, t) => acc + Math.abs(Number(t.amount || 0)), 0);
@@ -2747,7 +2784,9 @@ export const businessRules = {
         monthlyPending,
         annualPending,
         digitalPending,
-        role: profile.role
+        role: profile.role,
+        isEligible,
+        statusLabel: isEligible ? 'Adimplente / Ativo' : 'Inadimplente'
       };
     }).filter(p => p.monthlyPending > 0 || p.annualPending > 0 || p.digitalPending > 0);
 
@@ -2773,6 +2812,12 @@ export const businessRules = {
   },
 
   processPayout: async (profileId: string, amount: number, type: 'mensal' | 'anual' | 'digital', receiptUrl: string) => {
+    // Validação estrita de adimplência
+    const stats = await businessRules.getAffiliateStats(profileId);
+    if (!stats.isEligible) {
+      throw new Error('Usuário inadimplente (sem plano ativo). Pagamento bloqueado.');
+    }
+
     let displayType = '';
     if (type === 'mensal') displayType = 'Mensal';
     else if (type === 'anual') displayType = 'Anual';

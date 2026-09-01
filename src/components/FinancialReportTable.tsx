@@ -57,7 +57,7 @@ interface FinancialReportTableProps {
   affiliateData?: any[];
   title?: string;
   isAdmin?: boolean;
-  mode?: 'orders' | 'affiliates' | 'merchants';
+  mode?: 'orders' | 'affiliates' | 'merchants' | 'resellers';
   onGeneratePayments?: (selected: FinancialRecord[]) => void;
   hideReceiptButton?: boolean;
   hidePdfButton?: boolean;
@@ -132,7 +132,7 @@ export default function FinancialReportTable({
   const groupedCommissions: GroupedCommission[] = React.useMemo(() => {
     const map = new Map<string, GroupedCommission>();
     orderCommissions.forEach((comm: any) => {
-      const level = Number(comm.level) || 1;
+      const level = comm.level !== undefined && !isNaN(Number(comm.level)) ? Number(comm.level) : 0;
       const isRegional = comm.isRegional || false;
       const affiliateId = comm.affiliate_id || comm.affiliateId || 'unknown';
       const key = `${level}-${affiliateId}-${isRegional ? 'reg' : 'aff'}`;
@@ -490,11 +490,24 @@ export default function FinancialReportTable({
                 </>
               ) : (
                 <>
-                  <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-left">Afiliado / Beneficiário</th>
-                  <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Status do Plano</th>
-                  <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Cashback Mensal <br/><span className="text-[7px] text-emerald-500">(PAGO TODO MÊS)</span></th>
-                  <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Cashback Semanal <br/><span className="text-[7px] text-blue-500">(CARTEIRA DIGITAL)</span></th>
-                  <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Cashback Anual <br/><span className="text-[7px] text-indigo-500">(PAGO 10/DEZ)</span></th>
+                  <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-left">
+                    {mode === 'resellers' ? 'Revendedor Regional' : 'Afiliado / Beneficiário'}
+                  </th>
+                  <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">
+                    {mode === 'resellers' ? 'Status / Polo' : 'Status do Plano'}
+                  </th>
+                  <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">
+                    {mode === 'resellers' ? 'Repasse Mensal' : 'Cashback Mensal'} <br/>
+                    <span className="text-[7px] text-emerald-500">{mode === 'resellers' ? '(2% PIX MENSAL)' : '(PAGO TODO MÊS)'}</span>
+                  </th>
+                  <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">
+                    {mode === 'resellers' ? 'Repasse Semanal' : 'Cashback Semanal'} <br/>
+                    <span className="text-[7px] text-blue-500">{mode === 'resellers' ? '(2% CARTEIRA DIGITAL)' : '(CARTEIRA DIGITAL)'}</span>
+                  </th>
+                  <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">
+                    {mode === 'resellers' ? 'Repasse Anual' : 'Cashback Anual'} <br/>
+                    <span className="text-[7px] text-indigo-500">{mode === 'resellers' ? '(2% PAGO 10/DEZ)' : '(PAGO 10/DEZ)'}</span>
+                  </th>
                   <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right bg-slate-50/50">
                     {hideReceiptButton ? (
                       <>Total Apto <br/><span className="text-[7px] text-emerald-600 font-bold">(LIBERADO PIX)</span></>
@@ -819,6 +832,8 @@ export default function FinancialReportTable({
                                           <div className={`size-8 rounded-lg flex items-center justify-center border shadow-sm text-[10px] font-black shrink-0 ${
                                             (row as any).isRegional 
                                               ? 'text-purple-600 font-bold bg-purple-50 border-purple-100' 
+                                              : row.generation === 0
+                                              ? 'text-amber-600 font-bold bg-amber-50 border-amber-100'
                                               : row.generation === 1
                                               ? 'text-emerald-600 font-bold bg-emerald-50 border-emerald-100'
                                               : 'text-blue-600 font-bold bg-blue-50 border-blue-100'
@@ -831,6 +846,8 @@ export default function FinancialReportTable({
                                                 <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">
                                                   {(row as any).isRegional 
                                                     ? 'Revendedor Regional' 
+                                                    : row.generation === 0
+                                                    ? 'G0 (Titular / Comprador)'
                                                     : row.generation === 1 
                                                     ? 'Geração G1 (Indicador Direto)' 
                                                     : `Geração G${row.generation} (Indicador Indireto)`}

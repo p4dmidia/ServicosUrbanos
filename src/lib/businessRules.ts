@@ -1527,12 +1527,20 @@ export const businessRules = {
     const currentTotalRevenue = currentRevenue?.reduce((acc, o) => acc + Number(o.amount), 0) || 0;
     const lastTotalRevenue = lastRevenue?.reduce((acc, o) => acc + Number(o.amount), 0) || 0;
 
-    const { data: allCommissions } = await supabase.from('transactions').select('amount').eq('type', 'commission');
+    const { data: allCommissions } = await supabase.from('transactions').select('amount, description').eq('type', 'commission');
     const currentTotalCommissions = currentCommissions
       ?.filter(t => !t.description?.includes('Estorno') && ordersMap.get(t.order_id) !== 'Cancelado')
       ?.reduce((acc, t) => acc + Number(t.amount), 0) || 0;
     const lastTotalCommissions = lastCommissions
       ?.filter(t => !t.description?.includes('Estorno') && ordersMap.get(t.order_id) !== 'Cancelado')
+      ?.reduce((acc, t) => acc + Number(t.amount), 0) || 0;
+
+    const currentNetworkCommissions = currentCommissions
+      ?.filter(t => !t.description?.includes('Estorno') && !t.description?.includes('Revendedor') && !t.description?.includes('Regional') && ordersMap.get(t.order_id) !== 'Cancelado')
+      ?.reduce((acc, t) => acc + Number(t.amount), 0) || 0;
+
+    const currentResellerCommissions = currentCommissions
+      ?.filter(t => !t.description?.includes('Estorno') && (t.description?.includes('Revendedor') || t.description?.includes('Regional')) && ordersMap.get(t.order_id) !== 'Cancelado')
       ?.reduce((acc, t) => acc + Number(t.amount), 0) || 0;
 
     // Cálculos de Tendência
@@ -1556,6 +1564,8 @@ export const businessRules = {
       branchTrend: calculateTrend(branchesCurrent, branchesLast),
       commissionTotal: currentTotalCommissions,
       commissionTrend: calculateTrend(currentTotalCommissions, lastTotalCommissions),
+      networkCommissions: currentNetworkCommissions,
+      resellerCommissions: currentResellerCommissions,
       blockedUserCount: blockedUserCount || 0,
       pendingWithdrawals: pendingWithdrawalCount || 0,
       resellerCount: resellerCount || 0,
@@ -2024,7 +2034,11 @@ export const businessRules = {
     };
   },
 
-  getAffiliateCashbackReport: async (startDate: string, endDate: string) => {
+  getAffiliateCashbackReport: async (
+    startDate: string, 
+    endDate: string, 
+    filterCategory: 'all' | 'network' | 'reseller' = 'all'
+  ) => {
     try {
       // 1. Busca as comissões e saques/pagamentos do período
       const { data: transactions, error: txError } = await supabase
@@ -2038,8 +2052,19 @@ export const businessRules = {
       if (txError) throw txError;
       if (!transactions || transactions.length === 0) return [];
 
+      // Filtra transações conforme a categoria solicitada
+      const filteredTransactions = transactions.filter(t => {
+        const desc = t.description || '';
+        const isResellerTx = desc.includes('Revendedor') || desc.includes('Regional');
+        if (filterCategory === 'network') return !isResellerTx;
+        if (filterCategory === 'reseller') return isResellerTx;
+        return true;
+      });
+
+      if (filteredTransactions.length === 0) return [];
+
       // 2. Coleta IDs únicos de afiliados
-      const affiliateIds = [...new Set(transactions.map(t => t.profile_id).filter(Boolean))];
+      const affiliateIds = [...new Set(filteredTransactions.map(t => t.profile_id).filter(Boolean))];
 
       // 3. Busca perfis, assinaturas e pedidos pagos para apurar status ativo/inativo
       const [{ data: profiles, error: profError }, { data: subsData }, { data: ordersData }] = await Promise.all([
@@ -2103,7 +2128,7 @@ export const businessRules = {
       // 4. Agrupa e une os dados
       const report: Record<string, any> = {};
 
-      transactions.forEach(t => {
+      filteredTransactions.forEach(t => {
         const affiliateId = t.profile_id;
         if (!affiliateId) return;
 
@@ -2135,14 +2160,12 @@ export const businessRules = {
             report[affiliateId].mensal += amount;
           } else if (desc.includes('Anual')) {
             report[affiliateId].anual += amount;
-          } else if (desc.includes('Digital') || desc.includes('(CD)')) {
+          } else if (desc.includes('Digital') || desc.includes('Semanal') || desc.includes('(CD)')) {
             report[affiliateId].digital += amount;
           } else {
             report[affiliateId].digital += amount;
           }
         } else if (t.type === 'withdrawal') {
-          // Os saques/pagamentos são registrados com valores negativos na tabela transactions
-          // e devem ser deduzidos de seus respectivos saldos.
           if (desc.includes('Mensal')) {
             report[affiliateId].mensal += amount; // soma valor negativo (subtrai)
           } else if (desc.includes('Anual')) {
@@ -3320,14 +3343,13 @@ export const businessRules = {
         const desc = c.description || '';
         const isRegional = desc.includes('Regional');
         
-        let level = Number(c.level) || 1;
+        let level = Number(c.level) || 0;
         if (isRegional) {
           level = 99;
         } else {
           const gMatch = desc.match(/G(\d+)/i);
           if (gMatch) {
             level = parseInt(gMatch[1], 10);
-            if (level === 0) level = 1;
           } else {
             const levelMatch = desc.match(/Nível\s+(\d+)/i);
             if (levelMatch) {

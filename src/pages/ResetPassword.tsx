@@ -8,8 +8,7 @@ import {
     Eye,
     EyeOff
 } from 'lucide-react';
-import { motion } from 'motion/react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import Header from '../components/Header';
 import { supabase } from '../lib/supabase';
 import { toast } from 'react-hot-toast';

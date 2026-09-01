@@ -1,70 +1,40 @@
 -- =========================================================================
--- MIGRATION: COMISSIONAMENTO DINÂMICO MMN (G0 TITULAR + REDE + REVENDEDOR)
--- OBJETIVO: 
---   1. Lê todas as configurações definidas pelo Administrador em:
---      - public.mmn_config (profundidade, tipo percentual/fixo, comissões regionais)
---      - public.mmn_levels (valores específicos configurados para G0, G1, G2...)
---   2. Credita a comissão de G0 (Nível 0) para o PRÓPRIO COMPRADOR (Titular)
---      dividida na Regra Tripla (Semanal, Mensal, Anual).
---   3. Distribui as comissões de Rede para os Uplines (G1, G2...) conforme a profundidade.
---   4. Credita a comissão de Revendedor (6%) DIRETO ao Revendedor do fechamento (reseller_id).
+-- CONFIGURAÇÃO DE REGRAS MMN: G0 AO G2 + REGIONAL (DIVISÃO TRIPLA 2% + 2% + 2%)
+-- 
+-- DEFINIÇÃO DAS REGRAS:
+--   - G0 (Titular / Comprador): 2% Semanal + 2% Mensal + 2% Anual (6% Total)
+--   - G1 (Indicador Direto):   2% Semanal + 2% Mensal + 2% Anual (6% Total)
+--   - G2 (Segundo Nível):      2% Semanal + 2% Mensal + 2% Anual (6% Total)
+--   - REGIONAL (Revendedor):   2% Semanal + 2% Mensal + 2% Anual (6% Total)
 --
--- COMO EXECUTAR:
---   Abra o Supabase Dashboard > SQL Editor > Cole e execute este script.
+-- COMO EXECUTAR: Supabase Dashboard > SQL Editor > Run
 -- =========================================================================
 
--- 1. ADICIONAR AS COLUNAS reseller_id E ATUALIZAR CONSTRAINT DE STATUS
-ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS reseller_id UUID REFERENCES public.profiles(id);
-ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS reseller_id UUID REFERENCES public.profiles(id);
+BEGIN;
 
--- Atualizar restrição de status para aceitar todos os status válidos
-ALTER TABLE public.orders DROP CONSTRAINT IF EXISTS orders_status_check;
-ALTER TABLE public.orders ADD CONSTRAINT orders_status_check 
-  CHECK (status IN ('Aguardando Pagamento', 'Pendente', 'Processando', 'Pago', 'Pago, Aguardando Retirada', 'Concluído', 'Cancelado', 'Entregue'));
+-- 1. Atualizar Parâmetros Globais de MMN e Revendedor Regional
+UPDATE public.mmn_config
+SET 
+    depth = 3,
+    payment_type = 'percent',
+    cashback_digital = 2.00, -- Semanal (Carteira Digital)
+    cashback_mensal = 2.00,  -- Mensal (PIX)
+    cashback_anual = 2.00,   -- Anual (10/Dez)
+    commission_regional_semanal = 2.00,
+    commission_regional_mensal = 2.00,
+    commission_regional_anual = 2.00
+WHERE id = 1;
 
--- 2. BACKFILL DE CADASTROS ATUAIS (Associar ao Revendedor da Linha Ascendente)
-WITH RECURSIVE referral_tree AS (
-    SELECT 
-        id AS profile_id, 
-        referred_by, 
-        role,
-        CASE WHEN role = 'regional_reseller' THEN id ELSE NULL END AS found_reseller,
-        1 AS depth
-    FROM public.profiles
-    
-    UNION ALL
-    
-    SELECT 
-        t.profile_id,
-        p.referred_by,
-        p.role,
-        CASE 
-            WHEN t.found_reseller IS NOT NULL THEN t.found_reseller
-            WHEN p.role = 'regional_reseller' THEN p.id 
-            ELSE NULL 
-        END AS found_reseller,
-        t.depth + 1
-    FROM referral_tree t
-    JOIN public.profiles p ON t.referred_by = p.id
-    WHERE t.found_reseller IS NULL AND t.depth < 10
-)
-UPDATE public.profiles p
-SET reseller_id = sub.found_reseller
-FROM (
-    SELECT DISTINCT ON (profile_id) profile_id, found_reseller
-    FROM referral_tree
-    WHERE found_reseller IS NOT NULL
-    ORDER BY profile_id, depth ASC
-) sub
-WHERE p.id = sub.profile_id AND p.reseller_id IS NULL;
+-- 2. Atualizar Níveis de Comissionamento MMN (G0, G1, G2 a 6.00% cada)
+INSERT INTO public.mmn_levels (level, value)
+VALUES 
+    (1, 6.00), -- Nível 1 = G0 (Titular): 6% Total (2% Semanal + 2% Mensal + 2% Anual)
+    (2, 6.00), -- Nível 2 = G1 (Upline 1): 6% Total (2% Semanal + 2% Mensal + 2% Anual)
+    (3, 6.00)  -- Nível 3 = G2 (Upline 2): 6% Total (2% Semanal + 2% Mensal + 2% Anual)
+ON CONFLICT (level) 
+DO UPDATE SET value = EXCLUDED.value;
 
--- Atualizar orders existentes com o reseller_id do comprador
-UPDATE public.orders o
-SET reseller_id = p.reseller_id
-FROM public.profiles p
-WHERE o.customer_id = p.id AND o.reseller_id IS NULL;
-
--- 3. TRIGGER DINÂMICO: handle_order_payment
+-- 3. Atualizar a Função de Distribuição de Comissões (handle_order_payment)
 CREATE OR REPLACE FUNCTION public.handle_order_payment()
 RETURNS TRIGGER AS $$
 DECLARE
@@ -74,7 +44,6 @@ DECLARE
     v_reg_mensal NUMERIC := 2.00;
     v_reg_anual NUMERIC := 2.00;
     
-    -- Valores calculados por nível
     v_level_val NUMERIC := 0;
     v_level_semanal NUMERIC := 0;
     v_level_mensal NUMERIC := 0;
@@ -86,14 +55,14 @@ DECLARE
     v_reseller_id UUID := NULL;
     v_current_id UUID := NEW.customer_id;
 BEGIN
-    -- [CONDIÇÃO DE DISPARO]
+    -- [CONDIÇÃO DE DISPARO: Pedido Pago ou Concluído]
     IF (
         (NEW.status IN ('Pago', 'Pago, Aguardando Retirada', 'Concluído')) 
         AND 
         (OLD.status IS NULL OR OLD.status NOT IN ('Pago', 'Pago, Aguardando Retirada', 'Concluído'))
     ) THEN
         
-        -- [TRAVA DE SEGURANÇA CONTRA DUPLICIDADE]
+        -- Evita duplicidade de comissões
         IF EXISTS (
             SELECT 1 FROM public.transactions 
             WHERE (description LIKE '%Pedido #' || NEW.id || '%' OR order_id = NEW.id)
@@ -102,9 +71,7 @@ BEGIN
             RETURN NEW;
         END IF;
 
-        -- ==========================================
-        -- 1. CARREGAR PARÂMETROS CONFIGURADOS NO ADMIN (mmn_config)
-        -- ==========================================
+        -- Carregar parâmetros de mmn_config
         SELECT 
             COALESCE(depth, 3),
             COALESCE(payment_type, 'percent'),
@@ -120,9 +87,7 @@ BEGIN
         FROM public.mmn_config
         WHERE id = 1;
 
-        -- ==========================================
-        -- 2. ATIVAR ASSINATURA AUTOMATICAMENTE
-        -- ==========================================
+        -- Ativação de Assinatura se contiver item de plano
         IF NEW.items IS NOT NULL THEN
             DECLARE
                 item jsonb;
@@ -158,10 +123,10 @@ BEGIN
             END;
         END IF;
 
-        -- ==========================================
-        -- 3. DISTRIBUIR COMISSÃO G0 (TITULAR / PRÓPRIO COMPRADOR)
-        -- Lê o valor configurado para level = 1 (G0) em mmn_levels (Padrão 6% = 2% Semanal + 2% Mensal + 2% Anual)
-        -- ==========================================
+        -- ----------------------------------------------------
+        -- A. COMISSÃO G0 (TITULAR / PRÓPRIO COMPRADOR)
+        -- 2% Semanal + 2% Mensal + 2% Anual (6% Total)
+        -- ----------------------------------------------------
         SELECT COALESCE(value, 6.00) INTO v_level_val 
         FROM public.mmn_levels 
         WHERE level = 1;
@@ -170,35 +135,31 @@ BEGIN
             v_level_val := 6.00;
         END IF;
 
-        -- Calcula as 3 partes (Semanal, Mensal, Anual)
         IF v_payment_type = 'percent' THEN
-            -- Ex: 6% total dividido em 3 partes = exatamente 2.00% cada
             v_level_semanal := ROUND(v_amount * (v_level_val / 3.0 / 100.0), 2);
             v_level_mensal := ROUND(v_amount * (v_level_val / 3.0 / 100.0), 2);
             v_level_anual := ROUND(v_amount * (v_level_val / 3.0 / 100.0), 2);
         ELSE
-            -- Valor fixo R$
             v_level_semanal := ROUND(v_level_val / 3.0, 2);
             v_level_mensal := ROUND(v_level_val / 3.0, 2);
             v_level_anual := ROUND(v_level_val / 3.0, 2);
         END IF;
 
-        -- Credita para o Titular (NEW.customer_id)
         INSERT INTO public.transactions (profile_id, type, description, amount, status, order_id)
         VALUES 
         (NEW.customer_id, 'commission', 'Comissão Semanal G0 (Titular) - Pedido #' || NEW.id, v_level_semanal, 'pending', NEW.id),
         (NEW.customer_id, 'commission', 'Comissão Mensal G0 (Titular) - Pedido #' || NEW.id, v_level_mensal, 'pending', NEW.id),
         (NEW.customer_id, 'commission', 'Comissão Anual G0 (Titular) - Pedido #' || NEW.id, v_level_anual, 'pending', NEW.id);
 
-        -- ==========================================
-        -- 4. DISTRIBUIR COMISSÕES DE REDE PARA OS UPLINES (G1, G2... até v_depth)
-        -- ==========================================
+        -- ----------------------------------------------------
+        -- B. COMISSÕES DE REDE PARA OS UPLINES (G1 e G2)
+        -- 2% Semanal + 2% Mensal + 2% Anual (6% Total por nível)
+        -- ----------------------------------------------------
         v_current_id := NEW.customer_id;
         SELECT referred_by INTO v_upline_id FROM public.profiles WHERE id = v_current_id;
-        v_current_level := 1; -- Começa no G1 (indicador direto)
+        v_current_level := 1; -- G1
 
         WHILE v_upline_id IS NOT NULL AND v_current_level < v_depth LOOP
-            -- Busca o valor do nível em mmn_levels (level = v_current_level + 1)
             SELECT COALESCE(value, 6.00) INTO v_level_val 
             FROM public.mmn_levels 
             WHERE level = (v_current_level + 1);
@@ -217,7 +178,6 @@ BEGIN
                 v_level_anual := ROUND(v_level_val / 3.0, 2);
             END IF;
 
-            -- Credita para o Upline G1, G2...
             INSERT INTO public.transactions (profile_id, type, description, amount, status, order_id)
             VALUES 
             (v_upline_id, 'commission', 'Comissão Semanal G' || v_current_level || ' - Pedido #' || NEW.id, v_level_semanal, 'pending', NEW.id),
@@ -229,9 +189,10 @@ BEGIN
             v_current_level := v_current_level + 1;
         END LOOP;
 
-        -- ==========================================
-        -- 5. IDENTIFICAR E DISTRIBUIR COMISSÃO DE REVENDEDOR (reseller_id)
-        -- ==========================================
+        -- ----------------------------------------------------
+        -- C. COMISSÃO DE REVENDEDOR REGIONAL (reseller_id)
+        -- 2% Semanal + 2% Mensal + 2% Anual (6% Total)
+        -- ----------------------------------------------------
         v_reseller_id := NEW.reseller_id;
         
         IF v_reseller_id IS NULL THEN
@@ -268,3 +229,7 @@ CREATE TRIGGER trg_handle_order_payment
 AFTER INSERT OR UPDATE OF status ON public.orders
 FOR EACH ROW
 EXECUTE FUNCTION public.handle_order_payment();
+
+NOTIFY pgrst, 'reload schema';
+
+COMMIT;

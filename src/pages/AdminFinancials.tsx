@@ -37,8 +37,8 @@ export default function AdminFinancials() {
   const [selectedForPayment, setSelectedForPayment] = useState<FinancialRecord[]>([]);
   const [tableRefreshKey, setTableRefreshKey] = useState(0);
   
-  // View State - 100% Digital: Afiliados/MMN, Vendas Digitais, Seguro MBM, Módulo Fiscal
-  const [viewType, setViewType] = useState<'affiliates' | 'orders' | 'insurance' | 'fiscal'>('affiliates');
+  // View State - 100% Digital: Rede MMN, Revendedores Regionais, Vendas Digitais, Seguro MBM, Módulo Fiscal
+  const [viewType, setViewType] = useState<'network' | 'resellers' | 'orders' | 'insurance' | 'fiscal'>('network');
   const [fiscalRecords, setFiscalRecords] = useState<any[]>([]);
   const [loadingFiscal, setLoadingFiscal] = useState(false);
 
@@ -46,7 +46,8 @@ export default function AdminFinancials() {
     start: new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0],
     end: new Date().toISOString().split('T')[0]
   });
-  const [affiliateReport, setAffiliateReport] = useState<any[]>([]);
+  const [networkReport, setNetworkReport] = useState<any[]>([]);
+  const [resellerReport, setResellerReport] = useState<any[]>([]);
 
   useEffect(() => {
     if (viewType === 'fiscal') {
@@ -57,10 +58,11 @@ export default function AdminFinancials() {
   async function loadAdminData(silent = false) {
     try {
       if (!silent) setLoading(true);
-      const [ordersData, settingsData, affiliateData] = await Promise.all([
+      const [ordersData, settingsData, networkData, resellerData] = await Promise.all([
         businessRules.getAllOrders(),
         supabase.from('system_settings').select('key, value').in('key', ['matrix_pix_key', 'matrix_cpf']),
-        businessRules.getAffiliateCashbackReport(dateRange.start, `${dateRange.end}T23:59:59`)
+        businessRules.getAffiliateCashbackReport(dateRange.start, `${dateRange.end}T23:59:59`, 'network'),
+        businessRules.getAffiliateCashbackReport(dateRange.start, `${dateRange.end}T23:59:59`, 'reseller')
       ]);
 
       if (settingsData.data) {
@@ -71,7 +73,8 @@ export default function AdminFinancials() {
       }
 
       setOrders(ordersData || []);
-      setAffiliateReport(affiliateData || []);
+      setNetworkReport(networkData || []);
+      setResellerReport(resellerData || []);
     } catch (error) {
       console.error('Erro ao carregar dados financeiros admin:', error);
       toast.error('Erro ao carregar dados financeiros');
@@ -111,16 +114,27 @@ export default function AdminFinancials() {
       });
   }, [orders]);
 
-  // Filtro para mostrar apenas afiliados/regionais com saldo pendente e define a data prevista de pagamento
-  const filteredAffiliateData = useMemo(() => {
+  // Filtro de Comissões de Rede MMN (G0 a G2)
+  const filteredNetworkData = useMemo(() => {
     const todayStr = new Date().toLocaleDateString('pt-BR');
-    return affiliateReport
+    return networkReport
       .filter(r => (r.mensal + r.digital + r.anual) > 0.01)
       .map(r => ({
         ...r,
         payDate: todayStr
       }));
-  }, [affiliateReport]);
+  }, [networkReport]);
+
+  // Filtro de Repasses de Revendedores Regionais (6% Regional)
+  const filteredResellerData = useMemo(() => {
+    const todayStr = new Date().toLocaleDateString('pt-BR');
+    return resellerReport
+      .filter(r => (r.mensal + r.digital + r.anual) > 0.01)
+      .map(r => ({
+        ...r,
+        payDate: todayStr
+      }));
+  }, [resellerReport]);
 
   // Soma do faturamento total em vendas digitais no período
   const totalFaturamentoDigital = useMemo(() => {
@@ -129,36 +143,44 @@ export default function AdminFinancials() {
       .reduce((a, b) => a + b.amount, 0);
   }, [reportData]);
 
-  // Soma dos cashbacks mensais de afiliados ATIVOS a pagar hoje (mensal de todos os afiliados ativos pendentes)
-  const totalAfiliadosHoje = useMemo(() => {
-    return filteredAffiliateData
+  // Total de Cashback Mensal da Rede MMN a pagar hoje
+  const totalNetworkHoje = useMemo(() => {
+    return filteredNetworkData
       .filter(r => r.is_active)
       .reduce((a, b) => a + (b.mensal || 0), 0);
-  }, [filteredAffiliateData]);
+  }, [filteredNetworkData]);
+
+  // Total de Repasses Mensais dos Revendedores Regionais a pagar hoje
+  const totalResellersHoje = useMemo(() => {
+    return filteredResellerData
+      .filter(r => r.is_active)
+      .reduce((a, b) => a + (b.mensal || 0), 0);
+  }, [filteredResellerData]);
 
   const handleGeneratePayments = (selectedItems: any[]) => {
     if (selectedItems.length === 0) {
-      toast.error('Nenhum afiliado selecionado para pagamento.');
+      toast.error('Nenhum beneficiário selecionado para pagamento.');
       return;
     }
 
-    // Regra fundamental: Afiliado INATIVO NÃO pode receber comissões nem gerar QR Code PIX
     const inactiveUsers = selectedItems.filter(r => !r.is_active);
     if (inactiveUsers.length > 0) {
-      toast.error(`O afiliado "${inactiveUsers[0].name}" está INATIVO e não está apto a receber comissões.`);
+      toast.error(`O participante "${inactiveUsers[0].name}" está INATIVO e não está apto a receber pagamentos.`);
       return;
     }
 
-    // Transforma para o formato que o PaymentModal espera (liquidação estritamente do Cashback Mensal apto)
+    const isResellerBatch = viewType === 'resellers';
+
+    // Transforma para o formato que o PaymentModal espera
     const transformed = selectedItems.map(r => ({
-      orderId: `CASH-${r.id.substring(0, 5)}`,
-      buyerName: 'Rede MMN',
+      orderId: isResellerBatch ? `RES-${r.id.substring(0, 5)}` : `CASH-${r.id.substring(0, 5)}`,
+      buyerName: isResellerBatch ? 'Vendas da Região / Franquia' : 'Rede MMN',
       payeeName: r.name,
       orderStatus: 'Concluído',
       deliveryStatus: 'Concluído',
       saleDate: new Date().toLocaleDateString('pt-BR'),
       amount: r.mensal,
-      repasse: r.mensal, // Liquida estritamente o valor mensal apto
+      repasse: r.mensal,
       payDate: new Date().toLocaleDateString('pt-BR'),
       payeeId: r.id,
       payeePixKey: r.pix_key,
@@ -167,10 +189,14 @@ export default function AdminFinancials() {
       paymentMethod: 'PIX',
       is_active: r.is_active,
       plan_name: r.plan_name,
-      items: [
-        { name: 'Cashback Mensal (Apto a Receber)', price: r.mensal },
-        { name: 'Cashback Semanal (Carteira Digital)', price: r.digital },
-        { name: 'Cashback Anual (Bônus 10/Dez)', price: r.anual }
+      items: isResellerBatch ? [
+        { name: 'Repasse Revendedor Mensal (Apto a Receber)', price: r.mensal },
+        { name: 'Repasse Revendedor Semanal (Carteira Digital)', price: r.digital },
+        { name: 'Repasse Revendedor Anual (Bônus 10/Dez)', price: r.anual }
+      ] : [
+        { name: 'Cashback Mensal Rede (Apto a Receber)', price: r.mensal },
+        { name: 'Cashback Semanal Rede (Carteira Digital)', price: r.digital },
+        { name: 'Cashback Anual Rede (Bônus 10/Dez)', price: r.anual }
       ]
     }));
     
@@ -180,6 +206,8 @@ export default function AdminFinancials() {
 
   const handleConfirmPayment = async (payeeGroup: any) => {
     try {
+      const isResellerPayment = payeeGroup.orders[0]?.orderId?.startsWith('RES-') || viewType === 'resellers';
+
       // 1. Registramos o histórico na tabela de relatórios
       await businessRules.registerAffiliatePayout({
         profile_id: payeeGroup.payeeId,
@@ -190,14 +218,18 @@ export default function AdminFinancials() {
         pix_key: payeeGroup.payeePixKey
       });
 
-      // 2. Registramos uma transação de saque/saída na tabela transactions para abater do saldo mensal
+      // 2. Registramos a saída financeira com a devida identificação (Rede vs Revendedor)
+      const txDesc = isResellerPayment
+        ? `Pagamento Repasse Revendedor Mensal - Ref RES-${payeeGroup.payeeId.substring(0, 5)}`
+        : `Pagamento Cashback Mensal - Ref CASH-${payeeGroup.payeeId.substring(0, 5)}`;
+
       const { error: txInsertError } = await supabase
         .from('transactions')
         .insert([{
           profile_id: payeeGroup.payeeId,
           type: 'withdrawal',
           amount: -Math.abs(payeeGroup.totalAmount),
-          description: `Pagamento Cashback Mensal - Ref CASH-${payeeGroup.payeeId.substring(0, 5)}`,
+          description: txDesc,
           status: 'completed'
         }]);
 
@@ -206,13 +238,15 @@ export default function AdminFinancials() {
       // 3. Recarrega os dados silenciosamente
       await loadAdminData(true);
 
-      // Enviar notificação WhatsApp para afiliado (Cashback Mensal)
+      // Enviar notificação WhatsApp
       if (payeeGroup.payeeWhatsapp && payeeGroup.payeeWhatsapp.trim() !== '') {
         try {
-          const msg = `Olá! Seu cashback mensal no valor de R$ ${payeeGroup.totalAmount.toFixed(2).replace('.', ',')} foi pago com sucesso em sua chave PIX cadastrada.`;
+          const msg = isResellerPayment
+            ? `Olá! Seu repasse regional no valor de R$ ${payeeGroup.totalAmount.toFixed(2).replace('.', ',')} foi pago com sucesso em sua chave PIX cadastrada.`
+            : `Olá! Seu cashback mensal no valor de R$ ${payeeGroup.totalAmount.toFixed(2).replace('.', ',')} foi pago com sucesso em sua chave PIX cadastrada.`;
           await businessRules.sendTestWhatsAppMessage(payeeGroup.payeeWhatsapp, msg);
         } catch (whatsappErr) {
-          console.error('Erro ao enviar notificação WhatsApp para afiliado:', whatsappErr);
+          console.error('Erro ao enviar notificação WhatsApp:', whatsappErr);
         }
       }
 
@@ -223,7 +257,11 @@ export default function AdminFinancials() {
         if (nextList.length === 0) {
           setIsPaymentModalOpen(false);
           setTableRefreshKey(prevKey => prevKey + 1);
-          toast.success('Todos os pagamentos de cashback mensal foram finalizados com sucesso!');
+          toast.success(
+            isResellerPayment 
+              ? 'Todos os repasses dos revendedores foram finalizados com sucesso!' 
+              : 'Todos os pagamentos de cashback da rede foram finalizados com sucesso!'
+          );
         } else {
           toast.success(`Pagamento de R$ ${payeeGroup.totalAmount.toFixed(2)} para ${payeeGroup.payeeName} liquidado.`);
         }
@@ -549,18 +587,26 @@ export default function AdminFinancials() {
         
         {/* Toggle de Visualização e Filtros */}
         <div className="flex flex-col md:flex-row items-center justify-between gap-6 bg-white p-6 rounded-[2.5rem] shadow-xl border border-slate-100">
-          <div className="flex bg-slate-100 p-1.5 rounded-2xl w-full md:w-auto">
+          <div className="flex flex-wrap bg-slate-100 p-1.5 rounded-2xl w-full xl:w-auto gap-1">
             <button
-              onClick={() => setViewType('affiliates')}
-              className={`flex-1 md:flex-none px-8 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
-                viewType === 'affiliates' ? 'bg-white text-indigo-600 shadow-md' : 'text-slate-400 hover:text-slate-600'
+              onClick={() => setViewType('network')}
+              className={`flex-1 md:flex-none px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
+                viewType === 'network' ? 'bg-white text-indigo-600 shadow-md' : 'text-slate-400 hover:text-slate-600'
               }`}
             >
-              Comissões & Cashback MMN
+              Comissões de Rede MMN
+            </button>
+            <button
+              onClick={() => setViewType('resellers')}
+              className={`flex-1 md:flex-none px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
+                viewType === 'resellers' ? 'bg-white text-indigo-600 shadow-md' : 'text-slate-400 hover:text-slate-600'
+              }`}
+            >
+              Repasses Revendedor Regional
             </button>
             <button
               onClick={() => setViewType('orders')}
-              className={`flex-1 md:flex-none px-8 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
+              className={`flex-1 md:flex-none px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
                 viewType === 'orders' ? 'bg-white text-indigo-600 shadow-md' : 'text-slate-400 hover:text-slate-600'
               }`}
             >
@@ -568,7 +614,7 @@ export default function AdminFinancials() {
             </button>
             <button
               onClick={() => setViewType('insurance')}
-              className={`flex-1 md:flex-none px-8 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
+              className={`flex-1 md:flex-none px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
                 viewType === 'insurance' ? 'bg-white text-indigo-600 shadow-md' : 'text-slate-400 hover:text-slate-600'
               }`}
             >
@@ -576,7 +622,7 @@ export default function AdminFinancials() {
             </button>
             <button
               onClick={() => setViewType('fiscal')}
-              className={`flex-1 md:flex-none px-8 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
+              className={`flex-1 md:flex-none px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
                 viewType === 'fiscal' ? 'bg-white text-indigo-600 shadow-md' : 'text-slate-400 hover:text-slate-600'
               }`}
             >
@@ -619,22 +665,23 @@ export default function AdminFinancials() {
         
         {/* Banner de Regras 100% Digital MMN */}
         <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-           <div className="xl:col-span-2 bg-indigo-50/50 border border-indigo-200/50 p-8 rounded-[2.5rem] flex gap-6 items-start shadow-sm">
+           <div className="xl:col-span-2 bg-white border border-slate-100 p-8 rounded-[2.5rem] flex gap-6 items-start shadow-xl">
               <div className="size-14 bg-indigo-600 rounded-2xl flex items-center justify-center text-white shadow-lg shadow-indigo-600/20 shrink-0">
                  <ShieldCheck size={32} />
               </div>
-              <div className="space-y-4">
+              <div className="space-y-4 flex-1">
                  <h4 className="text-lg font-black text-midnight italic uppercase tracking-tighter">Regras de Comissionamento MMN 100% Digital</h4>
-                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div>
-                       <p className="text-[10px] text-indigo-700 font-black uppercase tracking-widest mb-1">Divisão Tripla (6% Total)</p>
-                       <p className="text-xs text-slate-600 leading-relaxed font-medium">
-                          Cada nível de indicação (G1, G2 e Regional) recebe 2% Semanal (Carteira Digital) + 2% Mensal (PIX) + 2% Anual (10/Dez).
+                       <p className="text-[10px] text-indigo-600 font-black uppercase tracking-widest mb-1.5">Divisão Tripla (G0 a G2 + Regional)</p>
+                       <p className="text-xs text-slate-700 leading-relaxed font-medium">
+                          <strong className="text-midnight font-bold">G0 ao G2 (Titular, G1 e G2):</strong> 2% Semanal (Carteira Digital) + 2% Mensal (PIX) + 2% Anual (10/Dez).<br />
+                          <strong className="text-midnight font-bold">Revendedor Regional:</strong> 2% Semanal + 2% Mensal + 2% Anual (6% Total).
                        </p>
                     </div>
-                    <div className="bg-white/80 p-4 rounded-2xl border border-indigo-100">
-                       <p className="text-[10px] text-indigo-700 font-black uppercase tracking-widest mb-1">Liquidação Mensal Apta</p>
-                        <p className="text-[10px] text-slate-700 font-bold leading-tight uppercase">
+                    <div className="bg-slate-50 p-5 rounded-2xl border border-slate-100 flex flex-col justify-center">
+                       <p className="text-[10px] text-indigo-600 font-black uppercase tracking-widest mb-1.5">Liquidação Mensal Apta</p>
+                        <p className="text-[10px] text-slate-700 font-bold leading-normal uppercase">
                           O botão "Gerar Pagamentos" liquida exclusivamente o Cashback Mensal acumulado no período.
                         </p>
                     </div>
@@ -642,24 +689,38 @@ export default function AdminFinancials() {
               </div>
            </div>
 
-            <div className="bg-indigo-600 p-8 rounded-[2.5rem] shadow-2xl shadow-indigo-600/20 group relative overflow-hidden flex flex-col justify-between">
-                <div className="absolute top-0 right-0 p-6 opacity-10">
-                   <QrCode size={100} className="text-white" />
-                </div>
-                <div>
-                  <p className="text-[10px] text-indigo-100 font-bold uppercase tracking-widest mb-1">
-                    {viewType === 'orders' ? 'Total Faturamento Digital (Mês)' : 'Total Cashback Mensal a Pagar Hoje'}
-                  </p>
-                  <h3 className="text-4xl font-black text-white tracking-tighter italic leading-none">
-                     R$ {(viewType === 'orders' ? totalFaturamentoDigital : totalAfiliadosHoje).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                  </h3>
-                </div>
-                <div className="mt-4">
-                   <span className="text-[9px] text-indigo-100 font-black uppercase tracking-[0.2em] border border-white/20 px-4 py-2 rounded-full backdrop-blur-sm">
-                     {viewType === 'orders' ? 'Plataforma 100% Digital' : 'Lote PIX Mensal'}
-                   </span>
-                </div>
-            </div>
+           <div className="bg-indigo-600 p-8 rounded-[2.5rem] shadow-2xl shadow-indigo-600/20 group relative overflow-hidden flex flex-col justify-between">
+              <div className="absolute top-0 right-0 p-6 opacity-10">
+                 <QrCode size={100} className="text-white" />
+              </div>
+              <div>
+                <p className="text-[10px] text-indigo-100 font-bold uppercase tracking-widest mb-1">
+                  {viewType === 'orders' 
+                    ? 'Total Faturamento Digital (Mês)' 
+                    : viewType === 'resellers'
+                    ? 'Total Repasses Revendedores a Pagar'
+                    : 'Total Cashback Mensal Rede a Pagar'}
+                </p>
+                <h3 className="text-4xl font-black text-white tracking-tighter italic leading-none">
+                   R$ {(
+                     viewType === 'orders' 
+                       ? totalFaturamentoDigital 
+                       : viewType === 'resellers'
+                       ? totalResellersHoje
+                       : totalNetworkHoje
+                   ).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                </h3>
+              </div>
+              <div className="mt-4">
+                 <span className="text-[9px] text-indigo-100 font-black uppercase tracking-[0.2em] border border-white/20 px-4 py-2 rounded-full backdrop-blur-sm">
+                   {viewType === 'orders' 
+                     ? 'Plataforma 100% Digital' 
+                     : viewType === 'resellers' 
+                     ? 'Lote PIX Revendedor' 
+                     : 'Lote PIX Rede MMN'}
+                 </span>
+              </div>
+           </div>
         </div>
 
         {/* Tabela de Relatórios, Seguro MBM ou Módulo Fiscal */}
@@ -824,11 +885,31 @@ export default function AdminFinancials() {
           <div key={`${viewType}-${tableRefreshKey}`} className="bg-white rounded-[3rem] overflow-hidden shadow-2xl border border-slate-100">
               <FinancialReportTable 
                 data={viewType === 'orders' ? reportData : []} 
-                affiliateData={viewType === 'affiliates' ? filteredAffiliateData : []}
-                title={viewType === 'orders' ? "Auditoria de Vendas & Adesões Digitais" : "Relatório de Comissões & Cashback MMN"} 
+                affiliateData={
+                  viewType === 'resellers' 
+                    ? filteredResellerData 
+                    : viewType === 'network' 
+                    ? filteredNetworkData 
+                    : []
+                }
+                title={
+                  viewType === 'orders' 
+                    ? "Auditoria de Vendas & Adesões Digitais" 
+                    : viewType === 'resellers'
+                    ? "Relatório de Repasses dos Revendedores Regionais"
+                    : "Relatório de Comissões & Cashback da Rede MMN"
+                } 
                 isAdmin={true} 
-                mode={viewType === 'orders' ? 'orders' : 'affiliates'}
-                onGeneratePayments={viewType === 'affiliates' ? handleGeneratePayments : undefined}
+                mode={
+                  viewType === 'orders' 
+                    ? 'orders' 
+                    : viewType === 'resellers'
+                    ? 'resellers'
+                    : 'affiliates'
+                }
+                onGeneratePayments={
+                  (viewType === 'network' || viewType === 'resellers') ? handleGeneratePayments : undefined
+                }
                 hideReceiptButton={true}
                 hidePdfButton={true}
               />

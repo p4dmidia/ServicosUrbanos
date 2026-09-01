@@ -2043,7 +2043,7 @@ export const businessRules = {
       // 1. Busca as comissões e saques/pagamentos do período
       const { data: transactions, error: txError } = await supabase
         .from('transactions')
-        .select('id, profile_id, amount, created_at, status, type, description')
+        .select('id, profile_id, order_id, amount, created_at, status, type, description')
         .in('status', ['completed', 'pago', 'pending'])
         .in('type', ['commission', 'withdrawal'])
         .gte('created_at', startDate)
@@ -2070,7 +2070,7 @@ export const businessRules = {
       const [{ data: profiles, error: profError }, { data: subsData }, { data: ordersData }] = await Promise.all([
         supabase
           .from('profiles')
-          .select('id, full_name, pix_key, pix_type, cpf, whatsapp, role')
+          .select('id, full_name, pix_key, pix_type, cpf, whatsapp, role, city, state')
           .in('id', affiliateIds),
         supabase
           .from('subscriptions')
@@ -2078,7 +2078,7 @@ export const businessRules = {
           .in('profile_id', affiliateIds),
         supabase
           .from('orders')
-          .select('customer_id, status, created_at, order_date, items')
+          .select('id, customer_id, status, created_at, order_date, items')
           .in('customer_id', affiliateIds)
           .in('status', ['Pago', 'Pago, Aguardando Retirada', 'Concluído'])
       ]);
@@ -2118,10 +2118,22 @@ export const businessRules = {
         const isRegional = p.role === 'regional_reseller';
         const isActive = hasActiveSub || hasPaidSubOrder || isRegional;
 
+        let displayPlan = planName;
+        if (!displayPlan) {
+          if (filterCategory === 'network') {
+            displayPlan = (hasActiveSub || hasPaidSubOrder) ? 'Plano Ativo' : (isRegional ? 'Afiliado Rede' : 'Inativo / Sem Plano');
+          } else if (filterCategory === 'reseller') {
+            displayPlan = 'Líder Regional';
+          } else {
+            displayPlan = isRegional ? 'Líder Regional' : (isActive ? 'Plano Ativo' : 'Inativo / Sem Plano');
+          }
+        }
+
         profilesMap[String(p.id)] = {
           ...p,
           is_active: isActive,
-          plan_name: planName || (isRegional ? 'Líder Regional' : (isActive ? 'Plano Ativo' : 'Inativo / Sem Plano'))
+          plan_name: displayPlan,
+          polo: p.city ? `${p.city}${p.state ? ` - ${p.state}` : ''}` : ''
         };
       });
 
@@ -2133,6 +2145,21 @@ export const businessRules = {
         if (!affiliateId) return;
 
         const profile = profilesMap[String(affiliateId)];
+        const desc = t.description || '';
+
+        // Extrai o nível a partir da descrição
+        let level = '';
+        if (desc.includes('G0') || desc.includes('Titular')) level = 'G0';
+        else if (desc.includes('G1')) level = 'G1';
+        else if (desc.includes('G2')) level = 'G2';
+        else if (desc.includes('Revendedor') || desc.includes('Regional')) level = 'REG';
+
+        // Extrai o número do pedido
+        let orderNum = t.order_id ? String(t.order_id) : '';
+        if (!orderNum) {
+          const match = desc.match(/Pedido #?([a-zA-Z0-9_-]+)/i);
+          if (match) orderNum = match[1];
+        }
 
         if (!report[affiliateId]) {
           report[affiliateId] = {
@@ -2145,15 +2172,28 @@ export const businessRules = {
             role: profile?.role || 'affiliate',
             is_active: Boolean(profile?.is_active),
             plan_name: profile?.plan_name || 'Inativo',
+            polo: profile?.polo || '',
+            level: level || (filterCategory === 'reseller' ? 'REG' : 'G0'),
+            levels: level ? [level] : [],
+            order_numbers: orderNum ? [orderNum] : [],
+            order_number: orderNum || '',
             mensal: 0,
             anual: 0,
             digital: 0,
             total: 0
           };
+        } else {
+          if (level && !report[affiliateId].levels.includes(level)) {
+            report[affiliateId].levels.push(level);
+            report[affiliateId].level = report[affiliateId].levels.join(', ');
+          }
+          if (orderNum && !report[affiliateId].order_numbers.includes(orderNum)) {
+            report[affiliateId].order_numbers.push(orderNum);
+            report[affiliateId].order_number = report[affiliateId].order_numbers.join(', #');
+          }
         }
 
         const amount = Number(t.amount);
-        const desc = t.description || '';
 
         if (t.type === 'commission') {
           if (desc.includes('Mensal')) {
@@ -2717,18 +2757,18 @@ export const businessRules = {
     }));
   },
 
-  getPayableBalances: async () => {
+  getPayableBalances: async (filterCategory: 'all' | 'network' | 'reseller' = 'all') => {
     // 1. Buscar todos os perfis
     const [{ data: profiles, error: pError }, { data: subsData }, { data: ordersData }, { data: transactions, error: tError }] = await Promise.all([
       supabase
         .from('profiles')
-        .select('id, full_name, email, pix_key, bank_name, bank_branch, bank_account, whatsapp, role'),
+        .select('id, full_name, email, pix_key, bank_name, bank_branch, bank_account, whatsapp, role, city, state'),
       supabase
         .from('subscriptions')
         .select('profile_id, status, end_date, plan_type'),
       supabase
         .from('orders')
-        .select('customer_id, status, created_at, order_date, items')
+        .select('id, customer_id, status, created_at, order_date, items')
         .in('status', ['Pago', 'Pago, Aguardando Retirada', 'Concluído']),
       supabase
         .from('transactions')
@@ -2742,7 +2782,15 @@ export const businessRules = {
 
     // 3. Processar saldos e status de adimplência por usuário
     const payableList = (profiles || []).map(profile => {
-      const userTransactions = (transactions || []).filter(t => t.profile_id === profile.id);
+      // Filtra transações do usuário conforme a categoria solicitada
+      const userTransactions = (transactions || []).filter(t => {
+        if (t.profile_id !== profile.id) return false;
+        const desc = t.description || '';
+        const isResellerTx = desc.includes('Revendedor') || desc.includes('Regional');
+        if (filterCategory === 'network') return !isResellerTx;
+        if (filterCategory === 'reseller') return isResellerTx;
+        return true;
+      });
       
       const userSubs = (subsData || []).filter(s => s.profile_id === profile.id);
       const userOrders = (ordersData || []).filter(o => o.customer_id === profile.id);
@@ -2766,6 +2814,28 @@ export const businessRules = {
 
       const isEligible = hasActiveSub || hasPaidSubOrder || profile.role === 'regional_reseller';
 
+      // Extrai níveis e pedidos das transações do usuário
+      const levels: string[] = [];
+      const orderNumbers: string[] = [];
+      userTransactions.forEach(t => {
+        const desc = t.description || '';
+        if (t.type === 'commission') {
+          let lvl = '';
+          if (desc.includes('G0') || desc.includes('Titular')) lvl = 'G0';
+          else if (desc.includes('G1')) lvl = 'G1';
+          else if (desc.includes('G2')) lvl = 'G2';
+          else if (desc.includes('Revendedor') || desc.includes('Regional')) lvl = 'REG';
+          if (lvl && !levels.includes(lvl)) levels.push(lvl);
+
+          let oNum = t.order_id ? String(t.order_id) : '';
+          if (!oNum) {
+            const m = desc.match(/Pedido #?([a-zA-Z0-9_-]+)/i);
+            if (m) oNum = m[1];
+          }
+          if (oNum && !orderNumbers.includes(oNum)) orderNumbers.push(oNum);
+        }
+      });
+
       const monthlyBonus = userTransactions
         .filter(t => t.type === 'commission' && t.description?.includes('Mensal') && (t.status === 'completed' || t.status === 'pago' || t.status === 'pending'))
         .reduce((acc, t) => acc + Number(t.amount || 0), 0);
@@ -2782,11 +2852,11 @@ export const businessRules = {
 
       // Subtrair pagamentos já realizados
       const monthlyPaid = userTransactions
-        .filter(t => t.type === 'withdrawal' && t.description?.includes('Pagamento Cashback Mensal') && (t.status === 'completed' || t.status === 'pago'))
+        .filter(t => t.type === 'withdrawal' && t.description?.includes('Mensal') && (t.status === 'completed' || t.status === 'pago'))
         .reduce((acc, t) => acc + Math.abs(Number(t.amount || 0)), 0);
 
       const annualPaid = userTransactions
-        .filter(t => t.type === 'withdrawal' && t.description?.includes('Pagamento Cashback Anual') && (t.status === 'completed' || t.status === 'pago'))
+        .filter(t => t.type === 'withdrawal' && t.description?.includes('Anual') && (t.status === 'completed' || t.status === 'pago'))
         .reduce((acc, t) => acc + Math.abs(Number(t.amount || 0)), 0);
 
       const totalWithdrawn = userTransactions
@@ -2809,7 +2879,12 @@ export const businessRules = {
         digitalPending,
         role: profile.role,
         isEligible,
-        statusLabel: isEligible ? 'Adimplente / Ativo' : 'Inadimplente'
+        statusLabel: isEligible ? 'Adimplente / Ativo' : 'Inadimplente',
+        level: levels.join(', ') || (filterCategory === 'reseller' ? 'REG' : (profile.role === 'regional_reseller' ? 'REG' : 'G0')),
+        levels,
+        orderNumber: orderNumbers.join(', #'),
+        orderNumbers,
+        polo: profile.city ? `${profile.city}${profile.state ? ` - ${profile.state}` : ''}` : ''
       };
     }).filter(p => p.monthlyPending > 0 || p.annualPending > 0 || p.digitalPending > 0);
 
@@ -2834,7 +2909,13 @@ export const businessRules = {
     return data.publicUrl;
   },
 
-  processPayout: async (profileId: string, amount: number, type: 'mensal' | 'anual' | 'digital', receiptUrl: string) => {
+  processPayout: async (
+    profileId: string, 
+    amount: number, 
+    type: 'mensal' | 'anual' | 'digital', 
+    receiptUrl: string,
+    category: 'network' | 'reseller' = 'network'
+  ) => {
     // Validação estrita de adimplência
     const stats = await businessRules.getAffiliateStats(profileId);
     if (!stats.isEligible) {
@@ -2846,7 +2927,10 @@ export const businessRules = {
     else if (type === 'anual') displayType = 'Anual';
     else displayType = 'Digital';
 
-    const description = `Pagamento Cashback ${displayType} - ${new Date().toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}`;
+    const isReseller = category === 'reseller';
+    const description = isReseller 
+      ? `Pagamento Repasse Revendedor ${displayType} - ${new Date().toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}`
+      : `Pagamento Cashback Rede ${displayType} - ${new Date().toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}`;
     
     const { error } = await supabase
       .from('transactions')

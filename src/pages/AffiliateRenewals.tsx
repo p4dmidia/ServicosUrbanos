@@ -90,6 +90,19 @@ export default function AffiliateRenewals() {
 
   const handlePay = async (plan: any) => {
     if (!user) return;
+    
+    // Bloqueia qualquer compra de plano se já possuir assinatura ativa antes da data de renovação
+    if (subscription && stats?.isEligible) {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const renewalDate = new Date(subscription.end_date);
+      renewalDate.setHours(0, 0, 0, 0);
+      if (today < renewalDate) {
+        toast.error(`Você já possui um plano ativo até ${renewalDate.toLocaleDateString('pt-BR')}. A renovação ou troca estará disponível apenas a partir desta data.`);
+        return;
+      }
+    }
+
     try {
       const cartItem = {
         id: plan.id,
@@ -186,8 +199,8 @@ export default function AffiliateRenewals() {
                     const isActivePlan = subscription && subscription.plan_type === planItem.plan_type && stats?.isEligible;
                     const isEcon = !stats?.isEligible && planItem.plan_type === 'anual';
                     
-                    const isChangeButton = !isActivePlan && stats?.isEligible;
-                    const isButtonDisabled = isChangeButton && !isRenewalDayOrLater;
+                    // Bloqueia tanto o próprio plano ativo quanto os demais enquanto a conta estiver ativa antes do dia de renovação
+                    const isButtonDisabled = Boolean(stats?.isEligible && !isRenewalDayOrLater);
                     
                     return (
                       <div 
@@ -232,22 +245,22 @@ export default function AffiliateRenewals() {
                             disabled={isButtonDisabled}
                             onClick={() => handlePay(planItem)}
                             className={`w-full py-3.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all active:scale-[0.98] ${
-                              isActivePlan || isEcon
-                                ? 'bg-emerald-500 text-white hover:bg-emerald-600 shadow-lg shadow-emerald-500/15' 
-                                : isPopular 
-                                  ? 'bg-primary-blue text-white hover:bg-primary-blue/90 shadow-lg shadow-primary-blue/15' 
-                                  : isButtonDisabled
-                                    ? 'bg-slate-100 border border-slate-200 text-slate-400 cursor-not-allowed opacity-60'
-                                    : 'bg-slate-50 border border-slate-200 text-slate-600 hover:bg-slate-100 hover:text-midnight'
+                              isButtonDisabled
+                                ? 'bg-slate-100 border border-slate-200 text-slate-400 cursor-not-allowed opacity-60'
+                                : isActivePlan || isEcon
+                                  ? 'bg-emerald-500 text-white hover:bg-emerald-600 shadow-lg shadow-emerald-500/15 cursor-pointer' 
+                                  : isPopular 
+                                    ? 'bg-primary-blue text-white hover:bg-primary-blue/90 shadow-lg shadow-primary-blue/15 cursor-pointer' 
+                                    : 'bg-slate-50 border border-slate-200 text-slate-600 hover:bg-slate-100 hover:text-midnight cursor-pointer'
                             }`}
                           >
                             {isActivePlan 
-                              ? 'Renovar Plano' 
+                              ? (isButtonDisabled ? 'Plano em Vigência' : 'Renovar Plano') 
                               : stats?.isEligible 
-                                ? 'Trocar para este' 
+                                ? (isButtonDisabled ? 'Bloqueado até Renovação' : 'Trocar para este') 
                                 : 'Escolher Plano'}
                           </button>
-                          {isButtonDisabled && (
+                          {isButtonDisabled && subscription?.end_date && (
                             <p className="text-[8px] text-slate-400 font-bold text-center mt-1">
                               Disponível em {new Date(subscription.end_date).toLocaleDateString('pt-BR')}
                             </p>

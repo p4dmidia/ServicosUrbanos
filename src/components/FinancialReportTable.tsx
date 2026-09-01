@@ -603,23 +603,55 @@ export default function FinancialReportTable({
               ) : (
                 <>
                   <td className="p-6">
-                      <div className="flex items-center gap-3">
-                        <div className={`size-8 rounded-lg flex items-center justify-center shrink-0 ${
-                          record.is_active ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-100 text-slate-400'
-                        }`}>
-                           <User size={16} />
-                        </div>
+                      <div className="flex items-center gap-3.5">
+                        {/* Badge de Nível (G0, G1, G2, REG) substituindo o bonequinho */}
+                        {record.level ? (
+                          <div 
+                            title={`Nível de Comissionamento: ${record.level}`}
+                            className={`size-10 rounded-2xl font-black text-xs flex items-center justify-center shadow-md tracking-tighter shrink-0 ${
+                              record.level.includes('G0')
+                                ? 'bg-amber-500 text-white shadow-amber-500/30'
+                                : record.level.includes('G1')
+                                ? 'bg-emerald-600 text-white shadow-emerald-600/30'
+                                : record.level.includes('G2')
+                                ? 'bg-sky-600 text-white shadow-sky-600/30'
+                                : 'bg-purple-600 text-white shadow-purple-600/30'
+                            }`}
+                          >
+                             {record.level}
+                          </div>
+                        ) : (
+                          <div className={`size-10 rounded-2xl flex items-center justify-center shrink-0 ${
+                            record.is_active ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-100 text-slate-400'
+                          }`}>
+                             <User size={18} />
+                          </div>
+                        )}
                         <div className="flex flex-col">
-                           <span className="text-xs font-black text-midnight uppercase tracking-tight">{record.name || record.payeeName}</span>
+                           <div className="flex items-center gap-2 flex-wrap">
+                              <span className="text-xs font-black text-midnight uppercase tracking-tight">{record.name || record.payeeName}</span>
+                              {record.order_number && (
+                                <span className="bg-slate-100 text-slate-700 text-[9px] font-black px-2 py-0.5 rounded-md border border-slate-200">
+                                  Pedido #{record.order_number}
+                                </span>
+                              )}
+                           </div>
                            <span className="text-[9px] text-slate-400 font-bold">CPF: {record.cpf}</span>
                         </div>
                       </div>
                     </td>
                     <td className="p-6 text-center">
-                      {record.is_active ? (
+                      {mode === 'resellers' ? (
+                        <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-purple-50 text-purple-700 rounded-full text-[9px] font-black uppercase tracking-wider border border-purple-100">
+                          <span className="size-1.5 rounded-full bg-purple-500" />
+                          {record.polo ? `Polo ${record.polo}` : 'Líder Regional'}
+                        </span>
+                      ) : record.is_active ? (
                         <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-50 text-emerald-600 rounded-full text-[9px] font-black uppercase tracking-wider border border-emerald-100">
                           <span className="size-1.5 rounded-full bg-emerald-500" />
-                          {record.plan_name || 'Plano Ativo'}
+                          {mode === 'affiliates' && record.plan_name === 'Líder Regional' 
+                            ? 'Afiliado Rede' 
+                            : (record.plan_name || 'Plano Ativo')}
                         </span>
                       ) : (
                         <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-red-50 text-red-600 rounded-full text-[9px] font-black uppercase tracking-wider border border-red-100">

@@ -16,7 +16,10 @@ import {
   TrendingUp,
   Wallet,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  ShieldCheck,
+  Building2,
+  Users
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import AdminLayout from '../components/AdminLayout';
@@ -26,6 +29,7 @@ import { toast } from 'react-hot-toast';
 export default function AdminWithdrawals() {
   const [loading, setLoading] = useState(true);
   const [payableBalances, setPayableBalances] = useState<any[]>([]);
+  const [viewTab, setViewTab] = useState<'network' | 'reseller'>('network');
 
   const getRoleBadge = (role: string) => {
     switch (role) {
@@ -36,7 +40,7 @@ export default function AdminWithdrawals() {
       case 'manager':
         return <span className="px-2 py-0.5 bg-emerald-500/10 text-emerald-400 rounded-md text-[8px] font-black uppercase tracking-widest border border-emerald-500/20">Revendedor</span>;
       case 'regional_reseller':
-        return <span className="px-2 py-0.5 bg-purple-500/10 text-purple-400 rounded-md text-[8px] font-black uppercase tracking-widest border border-purple-500/20">Segurado/Revendedor</span>;
+        return <span className="px-2 py-0.5 bg-purple-500/10 text-purple-400 rounded-md text-[8px] font-black uppercase tracking-widest border border-purple-500/20">Líder Regional</span>;
       case 'affiliate':
         return <span className="px-2 py-0.5 bg-pink-500/10 text-pink-400 rounded-md text-[8px] font-black uppercase tracking-widest border border-pink-500/20">Afiliado</span>;
       case 'customer':
@@ -44,6 +48,7 @@ export default function AdminWithdrawals() {
         return <span className="px-2 py-0.5 bg-blue-500/10 text-blue-400 rounded-md text-[8px] font-black uppercase tracking-widest border border-blue-500/20">Segurado</span>;
     }
   };
+
   const [searchTerm, setSearchTerm] = useState('');
   const [processingId, setProcessingId] = useState<string | null>(null);
   const [selectedPayout, setSelectedPayout] = useState<any>(null);
@@ -51,10 +56,10 @@ export default function AdminWithdrawals() {
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const loadBalances = async () => {
+  const loadBalances = async (category = viewTab) => {
     try {
       setLoading(true);
-      const data = await businessRules.getPayableBalances();
+      const data = await businessRules.getPayableBalances(category);
       setPayableBalances(data);
     } catch (error) {
       console.error('Error loading balances:', error);
@@ -65,8 +70,8 @@ export default function AdminWithdrawals() {
   };
 
   useEffect(() => {
-    loadBalances();
-  }, []);
+    loadBalances(viewTab);
+  }, [viewTab]);
 
   const handleProcessPayout = async (type: 'mensal' | 'anual' | 'digital') => {
     if (!selectedPayout || !receiptFile) {
@@ -81,13 +86,13 @@ export default function AdminWithdrawals() {
       // 1. Upload do comprovante
       const receiptUrl = await businessRules.uploadReceipt(receiptFile);
       
-      // 2. Registrar o pagamento
+      // 2. Registrar o pagamento com categoria
       const amount = type === 'mensal' 
         ? selectedPayout.monthlyPending 
         : type === 'anual' 
           ? selectedPayout.annualPending 
           : selectedPayout.digitalPending;
-      await businessRules.processPayout(selectedPayout.profileId, amount, type, receiptUrl);
+      await businessRules.processPayout(selectedPayout.profileId, amount, type, receiptUrl, viewTab);
       
       let displayType = '';
       if (type === 'mensal') displayType = 'Mensal';
@@ -98,12 +103,16 @@ export default function AdminWithdrawals() {
       if (selectedPayout.whatsapp && selectedPayout.whatsapp.trim() !== '') {
         try {
           let msg = '';
-          if (type === 'mensal') {
-            msg = `Olá! Seu cashback mensal no valor de R$ ${amount.toFixed(2).replace('.', ',')} foi pago com sucesso em sua chave PIX cadastrada.`;
-          } else if (type === 'anual') {
-            msg = `Olá! Seu cashback anual no valor de R$ ${amount.toFixed(2).replace('.', ',')} foi pago com sucesso em sua chave PIX cadastrada.`;
+          if (viewTab === 'reseller') {
+            msg = `Olá! Seu repasse regional ${displayType} no valor de R$ ${amount.toFixed(2).replace('.', ',')} foi pago com sucesso em sua chave PIX cadastrada.`;
           } else {
-            msg = `Olá! Seu resgate de cashback semanal no valor de R$ ${amount.toFixed(2).replace('.', ',')} foi pago com sucesso em sua chave PIX cadastrada.`;
+            if (type === 'mensal') {
+              msg = `Olá! Seu cashback mensal no valor de R$ ${amount.toFixed(2).replace('.', ',')} foi pago com sucesso em sua chave PIX cadastrada.`;
+            } else if (type === 'anual') {
+              msg = `Olá! Seu cashback anual no valor de R$ ${amount.toFixed(2).replace('.', ',')} foi pago com sucesso em sua chave PIX cadastrada.`;
+            } else {
+              msg = `Olá! Seu resgate de cashback semanal no valor de R$ ${amount.toFixed(2).replace('.', ',')} foi pago com sucesso em sua chave PIX cadastrada.`;
+            }
           }
           await businessRules.sendTestWhatsAppMessage(selectedPayout.whatsapp, msg);
         } catch (whatsappErr) {
@@ -114,7 +123,7 @@ export default function AdminWithdrawals() {
       toast.success(`Pagamento ${displayType} processado com sucesso!`);
       setSelectedPayout(null);
       setReceiptFile(null);
-      loadBalances();
+      loadBalances(viewTab);
     } catch (error) {
       console.error('Error processing payout:', error);
       toast.error('Erro ao processar pagamento');
@@ -136,9 +145,12 @@ export default function AdminWithdrawals() {
     }
 
     const csvContent = [];
+    const reportTitle = viewTab === 'reseller' 
+      ? 'Relatorio de Repasses de Revendedores Regionais Pendentes' 
+      : 'Relatorio de Comissoes de Rede MMN Pendentes';
     
     // Header
-    csvContent.push(`Relatorio de Saldos de Cashback Pendentes - Gerado em ${new Date().toLocaleString('pt-BR')}`);
+    csvContent.push(`${reportTitle} - Gerado em ${new Date().toLocaleString('pt-BR')}`);
     csvContent.push('');
     
     // Totais Gerais
@@ -152,11 +164,13 @@ export default function AdminWithdrawals() {
     csvContent.push('');
     
     // Detalhado
-    csvContent.push('Nome;Email;Chave PIX;Dados Bancarios;Pendente Mensal;Pendente Semanal;Pendente Anual;Pendente Total');
+    csvContent.push('Nivel;Pedido;Nome;Email;Chave PIX;Dados Bancarios;Pendente Mensal;Pendente Semanal;Pendente Anual;Pendente Total');
     
     payableBalances.forEach(w => {
       const userTotal = (w.monthlyPending || 0) + (w.digitalPending || 0) + (w.annualPending || 0);
       csvContent.push([
+        w.level || 'G0',
+        w.orderNumber ? `#${w.orderNumber}` : '---',
         w.userName,
         w.userEmail,
         `"${w.pixKey}"`,
@@ -173,7 +187,7 @@ export default function AdminWithdrawals() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.setAttribute('download', `relatorio_cashback_pendente_${Date.now()}.csv`);
+    link.setAttribute('download', `relatorio_pagamentos_${viewTab}_${Date.now()}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -191,7 +205,7 @@ export default function AdminWithdrawals() {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm]);
+  }, [searchTerm, viewTab]);
 
   const startIndex = (currentPage - 1) * itemsPerPage;
   const paginatedBalances = filteredBalances.slice(startIndex, startIndex + itemsPerPage);
@@ -203,9 +217,33 @@ export default function AdminWithdrawals() {
   const totalPending = totalMonthlyPending + totalAnnualPending + totalDigitalPending;
 
   return (
-    <AdminLayout title="Gestão de Pagamentos" subtitle="Central de pagamentos manuais de cashback">
+    <AdminLayout title="Gestão de Pagamentos" subtitle="Central de pagamentos manuais de cashback e repasses">
       <div className="p-8 lg:p-12 space-y-10">
         
+        {/* Toggle de Abas: Rede MMN vs Revendedores */}
+        <div className="flex bg-[#0a0e17] p-2 rounded-[2rem] border border-white/5 shadow-2xl w-full max-w-2xl gap-2">
+          <button
+            onClick={() => setViewTab('network')}
+            className={`flex-1 py-4 px-6 rounded-2xl text-xs font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 cursor-pointer ${
+              viewTab === 'network'
+                ? 'bg-gradient-to-r from-indigo-600 to-indigo-700 text-white shadow-lg shadow-indigo-600/30'
+                : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            👥 Comissões de Rede MMN (G0 ao G2)
+          </button>
+          <button
+            onClick={() => setViewTab('reseller')}
+            className={`flex-1 py-4 px-6 rounded-2xl text-xs font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 cursor-pointer ${
+              viewTab === 'reseller'
+                ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-lg shadow-purple-600/30'
+                : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            🏢 Repasses Revendedor Regional
+          </button>
+        </div>
+
         {/* Stats Header */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
           {/* Card 1: Total Geral */}
@@ -214,7 +252,9 @@ export default function AdminWithdrawals() {
                 <DollarSign size={32} />
              </div>
              <div>
-                <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest leading-none mb-2">Total Geral Pendente</p>
+                <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest leading-none mb-2">
+                  {viewTab === 'reseller' ? 'Total Revendedor Pendente' : 'Total Rede MMN Pendente'}
+                </p>
                 <p className="text-3xl font-black text-white tracking-tighter italic">
                   R$ {totalPending.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                 </p>
@@ -227,21 +267,24 @@ export default function AdminWithdrawals() {
                 <TrendingUp size={32} />
              </div>
              <div>
-                <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest leading-none mb-2">Pendente Mensal</p>
+                <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest leading-none mb-2">
+                  {viewTab === 'reseller' ? 'Repasse Mensal (2% PIX)' : 'Pendente Mensal (PIX)'}
+                </p>
                 <p className="text-3xl font-black text-white tracking-tighter italic">
                   R$ {totalMonthlyPending.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                 </p>
              </div>
           </div>
 
-          {/* Card 3: Digital */}
           {/* Card 3: Semanal */}
           <div className="flex items-center gap-6 bg-[#0a0e17] p-8 rounded-[2.5rem] border border-white/5 shadow-2xl relative overflow-hidden group">
              <div className="size-16 bg-purple-500/20 text-purple-400 rounded-3xl flex items-center justify-center shadow-lg shadow-purple-500/10 shrink-0">
                 <Wallet size={32} />
              </div>
              <div>
-                <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest leading-none mb-2">Pendente Semanal</p>
+                <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest leading-none mb-2">
+                  {viewTab === 'reseller' ? 'Repasse Semanal (2% Carteira)' : 'Pendente Semanal (Carteira)'}
+                </p>
                 <p className="text-3xl font-black text-white tracking-tighter italic">
                   R$ {totalDigitalPending.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                 </p>
@@ -254,7 +297,9 @@ export default function AdminWithdrawals() {
                 <Calendar size={32} />
              </div>
              <div>
-                <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest leading-none mb-2">Pendente Anual</p>
+                <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest leading-none mb-2">
+                  {viewTab === 'reseller' ? 'Repasse Anual (2% 10/Dez)' : 'Pendente Anual (10/Dez)'}
+                </p>
                 <p className="text-3xl font-black text-white tracking-tighter italic">
                   R$ {totalAnnualPending.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                 </p>
@@ -276,7 +321,7 @@ export default function AdminWithdrawals() {
           </div>
           <button 
             onClick={handleExportCSV}
-            className="w-full md:w-auto px-8 py-5 bg-white/5 hover:bg-white/10 border border-white/5 hover:border-white/10 text-white rounded-2xl font-black text-xs uppercase tracking-widest transition-all flex items-center justify-center gap-3 shrink-0"
+            className="w-full md:w-auto px-8 py-5 bg-white/5 hover:bg-white/10 border border-white/5 hover:border-white/10 text-white rounded-2xl font-black text-xs uppercase tracking-widest transition-all flex items-center justify-center gap-3 shrink-0 cursor-pointer"
           >
             <FileText size={18} className="text-slate-400" />
             Relatório CSV
@@ -293,8 +338,12 @@ export default function AdminWithdrawals() {
           ) : filteredBalances.length === 0 ? (
             <div className="bg-[#0a0e17] rounded-[2.5rem] p-32 flex flex-col items-center justify-center border border-white/5 text-center">
               <div className="size-20 bg-white/5 rounded-full flex items-center justify-center text-slate-700 mb-6 font-black text-4xl italic">!</div>
-              <h3 className="text-xl font-black text-white uppercase tracking-tighter mb-2 italic">Nenhum pagamento pendente</h3>
-              <p className="text-slate-500 font-bold uppercase text-[10px] tracking-widest">Todos os usuários estão com os pagamentos em dia.</p>
+              <h3 className="text-xl font-black text-white uppercase tracking-tighter mb-2 italic">
+                {viewTab === 'reseller' ? 'Nenhum repasse regional pendente' : 'Nenhum pagamento de rede pendente'}
+              </h3>
+              <p className="text-slate-500 font-bold uppercase text-[10px] tracking-widest">
+                {viewTab === 'reseller' ? 'Todos os revendedores regionais estão com os repasses em dia.' : 'Todos os afiliados de rede estão com os pagamentos em dia.'}
+              </p>
             </div>
           ) : (
             <>
@@ -310,13 +359,46 @@ export default function AdminWithdrawals() {
                 >
                   <div className="p-8 flex flex-col lg:flex-row lg:items-center justify-between gap-8">
                     <div className="flex items-center gap-6 flex-1">
-                      <div className="size-16 bg-gradient-to-br from-indigo-500 to-purple-600 text-white rounded-2xl flex items-center justify-center font-black text-2xl italic shadow-xl shadow-indigo-500/10">
-                        {w.userName.charAt(0)}
-                      </div>
+                      {/* Badge de Nível (G0, G1, G2, REG) */}
+                      {w.level ? (
+                        <div 
+                          title={`Nível: ${w.level}`}
+                          className={`size-16 rounded-2xl font-black text-lg flex items-center justify-center shadow-xl tracking-tighter shrink-0 ${
+                            w.level.includes('G0')
+                              ? 'bg-amber-500 text-white shadow-amber-500/30'
+                              : w.level.includes('G1')
+                              ? 'bg-emerald-600 text-white shadow-emerald-600/30'
+                              : w.level.includes('G2')
+                              ? 'bg-sky-600 text-white shadow-sky-600/30'
+                              : 'bg-purple-600 text-white shadow-purple-600/30'
+                          }`}
+                        >
+                           {w.level}
+                        </div>
+                      ) : (
+                        <div className="size-16 bg-gradient-to-br from-indigo-500 to-purple-600 text-white rounded-2xl flex items-center justify-center font-black text-2xl italic shadow-xl shadow-indigo-500/10 shrink-0">
+                           {w.userName.charAt(0)}
+                        </div>
+                      )}
+
                       <div>
-                        <div className="flex items-center gap-3 mb-1">
+                        <div className="flex items-center gap-3 mb-1 flex-wrap">
                           <h3 className="text-xl font-black text-white italic uppercase tracking-tighter">{w.userName}</h3>
-                          {getRoleBadge(w.role)}
+                          
+                          {w.orderNumber && (
+                            <span className="bg-white/10 text-indigo-300 text-[10px] font-black px-2.5 py-1 rounded-lg border border-white/10">
+                              Pedido #{w.orderNumber}
+                            </span>
+                          )}
+
+                          {viewTab === 'reseller' ? (
+                            <span className="px-2.5 py-1 bg-purple-500/10 text-purple-300 rounded-lg text-[8px] font-black uppercase tracking-widest border border-purple-500/20">
+                              {w.polo ? `Polo ${w.polo}` : 'Líder Regional'}
+                            </span>
+                          ) : (
+                            getRoleBadge(w.role === 'regional_reseller' ? 'affiliate' : w.role)
+                          )}
+
                           {w.isEligible ? (
                             <span className="px-2.5 py-1 bg-emerald-500/10 text-emerald-400 rounded-lg text-[8px] font-black uppercase tracking-widest border border-emerald-500/20">
                               🟢 Adimplente
@@ -414,7 +496,7 @@ export default function AdminWithdrawals() {
                           </div>
                           <button 
                             onClick={() => copyToClipboard(w.pixKey, 'PIX')}
-                            className="size-8 bg-white/10 border border-white/5 rounded-lg flex items-center justify-center text-slate-400 hover:text-indigo-400 hover:border-indigo-400 transition-all active:scale-95"
+                            className="size-8 bg-white/10 border border-white/5 rounded-lg flex items-center justify-center text-slate-400 hover:text-indigo-400 hover:border-indigo-400 transition-all active:scale-95 cursor-pointer"
                           >
                             <Copy size={14} />
                           </button>
@@ -443,7 +525,7 @@ export default function AdminWithdrawals() {
                   <button 
                     disabled={currentPage === 1}
                     onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-                    className="p-3 bg-white/5 hover:bg-white/10 border border-white/5 rounded-xl disabled:opacity-30 disabled:hover:bg-white/5 text-slate-400 hover:text-white transition-colors flex items-center justify-center"
+                    className="p-3 bg-white/5 hover:bg-white/10 border border-white/5 rounded-xl disabled:opacity-30 disabled:hover:bg-white/5 text-slate-400 hover:text-white transition-colors flex items-center justify-center cursor-pointer"
                   >
                     <ChevronLeft size={18} />
                   </button>
@@ -452,7 +534,7 @@ export default function AdminWithdrawals() {
                       <button
                         key={i}
                         onClick={() => setCurrentPage(i + 1)}
-                        className={`size-10 rounded-xl text-xs font-black transition-all ${
+                        className={`size-10 rounded-xl text-xs font-black transition-all cursor-pointer ${
                           currentPage === i + 1 
                             ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20' 
                             : 'bg-white/5 border border-white/5 text-slate-400 hover:bg-white/10 hover:text-white'
@@ -465,7 +547,7 @@ export default function AdminWithdrawals() {
                   <button 
                     disabled={currentPage === totalPages}
                     onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
-                    className="p-3 bg-white/5 hover:bg-white/10 border border-white/5 rounded-xl disabled:opacity-30 disabled:hover:bg-white/5 text-slate-400 hover:text-white transition-colors flex items-center justify-center"
+                    className="p-3 bg-white/5 hover:bg-white/10 border border-white/5 rounded-xl disabled:opacity-30 disabled:hover:bg-white/5 text-slate-400 hover:text-white transition-colors flex items-center justify-center cursor-pointer"
                   >
                     <ChevronRight size={18} />
                   </button>
@@ -494,7 +576,7 @@ export default function AdminWithdrawals() {
                 className="relative w-full max-w-lg bg-[#0d1117] rounded-[3rem] border border-white/10 shadow-3xl p-12 overflow-hidden"
               >
                 <div className="absolute top-0 right-0 p-8">
-                  <button onClick={() => setSelectedPayout(null)} className="text-slate-500 hover:text-white transition-colors">
+                  <button onClick={() => setSelectedPayout(null)} className="text-slate-500 hover:text-white transition-colors cursor-pointer">
                     <XCircle size={24} />
                   </button>
                 </div>
@@ -504,9 +586,11 @@ export default function AdminWithdrawals() {
                     <div className="size-20 bg-indigo-500/10 text-indigo-400 rounded-[2rem] flex items-center justify-center mx-auto mb-6">
                       <DollarSign size={40} />
                     </div>
-                    <h3 className="text-3xl font-black text-white tracking-tighter uppercase italic">Confirmar Pagamento</h3>
+                    <h3 className="text-3xl font-black text-white tracking-tighter uppercase italic">
+                      {viewTab === 'reseller' ? 'Confirmar Repasse Regional' : 'Confirmar Pagamento de Rede'}
+                    </h3>
                     <p className="text-slate-400 font-bold uppercase text-[10px] tracking-widest mt-2">
-                      {selectedPayout.userName} • {selectedPayout.currentType === 'mensal' ? 'Cashback Mensal' : selectedPayout.currentType === 'anual' ? 'Cashback Anual' : 'Cashback Semanal'}
+                      {selectedPayout.userName} • {selectedPayout.currentType === 'mensal' ? (viewTab === 'reseller' ? 'Repasse Mensal' : 'Cashback Mensal') : selectedPayout.currentType === 'anual' ? (viewTab === 'reseller' ? 'Repasse Anual' : 'Cashback Anual') : (viewTab === 'reseller' ? 'Repasse Semanal' : 'Cashback Semanal')}
                     </p>
                   </div>
 
@@ -575,7 +659,7 @@ export default function AdminWithdrawals() {
                   <button
                     disabled={!selectedPayout.isEligible || !receiptFile || uploading}
                     onClick={() => handleProcessPayout(selectedPayout.currentType)}
-                    className="w-full py-6 bg-emerald-600 hover:bg-emerald-500 text-white rounded-2xl font-black text-sm uppercase tracking-widest shadow-xl shadow-emerald-600/20 transition-all flex items-center justify-center gap-3 disabled:opacity-50 disabled:grayscale"
+                    className="w-full py-6 bg-emerald-600 hover:bg-emerald-500 text-white rounded-2xl font-black text-sm uppercase tracking-widest shadow-xl shadow-emerald-600/20 transition-all flex items-center justify-center gap-3 disabled:opacity-50 disabled:grayscale cursor-pointer"
                   >
                     {uploading ? (
                       <>

@@ -218,30 +218,27 @@ export default function PaymentModal({ isOpen, onClose, selectedRecords, onConfi
                   )}
                 </div>
               </div>
-              <div className="text-right">
+                 <div className="text-right">
                  <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest mb-1">
-                   {currentRecord.buyerName === 'Rede MMN' ? 'Valor Apto (Mensal)' : 'Valor do Repasse'}
+                   {currentRecord.is_pj ? 'Valor a Pagar (PJ Isento)' : (currentRecord.inss > 0 ? 'Valor Líquido PIX (com INSS)' : 'Valor do Repasse')}
                  </p>
-                 <p className="text-4xl font-black text-indigo-600 italic tracking-tighter">R$ {currentRecord.repasse.toFixed(2).replace('.', ',')}</p>
+                 <p className="text-4xl font-black text-emerald-600 italic tracking-tighter">R$ {currentRecord.repasse.toFixed(2).replace('.', ',')}</p>
                  
-                 {/* Detalhamento para Afiliados */}
-                 {(currentRecord.buyerName === 'Rede MMN' || currentRecord.orderId?.startsWith('CASH-')) && (
-                   <div className="flex flex-col items-end gap-1 mt-3 border-t border-slate-100 pt-3">
-                     {currentRecord.items?.map((item: any, i: number) => (
-                       <div key={i} className="flex items-center gap-2">
-                         <span className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">{item.name}:</span>
-                         <span className={`text-[9px] font-black ${
-                           item.name.includes('Mensal') ? 'text-emerald-600 font-black' : 
-                           item.name.includes('Semanal') || item.name.includes('Digital') ? 'text-blue-500' : 'text-indigo-400'
-                         }`}>
-                           R$ {Number(item.price || 0).toFixed(2).replace('.', ',')}
-                         </span>
-                       </div>
-                     ))}
-                   </div>
-                 )}
-              </div>
-           </div>
+                 {/* Detalhamento de Impostos e Itens */}
+                 <div className="flex flex-col items-end gap-1 mt-2 border-t border-slate-100 pt-2">
+                   {currentRecord.bruto && currentRecord.inss > 0 && (
+                     <div className="flex items-center gap-2 text-[10px] font-bold">
+                       <span className="text-slate-400">Bruto: R$ {currentRecord.bruto.toFixed(2).replace('.', ',')}</span>
+                       <span className="text-amber-600">INSS (11%): -R$ {currentRecord.inss.toFixed(2).replace('.', ',')}</span>
+                     </div>
+                   )}
+                   {currentRecord.is_pj && (
+                     <span className="px-2 py-0.5 bg-blue-50 text-blue-600 rounded text-[9px] font-black uppercase">
+                       🏢 Pessoa Jurídica (CNPJ Isento)
+                     </span>
+                   )}
+                 </div>
+              </div>            </div>
 
            {/* Input de Chave PIX */}
            <div className="bg-slate-50 border border-slate-100 rounded-[2.5rem] p-8 space-y-4">

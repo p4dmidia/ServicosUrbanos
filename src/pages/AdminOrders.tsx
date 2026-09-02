@@ -211,7 +211,7 @@ export default function AdminOrders() {
                           {(order.status === 'Aguardando Pagamento' || order.status === 'Pendente') && (
                             <>
                               <button 
-                                onClick={() => handleUpdateStatus(order.id, 'Pago, Aguardando Retirada')}
+                                onClick={() => handleUpdateStatus(order.id, 'Concluído')}
                                 disabled={actionLoading === order.id}
                                 className="p-2 hover:bg-emerald-500/10 text-emerald-500 rounded-xl transition-all"
                                 title="Aprovar Pagamento"
@@ -346,7 +346,7 @@ export default function AdminOrders() {
                       Recusar / Cancelar
                     </button>
                     <button 
-                      onClick={() => handleUpdateStatus(selectedOrder.id, 'Pago, Aguardando Retirada')}
+                      onClick={() => handleUpdateStatus(selectedOrder.id, 'Concluído')}
                       className="flex-1 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest transition-all shadow-xl shadow-emerald-600/20"
                     >
                       Aprovar e Ativar Plano

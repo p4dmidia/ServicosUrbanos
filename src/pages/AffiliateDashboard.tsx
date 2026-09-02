@@ -11,7 +11,8 @@ import {
   ChevronRight,
   ExternalLink,
   Target,
-  ShoppingBag
+  ShoppingBag,
+  Building2
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { Link, useNavigate } from 'react-router-dom';
@@ -324,21 +325,24 @@ export default function AffiliateDashboard() {
               <h2 className="text-2xl font-black text-midnight tracking-tight italic uppercase">Atividade no Ecossistema</h2>
               <p className="text-slate-500 font-medium">Histórico de consumos e cashbacks gerados recentemente.</p>
             </div>
-            <button className="flex items-center gap-2 text-xs font-black text-slate-400 hover:text-midnight transition-colors tracking-widest uppercase">
+            <Link 
+              to="/afiliado/financeiro" 
+              className="flex items-center gap-2 text-xs font-black text-slate-400 hover:text-midnight transition-colors tracking-widest uppercase"
+            >
               Ver Histórico Completo
               <ChevronRight size={16} />
-            </button>
+            </Link>
           </div>
 
           <div className="overflow-x-auto">
             <table className="w-full text-left">
               <thead>
                 <tr className="border-b border-slate-100">
-                  <th className="pb-6 text-[10px] font-black text-slate-400 uppercase tracking-widest pl-4">Tipo/Serviço</th>
+                  <th className="pb-6 text-[10px] font-black text-slate-400 uppercase tracking-widest pl-4">Tipo / Categoria</th>
                   <th className="pb-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Descrição</th>
-                  <th className="pb-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Data/Hora</th>
+                  <th className="pb-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Data</th>
                   <th className="pb-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Valor</th>
-                  <th className="pb-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right pr-4">Bônus</th>
+                  <th className="pb-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center pr-4">Nível / Origem</th>
                 </tr>
               </thead>
               <tbody>
@@ -349,44 +353,88 @@ export default function AffiliateDashboard() {
                     </td>
                   </tr>
                 ) : (
-                  activity.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage).map((item: any, i: number) => (
-                    <motion.tr 
-                      key={item.id}
-                      initial={{ opacity: 0, x: -10 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: i * 0.1 }}
-                      className="group hover:bg-slate-50 transition-all border-b border-slate-50 last:border-0"
-                    >
-                      <td className="py-6 pl-4">
+                  activity.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage).map((item: any, i: number) => {
+                    const isReseller = item.isReseller || item.category === 'reseller';
+                    const isWithdrawal = item.originalType === 'withdrawal' || item.category === 'withdrawal';
+                    const typeLabel = isWithdrawal 
+                      ? 'Resgate' 
+                      : isReseller 
+                        ? 'Comissão Regional' 
+                        : (item.cashbackType ? `Cashback ${item.cashbackType}` : 'Cashback');
+
+                    return (
+                      <motion.tr 
+                        key={item.id}
+                        initial={{ opacity: 0, x: -10 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ delay: i * 0.05 }}
+                        className="group hover:bg-slate-50 transition-all border-b border-slate-50 last:border-0"
+                      >
+                        <td className="py-6 pl-4">
                           <div className="flex items-center gap-3">
-                            <div className={`size-10 rounded-xl flex items-center justify-center ${
-                              item.type === 'commission' || item.type === 'Comissão' ? 'bg-emerald-50 text-emerald-600' : 'bg-primary-blue/10 text-primary-blue'
+                            <div className={`size-10 rounded-2xl flex items-center justify-center shrink-0 ${
+                              isWithdrawal 
+                                ? 'bg-amber-50 text-amber-600 border border-amber-100'
+                                : isReseller 
+                                  ? 'bg-purple-50 text-purple-600 border border-purple-100'
+                                  : 'bg-emerald-50 text-emerald-600 border border-emerald-100'
                             }`}>
-                              {item.type === 'commission' || item.type === 'Comissão' ? <ArrowUpRight size={18} /> : <ExternalLink size={18} />}
+                              {isWithdrawal ? (
+                                <Wallet size={18} />
+                              ) : isReseller ? (
+                                <Building2 size={18} />
+                              ) : (
+                                <ArrowUpRight size={18} />
+                              )}
                             </div>
-                            <span className="font-bold text-sm tracking-tight">{item.type === 'commission' || item.type === 'Comissão' ? 'Cashback' : item.type}</span>
+                            <span className="font-bold text-sm tracking-tight text-midnight whitespace-nowrap">
+                              {typeLabel}
+                            </span>
                           </div>
-                      </td>
-                      <td className="py-6">
-                        <p className="font-bold text-midnight text-sm max-w-xs truncate">{item.description}</p>
-                      </td>
-                      <td className="py-6">
-                        <div className="flex items-center gap-2 text-slate-400">
-                          <Clock size={14} />
-                          <span className="text-xs font-bold">{item.date}</span>
-                        </div>
-                      </td>
-                      <td className="py-6 text-right font-black text-midnight text-sm">
-                        R$ {Number(item.amount).toFixed(2)}
-                      </td>
-                      <td className="py-6 text-right pr-4">
-                         <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-50 text-emerald-600 rounded-full text-[10px] font-black uppercase">
-                           +{item.points} pts
-                           <CheckCircle2 size={12} />
-                         </span>
-                      </td>
-                    </motion.tr>
-                  ))
+                        </td>
+                        <td className="py-6">
+                          <p className="font-bold text-midnight text-sm max-w-xs truncate" title={item.description}>
+                            {item.description}
+                          </p>
+                        </td>
+                        <td className="py-6">
+                          <div className="flex items-center gap-2 text-slate-400">
+                            <Clock size={14} />
+                            <span className="text-xs font-bold">{item.date}</span>
+                          </div>
+                        </td>
+                        <td className="py-6 text-right font-black text-midnight text-sm">
+                          <span className={item.amount > 0 ? 'text-emerald-600' : 'text-slate-800'}>
+                            {item.amount > 0 ? '+' : ''}{Number(item.amount).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                          </span>
+                        </td>
+                        <td className="py-6 text-center pr-4">
+                          {item.level === 'REG' ? (
+                            <span className="inline-flex items-center justify-center px-2.5 py-1 rounded-xl text-[10px] font-black bg-purple-100 text-purple-700 border border-purple-200 shadow-sm" title="Comissão de Revendedor Regional">
+                              🏢 REG
+                            </span>
+                          ) : item.level === '0' ? (
+                            <span className="inline-flex items-center justify-center px-2.5 py-1 rounded-xl text-[10px] font-black bg-amber-100 text-amber-800 border border-amber-200 shadow-sm" title="Titular da Compra (G0)">
+                              🟡 G0
+                            </span>
+                          ) : item.level === '1' ? (
+                            <span className="inline-flex items-center justify-center px-2.5 py-1 rounded-xl text-[10px] font-black bg-emerald-100 text-emerald-800 border border-emerald-200 shadow-sm" title="1º Nível (G1)">
+                              🟢 G1
+                            </span>
+                          ) : item.level === '2' ? (
+                            <span className="inline-flex items-center justify-center px-2.5 py-1 rounded-xl text-[10px] font-black bg-sky-100 text-sky-800 border border-sky-200 shadow-sm" title="2º Nível (G2)">
+                              🔵 G2
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-50 text-emerald-600 rounded-full text-[10px] font-black uppercase">
+                              {item.status || 'Pago'}
+                              <CheckCircle2 size={12} />
+                            </span>
+                          )}
+                        </td>
+                      </motion.tr>
+                    );
+                  })
                 )}
               </tbody>
             </table>

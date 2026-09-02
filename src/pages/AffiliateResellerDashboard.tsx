@@ -10,11 +10,13 @@ import {
   UserPlus,
   Sparkles,
   CheckCircle2,
-  Shield
+  Shield,
+  Copy,
+  ExternalLink
 } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { Link } from 'react-router-dom';
 import AffiliateLayout from '../components/AffiliateLayout';
-import ResellerRegisterModal from '../components/ResellerRegisterModal';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import { businessRules } from '../lib/businessRules';
@@ -31,7 +33,6 @@ export default function AffiliateResellerDashboard() {
   const [regionalConfig, setRegionalConfig] = useState<any>(null);
   const [transactions, setTransactions] = useState<any[]>([]);
   const [closedDeals, setClosedDeals] = useState<any[]>([]);
-  const [isRegisterModalOpen, setIsRegisterModalOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<'transactions' | 'deals'>('deals');
 
   const loadResellerData = async () => {
@@ -161,13 +162,37 @@ export default function AffiliateResellerDashboard() {
             <p className="text-slate-500 font-medium mt-1">Realize apresentações, feche cadastros e receba comissão direta sobre cada venda.</p>
           </div>
 
-          <button
-            onClick={() => setIsRegisterModalOpen(true)}
-            className="bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-slate-900 font-black px-8 py-4 rounded-2xl text-xs uppercase tracking-widest transition-all shadow-xl shadow-amber-500/20 flex items-center justify-center gap-3 cursor-pointer active:scale-95 shrink-0"
-          >
-            <UserPlus size={18} />
-            Cadastrar Novo Membro
-          </button>
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+            <button
+              onClick={() => {
+                const code = profile?.referral_code || user?.id;
+                const link = `${window.location.origin}/cadastro?rev=${code}`;
+                navigator.clipboard.writeText(link);
+                toast.success('Link do Revendedor copiado!', {
+                  style: {
+                    borderRadius: '16px',
+                    background: '#0a0e17',
+                    color: '#fff',
+                    fontWeight: 'bold',
+                    fontSize: '12px'
+                  }
+                });
+              }}
+              className="px-6 py-4 rounded-2xl bg-white hover:bg-slate-50 text-midnight font-black text-xs uppercase tracking-widest border border-slate-200 shadow-sm flex items-center justify-center gap-2 transition-all cursor-pointer active:scale-95"
+              title="Copiar Link de Cadastro Direto do Revendedor"
+            >
+              <Copy size={16} className="text-amber-500" />
+              Copiar Link
+            </button>
+
+            <Link
+              to={`/cadastro?rev=${profile?.referral_code || user?.id}`}
+              className="bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-slate-900 font-black px-8 py-4 rounded-2xl text-xs uppercase tracking-widest transition-all shadow-xl shadow-amber-500/20 flex items-center justify-center gap-3 cursor-pointer active:scale-95 shrink-0"
+            >
+              <UserPlus size={18} />
+              Cadastrar Novo Membro
+            </Link>
+          </div>
         </div>
 
         {/* Cards de Métricas */}
@@ -372,12 +397,12 @@ export default function AffiliateResellerDashboard() {
                   <p className="text-xs text-slate-400 font-medium max-w-sm mx-auto mb-6">
                     Clique no botão acima para cadastrar seu primeiro membro e começar a lucrar com vendas diretas.
                   </p>
-                  <button
-                    onClick={() => setIsRegisterModalOpen(true)}
-                    className="bg-amber-500 text-slate-950 font-black px-6 py-3 rounded-xl text-xs uppercase tracking-widest hover:bg-amber-600 transition-all cursor-pointer"
+                  <Link
+                    to={`/cadastro?rev=${profile?.referral_code || user?.id}`}
+                    className="bg-amber-500 text-slate-950 font-black px-6 py-3 rounded-xl text-xs uppercase tracking-widest hover:bg-amber-600 transition-all inline-block cursor-pointer"
                   >
                     Cadastrar Primeiro Membro
-                  </button>
+                  </Link>
                 </div>
               )}
             </div>
@@ -450,14 +475,6 @@ export default function AffiliateResellerDashboard() {
             </div>
           </div>
         )}
-
-        {/* Modal de Cadastro Direto do Revendedor */}
-        <ResellerRegisterModal
-          isOpen={isRegisterModalOpen}
-          onClose={() => setIsRegisterModalOpen(false)}
-          resellerUser={user}
-          onSuccess={loadResellerData}
-        />
 
       </div>
     </AffiliateLayout>

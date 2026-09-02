@@ -6,9 +6,14 @@ dotenv.config({ path: path.resolve('.env') });
 
 const supabase = createClient(process.env.VITE_SUPABASE_URL!, process.env.VITE_SUPABASE_ANON_KEY!);
 
-async function checkConfig() {
-  const { data: config } = await supabase.from('mmn_config').select('*');
-  console.log('MMN Config:', config);
+async function checkAllTxs() {
+  const { data: txs } = await supabase
+    .from('transactions')
+    .select('*')
+    .order('created_at', { ascending: false })
+    .limit(10);
+  
+  console.log('Last 10 transactions:', txs);
 }
 
-checkConfig();
+checkAllTxs();

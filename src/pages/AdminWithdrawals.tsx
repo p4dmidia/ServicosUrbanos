@@ -154,7 +154,7 @@ export default function AdminWithdrawals() {
     csvContent.push('');
     
     // Totais Gerais
-    csvContent.push('Total Geral Pendente;Pendente Mensal;Pendente Semanal;Pendente Anual');
+    csvContent.push('Total Geral Liquido;Mensal Liquido;Semanal Liquido;Anual Liquido');
     csvContent.push([
       `R$ ${totalPending.toFixed(2).replace('.', ',')}`,
       `R$ ${totalMonthlyPending.toFixed(2).replace('.', ',')}`,
@@ -164,21 +164,26 @@ export default function AdminWithdrawals() {
     csvContent.push('');
     
     // Detalhado
-    csvContent.push('Nivel;Pedido;Nome;Email;Chave PIX;Dados Bancarios;Pendente Mensal;Pendente Semanal;Pendente Anual;Pendente Total');
+    csvContent.push('Nivel;Pedido;Nome;Email;Tipo;Chave PIX;Dados Bancarios;Bruto Mensal;INSS (11% PF);Mensal Liquido;Semanal Liquido;Anual Liquido;Total Liquido a Pagar');
     
     payableBalances.forEach(w => {
-      const userTotal = (w.monthlyPending || 0) + (w.digitalPending || 0) + (w.annualPending || 0);
+      const userTotalLiquid = (w.monthlyLiquid !== undefined ? w.monthlyLiquid : w.monthlyPending) + 
+                              (w.digitalLiquid !== undefined ? w.digitalLiquid : (w.digitalPending || 0)) + 
+                              (w.annualLiquid !== undefined ? w.annualLiquid : (w.annualPending || 0));
       csvContent.push([
         w.level || 'G0',
         w.orderNumber ? `#${w.orderNumber}` : '---',
         w.userName,
         w.userEmail,
+        w.isPJ ? 'PJ (CNPJ)' : 'PF (CPF)',
         `"${w.pixKey}"`,
         `"${w.bankDetails}"`,
         `R$ ${(w.monthlyPending || 0).toFixed(2).replace('.', ',')}`,
-        `R$ ${(w.digitalPending || 0).toFixed(2).replace('.', ',')}`,
-        `R$ ${(w.annualPending || 0).toFixed(2).replace('.', ',')}`,
-        `R$ ${userTotal.toFixed(2).replace('.', ',')}`
+        `R$ ${(w.monthlyInss || 0).toFixed(2).replace('.', ',')}`,
+        `R$ ${(w.monthlyLiquid !== undefined ? w.monthlyLiquid : w.monthlyPending).toFixed(2).replace('.', ',')}`,
+        `R$ ${(w.digitalLiquid !== undefined ? w.digitalLiquid : (w.digitalPending || 0)).toFixed(2).replace('.', ',')}`,
+        `R$ ${(w.annualLiquid !== undefined ? w.annualLiquid : (w.annualPending || 0)).toFixed(2).replace('.', ',')}`,
+        `R$ ${userTotalLiquid.toFixed(2).replace('.', ',')}`
       ].join(';'));
     });
 
@@ -211,13 +216,13 @@ export default function AdminWithdrawals() {
   const paginatedBalances = filteredBalances.slice(startIndex, startIndex + itemsPerPage);
   const totalPages = Math.ceil(filteredBalances.length / itemsPerPage);
 
-  const totalMonthlyPending = payableBalances.reduce((acc, curr) => acc + (curr.monthlyPending || 0), 0);
-  const totalAnnualPending = payableBalances.reduce((acc, curr) => acc + (curr.annualPending || 0), 0);
-  const totalDigitalPending = payableBalances.reduce((acc, curr) => acc + (curr.digitalPending || 0), 0);
+  const totalMonthlyPending = payableBalances.reduce((acc, curr) => acc + (curr.monthlyLiquid !== undefined ? curr.monthlyLiquid : (curr.monthlyPending || 0)), 0);
+  const totalAnnualPending = payableBalances.reduce((acc, curr) => acc + (curr.annualLiquid !== undefined ? curr.annualLiquid : (curr.annualPending || 0)), 0);
+  const totalDigitalPending = payableBalances.reduce((acc, curr) => acc + (curr.digitalLiquid !== undefined ? curr.digitalLiquid : (curr.digitalPending || 0)), 0);
   const totalPending = totalMonthlyPending + totalAnnualPending + totalDigitalPending;
 
   return (
-    <AdminLayout title="Gestão de Pagamentos" subtitle="Central de pagamentos manuais de cashback e repasses">
+    <AdminLayout title="Gestão de Pagamentos" subtitle="Central de pagamentos manuais de cashback e repasses (Valores Líquidos com INSS)">
       <div className="p-8 lg:p-12 space-y-10">
         
         {/* Toggle de Abas: Rede MMN vs Revendedores */}
@@ -246,14 +251,14 @@ export default function AdminWithdrawals() {
 
         {/* Stats Header */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-          {/* Card 1: Total Geral */}
+          {/* Card 1: Total Geral Líquido */}
           <div className="flex items-center gap-6 bg-[#0a0e17] p-8 rounded-[2.5rem] border border-white/5 shadow-2xl relative overflow-hidden group">
              <div className="size-16 bg-indigo-500/20 text-indigo-400 rounded-3xl flex items-center justify-center shadow-lg shadow-indigo-500/10 shrink-0">
                 <DollarSign size={32} />
              </div>
              <div>
                 <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest leading-none mb-2">
-                  {viewTab === 'reseller' ? 'Total Revendedor Pendente' : 'Total Rede MMN Pendente'}
+                  {viewTab === 'reseller' ? 'Total Revendedor Líquido' : 'Total Rede MMN Líquido'}
                 </p>
                 <p className="text-3xl font-black text-white tracking-tighter italic">
                   R$ {totalPending.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
@@ -261,14 +266,14 @@ export default function AdminWithdrawals() {
              </div>
           </div>
 
-          {/* Card 2: Mensal */}
+          {/* Card 2: Mensal Líquido */}
           <div className="flex items-center gap-6 bg-[#0a0e17] p-8 rounded-[2.5rem] border border-white/5 shadow-2xl relative overflow-hidden group">
              <div className="size-16 bg-emerald-500/20 text-emerald-400 rounded-3xl flex items-center justify-center shadow-lg shadow-emerald-500/10 shrink-0">
                 <TrendingUp size={32} />
              </div>
              <div>
                 <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest leading-none mb-2">
-                  {viewTab === 'reseller' ? 'Repasse Mensal (2% PIX)' : 'Pendente Mensal (PIX)'}
+                  {viewTab === 'reseller' ? 'Repasse Mensal Líquido' : 'Pendente Mensal Líquido'}
                 </p>
                 <p className="text-3xl font-black text-white tracking-tighter italic">
                   R$ {totalMonthlyPending.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
@@ -276,14 +281,14 @@ export default function AdminWithdrawals() {
              </div>
           </div>
 
-          {/* Card 3: Semanal */}
+          {/* Card 3: Semanal Líquido */}
           <div className="flex items-center gap-6 bg-[#0a0e17] p-8 rounded-[2.5rem] border border-white/5 shadow-2xl relative overflow-hidden group">
              <div className="size-16 bg-purple-500/20 text-purple-400 rounded-3xl flex items-center justify-center shadow-lg shadow-purple-500/10 shrink-0">
                 <Wallet size={32} />
              </div>
              <div>
                 <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest leading-none mb-2">
-                  {viewTab === 'reseller' ? 'Repasse Semanal (2% Carteira)' : 'Pendente Semanal (Carteira)'}
+                  {viewTab === 'reseller' ? 'Repasse Semanal Líquido' : 'Pendente Semanal Líquido'}
                 </p>
                 <p className="text-3xl font-black text-white tracking-tighter italic">
                   R$ {totalDigitalPending.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
@@ -291,14 +296,14 @@ export default function AdminWithdrawals() {
              </div>
           </div>
 
-          {/* Card 4: Anual */}
+          {/* Card 4: Anual Líquido */}
           <div className="flex items-center gap-6 bg-[#0a0e17] p-8 rounded-[2.5rem] border border-white/5 shadow-2xl relative overflow-hidden group">
              <div className="size-16 bg-blue-500/20 text-blue-400 rounded-3xl flex items-center justify-center shadow-lg shadow-blue-500/10 shrink-0">
                 <Calendar size={32} />
              </div>
              <div>
                 <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest leading-none mb-2">
-                  {viewTab === 'reseller' ? 'Repasse Anual (2% 10/Dez)' : 'Pendente Anual (10/Dez)'}
+                  {viewTab === 'reseller' ? 'Repasse Anual Líquido' : 'Pendente Anual Líquido'}
                 </p>
                 <p className="text-3xl font-black text-white tracking-tighter italic">
                   R$ {totalAnnualPending.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
@@ -391,6 +396,16 @@ export default function AdminWithdrawals() {
                             </span>
                           )}
 
+                          {w.isPJ ? (
+                            <span className="px-2.5 py-1 bg-blue-500/10 text-blue-300 rounded-lg text-[8px] font-black uppercase tracking-widest border border-blue-500/20">
+                              🏢 CNPJ (Isento)
+                            </span>
+                          ) : (
+                            <span className="px-2.5 py-1 bg-amber-500/10 text-amber-300 rounded-lg text-[8px] font-black uppercase tracking-widest border border-amber-500/20">
+                              👤 PF (INSS 11%)
+                            </span>
+                          )}
+
                           {viewTab === 'reseller' ? (
                             <span className="px-2.5 py-1 bg-purple-500/10 text-purple-300 rounded-lg text-[8px] font-black uppercase tracking-widest border border-purple-500/20">
                               {w.polo ? `Polo ${w.polo}` : 'Líder Regional'}
@@ -418,11 +433,17 @@ export default function AdminWithdrawals() {
 
                     <div className="flex flex-col md:flex-row items-center gap-8 bg-white/5 p-6 rounded-[2rem] border border-white/5">
                       <div className="flex gap-8">
+                        {/* Mensal */}
                         <div className="text-center md:text-left border-r border-white/10 pr-8">
-                           <p className="text-[10px] font-black text-emerald-500 uppercase tracking-widest mb-1">Mensal</p>
+                           <p className="text-[10px] font-black text-emerald-500 uppercase tracking-widest mb-1">Mensal Líquido</p>
                            <p className="text-2xl font-black text-white tracking-tighter italic">
-                             R$ {w.monthlyPending.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                             R$ {(w.monthlyLiquid !== undefined ? w.monthlyLiquid : w.monthlyPending).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                            </p>
+                           {!w.isPJ && w.monthlyInss > 0 && (
+                             <p className="text-[8px] text-slate-500 font-bold mt-0.5">
+                               Bruto R$ {w.monthlyPending.toFixed(2)} | INSS: -R$ {w.monthlyInss.toFixed(2)}
+                             </p>
+                           )}
                            <button 
                              onClick={() => {
                                if (!w.isEligible) {
@@ -440,11 +461,18 @@ export default function AdminWithdrawals() {
                              {w.isEligible ? 'Dar Baixa' : '🔒 Bloqueado'}
                            </button>
                         </div>
+
+                        {/* Semanal */}
                         <div className="text-center md:text-left border-r border-white/10 pr-8">
-                           <p className="text-[10px] font-black text-purple-400 uppercase tracking-widest mb-1">Semanal</p>
+                           <p className="text-[10px] font-black text-purple-400 uppercase tracking-widest mb-1">Semanal Líquido</p>
                            <p className="text-2xl font-black text-white tracking-tighter italic">
-                             R$ {(w.digitalPending || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                             R$ {(w.digitalLiquid !== undefined ? w.digitalLiquid : (w.digitalPending || 0)).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                            </p>
+                           {!w.isPJ && w.digitalInss > 0 && (
+                             <p className="text-[8px] text-slate-500 font-bold mt-0.5">
+                               Bruto R$ {w.digitalPending.toFixed(2)} | INSS: -R$ {w.digitalInss.toFixed(2)}
+                             </p>
+                           )}
                            <button 
                              onClick={() => {
                                if (!w.isEligible) {
@@ -462,11 +490,18 @@ export default function AdminWithdrawals() {
                              {w.isEligible ? 'Dar Baixa' : '🔒 Bloqueado'}
                            </button>
                         </div>
+
+                        {/* Anual */}
                         <div className="text-center md:text-left">
-                           <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest mb-1">Anual</p>
+                           <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest mb-1">Anual Líquido</p>
                            <p className="text-2xl font-black text-white tracking-tighter italic">
-                             R$ {w.annualPending.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                             R$ {(w.annualLiquid !== undefined ? w.annualLiquid : w.annualPending).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                            </p>
+                           {!w.isPJ && w.annualInss > 0 && (
+                             <p className="text-[8px] text-slate-500 font-bold mt-0.5">
+                               Bruto R$ {w.annualPending.toFixed(2)} | INSS: -R$ {w.annualInss.toFixed(2)}
+                             </p>
+                           )}
                            <button 
                              onClick={() => {
                                if (!w.isEligible) {
@@ -560,7 +595,26 @@ export default function AdminWithdrawals() {
 
         {/* Payout Modal */}
         <AnimatePresence>
-          {selectedPayout && (
+          {selectedPayout && (() => {
+            const grossAmount = selectedPayout.currentType === 'mensal' 
+              ? selectedPayout.monthlyPending 
+              : selectedPayout.currentType === 'anual' 
+                ? selectedPayout.annualPending 
+                : selectedPayout.digitalPending;
+
+            const inssAmount = selectedPayout.currentType === 'mensal' 
+              ? (selectedPayout.monthlyInss || 0) 
+              : selectedPayout.currentType === 'anual' 
+                ? (selectedPayout.annualInss || 0) 
+                : (selectedPayout.digitalInss || 0);
+
+            const liquidAmount = selectedPayout.currentType === 'mensal' 
+              ? (selectedPayout.monthlyLiquid !== undefined ? selectedPayout.monthlyLiquid : selectedPayout.monthlyPending) 
+              : selectedPayout.currentType === 'anual' 
+                ? (selectedPayout.annualLiquid !== undefined ? selectedPayout.annualLiquid : selectedPayout.annualPending) 
+                : (selectedPayout.digitalLiquid !== undefined ? selectedPayout.digitalLiquid : selectedPayout.digitalPending);
+
+            return (
             <div className="fixed inset-0 z-[100] flex items-center justify-center p-6">
               <motion.div 
                 initial={{ opacity: 0 }}
@@ -594,17 +648,33 @@ export default function AdminWithdrawals() {
                     </p>
                   </div>
 
-                  <div className="bg-white/5 rounded-3xl p-8 border border-white/10 text-center">
-                    <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">Valor a Pagar</p>
-                    <p className="text-5xl font-black text-white tracking-tighter italic">
-                      R$ {(
-                        selectedPayout.currentType === 'mensal' 
-                          ? selectedPayout.monthlyPending 
-                          : selectedPayout.currentType === 'anual' 
-                            ? selectedPayout.annualPending 
-                            : selectedPayout.digitalPending
-                      ).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                    </p>
+                  {/* Detalhamento Fiscais e Valor Líquido */}
+                  <div className="bg-white/5 rounded-3xl p-6 border border-white/10 space-y-3">
+                    <div className="flex justify-between items-center text-xs font-bold text-slate-400">
+                      <span>Rendimento Bruto:</span>
+                      <span className="text-white font-mono">R$ {grossAmount.toFixed(2).replace('.', ',')}</span>
+                    </div>
+
+                    {!selectedPayout.isPJ && inssAmount > 0 && (
+                      <div className="flex justify-between items-center text-xs font-bold text-amber-400">
+                        <span>Retenção INSS (11% PF):</span>
+                        <span className="font-mono">- R$ {inssAmount.toFixed(2).replace('.', ',')}</span>
+                      </div>
+                    )}
+
+                    {selectedPayout.isPJ && (
+                      <div className="flex justify-between items-center text-[10px] font-bold text-blue-400 bg-blue-500/10 px-3 py-1.5 rounded-xl">
+                        <span>Pessoa Jurídica (CNPJ):</span>
+                        <span>Isento de Retenção de INSS</span>
+                      </div>
+                    )}
+
+                    <div className="pt-3 border-t border-white/10 text-center">
+                      <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Valor Líquido a Pagar no PIX</p>
+                      <p className="text-4xl font-black text-emerald-400 tracking-tighter italic">
+                        R$ {liquidAmount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                      </p>
+                    </div>
                   </div>
 
                   {!selectedPayout.isEligible && (
@@ -681,7 +751,8 @@ export default function AdminWithdrawals() {
                 </div>
               </motion.div>
             </div>
-          )}
+          );
+          })()}
         </AnimatePresence>
       </div>
     </AdminLayout>

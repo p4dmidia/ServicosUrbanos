@@ -514,11 +514,11 @@ export default function Checkout() {
 
         const orderId = order.id;
 
-        // 1.1 Dar baixa automática: atualizar status do pedido para 'Pago, Aguardando Retirada'
+        // 1.1 Dar baixa automática: atualizar status do pedido para 'Pago'
         // Isso dispara a trigger de comissões do banco de dados automaticamente!
         const { error: updateStatusError } = await supabase
           .from('orders')
-          .update({ status: 'Pago, Aguardando Retirada' })
+          .update({ status: 'Concluído' })
           .eq('id', orderId);
 
         if (updateStatusError) throw updateStatusError;
@@ -697,7 +697,7 @@ export default function Checkout() {
             },
             (payload) => {
               console.log("Realtime update received:", payload.new.status);
-              if (payload.new.status === 'Pago, Aguardando Retirada' || payload.new.status === 'Concluído') {
+              if (payload.new.status === 'Pago' || payload.new.status === 'Concluído' || payload.new.status === 'Pago, Aguardando Retirada') {
                 setPaymentConfirmed(true);
                 setShowPixModal(false);
                 localStorage.removeItem('urbashop_cart');
@@ -717,7 +717,7 @@ export default function Checkout() {
 
           if (!pollError && orderUpdate) {
             console.log("Polling status check:", orderUpdate.status);
-            if (orderUpdate.status === 'Pago, Aguardando Retirada' || orderUpdate.status === 'Concluído') {
+            if (orderUpdate.status === 'Pago' || orderUpdate.status === 'Concluído' || orderUpdate.status === 'Pago, Aguardando Retirada') {
               setPaymentConfirmed(true);
               setShowPixModal(false);
               localStorage.removeItem('urbashop_cart');

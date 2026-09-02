@@ -112,6 +112,50 @@ export interface MarketplaceConfig {
   commissionRate: number;
 }
 
+// Funções Auxiliares Fiscais (INSS 11% para PF limitado a R$ 932,31 / 0% para PJ)
+export function isCnpj(documentOrCpf?: string | null, pixType?: string | null): boolean {
+  if (pixType === 'cnpj') return true;
+  if (!documentOrCpf) return false;
+  const digits = documentOrCpf.replace(/\D/g, '');
+  return digits.length > 11;
+}
+
+export function calculateTaxDeductions(bruto: number, isPjUser: boolean = false) {
+  const safeBruto = Math.max(0, bruto || 0);
+  if (isPjUser || safeBruto <= 0) {
+    return {
+      bruto: parseFloat(safeBruto.toFixed(2)),
+      inss: 0,
+      inssRate: 0,
+      inssMax: 932.31,
+      liquido: parseFloat(safeBruto.toFixed(2)),
+      isPJ: true,
+      patronal: 0
+    };
+  }
+
+  // Regra PF solicitada:
+  // INSS: 11% fixo, limitado a R$ 932,31
+  const inssRate = 0.11;
+  const inssMax = 932.31;
+  const rawInss = safeBruto * inssRate;
+  const inss = Math.min(rawInss, inssMax);
+  const liquido = Math.max(0, safeBruto - inss);
+  
+  // INSS Patronal (Encargo da empresa): 20% sobre o bruto
+  const patronal = safeBruto * 0.20;
+
+  return {
+    bruto: parseFloat(safeBruto.toFixed(2)),
+    inss: parseFloat(inss.toFixed(2)),
+    inssRate,
+    inssMax,
+    liquido: parseFloat(liquido.toFixed(2)),
+    isPJ: false,
+    patronal: parseFloat(patronal.toFixed(2))
+  };
+}
+
 export const businessRules = {
   // Usuário Atual
   getCurrentUser: async (): Promise<MerchantUser | null> => {
@@ -1029,8 +1073,19 @@ export const businessRules = {
         .limit(1)
         .maybeSingle();
 
-      let hasActiveSub = lastSub && lastSub.status === 'active' && new Date(lastSub.end_date) > new Date();
-      let activeSubData = lastSub ? {
+      const SIC_COMERCIO_ID = '194e5265-cdb6-431f-9f77-8888b1ee74ae';
+      const isSicComercio = userId === SIC_COMERCIO_ID;
+
+      let hasActiveSub = isSicComercio || (lastSub && lastSub.status === 'active' && new Date(lastSub.end_date) > new Date());
+      let activeSubData = isSicComercio ? {
+        id: 'sic-empresa-vitalicio',
+        planType: 'Empresa (Vitalício)',
+        amount: 0,
+        status: 'active',
+        startDate: '2026-01-01',
+        endDate: '2099-12-31',
+        isActive: true
+      } : (lastSub ? {
         id: lastSub.id,
         planType: lastSub.plan_type,
         amount: Number(lastSub.amount),
@@ -1038,7 +1093,7 @@ export const businessRules = {
         startDate: lastSub.start_date,
         endDate: lastSub.end_date,
         isActive: hasActiveSub
-      } : null;
+      } : null);
 
       // Fallback para LocalStorage se não houver assinatura ativa no Supabase
       if (!hasActiveSub) {
@@ -1267,33 +1322,46 @@ export const businessRules = {
         const orderId = orderMatch ? orderMatch[1].trim() : null;
         const order = orderId ? ordersMap.get(orderId) : null;
 
+        const desc = t.description || '';
+        const isReseller = desc.includes('Revendedor') || desc.includes('Regional');
+
         // Classificar saques e comissões como 'Semanal', 'Mensal' ou 'Anual' baseado na descrição
         let cashbackType = 'Outros';
-        const typeMatch = t.description?.match(/(Mensal|Anual|Semanal|Digital|CD)/i);
+        const typeMatch = desc.match(/(Mensal|Anual|Semanal|Digital|CD)/i);
         if (typeMatch) {
           const matched = typeMatch[1].toLowerCase();
-          if (matched === 'mensal') cashbackType = 'Mensal';
-          else if (matched === 'anual') cashbackType = 'Anual';
-          else cashbackType = 'Semanal'; // mapeia 'semanal', 'digital' e 'cd' para 'Semanal'
+          if (matched === 'mensal') cashbackType = isReseller ? 'Mensal (REG)' : 'Mensal';
+          else if (matched === 'anual') cashbackType = isReseller ? 'Anual (REG)' : 'Anual';
+          else cashbackType = isReseller ? 'Semanal (REG)' : 'Semanal';
         } else {
           cashbackType = t.type === 'withdrawal' ? 'Semanal' : 'Outros';
         }
 
-        // Determinar o nível, extraindo primeiramente da descrição (Nível X) se disponível
+        // Determinar o nível com precisão (G0, G1, G2 ou REG)
         let level = '---';
-        const levelMatch = t.description?.match(/\(N[íi]vel\s*(\d+)\)/i);
-        if (levelMatch) {
-          level = levelMatch[1];
-        } else if (order?.customer_id) {
-          if (order.customer_id === userId) {
-            level = '0';
-          } else if (levelMap.has(order.customer_id)) {
-            level = String(levelMap.get(order.customer_id));
-          }
+        if (isReseller) {
+          level = 'REG';
+        } else if (desc.includes('G0') || desc.includes('Titular')) {
+          level = '0';
+        } else if (desc.includes('G1')) {
+          level = '1';
+        } else if (desc.includes('G2')) {
+          level = '2';
         } else {
-          const todosNumeros = t.description?.match(/\d+/g) || [];
-          const nivelEncontrado = todosNumeros.find(n => n !== orderId && n.length < 3);
-          level = nivelEncontrado ? String(parseInt(nivelEncontrado, 10)) : (t.type === 'commission' ? '0' : '---');
+          const levelMatch = desc.match(/\(N[íi]vel\s*(\d+)\)/i);
+          if (levelMatch) {
+            level = levelMatch[1];
+          } else if (order?.customer_id) {
+            if (order.customer_id === userId) {
+              level = '0';
+            } else if (levelMap.has(order.customer_id)) {
+              level = String(levelMap.get(order.customer_id));
+            }
+          } else {
+            const todosNumeros = desc.match(/\d+/g) || [];
+            const nivelEncontrado = todosNumeros.find(n => n !== orderId && n.length < 3);
+            level = nivelEncontrado ? String(parseInt(nivelEncontrado, 10)) : (t.type === 'commission' ? '0' : '---');
+          }
         }
 
         let mappedDescription = t.description || '';
@@ -1307,15 +1375,34 @@ export const businessRules = {
           .replace(/Comiss[aã]o Mensal/gi, 'Cashback Mensal')
           .replace(/Comiss[aã]o Anual/gi, 'Cashback Anual');
 
+        let displayStatus = 'Pendente';
+        const rawStatus = order?.status || (t.status === 'completed' ? 'Pago' : 'Pendente');
+        if (rawStatus === 'Pago, Aguardando Retirada' || rawStatus === 'Pago' || rawStatus === 'Concluído' || rawStatus === 'completed') {
+          displayStatus = 'Pago';
+        } else if (rawStatus === 'Cancelado') {
+          displayStatus = 'Cancelado';
+        } else {
+          displayStatus = 'Pendente';
+        }
+
+        let displayName = order?.buyer_name || (t.type === 'withdrawal' ? 'Resgate' : 'Sistema');
+        if (isReseller && order?.buyer_name) {
+          displayName = `${order.buyer_name} (Regional)`;
+        } else if (level === '0' && order?.buyer_name) {
+          displayName = `${order.buyer_name} (Você)`;
+        }
+
         return {
           id: t.id,
           orderId: orderId || '---',
-          affiliateName: order?.buyer_name || (t.type === 'withdrawal' ? 'Resgate' : 'Sistema'),
+          affiliateName: displayName,
           level: level,
+          category: isReseller ? 'reseller' : (t.type === 'commission' ? 'network' : 'withdrawal'),
+          isReseller: isReseller,
           cashbackType: cashbackType,
           date: new Date(t.created_at).toLocaleDateString('pt-BR'),
           amount: t.amount,
-          status: order?.status || (t.status === 'completed' ? 'Concluído' : 'Pendente'),
+          status: displayStatus,
           originalType: t.type,
           description: mappedDescription
         };
@@ -2216,13 +2303,31 @@ export const businessRules = {
         }
       });
 
-      // Calcular o total e remover saldos negativos
+      // Calcular o total e deduções fiscais (INSS 11% para PF limitado a R$ 932,31 / 0% para PJ)
       Object.values(report).forEach((r: any) => {
         r.mensal = Math.max(0, Math.round(r.mensal * 100) / 100);
         r.anual = Math.max(0, Math.round(r.anual * 100) / 100);
         r.digital = Math.max(0, Math.round(r.digital * 100) / 100);
         r.total = Math.round((r.mensal + r.anual + r.digital) * 100) / 100;
-        r.payable_amount = r.is_active ? r.mensal : 0;
+
+        const isPJ = isCnpj(r.cpf, r.pix_key);
+        const taxMensal = calculateTaxDeductions(r.mensal, isPJ);
+        const taxAnual = calculateTaxDeductions(r.anual, isPJ);
+        const taxDigital = calculateTaxDeductions(r.digital, isPJ);
+        const taxTotal = calculateTaxDeductions(r.total, isPJ);
+
+        r.is_pj = isPJ;
+        r.inss_mensal = taxMensal.inss;
+        r.liquido_mensal = taxMensal.liquido;
+        r.inss_anual = taxAnual.inss;
+        r.liquido_anual = taxAnual.liquido;
+        r.inss_digital = taxDigital.inss;
+        r.liquido_digital = taxDigital.liquido;
+        r.inss_total = taxTotal.inss;
+        r.liquido_total = taxTotal.liquido;
+
+        // O valor a ser pago (liquidação PIX) para o afiliado ativo é o valor Líquido!
+        r.payable_amount = r.is_active ? taxMensal.liquido : 0;
       });
 
       return Object.values(report).sort((a: any, b: any) => b.total - a.total);
@@ -2867,6 +2972,12 @@ export const businessRules = {
       const annualPending = Math.max(0, annualBonus - annualPaid);
       const digitalPending = Math.max(0, walletBonus - totalWithdrawn);
 
+      const isPJ = isCnpj(profile.cpf, profile.pix_key);
+      const taxMonthly = calculateTaxDeductions(monthlyPending, isPJ);
+      const taxAnnual = calculateTaxDeductions(annualPending, isPJ);
+      const taxDigital = calculateTaxDeductions(digitalPending, isPJ);
+      const taxTotal = calculateTaxDeductions(monthlyPending + annualPending + digitalPending, isPJ);
+
       return {
         profileId: profile.id,
         userName: profile.full_name || 'N/A',
@@ -2874,9 +2985,20 @@ export const businessRules = {
         pixKey: profile.pix_key || 'Não informado',
         bankDetails: profile.bank_name ? `${profile.bank_name} / Ag: ${profile.bank_branch} / CC: ${profile.bank_account}` : 'Apenas PIX',
         whatsapp: profile.whatsapp || '',
-        monthlyPending,
-        annualPending,
-        digitalPending,
+        cpf: profile.cpf || '',
+        isPJ,
+        monthlyPending: taxMonthly.bruto,
+        monthlyInss: taxMonthly.inss,
+        monthlyLiquid: taxMonthly.liquido,
+        annualPending: taxAnnual.bruto,
+        annualInss: taxAnnual.inss,
+        annualLiquid: taxAnnual.liquido,
+        digitalPending: taxDigital.bruto,
+        digitalInss: taxDigital.inss,
+        digitalLiquid: taxDigital.liquido,
+        totalPending: taxTotal.bruto,
+        totalInss: taxTotal.inss,
+        totalLiquid: taxTotal.liquido,
         role: profile.role,
         isEligible,
         statusLabel: isEligible ? 'Adimplente / Ativo' : 'Inadimplente',
@@ -2922,16 +3044,27 @@ export const businessRules = {
       throw new Error('Usuário inadimplente (sem plano ativo). Pagamento bloqueado.');
     }
 
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('cpf, pix_key')
+      .eq('id', profileId)
+      .single();
+
+    const isPJ = isCnpj(profile?.cpf, profile?.pix_key);
+    const tax = calculateTaxDeductions(amount, isPJ);
+
     let displayType = '';
     if (type === 'mensal') displayType = 'Mensal';
     else if (type === 'anual') displayType = 'Anual';
     else displayType = 'Digital';
 
     const isReseller = category === 'reseller';
+    const taxDetail = isPJ ? ' (PJ Isento)' : (tax.inss > 0 ? ` (Líq. R$ ${tax.liquido.toFixed(2)} | INSS 11%: -R$ ${tax.inss.toFixed(2)})` : '');
     const description = isReseller 
-      ? `Pagamento Repasse Revendedor ${displayType} - ${new Date().toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}`
-      : `Pagamento Cashback Rede ${displayType} - ${new Date().toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}`;
+      ? `Pagamento Repasse Revendedor ${displayType}${taxDetail} - ${new Date().toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}`
+      : `Pagamento Cashback Rede ${displayType}${taxDetail} - ${new Date().toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}`;
     
+    // O valor deduzido na transação do usuário é o valor integral de comissão quitada (-amount)
     const { error } = await supabase
       .from('transactions')
       .insert([{

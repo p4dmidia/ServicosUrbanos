@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
     CheckCircle,
     User,
@@ -19,18 +19,26 @@ import {
     ShieldCheck,
     Info,
     AlertTriangle,
-    X
+    X,
+    Target,
+    Building2,
+    Sparkles
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import Header from '../components/Header';
 import PWAInstallPrompt from '../components/PWAInstallPrompt';
 import { supabase } from '../lib/supabase';
-import { useEffect } from 'react';
 import { toast } from 'react-hot-toast';
+
+// Empresa Matriz (Fallback Padrão para evitar afiliados órfãos)
+const SIC_COMERCIO_ID = '194e5265-cdb6-431f-9f77-8888b1ee74ae';
+const SIC_COMERCIO_CODE = 'A03A7B';
+const SIC_COMERCIO_NAME = 'Sic Comercio de Produtos Alimentícios e Serviços Ltda.';
 
 export default function Cadastro() {
     const navigate = useNavigate();
+    const [searchParams] = useSearchParams();
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [success, setSuccess] = useState(false);
@@ -46,28 +54,60 @@ export default function Cadastro() {
     const [gender, setGender] = useState('');
     const [password, setPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
+
+    // Sponsor (Patrocinador MMN)
     const [referralCode, setReferralCode] = useState('');
     const [referrerName, setReferrerName] = useState<string | null>(null);
     const [referrerId, setReferrerId] = useState<string | null>(null);
     const [isSearching, setIsSearching] = useState(false);
     const [isReferralLocked, setIsReferralLocked] = useState(false);
+
+    // Reseller (Revendedor Regional)
+    const [resellerCode, setResellerCode] = useState('');
+    const [resellerName, setResellerName] = useState<string | null>(null);
+    const [resellerId, setResellerId] = useState<string | null>(null);
+    const [isSearchingReseller, setIsSearchingReseller] = useState(false);
+    const [isResellerLocked, setIsResellerLocked] = useState(false);
+    const [isSameAsReseller, setIsSameAsReseller] = useState(false);
+
     const [bankName, setBankName] = useState('');
     const [pixKey, setPixKey] = useState('');
     const [bankBranch, setBankBranch] = useState('');
     const [bankAccount, setBankAccount] = useState('');
 
     useEffect(() => {
-        // Load referral from storage
-        const storedRef = localStorage.getItem('urba_referral');
-        if (storedRef) {
-            setReferralCode(storedRef);
-            fetchReferrerName(storedRef);
-            setIsReferralLocked(true);
+        // 1. Ler parâmetros da URL
+        const refParam = searchParams.get('ref') || searchParams.get('indicador');
+        const revParam = searchParams.get('rev') || searchParams.get('reseller') || searchParams.get('revendedor');
+
+        // 2. Revendedor Regional
+        const storedRev = revParam || localStorage.getItem('urba_reseller');
+        if (storedRev) {
+            setResellerCode(storedRev);
+            fetchResellerName(storedRev);
+            if (revParam) setIsResellerLocked(true);
         }
-    }, []);
+
+        // 3. Patrocinador MMN
+        // Se o ref for igual ao revendedor, ignorar para que o campo comece vazio!
+        const isRefSame = (refParam && storedRev && refParam.trim().toUpperCase() === storedRev.trim().toUpperCase()) ||
+                          (localStorage.getItem('urba_referral')?.trim().toUpperCase() === storedRev?.trim().toUpperCase());
+
+        if (refParam && !isRefSame) {
+            setReferralCode(refParam);
+            fetchReferrerName(refParam);
+        } else {
+            setReferralCode('');
+            setReferrerName(null);
+            setReferrerId(null);
+            setIsReferralLocked(false);
+            setIsSameAsReseller(false);
+            localStorage.removeItem('urba_referral');
+        }
+    }, [searchParams]);
 
     const fetchReferrerName = async (codeOrId: string) => {
-        if (!codeOrId || codeOrId.length < 3) {
+        if (!codeOrId || codeOrId.trim().length < 3) {
             setReferrerName(null);
             setReferrerId(null);
             setIsSearching(false);
@@ -76,33 +116,30 @@ export default function Cadastro() {
 
         setIsSearching(true);
         try {
-            // 1. Try to find by friendly referral_code
-            try {
-                const { data: results } = await supabase
-                    .from('profiles')
-                    .select('id, full_name')
-                    .eq('referral_code', codeOrId.toUpperCase())
-                    .limit(1);
+            const cleanCode = codeOrId.trim().toUpperCase();
+            const cleanCpf = codeOrId.replace(/\D/g, '');
 
-                const byCode = results && results.length > 0 ? results[0] : null;
+            const { data: results } = await supabase
+                .from('profiles')
+                .select('id, full_name, referral_code')
+                .or(`referral_code.eq.${cleanCode},cpf.eq.${cleanCpf || 'none'}`)
+                .limit(1);
 
-                if (byCode) {
-                    setReferrerName(byCode.full_name);
-                    setReferrerId(byCode.id);
-                    setIsSearching(false);
-                    return;
-                }
-            } catch (e) {
-                // Ignore errors
+            const byCode = results && results.length > 0 ? results[0] : null;
+
+            if (byCode) {
+                setReferrerName(byCode.full_name);
+                setReferrerId(byCode.id);
+                setIsSearching(false);
+                return;
             }
 
-            // 2. Fallback: Try to find by UUID (backward compatibility)
             const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-            if (uuidRegex.test(codeOrId)) {
+            if (uuidRegex.test(codeOrId.trim())) {
                 const { data: byId } = await supabase
                     .from('profiles')
                     .select('id, full_name')
-                    .eq('id', codeOrId)
+                    .eq('id', codeOrId.trim())
                     .single();
 
                 if (byId) {
@@ -121,6 +158,60 @@ export default function Cadastro() {
             setReferrerId(null);
         } finally {
             setIsSearching(false);
+        }
+    };
+
+    const fetchResellerName = async (codeOrId: string) => {
+        if (!codeOrId || codeOrId.trim().length < 3) {
+            setResellerName(null);
+            setResellerId(null);
+            setIsSearchingReseller(false);
+            return;
+        }
+
+        setIsSearchingReseller(true);
+        try {
+            const cleanCode = codeOrId.trim().toUpperCase();
+            const cleanCpf = codeOrId.replace(/\D/g, '');
+
+            const { data: results } = await supabase
+                .from('profiles')
+                .select('id, full_name, referral_code, role')
+                .or(`referral_code.eq.${cleanCode},cpf.eq.${cleanCpf || 'none'}`)
+                .limit(1);
+
+            const found = results && results.length > 0 ? results[0] : null;
+            if (found) {
+                setResellerName(found.full_name);
+                setResellerId(found.id);
+                setIsSearchingReseller(false);
+                return;
+            }
+
+            const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+            if (uuidRegex.test(codeOrId.trim())) {
+                const { data: byId } = await supabase
+                    .from('profiles')
+                    .select('id, full_name')
+                    .eq('id', codeOrId.trim())
+                    .single();
+
+                if (byId) {
+                    setResellerName(byId.full_name);
+                    setResellerId(byId.id);
+                    setIsSearchingReseller(false);
+                    return;
+                }
+            }
+
+            setResellerName(null);
+            setResellerId(null);
+        } catch (err) {
+            console.error("Erro ao buscar revendedor:", err);
+            setResellerName(null);
+            setResellerId(null);
+        } finally {
+            setIsSearchingReseller(false);
         }
     };
 
@@ -275,6 +366,9 @@ export default function Cadastro() {
             return;
         }
 
+        const finalSponsorId = referrerId || SIC_COMERCIO_ID;
+        const finalResellerId = resellerId || SIC_COMERCIO_ID;
+
         try {
             const { data, error: signUpError } = await supabase.auth.signUp({
                 email,
@@ -285,7 +379,8 @@ export default function Cadastro() {
                         whatsapp: whatsapp,
                         cpf: cpf.replace(/\D/g, ''),
                         role: 'affiliate',
-                        referred_by: referrerId || null,
+                        referred_by: finalSponsorId,
+                        reseller_id: finalResellerId,
                         address,
                         number,
                         neighborhood,
@@ -312,6 +407,29 @@ export default function Cadastro() {
                 return;
             }
 
+            if (data?.user?.id) {
+                await supabase.from('profiles').update({
+                    full_name: fullName,
+                    whatsapp: whatsapp,
+                    cpf: cpf.replace(/\D/g, ''),
+                    role: 'affiliate',
+                    referred_by: finalSponsorId,
+                    reseller_id: finalResellerId,
+                    address,
+                    number,
+                    neighborhood,
+                    city,
+                    state,
+                    zip_code: zipCode.replace(/\D/g, ''),
+                    birth_date: birthDate,
+                    gender: gender,
+                    bank_name: bankName,
+                    bank_branch: bankBranch,
+                    bank_account: bankAccount,
+                    pix_key: pixKey
+                }).eq('id', data.user.id);
+            }
+
             toast.success('Conta criada com sucesso!', {
                 style: {
                     borderRadius: '16px',
@@ -323,6 +441,19 @@ export default function Cadastro() {
             });
 
             localStorage.removeItem('urba_referral');
+            localStorage.removeItem('urba_reseller');
+
+            // Login automático e direcionamento para ativação do plano
+            try {
+                const { error: signInErr } = await supabase.auth.signInWithPassword({ email, password });
+                if (!signInErr) {
+                    navigate('/afiliado/renovacoes');
+                    return;
+                }
+            } catch (loginErr) {
+                console.warn('Auto login warning:', loginErr);
+            }
+
             navigate('/login');
         } catch (err: any) {
             console.error("Erro no Supabase Auth:", err);
@@ -779,49 +910,147 @@ export default function Cadastro() {
                                 </div>
                             </div>
 
-                            {/* Código de Indicação (Optional) */}
-                            <div className="pt-4">
-                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 mb-2 block">Cód. Indicação (Opcional)</label>
-                                <div className="relative group">
-                                    <TrendingUp className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300" size={18} />
-                                    <input
-                                        type="text"
-                                        value={referralCode}
-                                        onChange={(e) => {
-                                            if (isReferralLocked) return;
-                                            const val = e.target.value;
-                                            setReferralCode(val);
-                                            fetchReferrerName(val);
-                                        }}
-                                        disabled={isReferralLocked}
-                                        placeholder="EX: A1B2C3"
-                                        className={`w-full pl-12 pr-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500/50 transition-all font-bold text-midnight placeholder:text-slate-300 uppercase ${isReferralLocked ? 'opacity-70 cursor-not-allowed bg-slate-100/50' : ''}`}
-                                    />
+                            {/* Seção 5: Indicações e Liderança Regional */}
+                            <div className="pt-4 space-y-6">
+                                <div className="flex items-center gap-3 mb-2">
+                                    <div className="size-1.5 rounded-full bg-emerald-500" />
+                                    <h3 className="text-[11px] font-black uppercase tracking-widest text-midnight">05. Indicação e Liderança Regional</h3>
                                 </div>
-                                {referrerName ? (
-                                    <motion.div
-                                        initial={{ opacity: 0, y: -10 }}
-                                        animate={{ opacity: 1, y: 0 }}
-                                        className="mt-3 ml-1 p-4 bg-emerald-500/5 border border-emerald-500/10 rounded-2xl flex items-center gap-4 group"
-                                    >
-                                        <div className="size-10 rounded-xl bg-emerald-500 text-midnight flex items-center justify-center shadow-lg shadow-emerald-500/20 transform group-hover:scale-110 transition-transform">
-                                            <User size={20} />
+
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    {/* Código de Indicação (MMN Sponsor) */}
+                                    <div className="flex flex-col gap-2">
+                                        <div className="flex justify-between items-center px-1">
+                                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">
+                                                Cód. Patrocinador MMN (Opcional)
+                                            </label>
+                                            {isSameAsReseller && (
+                                                <span className="text-[9px] font-black text-amber-500 uppercase tracking-widest">
+                                                    Mesmo do Revendedor
+                                                </span>
+                                            )}
                                         </div>
-                                        <div>
-                                            <p className="text-[9px] font-black text-emerald-600 uppercase tracking-[0.2em] mb-0.5">Indicação Confirmada</p>
-                                            <p className="text-sm font-black text-midnight uppercase italic">
-                                                Indicado por: <span className="text-emerald-600 underline underline-offset-4">{referrerName}</span>
-                                            </p>
+                                        <div className="relative group">
+                                            <TrendingUp className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300" size={18} />
+                                            <input
+                                                type="text"
+                                                value={referralCode}
+                                                onChange={(e) => {
+                                                    if (isSameAsReseller) return;
+                                                    const val = e.target.value;
+                                                    setReferralCode(val);
+                                                    fetchReferrerName(val);
+                                                }}
+                                                disabled={isSameAsReseller}
+                                                placeholder="EX: A1B2C3 ou CPF (ou em branco)"
+                                                className={`w-full pl-12 pr-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500/50 transition-all font-bold text-midnight placeholder:text-slate-300 uppercase ${isSameAsReseller ? 'opacity-70 cursor-not-allowed bg-slate-100/50' : ''}`}
+                                            />
                                         </div>
-                                    </motion.div>
-                                ) : isSearching && (
-                                    <div className="mt-2 ml-1 flex items-center gap-2">
-                                        <div className="size-1.5 rounded-full bg-slate-200 animate-pulse" />
-                                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest italic">
-                                            Buscando afiliado...
-                                        </p>
+                                        {referrerName ? (
+                                            <motion.div
+                                                initial={{ opacity: 0, y: -10 }}
+                                                animate={{ opacity: 1, y: 0 }}
+                                                className="mt-1 p-3 bg-emerald-500/5 border border-emerald-500/10 rounded-2xl flex items-center gap-3 group"
+                                            >
+                                                <div className="size-8 rounded-xl bg-emerald-500 text-midnight flex items-center justify-center shadow-md shadow-emerald-500/20 shrink-0">
+                                                    <User size={16} />
+                                                </div>
+                                                <div className="min-w-0">
+                                                    <p className="text-[8px] font-black text-emerald-600 uppercase tracking-widest leading-none mb-0.5">Indicador Confirmado</p>
+                                                    <p className="text-xs font-black text-midnight uppercase truncate">{referrerName}</p>
+                                                </div>
+                                            </motion.div>
+                                        ) : isSearching && (
+                                            <div className="mt-1 ml-1 flex items-center gap-2">
+                                                <div className="size-1.5 rounded-full bg-slate-200 animate-pulse" />
+                                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest italic">
+                                                    Buscando patrocinador...
+                                                </p>
+                                            </div>
+                                        )}
                                     </div>
-                                )}
+
+                                    {/* Código do Revendedor Regional */}
+                                    <div className="flex flex-col gap-2">
+                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 block">
+                                            Cód. Revendedor Regional (Opcional)
+                                        </label>
+                                        <div className="relative group">
+                                            <Building2 className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300" size={18} />
+                                            <input
+                                                type="text"
+                                                value={resellerCode}
+                                                onChange={(e) => {
+                                                    if (isResellerLocked) return;
+                                                    const val = e.target.value;
+                                                    setResellerCode(val);
+                                                    fetchResellerName(val);
+                                                }}
+                                                disabled={isResellerLocked}
+                                                placeholder="EX: REV123 ou CPF"
+                                                className={`w-full pl-12 pr-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:outline-none focus:ring-4 focus:ring-purple-500/10 focus:border-purple-500/50 transition-all font-bold text-midnight placeholder:text-slate-300 uppercase ${isResellerLocked ? 'opacity-70 cursor-not-allowed bg-slate-100/50' : ''}`}
+                                            />
+                                        </div>
+                                        {resellerName ? (
+                                            <motion.div
+                                                initial={{ opacity: 0, y: -10 }}
+                                                animate={{ opacity: 1, y: 0 }}
+                                                className="mt-1 p-3 bg-purple-500/5 border border-purple-500/10 rounded-2xl flex items-center gap-3 group"
+                                            >
+                                                <div className="size-8 rounded-xl bg-purple-500 text-white flex items-center justify-center shadow-md shadow-purple-500/20 shrink-0">
+                                                    <Target size={16} />
+                                                </div>
+                                                <div className="min-w-0">
+                                                    <p className="text-[8px] font-black text-purple-600 uppercase tracking-widest leading-none mb-0.5">Revendedor Confirmado</p>
+                                                    <p className="text-xs font-black text-midnight uppercase truncate">{resellerName}</p>
+                                                </div>
+                                            </motion.div>
+                                        ) : isSearchingReseller && (
+                                            <div className="mt-1 ml-1 flex items-center gap-2">
+                                                <div className="size-1.5 rounded-full bg-slate-200 animate-pulse" />
+                                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest italic">
+                                                    Buscando revendedor...
+                                                </p>
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* Checkbox de Indicação pelo Revendedor */}
+                                    {resellerCode && (
+                                        <div className="md:col-span-2">
+                                            <label className="flex items-start sm:items-center gap-3 p-4 bg-amber-500/5 border border-amber-500/20 rounded-2xl cursor-pointer hover:bg-amber-500/10 transition-all select-none group">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={isSameAsReseller}
+                                                    onChange={(e) => {
+                                                        const checked = e.target.checked;
+                                                        setIsSameAsReseller(checked);
+                                                        if (checked) {
+                                                            setReferralCode(resellerCode);
+                                                            fetchReferrerName(resellerCode);
+                                                            setIsReferralLocked(true);
+                                                        } else {
+                                                            setReferralCode('');
+                                                            setReferrerName(null);
+                                                            setReferrerId(null);
+                                                            setIsReferralLocked(false);
+                                                        }
+                                                    }}
+                                                    className="mt-0.5 sm:mt-0 size-5 rounded-lg text-amber-500 focus:ring-amber-500 border-slate-300 accent-amber-500 cursor-pointer shrink-0"
+                                                />
+                                                <div className="flex flex-col">
+                                                    <span className="text-xs font-black text-midnight group-hover:text-amber-600 transition-colors">
+                                                        Fui indicado diretamente por este revendedor {resellerName ? `(${resellerName})` : ''}
+                                                    </span>
+                                                    <span className="text-[10px] text-slate-500 font-medium">
+                                                        Marque esta opção se o revendedor for também seu patrocinador MMN. Caso outra pessoa tenha te indicado, deixe desmarcado e digite o código dela no campo ao lado.
+                                                    </span>
+                                                </div>
+                                            </label>
+                                        </div>
+                                    )}
+                                </div>
+
                             </div>
 
                             {/* Mensagem de Erro */}

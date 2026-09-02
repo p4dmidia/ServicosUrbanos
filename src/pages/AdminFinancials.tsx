@@ -17,7 +17,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import AdminLayout from '../components/AdminLayout';
-import { businessRules } from '../lib/businessRules';
+import { businessRules, isCnpj, calculateTaxDeductions } from '../lib/businessRules';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import toast from 'react-hot-toast';
@@ -171,34 +171,41 @@ export default function AdminFinancials() {
 
     const isResellerBatch = viewType === 'resellers';
 
-    // Transforma para o formato que o PaymentModal espera
-    const transformed = selectedItems.map(r => ({
-      orderId: isResellerBatch ? `RES-${r.id.substring(0, 5)}` : `CASH-${r.id.substring(0, 5)}`,
-      buyerName: isResellerBatch ? 'Vendas da Região / Franquia' : 'Rede MMN',
-      payeeName: r.name,
-      orderStatus: 'Concluído',
-      deliveryStatus: 'Concluído',
-      saleDate: new Date().toLocaleDateString('pt-BR'),
-      amount: r.mensal,
-      repasse: r.mensal,
-      payDate: new Date().toLocaleDateString('pt-BR'),
-      payeeId: r.id,
-      payeePixKey: r.pix_key,
-      payeeCpf: r.cpf,
-      payeeWhatsapp: r.whatsapp,
-      paymentMethod: 'PIX',
-      is_active: r.is_active,
-      plan_name: r.plan_name,
-      items: isResellerBatch ? [
-        { name: 'Repasse Revendedor Mensal (Apto a Receber)', price: r.mensal },
-        { name: 'Repasse Revendedor Semanal (Carteira Digital)', price: r.digital },
-        { name: 'Repasse Revendedor Anual (Bônus 10/Dez)', price: r.anual }
-      ] : [
-        { name: 'Cashback Mensal Rede (Apto a Receber)', price: r.mensal },
-        { name: 'Cashback Semanal Rede (Carteira Digital)', price: r.digital },
-        { name: 'Cashback Anual Rede (Bônus 10/Dez)', price: r.anual }
-      ]
-    }));
+    // Transforma para o formato que o PaymentModal espera (com valor líquido já apurado para PF / integral para PJ)
+    const transformed = selectedItems.map(r => {
+      const isPJ = isCnpj(r.cpf, r.pix_key);
+      const tax = calculateTaxDeductions(r.mensal, isPJ);
+      return {
+        orderId: isResellerBatch ? `RES-${r.id.substring(0, 5)}` : `CASH-${r.id.substring(0, 5)}`,
+        buyerName: isResellerBatch ? 'Vendas da Região / Franquia' : 'Rede MMN',
+        payeeName: r.name,
+        orderStatus: 'Concluído',
+        deliveryStatus: 'Concluído',
+        saleDate: new Date().toLocaleDateString('pt-BR'),
+        amount: r.mensal,
+        repasse: tax.liquido,
+        inss: tax.inss,
+        bruto: r.mensal,
+        is_pj: isPJ,
+        payDate: new Date().toLocaleDateString('pt-BR'),
+        payeeId: r.id,
+        payeePixKey: r.pix_key,
+        payeeCpf: r.cpf,
+        payeeWhatsapp: r.whatsapp,
+        paymentMethod: 'PIX',
+        is_active: r.is_active,
+        plan_name: r.plan_name,
+        items: isResellerBatch ? [
+          { name: 'Repasse Revendedor Mensal (Apto a Receber)', price: r.mensal },
+          { name: 'Repasse Revendedor Semanal (Carteira Digital)', price: r.digital },
+          { name: 'Repasse Revendedor Anual (Bônus 10/Dez)', price: r.anual }
+        ] : [
+          { name: 'Cashback Mensal Rede (Apto a Receber)', price: r.mensal },
+          { name: 'Cashback Semanal Rede (Carteira Digital)', price: r.digital },
+          { name: 'Cashback Anual Rede (Bônus 10/Dez)', price: r.anual }
+        ]
+      };
+    });
     
     setSelectedForPayment(transformed);
     setIsPaymentModalOpen(true);
@@ -207,28 +214,32 @@ export default function AdminFinancials() {
   const handleConfirmPayment = async (payeeGroup: any) => {
     try {
       const isResellerPayment = payeeGroup.orders[0]?.orderId?.startsWith('RES-') || viewType === 'resellers';
+      const grossAmount = payeeGroup.orders[0]?.bruto || payeeGroup.totalAmount;
+      const inssAmount = payeeGroup.orders[0]?.inss || 0;
+      const isPJ = payeeGroup.orders[0]?.is_pj;
 
       // 1. Registramos o histórico na tabela de relatórios
       await businessRules.registerAffiliatePayout({
         profile_id: payeeGroup.payeeId,
-        amount: payeeGroup.totalAmount,
+        amount: grossAmount,
         mensal: payeeGroup.orders[0]?.items?.find((i: any) => i.name.includes('Mensal'))?.price || 0,
         digital: payeeGroup.orders[0]?.items?.find((i: any) => i.name.includes('Digital') || i.name.includes('Semanal'))?.price || 0,
         anual: payeeGroup.orders[0]?.items?.find((i: any) => i.name.includes('Anual'))?.price || 0,
         pix_key: payeeGroup.payeePixKey
       });
 
-      // 2. Registramos a saída financeira com a devida identificação (Rede vs Revendedor)
+      // 2. Registramos a saída financeira com a devida identificação (Rede vs Revendedor) e discriminação tributária
+      const taxDetail = isPJ ? ' (PJ Isento)' : (inssAmount > 0 ? ` (Líq. R$ ${payeeGroup.totalAmount.toFixed(2)} | INSS 11%: -R$ ${inssAmount.toFixed(2)})` : '');
       const txDesc = isResellerPayment
-        ? `Pagamento Repasse Revendedor Mensal - Ref RES-${payeeGroup.payeeId.substring(0, 5)}`
-        : `Pagamento Cashback Mensal - Ref CASH-${payeeGroup.payeeId.substring(0, 5)}`;
+        ? `Pagamento Repasse Revendedor Mensal${taxDetail} - Ref RES-${payeeGroup.payeeId.substring(0, 5)}`
+        : `Pagamento Cashback Mensal${taxDetail} - Ref CASH-${payeeGroup.payeeId.substring(0, 5)}`;
 
       const { error: txInsertError } = await supabase
         .from('transactions')
         .insert([{
           profile_id: payeeGroup.payeeId,
           type: 'withdrawal',
-          amount: -Math.abs(payeeGroup.totalAmount),
+          amount: -Math.abs(grossAmount),
           description: txDesc,
           status: 'completed'
         }]);
@@ -242,8 +253,8 @@ export default function AdminFinancials() {
       if (payeeGroup.payeeWhatsapp && payeeGroup.payeeWhatsapp.trim() !== '') {
         try {
           const msg = isResellerPayment
-            ? `Olá! Seu repasse regional no valor de R$ ${payeeGroup.totalAmount.toFixed(2).replace('.', ',')} foi pago com sucesso em sua chave PIX cadastrada.`
-            : `Olá! Seu cashback mensal no valor de R$ ${payeeGroup.totalAmount.toFixed(2).replace('.', ',')} foi pago com sucesso em sua chave PIX cadastrada.`;
+            ? `Olá! Seu repasse regional no valor líquido de R$ ${payeeGroup.totalAmount.toFixed(2).replace('.', ',')} foi pago com sucesso em sua chave PIX cadastrada.`
+            : `Olá! Seu cashback mensal no valor líquido de R$ ${payeeGroup.totalAmount.toFixed(2).replace('.', ',')} foi pago com sucesso em sua chave PIX cadastrada.`;
           await businessRules.sendTestWhatsAppMessage(payeeGroup.payeeWhatsapp, msg);
         } catch (whatsappErr) {
           console.error('Erro ao enviar notificação WhatsApp:', whatsappErr);
@@ -439,28 +450,17 @@ export default function AdminFinancials() {
 
       const records = Object.values(grouped).map((rec: any) => {
         const bruto = rec.bruto;
+        const isPJ = isCnpj(rec.cpf);
         
         let inss = 0;
-        const faixasInss = [
-          { limite: 1621.00, aliquota: 0.075 },
-          { limite: 2902.84, aliquota: 0.09 },
-          { limite: 4354.27, aliquota: 0.12 },
-          { limite: 8475.55, aliquota: 0.14 }
-        ];
-        for (let i = 0; i < faixasInss.length; i++) {
-          const anterior = i === 0 ? 0 : faixasInss[i - 1].limite;
-          if (bruto > faixasInss[i].limite) {
-            inss += (faixasInss[i].limite - anterior) * faixasInss[i].aliquota;
-          } else {
-            inss += (bruto - anterior) * faixasInss[i].aliquota;
-            break;
-          }
+        if (!isPJ) {
+          // Regra INSS PF: 11% fixo limitado a R$ 932,31
+          inss = Math.min(bruto * 0.11, 932.31);
         }
-        inss = Math.min(inss, 988.09);
 
-        const baseIrrf = bruto - inss;
+        const baseIrrf = Math.max(0, bruto - inss);
         let irrf = 0;
-        if (baseIrrf > 2259.20) {
+        if (!isPJ && baseIrrf > 2259.20) {
           if (baseIrrf <= 2826.65) {
             irrf = (baseIrrf * 0.075) - 169.44;
           } else if (baseIrrf <= 3751.05) {
@@ -472,11 +472,12 @@ export default function AdminFinancials() {
           }
         }
 
-        const patronal = bruto * 0.20;
+        const patronal = isPJ ? 0 : bruto * 0.20;
         const liquido = bruto - inss - irrf;
 
         return {
           ...rec,
+          is_pj: isPJ,
           inss: parseFloat(inss.toFixed(2)),
           irrf: parseFloat(irrf.toFixed(2)),
           patronal: parseFloat(patronal.toFixed(2)),

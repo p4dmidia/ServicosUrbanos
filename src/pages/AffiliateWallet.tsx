@@ -33,18 +33,30 @@ export default function AffiliateWallet() {
   const [submitting, setSubmitting] = useState(false);
   const [stats, setStats] = useState<any>(null);
   const [transactions, setTransactions] = useState<any[]>([]);
+  const [categoryFilter, setCategoryFilter] = useState<'all' | 'network' | 'reseller'>('all');
   const [activeFilter, setActiveFilter] = useState<'all' | 'cd' | 'mensal' | 'anual'>('all');
+  const [mmnLevelFilter, setMmnLevelFilter] = useState<'all' | '0' | '1' | '2'>('all');
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 8;
   const [searchQuery, setSearchQuery] = useState('');
 
   const filteredTransactions = useMemo(() => {
     return transactions.filter(t => {
+      const matchesCategory = 
+        categoryFilter === 'all' || 
+        (categoryFilter === 'network' && (t.category === 'network' || t.level === '0' || t.level === '1' || t.level === '2')) ||
+        (categoryFilter === 'reseller' && (t.category === 'reseller' || t.level === 'REG' || t.isReseller));
+
       const matchesFilter = 
         activeFilter === 'all' || 
-        (activeFilter === 'cd' && t.cashbackType === 'Semanal') ||
-        (activeFilter === 'mensal' && t.cashbackType === 'Mensal') ||
-        (activeFilter === 'anual' && t.cashbackType === 'Anual');
+        (activeFilter === 'cd' && t.cashbackType?.includes('Semanal')) ||
+        (activeFilter === 'mensal' && t.cashbackType?.includes('Mensal')) ||
+        (activeFilter === 'anual' && t.cashbackType?.includes('Anual'));
+
+      const matchesLevel = 
+        categoryFilter !== 'network' || 
+        mmnLevelFilter === 'all' || 
+        t.level === mmnLevelFilter;
       
       const searchLower = searchQuery.toLowerCase();
       const matchesSearch = 
@@ -56,9 +68,9 @@ export default function AffiliateWallet() {
         t.status?.toLowerCase().includes(searchLower) ||
         String(t.amount).includes(searchQuery);
 
-      return matchesFilter && matchesSearch;
+      return matchesCategory && matchesFilter && matchesLevel && matchesSearch;
     });
-  }, [transactions, activeFilter, searchQuery]);
+  }, [transactions, categoryFilter, activeFilter, mmnLevelFilter, searchQuery]);
 
   const totalPending = useMemo(() => {
     return filteredTransactions
@@ -68,7 +80,7 @@ export default function AffiliateWallet() {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [activeFilter, searchQuery]);
+  }, [categoryFilter, activeFilter, mmnLevelFilter, searchQuery]);
 
   const handleDownloadPDF = () => {
     const doc = new jsPDF();
@@ -97,9 +109,10 @@ export default function AffiliateWallet() {
     
     doc.setFontSize(10);
     doc.setFont('helvetica', 'normal');
-    doc.text(`Filtro Ativo: ${activeFilter === 'all' ? 'Todos' : activeFilter === 'cd' ? 'Carteira Semanal' : activeFilter === 'mensal' ? 'Mensal' : 'Anual'}`, 14, 62);
-    doc.text(`Registros: ${filteredTransactions.length}`, 14, 67);
-    doc.text(`Total Acumulado: ${totalPending.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`, 14, 72);
+    doc.text(`Categoria: ${categoryFilter === 'all' ? 'Todos os Ganhos' : categoryFilter === 'network' ? `Rede MMN (${mmnLevelFilter === 'all' ? 'G0 ao G2' : 'Nível G' + mmnLevelFilter})` : 'Revendedor Regional'}`, 14, 62);
+    doc.text(`Tipo: ${activeFilter === 'all' ? 'Todos' : activeFilter === 'cd' ? 'Carteira Semanal' : activeFilter === 'mensal' ? 'Mensal' : 'Anual'}`, 14, 67);
+    doc.text(`Registros: ${filteredTransactions.length}`, 14, 72);
+    doc.text(`Total Acumulado: ${totalPending.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`, 14, 77);
 
     // Tabela
     const tableData = filteredTransactions.map(t => [
@@ -411,22 +424,63 @@ export default function AffiliateWallet() {
 
         {/* Transactions List */}
         <div className="bg-white rounded-[2.5rem] border border-slate-100 shadow-sm p-10">
+            {/* Seletor de Categoria: Todos vs Rede Afiliados vs Revendedor Regional */}
+            <div className="flex bg-slate-100 p-1.5 rounded-2xl border border-slate-200 w-full max-w-2xl gap-2 mb-8">
+              <button
+                onClick={() => setCategoryFilter('all')}
+                className={`flex-1 py-3 px-4 rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                  categoryFilter === 'all'
+                    ? 'bg-midnight text-white shadow-md'
+                    : 'text-slate-500 hover:text-midnight'
+                }`}
+              >
+                📊 Todos os Ganhos
+              </button>
+              <button
+                onClick={() => setCategoryFilter('network')}
+                className={`flex-1 py-3 px-4 rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                  categoryFilter === 'network'
+                    ? 'bg-gradient-to-r from-indigo-600 to-indigo-700 text-white shadow-md'
+                    : 'text-slate-500 hover:text-indigo-600'
+                }`}
+              >
+                👥 Rede MMN (G0 ao G2)
+              </button>
+              <button
+                onClick={() => setCategoryFilter('reseller')}
+                className={`flex-1 py-3 px-4 rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                  categoryFilter === 'reseller'
+                    ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-md'
+                    : 'text-slate-500 hover:text-purple-600'
+                }`}
+              >
+                🏢 Revendedor Regional
+              </button>
+            </div>
+
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-8 mb-10">
               <div>
                  <h2 className="text-2xl font-black text-midnight tracking-tighter uppercase italic underline decoration-primary-blue decoration-4 underline-offset-8 mb-2">
-                   Histórico {activeFilter === 'cd' ? '(Carteira CD)' : activeFilter === 'mensal' ? '(Mensal)' : activeFilter === 'anual' ? '(Anual)' : 'Financeiro'}
+                   {categoryFilter === 'reseller' 
+                     ? 'Repasses de Revendedor Regional' 
+                     : categoryFilter === 'network' 
+                       ? 'Comissões de Rede MMN' 
+                       : 'Histórico Financeiro Completo'}
                  </h2>
                  <p className="text-slate-500 font-medium">
-                    {activeFilter !== 'all' 
-                      ? `Exibindo apenas lançamentos de ${activeFilter === 'cd' ? 'Carteira CD' : activeFilter === 'mensal' ? 'Bônus Mensal' : 'Bônus Anual'}.` 
-                      : 'Veja todos os créditos e débitos realizados na sua conta.'}
+                    {categoryFilter === 'reseller' 
+                      ? 'Exibindo comissões e repasses das vendas efetuadas na sua região/franquia.' 
+                      : categoryFilter === 'network'
+                        ? 'Exibindo comissões de sua compra própria (G0) e de sua rede de indicados (G1 e G2).'
+                        : 'Veja todos os créditos de cashback e repasses realizados na sua conta.'}
                  </p>
               </div>
               <div className="flex items-center gap-4">
-                 {activeFilter !== 'all' && (
+                 {(activeFilter !== 'all' || (categoryFilter === 'network' && mmnLevelFilter !== 'all')) && (
                    <button 
                      onClick={() => {
                        setActiveFilter('all');
+                       setMmnLevelFilter('all');
                        setCurrentPage(1);
                      }}
                      className="text-[10px] font-black text-primary-blue uppercase tracking-widest hover:underline px-4 py-2 bg-primary-blue/5 rounded-xl"
@@ -456,6 +510,70 @@ export default function AffiliateWallet() {
               </div>
            </div>
 
+           {/* Subfiltro de Níveis MMN (G0, G1, G2 ou Todas) */}
+           {categoryFilter === 'network' && (
+             <div className="flex flex-wrap items-center gap-2 mb-6 bg-slate-50 p-2 rounded-2xl border border-slate-200/60 shadow-sm">
+               <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-3 py-1">
+                 Nível:
+               </span>
+               <button
+                 onClick={() => {
+                   setMmnLevelFilter('all');
+                   setCurrentPage(1);
+                 }}
+                 className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer ${
+                   mmnLevelFilter === 'all'
+                     ? 'bg-slate-900 text-white shadow-md'
+                     : 'text-slate-600 hover:text-slate-900 hover:bg-white'
+                 }`}
+               >
+                 Todas ({transactions.filter(t => t.category === 'network' || t.level === '0' || t.level === '1' || t.level === '2').length})
+               </button>
+               <button
+                 onClick={() => {
+                   setMmnLevelFilter('0');
+                   setCurrentPage(1);
+                 }}
+                 className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer flex items-center gap-2 ${
+                   mmnLevelFilter === '0'
+                     ? 'bg-amber-500 text-white shadow-md'
+                     : 'text-slate-700 hover:text-amber-600 hover:bg-amber-50/70'
+                 }`}
+               >
+                 <span className="size-2 rounded-full bg-amber-400" />
+                 G0 - Compra Própria ({transactions.filter(t => t.level === '0').length})
+               </button>
+               <button
+                 onClick={() => {
+                   setMmnLevelFilter('1');
+                   setCurrentPage(1);
+                 }}
+                 className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer flex items-center gap-2 ${
+                   mmnLevelFilter === '1'
+                     ? 'bg-emerald-600 text-white shadow-md'
+                     : 'text-slate-700 hover:text-emerald-600 hover:bg-emerald-50/70'
+                 }`}
+               >
+                 <span className="size-2 rounded-full bg-emerald-400" />
+                 G1 - Indicação Direta ({transactions.filter(t => t.level === '1').length})
+               </button>
+               <button
+                 onClick={() => {
+                   setMmnLevelFilter('2');
+                   setCurrentPage(1);
+                 }}
+                 className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer flex items-center gap-2 ${
+                   mmnLevelFilter === '2'
+                     ? 'bg-sky-600 text-white shadow-md'
+                     : 'text-slate-700 hover:text-sky-600 hover:bg-sky-50/70'
+                 }`}
+               >
+                 <span className="size-2 rounded-full bg-sky-400" />
+                 G2 - 2ª Geração ({transactions.filter(t => t.level === '2').length})
+               </button>
+             </div>
+           )}
+
            <div className="space-y-4">
               {(() => {
                 const startIndex = (currentPage - 1) * itemsPerPage;
@@ -477,12 +595,12 @@ export default function AffiliateWallet() {
                         <thead>
                           <tr className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
                             <th className="px-6 py-2">ID DO PEDIDO</th>
-                            <th className="px-6 py-2">AFILIADO</th>
+                            <th className="px-6 py-2">AFILIADO / ORIGEM</th>
                             <th className="px-6 py-2 text-center">NÍVEL</th>
-                            <th className="px-6 py-2">CASHBACK</th>
-                            <th className="px-6 py-2">PERIODO</th>
-                            <th className="px-6 py-2 text-right">VALOR A RECEBER</th>
-                            <th className="px-6 py-2 text-center">Status</th>
+                            <th className="px-6 py-2">CATEGORIA / PERÍODO</th>
+                            <th className="px-6 py-2">DATA</th>
+                            <th className="px-6 py-2 text-right">VALOR</th>
+                            <th className="px-6 py-2 text-center">STATUS</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -495,23 +613,43 @@ export default function AffiliateWallet() {
                               className="bg-slate-50 hover:bg-white hover:shadow-xl hover:shadow-slate-100/50 transition-all cursor-pointer group"
                             >
                               <td className="px-6 py-5 rounded-l-3xl font-black text-midnight text-xs border-y border-transparent group-hover:border-slate-100">
-                                {t.orderId}
+                                #{t.orderId}
                               </td>
                               <td className="px-6 py-5 font-bold text-slate-600 text-xs border-y border-transparent group-hover:border-slate-100">
                                 {t.affiliateName}
                               </td>
                               <td className="px-6 py-5 text-center border-y border-transparent group-hover:border-slate-100">
-                                <span className={`inline-flex items-center justify-center size-6 rounded-full text-[10px] font-black ${
-                                  t.level === '0' ? 'bg-indigo-100 text-indigo-600' : 'bg-slate-200 text-slate-500'
-                                }`}>
-                                  {t.level}
-                                </span>
+                                {t.level === 'REG' ? (
+                                  <span className="inline-flex items-center justify-center px-2.5 py-1 rounded-xl text-[10px] font-black bg-purple-100 text-purple-700 border border-purple-200 shadow-sm" title="Comissão de Revendedor Regional">
+                                    🏢 REG
+                                  </span>
+                                ) : t.level === '0' ? (
+                                  <span className="inline-flex items-center justify-center px-2 py-0.5 rounded-xl text-[10px] font-black bg-amber-100 text-amber-800 border border-amber-200 shadow-sm" title="Titular da Compra (G0)">
+                                    🟡 G0
+                                  </span>
+                                ) : t.level === '1' ? (
+                                  <span className="inline-flex items-center justify-center px-2 py-0.5 rounded-xl text-[10px] font-black bg-emerald-100 text-emerald-800 border border-emerald-200 shadow-sm" title="1º Nível (G1)">
+                                    🟢 G1
+                                  </span>
+                                ) : t.level === '2' ? (
+                                  <span className="inline-flex items-center justify-center px-2 py-0.5 rounded-xl text-[10px] font-black bg-sky-100 text-sky-800 border border-sky-200 shadow-sm" title="2º Nível (G2)">
+                                    🔵 G2
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center justify-center px-2 py-0.5 rounded-xl text-[10px] font-black bg-slate-200 text-slate-600">
+                                    {t.level}
+                                  </span>
+                                )}
                               </td>
                               <td className="px-6 py-5 border-y border-transparent group-hover:border-slate-100">
-                                <span className={`text-[10px] font-black px-2 py-1 rounded-md uppercase ${
-                                  t.cashbackType === 'Mensal' ? 'bg-red-50 text-red-600' : 
-                                  t.cashbackType === 'Semanal' ? 'bg-emerald-50 text-emerald-600' : 
-                                  'bg-blue-50 text-blue-600'
+                                <span className={`text-[10px] font-black px-2.5 py-1 rounded-lg uppercase ${
+                                  t.isReseller
+                                    ? 'bg-purple-50 text-purple-700 border border-purple-100'
+                                    : t.cashbackType?.includes('Mensal') 
+                                      ? 'bg-rose-50 text-rose-600 border border-rose-100' 
+                                      : t.cashbackType?.includes('Semanal') 
+                                        ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' 
+                                        : 'bg-blue-50 text-blue-600 border border-blue-100'
                                 }`}>
                                   {t.cashbackType}
                                 </span>
@@ -527,16 +665,12 @@ export default function AffiliateWallet() {
                                 </p>
                               </td>
                               <td className="px-6 py-5 rounded-r-3xl text-center border-y border-transparent group-hover:border-slate-100">
-                                <span className={`text-[9px] font-black px-2 py-1 rounded-md uppercase whitespace-nowrap ${
-                                  t.status === 'Cancelado' ? 'bg-red-50 text-red-600' : 
-                                  (t.status === 'Concluído' || t.status === 'Pago' || t.status === 'Pago, Aguardando Retirada') ? 'bg-emerald-50 text-emerald-600' : 
-                                  'bg-amber-50 text-amber-600'
+                                <span className={`text-[9px] font-black px-2.5 py-1 rounded-md uppercase whitespace-nowrap ${
+                                  t.status === 'Cancelado' 
+                                    ? 'bg-red-50 text-red-600 border border-red-100' 
+                                    : 'bg-emerald-50 text-emerald-600 border border-emerald-100'
                                 }`}>
-                                  {t.status === 'pending' 
-                                    ? 'Confirmado' 
-                                    : (t.status === 'completed' || t.status === 'pago' || t.status === 'Concluído' || t.status === 'Pago') 
-                                      ? 'Pago' 
-                                      : t.status}
+                                  {t.status === 'Cancelado' ? 'Cancelado' : 'Pago'}
                                 </span>
                               </td>
                             </motion.tr>

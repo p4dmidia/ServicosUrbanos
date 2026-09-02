@@ -671,9 +671,21 @@ export default function FinancialReportTable({
                     </td>
                     <td className="p-6 text-right bg-slate-50/50">
                       {record.is_active ? (
-                        <span className="text-sm font-black text-emerald-600 italic">
-                          R$ {((hideReceiptButton ? (record.mensal || 0) : (record.amount || record.repasse || 0))).toFixed(2).replace('.', ',')}
-                        </span>
+                        <div className="flex flex-col items-end">
+                          <span className="text-sm font-black text-emerald-600 italic">
+                            R$ {(record.liquido_mensal !== undefined ? record.liquido_mensal : (record.mensal || 0)).toFixed(2).replace('.', ',')}
+                          </span>
+                          {!record.is_pj && record.inss_mensal > 0 && (
+                            <span className="text-[8px] font-bold text-amber-600">
+                              INSS (11%): -R$ {record.inss_mensal.toFixed(2).replace('.', ',')}
+                            </span>
+                          )}
+                          {record.is_pj && (
+                            <span className="text-[8px] font-bold text-blue-500 uppercase">
+                              PJ Isento
+                            </span>
+                          )}
+                        </div>
                       ) : (
                         <div className="flex flex-col items-end">
                           <span className="text-xs font-black text-slate-400 italic line-through">

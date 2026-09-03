@@ -348,8 +348,26 @@ export default function Cadastro() {
             return;
         }
 
+        if (!fullName.trim() || !whatsapp.trim() || !cpf.trim() || !email.trim()) {
+            setError("Por favor, preencha todos os dados pessoais básicos (Nome, WhatsApp, CPF e E-mail).");
+            setLoading(false);
+            return;
+        }
+
+        if (!birthDate || !gender) {
+            setError("Data de nascimento e gênero são obrigatórios para a apólice de seguro.");
+            setLoading(false);
+            return;
+        }
+
+        if (!zipCode || !address || !number || !neighborhood || !city || !state) {
+            setError("Por favor, preencha o endereço completo (CEP, logradouro, número, bairro, cidade e estado) para a apólice de seguro.");
+            setLoading(false);
+            return;
+        }
+
         if (!bankName || !pixKey || !bankBranch || !bankAccount) {
-            setError("Por favor, preencha todos os dados bancários e chave PIX.");
+            setError("Por favor, preencha todos os dados bancários e chave PIX para recebimento.");
             setLoading(false);
             return;
         }
@@ -1169,7 +1187,7 @@ export default function Cadastro() {
                                     </div>
                                     <div>
                                         <h3 className="text-lg font-black text-midnight uppercase italic tracking-tight">
-                                            Resumo dos Anexos I a XI – Seguro Vida Light R$ 5.000,00
+                                            Resumo dos Anexos I a XII – Seguro Vida Light R$ 5.000,00
                                         </h3>
                                         <p className="text-[9px] text-slate-400 font-black uppercase tracking-widest">
                                             Termo de Aceite Digital Simplificado
@@ -1252,7 +1270,7 @@ export default function Cadastro() {
                                                 <li><strong className="text-midnight font-bold">Mensal:</strong> 4 sorteios/mês</li>
                                                 <li><strong className="text-midnight font-bold">Trimestral:</strong> 12 sorteios/período</li>
                                                 <li><strong className="text-midnight font-bold">Semestral:</strong> 24 sorteios/período</li>
-                                                <li><strong className="text-midnight font-bold">Anual:</strong> 48 sorteios/período 👉 Renovação obrigatória via dashboard para continuidade nos sorteios.</li>
+                                                <li><strong className="text-midnight font-bold">Anual:</strong> 48 sorteios/período 🔔 Renovação obrigatória via dashboard para continuidade nos sorteios.</li>
                                             </ul>
                                         </div>
                                     </li>
@@ -1260,6 +1278,12 @@ export default function Cadastro() {
                                         <div className="size-2 rounded-full bg-emerald-500 mt-2 shrink-0" />
                                         <span>
                                             <strong className="text-midnight font-bold">Anexo XI – Documentos para Indenização:</strong> Formulário de Aviso de Sinistro, Certificado Individual, RG/CPF, laudos médicos, folha de anestesia (quando aplicável), atestado de óbito e demais documentos solicitados pela seguradora.
+                                        </span>
+                                    </li>
+                                    <li className="flex gap-3 items-start">
+                                        <div className="size-2 rounded-full bg-emerald-500 mt-2 shrink-0" />
+                                        <span>
+                                            <strong className="text-midnight font-bold">Anexo XII – Regras de Cashback e Inadimplência</strong>
                                         </span>
                                     </li>
                                 </ul>

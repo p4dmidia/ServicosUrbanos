@@ -814,21 +814,81 @@ export default function AffiliateAdherenceTerm() {
             </div>
           )
         };
+      case 'anexo-12':
+        return {
+          title: "ANEXO XII – Regras de Cashback e Inadimplência",
+          subtitle: "Políticas de Acúmulo, Bloqueio e Reabilitação de Cashback",
+          body: (
+            <div className="space-y-6 text-justify">
+              <div className="space-y-3">
+                <h4 className="font-bold text-midnight font-sans text-sm uppercase">1. Perda de Direitos em Caso de Inadimplência</h4>
+                <ul className="list-disc pl-5 space-y-1">
+                  <li>O segurado que se tornar inadimplente perderá automaticamente o direito de participação nos sorteios e a cobertura do seguro de acidentes pessoais.</li>
+                </ul>
+              </div>
+
+              <div className="space-y-3">
+                <h4 className="font-bold text-midnight font-sans text-sm uppercase">2. Cashback Acumulado até a Inadimplência</h4>
+                <ul className="list-disc pl-5 space-y-1">
+                  <li>Os valores de cashback acumulados até a data da inadimplência ficarão bloqueados e não poderão ser resgatados enquanto persistir a inadimplência.</li>
+                </ul>
+              </div>
+
+              <div className="space-y-3">
+                <h4 className="font-bold text-midnight font-sans text-sm uppercase">3. Cashback Durante o Período de Inadimplência</h4>
+                <ul className="list-disc pl-5 space-y-2">
+                  <li>Mesmo durante o período de inadimplência, o segurado continuará acumulando cashback semanal, mensal e anual referente à sua rede G1 e G2.</li>
+                  <li>Esses valores permanecerão bloqueados até que o segurado regularize sua situação.</li>
+                  <li>O cashback semanal, mensal e anual G0, vinculado diretamente aos pagamentos das assinaturas do próprio segurado, somente será retomado após a regularização das parcelas em atraso.</li>
+                </ul>
+              </div>
+
+              <div className="space-y-3">
+                <h4 className="font-bold text-midnight font-sans text-sm uppercase">4. Reabilitação e Liberação dos Valores</h4>
+                <p>Após a regularização de todas as parcelas em atraso e a retomada da adimplência, o segurado terá liberados:</p>
+                <ul className="list-none pl-4 space-y-2">
+                  <li><strong>• a)</strong> Os cashbacks acumulados até a data da inadimplência.</li>
+                  <li><strong>• b)</strong> Os cashbacks acumulados durante o período de inadimplência referentes à rede G1 e G2.</li>
+                  <li><strong>• c)</strong> O direito de voltar a acumular e receber os cashbacks G0, vinculados às suas assinaturas.</li>
+                </ul>
+                <p className="pt-2">
+                  A liberação será integral e automática, abrangendo todos os valores acumulados entre o início da inadimplência e a retomada da adimplência.
+                </p>
+              </div>
+
+              <div className="space-y-3">
+                <h4 className="font-bold text-midnight font-sans text-sm uppercase">5. Disposições Gerais</h4>
+                <ul className="list-disc pl-5 space-y-2">
+                  <li>O cashback é benefício adicional vinculado à manutenção da apólice ativa e adimplente.</li>
+                  <li>O estipulante poderá alterar regras de periodicidade e valores mediante comunicação prévia.</li>
+                  <li><strong>Foro eleito:</strong> Comarca de Salvador/BA.</li>
+                </ul>
+              </div>
+            </div>
+          )
+        };
       default:
         return {
           title: "TERMO DE ADESÃO – SEGURO DE ACIDENTES PESSOAIS",
           subtitle: "PROCESSO SUSEP 10.004808/99-14 – SEGURO VIDA LIGHT R$ 5.000,00",
           body: (
-            <div className="space-y-6">
+            <div className="space-y-6 text-justify">
+              <div className="bg-slate-50 border border-slate-200 p-4 rounded-2xl text-xs font-bold text-slate-700 font-sans">
+                Condições Contratuais – Vinculadas à Proposta nº 0458/2026 - Apólice 11.0982.58940.001
+              </div>
+
               <p>
                 Este Termo de Adesão formaliza a participação no plano Vida Light R$ 5.000,00, promovido pela <strong>SIC Comércio de Produtos Alimentícios e Serviços Ltda</strong> sobre CNPJ/MF nº 54.795.377/0001-03, em parceria com a <strong>MBM Seguradora S.A.</strong> inscrita no CNPJ/MF nº 92.892.256/0001-79 e a <strong>APLUB Capitalização S.A.</strong> inscrita no CNPJ/MF nº 88.076.302-0001/94, conforme regulamentos e condições gerais aprovados pela SUSEP por meio do Processo nº 15414.902121/2019-11.
               </p>
+              
               <p>
                 Ao aderir, o segurado declara ciência e concordância com todas as regras descritas nos anexos integrantes deste contrato.
               </p>
 
               <div className="space-y-4 pt-4">
-                <h3 className="font-bold text-midnight font-sans uppercase text-xs tracking-wider border-b border-slate-100 pb-2">ANEXOS INTEGRANTES</h3>
+                <h3 className="font-bold text-midnight font-sans uppercase text-xs tracking-wider border-b border-slate-100 pb-2">
+                  ANEXOS INTEGRANTES
+                </h3>
                 
                 <ul className="space-y-4 list-none pl-0">
                   <li>
@@ -870,19 +930,19 @@ export default function AffiliateAdherenceTerm() {
                       Observações: nos meses com 5 domingos, desconsidera-se o primeiro; para continuar concorrendo, o segurado deve renovar o plano conforme opção disponível em seu dashboard.
                     </p>
                   </li>
-                  <li className="space-y-2">
-                    <strong>• Anexo XI – Documentos Necessários para Recebimento da Indenização:</strong> lista de documentos obrigatórios (Aviso de Sinistro, Certificado Individual, RG/CPF, Laudo Médico, Folha de Anestesia, Atestado de Óbito, etc.).
-                    <ul className="pl-6 list-disc space-y-1 text-slate-500 text-xs">
-                      <li>A Seguradora poderá solicitar documentos complementares.</li>
-                      <li>O prazo de análise será suspenso até a entrega formal dos documentos faltantes.</li>
-                      <li>O pagamento da indenização será limitado ao Capital Segurado vigência na data do evento.</li>
-                    </ul>
+                  <li>
+                    <strong>• Anexo XI – Documentos Necessários para Recebimento da Indenização:</strong> FORO
+                  </li>
+                  <li>
+                    <strong>• Anexo XII – Regras de Cashback e Inadimplência</strong>
                   </li>
                 </ul>
               </div>
 
               <div className="space-y-3 pt-6 border-t border-slate-100">
-                <h3 className="font-bold text-midnight font-sans uppercase text-xs tracking-wider">FORO</h3>
+                <h3 className="font-bold text-midnight font-sans uppercase text-xs tracking-wider">
+                  • Foro
+                </h3>
                 <p>
                   Fica eleito o foro da Comarca de Salvador/BA para dirimir quaisquer questões oriundas deste Termo de Adesão e seus anexos, com renúncia expressa a qualquer outro, por mais privilegiado que seja.
                 </p>

@@ -942,8 +942,11 @@ export const businessRules = {
   getNetworkSummary: async (userId: string) => {
     try {
       // 1. Buscar profundidade real no banco
+      // No modelo MMN (G0 ao G2), o banco armazena depth = 3 representando as faixas comissionadas (G0, G1 e G2),
+      // e o gatilho SQL percorre v_current_level < v_depth (isto é, 2 níveis de indicados: G1 diretos e G2 indiretos).
       const { data: config } = await supabase.from('mmn_config').select('depth').single();
-      const depth = Math.min(config?.depth || 4, 5); // Fallback para 4 se não achar, limita em 5 para excluir G6 (nível 6)
+      const rawDepth = config?.depth || 3;
+      const depth = Math.min(rawDepth > 2 ? rawDepth - 1 : rawDepth, 2);
 
       // 2. Buscar todos os níveis dinamicamente
       const levels: { [key: string]: number } = {};
@@ -1023,20 +1026,6 @@ export const businessRules = {
       const consumptionCount = oResult.data?.length || 0;
 
       // Cálculo Real baseado no PRD (Divisão Tripla)
-      // Buscamos por palavras-chave na descrição ou tipo de forma mais flexível
-      // Para o Card Mensal e Anual: Exibir o Total Pago/Recebido (retiradas concluídas/pagas)
-      const monthlyBonus = transactions
-        .filter(t => t.type === 'withdrawal' &&
-                (t.description?.includes('Mensal')) && 
-                (t.status === 'completed' || t.status === 'pago'))
-        .reduce((acc, t) => acc + Math.abs(Number(t.amount || 0)), 0);
-
-      const annualBonus = transactions
-        .filter(t => t.type === 'withdrawal' &&
-                (t.description?.includes('Anual')) && 
-                (t.status === 'completed' || t.status === 'pago'))
-        .reduce((acc, t) => acc + Math.abs(Number(t.amount || 0)), 0);
-
       // Carteira Semanal (CD): soma de todas as comissões semanais (pending, completed ou pago)
       const walletBonus = transactions
         .filter(t => t.type === 'commission' && 
@@ -1044,14 +1033,21 @@ export const businessRules = {
                 (t.status === 'completed' || t.status === 'pago' || t.status === 'pending'))
         .reduce((acc, t) => acc + Number(t.amount || 0), 0);
 
+      // Cashback Mensal e Anual: soma de todas as comissões (pending, completed ou pago)
+      const monthlyBonus = transactions
+        .filter(t => t.type === 'commission' && 
+                t.description?.includes('Mensal') && 
+                (t.status === 'completed' || t.status === 'pago' || t.status === 'pending'))
+        .reduce((acc, t) => acc + Number(t.amount || 0), 0);
+
+      const annualBonus = transactions
+        .filter(t => t.type === 'commission' && 
+                t.description?.includes('Anual') && 
+                (t.status === 'completed' || t.status === 'pago' || t.status === 'pending'))
+        .reduce((acc, t) => acc + Number(t.amount || 0), 0);
+
       // totalEarnings: soma de todas as comissões (ganhos históricos acumulados)
-      const monthlyCommissions = transactions
-        .filter(t => t.type === 'commission' && t.description?.includes('Mensal') && (t.status === 'completed' || t.status === 'pago' || t.status === 'pending'))
-        .reduce((acc, t) => acc + Number(t.amount || 0), 0);
-      const annualCommissions = transactions
-        .filter(t => t.type === 'commission' && t.description?.includes('Anual') && (t.status === 'completed' || t.status === 'pago' || t.status === 'pending'))
-        .reduce((acc, t) => acc + Number(t.amount || 0), 0);
-      const totalEarnings = monthlyCommissions + annualCommissions + walletBonus;
+      const totalEarnings = monthlyBonus + annualBonus + walletBonus;
       
       // O Saldo Disponível conforme o PRD é o da Carteira Digital (CD)
       // Exclui resgates/pagamentos de Cashback Mensal e Anual para manter as carteiras independentes
@@ -1123,6 +1119,7 @@ export const businessRules = {
         monthlyBonus,
         annualBonus,
         walletBonus,
+        walletBalance: availableBalance,
         maintenanceFee: 0,
         totalEarnings,
         availableBalance,
@@ -1201,9 +1198,10 @@ export const businessRules = {
     try {
       if (!userId || userId === 'user123') return [];
 
-      // 1. Buscar profundidade
+      // 1. Buscar profundidade (Rede MMN G0 ao G2 -> descendentes G1 e G2)
       const { data: config } = await supabase.from('mmn_config').select('depth').single();
-      const depth = Math.min(config?.depth || 4, 5); // Limita em 5 para excluir G6 (nível 6)
+      const rawDepth = config?.depth || 3;
+      const depth = Math.min(rawDepth > 2 ? rawDepth - 1 : rawDepth, 2);
 
       const fullNetwork: any[] = [];
       let currentParentIds = [userId];
@@ -1424,7 +1422,8 @@ export const businessRules = {
   getAffiliateTree: async (userId: string) => {
     try {
       const { data: config } = await supabase.from('mmn_config').select('depth').single();
-      const depth = Math.min(config?.depth || 4, 5); // Limita em 5 para excluir G6 (nível 6)
+      const rawDepth = config?.depth || 3;
+      const depth = Math.min(rawDepth > 2 ? rawDepth - 1 : rawDepth, 2);
 
       // Buscar todos os perfis da rede de uma vez para construir a árvore na memória
       // (Mais eficiente do que múltiplas chamadas recursivas ao banco)
@@ -3011,6 +3010,191 @@ export const businessRules = {
     }).filter(p => p.monthlyPending > 0 || p.annualPending > 0 || p.digitalPending > 0);
 
     return payableList;
+  },
+
+  getResellerFinancialSummary: async (userId: string, year?: number, month?: number) => {
+    try {
+      const now = new Date();
+      const selYear = year !== undefined ? year : now.getFullYear();
+      const selMonth = month !== undefined ? month : now.getMonth(); // 0-indexed: 0 = Jan, 8 = Set
+
+      const startDate = new Date(selYear, selMonth, 1, 0, 0, 0, 0);
+      const endDate = new Date(selYear, selMonth + 1, 0, 23, 59, 59, 999);
+
+      // 1. Buscar perfil do revendedor e configurações
+      const [{ data: profile }, { data: config }] = await Promise.all([
+        supabase.from('profiles').select('*').eq('id', userId).single(),
+        supabase.from('mmn_config').select('commission_regional_semanal, commission_regional_mensal, commission_regional_anual').single()
+      ]);
+
+      // 2. Buscar todas as transações do revendedor
+      const { data: allTransactions, error: txError } = await supabase
+        .from('transactions')
+        .select('*')
+        .eq('profile_id', userId)
+        .order('created_at', { ascending: false });
+
+      if (txError) throw txError;
+
+      // Filtrar apenas comissões e repasses de revendedor regional
+      const resellerTransactions = (allTransactions || []).filter(t => {
+        const desc = t.description || '';
+        return desc.includes('Revendedor') || desc.includes('Regional');
+      });
+
+      // Transações do mês selecionado
+      const monthTransactions = resellerTransactions.filter(t => {
+        const tDate = new Date(t.created_at);
+        return tDate >= startDate && tDate <= endDate;
+      });
+
+      // Cálculos específicos do mês selecionado
+      const monthCommissions = monthTransactions.filter(t => 
+        t.type === 'commission' && (t.status === 'completed' || t.status === 'pago' || t.status === 'pending')
+      );
+      const monthWithdrawals = monthTransactions.filter(t => 
+        t.type === 'withdrawal' && (t.status === 'completed' || t.status === 'pago')
+      );
+
+      const monthlyEarned = monthCommissions
+        .filter(t => t.description?.includes('Mensal'))
+        .reduce((acc, t) => acc + Number(t.amount || 0), 0);
+      
+      const monthlyPaid = monthWithdrawals
+        .filter(t => t.description?.includes('Mensal'))
+        .reduce((acc, t) => acc + Math.abs(Number(t.amount || 0)), 0);
+
+      const monthlyToReceive = Math.max(0, monthlyEarned - monthlyPaid);
+
+      const weeklyEarned = monthCommissions
+        .filter(t => t.description?.includes('Semanal'))
+        .reduce((acc, t) => acc + Number(t.amount || 0), 0);
+      
+      const weeklyPaid = monthWithdrawals
+        .filter(t => t.description?.includes('Semanal') || (!t.description?.includes('Mensal') && !t.description?.includes('Anual')))
+        .reduce((acc, t) => acc + Math.abs(Number(t.amount || 0)), 0);
+
+      const weeklyAvailable = Math.max(0, weeklyEarned - weeklyPaid);
+
+      const annualEarned = monthCommissions
+        .filter(t => t.description?.includes('Anual'))
+        .reduce((acc, t) => acc + Number(t.amount || 0), 0);
+
+      const annualPaid = monthWithdrawals
+        .filter(t => t.description?.includes('Anual'))
+        .reduce((acc, t) => acc + Math.abs(Number(t.amount || 0)), 0);
+
+      const annualToReceive = Math.max(0, annualEarned - annualPaid);
+
+      // Acumulado geral da revenda
+      const allResellerCommissions = resellerTransactions.filter(t => 
+        t.type === 'commission' && (t.status === 'completed' || t.status === 'pago' || t.status === 'pending')
+      );
+      const allResellerWithdrawals = resellerTransactions.filter(t => 
+        t.type === 'withdrawal' && (t.status === 'completed' || t.status === 'pago')
+      );
+
+      const totalHistoricalMonthly = allResellerCommissions
+        .filter(t => t.description?.includes('Mensal'))
+        .reduce((acc, t) => acc + Number(t.amount || 0), 0);
+      const totalHistoricalMonthlyPaid = allResellerWithdrawals
+        .filter(t => t.description?.includes('Mensal'))
+        .reduce((acc, t) => acc + Math.abs(Number(t.amount || 0)), 0);
+      const totalMonthlyPendingHistorical = Math.max(0, totalHistoricalMonthly - totalHistoricalMonthlyPaid);
+
+      const isPJ = isCnpj(profile?.cpf || profile?.cnpj, profile?.pix_key);
+      const taxMonthly = calculateTaxDeductions(monthlyToReceive, isPJ);
+
+      // Buscar pedidos das comissões do mês
+      const orderIds = [...new Set(monthCommissions.map(t => {
+        const match = t.description?.match(/Pedido\s*#?\s*([a-zA-Z0-9_-]+)/i);
+        return t.order_id || (match ? match[1] : null);
+      }).filter(Boolean))] as string[];
+
+      let ordersMap = new Map();
+      if (orderIds.length > 0) {
+        const { data: ordersData } = await supabase
+          .from('orders')
+          .select('id, amount, customer_id, customer_name, status, created_at, order_date, items')
+          .in('id', orderIds);
+        ordersMap = new Map((ordersData || []).map(o => [String(o.id), o]));
+      }
+
+      // Agrupar comissões por pedido para tabela de fechamentos/vendas do mês
+      const groupedMap = new Map<string, any>();
+
+      monthCommissions.forEach(t => {
+        const orderId = String(t.order_id || (t.description?.match(/Pedido\s*#?\s*([a-zA-Z0-9_-]+)/i)?.[1] || t.id));
+        if (!groupedMap.has(orderId)) {
+          const orderInfo = ordersMap.get(orderId);
+          groupedMap.set(orderId, {
+            orderId,
+            date: t.created_at,
+            customerName: orderInfo?.customer_name || 'Cliente Direto',
+            orderAmount: Number(orderInfo?.amount || 0),
+            orderStatus: orderInfo?.status || 'Concluído',
+            semanal: 0,
+            mensal: 0,
+            anual: 0,
+            totalCommission: 0,
+            status: t.status,
+            rawTransactions: []
+          });
+        }
+
+        const item = groupedMap.get(orderId);
+        const amt = Number(t.amount || 0);
+        item.rawTransactions.push(t);
+        item.totalCommission += amt;
+        if (t.description?.includes('Semanal')) item.semanal += amt;
+        else if (t.description?.includes('Mensal')) item.mensal += amt;
+        else if (t.description?.includes('Anual')) item.anual += amt;
+      });
+
+      const salesList = Array.from(groupedMap.values()).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+      const totalOrderVolume = salesList.reduce((acc, s) => acc + s.orderAmount, 0);
+
+      // Pagamentos já liquidados (saques concluídos da revenda)
+      const withdrawalsList = allResellerWithdrawals.map(w => ({
+        id: w.id,
+        date: w.created_at,
+        amount: Math.abs(Number(w.amount || 0)),
+        description: w.description,
+        status: w.status,
+        receiptUrl: w.receipt_url || null
+      }));
+
+      return {
+        profile,
+        isPJ,
+        year: selYear,
+        month: selMonth,
+        rates: {
+          semanal: Number(config?.commission_regional_semanal ?? 2.00),
+          mensal: Number(config?.commission_regional_mensal ?? 2.00),
+          anual: Number(config?.commission_regional_anual ?? 2.00),
+          total: Number(config?.commission_regional_semanal ?? 2.00) + Number(config?.commission_regional_mensal ?? 2.00) + Number(config?.commission_regional_anual ?? 2.00)
+        },
+        monthlyEarned,
+        monthlyPaid,
+        monthlyToReceive,
+        weeklyEarned,
+        weeklyPaid,
+        weeklyAvailable,
+        annualEarned,
+        annualPaid,
+        annualToReceive,
+        totalMonthlyPendingHistorical,
+        tax: taxMonthly,
+        salesList,
+        salesCount: salesList.length,
+        totalOrderVolume,
+        withdrawalsList
+      };
+    } catch (error) {
+      console.error("Erro ao carregar dados financeiros do revendedor:", error);
+      throw error;
+    }
   },
 
   uploadReceipt: async (file: File) => {

@@ -19,7 +19,8 @@ import {
   Package,
   RefreshCw,
   HeartPulse,
-  Target
+  Target,
+  CircleDollarSign
 } from 'lucide-react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
@@ -113,7 +114,10 @@ export default function AffiliateLayout({ children, title }: AffiliateLayoutProp
       { path: '/afiliado/revendedor', icon: Target, label: 'Liderança Regional' }
     ] : []),
     { path: '/afiliado/rede', icon: Users, label: 'Cashback de rede' },
-    { path: '/afiliado/financeiro', icon: Wallet, label: 'Financeiro' },
+    { path: '/afiliado/financeiro', icon: Wallet, label: 'Financeiro de Rede' },
+    ...(profile?.role === 'regional_reseller' ? [
+      { path: '/afiliado/financeiro-revendedor', icon: CircleDollarSign, label: 'Financeiro do Revendedor' }
+    ] : []),
     { path: '/afiliado/pedidos', icon: ShoppingBag, label: 'Meus Pedidos' },
     { path: '/afiliado/renovacoes', icon: RefreshCw, label: 'Minhas Renovações' },
     { path: '/afiliado/ecossistema', icon: Globe, label: 'Ecossistema' },
@@ -167,6 +171,7 @@ export default function AffiliateLayout({ children, title }: AffiliateLayoutProp
               { path: '/afiliado/termo-adesao/anexo-9', label: 'Anexo IX - Telemedicina' },
               { path: '/afiliado/termo-adesao/anexo-10', label: 'Anexo X - Qtde Sorteios' },
               { path: '/afiliado/termo-adesao/anexo-11', label: 'Anexo XI - Docs Indenização' },
+              { path: '/afiliado/termo-adesao/anexo-12', label: 'Anexo XII - Cashback/Inadimplência' },
             ];
 
             return (
@@ -446,6 +451,7 @@ export default function AffiliateLayout({ children, title }: AffiliateLayoutProp
                       { path: '/afiliado/termo-adesao/anexo-9', label: 'Anexo IX - Telemedicina' },
                       { path: '/afiliado/termo-adesao/anexo-10', label: 'Anexo X - Qtde Sorteios' },
                       { path: '/afiliado/termo-adesao/anexo-11', label: 'Anexo XI - Docs Indenização' },
+                      { path: '/afiliado/termo-adesao/anexo-12', label: 'Anexo XII - Cashback/Inadimplência' },
                     ];
 
                     return (

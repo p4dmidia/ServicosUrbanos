@@ -93,10 +93,15 @@ export default function AffiliateResellerDashboard() {
         .filter(t => t.description?.includes('Anual'))
         .reduce((acc, t) => acc + Number(t.amount || 0), 0);
 
-      setRegionalEarnings(totalReg);
-      setRegWeeklyEarnings(weeklyReg);
-      setRegMonthlyEarnings(monthlyReg);
-      setRegAnnualEarnings(annualReg);
+      const weekly = statsData?.availableBalance ?? statsData?.walletBonus ?? 0;
+      const monthly = statsData?.monthlyBonus || 0;
+      const annual = statsData?.annualBonus || 0;
+      const total = statsData?.totalEarnings || (weekly + monthly + annual);
+
+      setRegionalEarnings(total);
+      setRegWeeklyEarnings(weekly);
+      setRegMonthlyEarnings(monthly);
+      setRegAnnualEarnings(annual);
       setRegionalConfig(regConfigRes.data);
       setTransactions(transactionsList);
 
@@ -159,7 +164,7 @@ export default function AffiliateResellerDashboard() {
               </div>
               Painel do Revendedor
             </h1>
-            <p className="text-slate-500 font-medium mt-1">Realize apresentações, feche cadastros e receba comissão direta sobre cada venda.</p>
+            <p className="text-slate-500 font-medium mt-1">Realize apresentações, feche cadastros e receba comissão direta sobre cada venda e renovações.</p>
           </div>
 
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
@@ -214,7 +219,7 @@ export default function AffiliateResellerDashboard() {
                 Comissão Acumulada
               </div>
             </div>
-            <p className="text-[10px] font-black text-white/70 uppercase tracking-widest leading-none mb-1">Ganhos Regionais Extras</p>
+            <p className="text-[10px] font-black text-white/70 uppercase tracking-widest leading-none mb-1">Ganhos Acumulados</p>
             <h3 className="text-2xl font-black text-white tracking-tighter">
               R$ {regionalEarnings.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
             </h3>

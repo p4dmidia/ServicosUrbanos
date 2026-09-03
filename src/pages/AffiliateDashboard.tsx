@@ -142,49 +142,10 @@ export default function AffiliateDashboard() {
         
         {/* Top Stats Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          {/* 1. Semanal */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm hover:shadow-xl transition-all"
-          >
-            <div className="flex justify-between items-start mb-4">
-              <div className="p-3 rounded-2xl bg-blue-50 text-blue-600">
-                <TrendingUp size={22} />
-              </div>
-              <div className="flex items-center gap-1 text-[10px] font-black text-blue-500 bg-blue-50 px-2 py-1 rounded-lg uppercase">
-                 Cashback Mensal
-              </div>
-            </div>
-            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Total Recebido</p>
-            <h3 className="text-2xl font-black text-midnight tracking-tighter text-blue-600">
-              R$ {stats.monthlyBonus.toFixed(2)}
-            </h3>
-          </motion.div>
-
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1 }}
-            className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm hover:shadow-xl transition-all"
-          >
-            <div className="flex justify-between items-start mb-4">
-              <div className="p-3 rounded-2xl bg-emerald-50 text-emerald-600">
-                <ArrowUpRight size={22} />
-              </div>
-              <div className="flex items-center gap-1 text-[10px] font-black text-emerald-500 bg-emerald-50 px-2 py-1 rounded-lg uppercase">
-                 Cashback Anual
-              </div>
-            </div>
-            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Total Recebido</p>
-            <h3 className="text-2xl font-black text-midnight tracking-tighter text-emerald-600">
-              R$ {stats.annualBonus.toFixed(2)}
-            </h3>
-          </motion.div>
-
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2 }}
             className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm hover:shadow-xl transition-all"
           >
             <div className="flex justify-between items-start mb-4">
@@ -201,6 +162,49 @@ export default function AffiliateDashboard() {
             </h3>
           </motion.div>
 
+          {/* 2. Mensal */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.1 }}
+            className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm hover:shadow-xl transition-all"
+          >
+            <div className="flex justify-between items-start mb-4">
+              <div className="p-3 rounded-2xl bg-blue-50 text-blue-600">
+                <TrendingUp size={22} />
+              </div>
+              <div className="flex items-center gap-1 text-[10px] font-black text-blue-500 bg-blue-50 px-2 py-1 rounded-lg uppercase">
+                 Cashback Mensal
+              </div>
+            </div>
+            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Total Recebido</p>
+            <h3 className="text-2xl font-black text-midnight tracking-tighter text-blue-600">
+              R$ {stats.monthlyBonus.toFixed(2)}
+            </h3>
+          </motion.div>
+
+          {/* 3. Anual */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.2 }}
+            className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm hover:shadow-xl transition-all"
+          >
+            <div className="flex justify-between items-start mb-4">
+              <div className="p-3 rounded-2xl bg-emerald-50 text-emerald-600">
+                <ArrowUpRight size={22} />
+              </div>
+              <div className="flex items-center gap-1 text-[10px] font-black text-emerald-500 bg-emerald-50 px-2 py-1 rounded-lg uppercase">
+                 Cashback Anual
+              </div>
+            </div>
+            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Total Recebido</p>
+            <h3 className="text-2xl font-black text-midnight tracking-tighter text-emerald-600">
+              R$ {stats.annualBonus.toFixed(2)}
+            </h3>
+          </motion.div>
+
+          {/* 4. Plano / Elegibilidade */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}

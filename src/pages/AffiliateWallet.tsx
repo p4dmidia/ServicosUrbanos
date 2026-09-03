@@ -204,14 +204,14 @@ export default function AffiliateWallet() {
   }
 
   return (
-    <AffiliateLayout title="Minha Carteira">
+    <AffiliateLayout title="Financeiro de Rede">
       <div className="p-8 lg:p-12 space-y-10">
         
         {/* Header with Quick Stats */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
           <div>
-             <h2 className="text-3xl font-black text-midnight tracking-tighter uppercase italic">Minha <span className="text-primary-blue">Carteira</span></h2>
-             <p className="text-slate-400 font-bold text-xs uppercase tracking-widest mt-1">Gestão de ganhos e cashback</p>
+             <h2 className="text-3xl font-black text-midnight tracking-tighter uppercase italic">Financeiro de <span className="text-primary-blue">Rede</span></h2>
+             <p className="text-slate-400 font-bold text-xs uppercase tracking-widest mt-1">Gestão de ganhos e cashback da rede MMN</p>
           </div>
           
           {/* Consumos Badge in the Corner */}
@@ -229,48 +229,7 @@ export default function AffiliateWallet() {
         {/* Balance Cards Grid - Credit Card Style */}
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8">
            
-           {/* Card 1: Bônus Mensal */}
-           <motion.div 
-             whileHover={{ y: -5 }}
-             onClick={() => {
-               setActiveFilter(activeFilter === 'mensal' ? 'all' : 'mensal');
-               setCurrentPage(1);
-             }}
-             className={`aspect-[1.6/1] bg-gradient-to-br from-indigo-600 via-blue-700 to-slate-900 p-8 rounded-[2.5rem] text-white relative overflow-hidden flex flex-col justify-between shadow-2xl transition-all cursor-pointer group ${
-               activeFilter === 'mensal' ? 'ring-4 ring-blue-400 shadow-blue-500/20' : 'shadow-blue-900/20'
-             }`}
-           >
-              <div className="absolute top-[-20%] right-[-10%] w-40 h-40 bg-white/10 rounded-full blur-3xl"></div>
-              
-              <div className="relative z-10 flex justify-between items-start">
-                 <div>
-                    <p className="text-[10px] font-black text-blue-200/60 uppercase tracking-widest mb-1">Total Recebido</p>
-                    <p className="text-[8px] font-bold text-blue-300/40 uppercase tracking-[0.2em]">Cashback Mensal</p>
-                 </div>
-                 <div className={`size-10 rounded-xl flex items-center justify-center border transition-colors ${
-                   activeFilter === 'mensal' ? 'bg-white text-indigo-600 border-white' : 'bg-white/10 text-white border-white/10'
-                 }`}>
-                    <TrendingUp size={20} />
-                 </div>
-              </div>
-
-              <div className="relative z-10">
-                 <h2 className="text-4xl font-black tracking-tighter italic uppercase mb-2">R$ {Number(stats.monthlyBonus).toFixed(2)}</h2>
-                 <p className="text-[9px] font-black text-blue-200/60 uppercase tracking-widest flex items-center gap-2">
-                    <ShieldCheck size={12} /> Proteção Ativa
-                 </p>
-              </div>
-
-              <div className="relative z-10 flex justify-between items-center opacity-40">
-                 <div className="flex gap-1">
-                    <div className="w-6 h-1 bg-white/20 rounded-full"></div>
-                    <div className="w-3 h-1 bg-white/20 rounded-full"></div>
-                 </div>
-                 <span className="text-[8px] font-black uppercase tracking-widest">PRO PREMIUM</span>
-              </div>
-           </motion.div>
-
-           {/* Card 2: Saldo Disponível (Carteira CD) */}
+           {/* Card 1: Saldo Disponível (Carteira CD) */}
            <motion.div 
              whileHover={{ y: -5 }}
              onClick={() => {
@@ -312,6 +271,47 @@ export default function AffiliateWallet() {
                     <div className="size-6 rounded-full border border-white/20 bg-white/5"></div>
                  </div>
                  <span className="text-[8px] font-black uppercase tracking-widest">**** 4829</span>
+              </div>
+           </motion.div>
+
+           {/* Card 2: Bônus Mensal */}
+           <motion.div 
+             whileHover={{ y: -5 }}
+             onClick={() => {
+               setActiveFilter(activeFilter === 'mensal' ? 'all' : 'mensal');
+               setCurrentPage(1);
+             }}
+             className={`aspect-[1.6/1] bg-gradient-to-br from-indigo-600 via-blue-700 to-slate-900 p-8 rounded-[2.5rem] text-white relative overflow-hidden flex flex-col justify-between shadow-2xl transition-all cursor-pointer group ${
+               activeFilter === 'mensal' ? 'ring-4 ring-blue-400 shadow-blue-500/20' : 'shadow-blue-900/20'
+             }`}
+           >
+              <div className="absolute top-[-20%] right-[-10%] w-40 h-40 bg-white/10 rounded-full blur-3xl"></div>
+              
+              <div className="relative z-10 flex justify-between items-start">
+                 <div>
+                    <p className="text-[10px] font-black text-blue-200/60 uppercase tracking-widest mb-1">Total Recebido</p>
+                    <p className="text-[8px] font-bold text-blue-300/40 uppercase tracking-[0.2em]">Cashback Mensal</p>
+                 </div>
+                 <div className={`size-10 rounded-xl flex items-center justify-center border transition-colors ${
+                   activeFilter === 'mensal' ? 'bg-white text-indigo-600 border-white' : 'bg-white/10 text-white border-white/10'
+                 }`}>
+                    <TrendingUp size={20} />
+                 </div>
+              </div>
+
+              <div className="relative z-10">
+                 <h2 className="text-4xl font-black tracking-tighter italic uppercase mb-2">R$ {Number(stats.monthlyBonus).toFixed(2)}</h2>
+                 <p className="text-[9px] font-black text-blue-200/60 uppercase tracking-widest flex items-center gap-2">
+                    <ShieldCheck size={12} /> Proteção Ativa
+                 </p>
+              </div>
+
+              <div className="relative z-10 flex justify-between items-center opacity-40">
+                 <div className="flex gap-1">
+                    <div className="w-6 h-1 bg-white/20 rounded-full"></div>
+                    <div className="w-3 h-1 bg-white/20 rounded-full"></div>
+                 </div>
+                 <span className="text-[8px] font-black uppercase tracking-widest">PRO PREMIUM</span>
               </div>
            </motion.div>
 

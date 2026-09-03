@@ -21,6 +21,7 @@ import AffiliateDashboard from './pages/AffiliateDashboard';
 import AffiliateResellerDashboard from './pages/AffiliateResellerDashboard';
 import AffiliateNetwork from './pages/AffiliateNetwork';
 import AffiliateWallet from './pages/AffiliateWallet';
+import AffiliateResellerFinancial from './pages/AffiliateResellerFinancial';
 import AffiliateEcosystem from './pages/AffiliateEcosystem';
 import AffiliateProfile from './pages/AffiliateProfile';
 import AffiliateOrders from './pages/AffiliateOrders';
@@ -122,6 +123,10 @@ export default function App() {
             <Route 
               path="/afiliado/financeiro" 
               element={<ProtectedRoute allowedRoles={['affiliate', 'owner', 'manager', 'admin', 'regional_reseller']}><AffiliateWallet /></ProtectedRoute>} 
+            />
+            <Route 
+              path="/afiliado/financeiro-revendedor" 
+              element={<ProtectedRoute allowedRoles={['regional_reseller', 'owner', 'admin']}><AffiliateResellerFinancial /></ProtectedRoute>} 
             />
             <Route 
               path="/afiliado/ecossistema" 

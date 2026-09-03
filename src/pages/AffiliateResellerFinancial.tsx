@@ -41,6 +41,7 @@ export default function AffiliateResellerFinancial() {
   const [data, setData] = useState<any>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'completed'>('all');
+  const [viewMode, setViewMode] = useState<'itemized' | 'orders'>('itemized');
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 8;
 
@@ -94,6 +95,26 @@ export default function AffiliateResellerFinancial() {
       return matchesStatus && matchesSearch;
     });
   }, [data?.salesList, searchQuery, statusFilter]);
+
+  const filteredItemized = useMemo(() => {
+    if (!data?.itemizedTransactions) return [];
+    return data.itemizedTransactions.filter((tx: any) => {
+      const matchesStatus = 
+        statusFilter === 'all' || 
+        (statusFilter === 'completed' && (tx.status === 'PAGO' || tx.status === 'completed' || tx.status === 'pago')) ||
+        (statusFilter === 'pending' && (tx.status === 'PENDENTE' || tx.status === 'pending'));
+
+      const q = searchQuery.toLowerCase();
+      const matchesSearch = 
+        !searchQuery || 
+        tx.orderId.toLowerCase().includes(q) ||
+        tx.affiliateName.toLowerCase().includes(q) ||
+        tx.category.toLowerCase().includes(q) ||
+        String(tx.amount).includes(q);
+
+      return matchesStatus && matchesSearch;
+    });
+  }, [data?.itemizedTransactions, searchQuery, statusFilter]);
 
   const handleExportPDF = () => {
     if (!data) return;
@@ -501,8 +522,29 @@ export default function AffiliateResellerFinancial() {
               </p>
             </div>
 
-            {/* Search and Status Filters */}
+            {/* Search, View Mode and Status Filters */}
             <div className="flex flex-wrap items-center gap-3">
+              {/* Alternador de Visão: Lançamentos REG vs Por Pedido */}
+              <div className="flex bg-slate-100 p-1 rounded-xl text-[10px] font-black uppercase tracking-wider">
+                <button
+                  onClick={() => { setViewMode('itemized'); setCurrentPage(1); }}
+                  className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer flex items-center gap-1.5 ${
+                    viewMode === 'itemized' ? 'bg-purple-600 text-white shadow-sm' : 'text-slate-500 hover:text-slate-900'
+                  }`}
+                >
+                  <span className={`px-1 py-0.2 rounded text-[8px] font-black ${viewMode === 'itemized' ? 'bg-white text-purple-700' : 'bg-purple-100 text-purple-700'}`}>REG</span>
+                  Lançamentos (REG)
+                </button>
+                <button
+                  onClick={() => { setViewMode('orders'); setCurrentPage(1); }}
+                  className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
+                    viewMode === 'orders' ? 'bg-purple-600 text-white shadow-sm' : 'text-slate-500 hover:text-slate-900'
+                  }`}
+                >
+                  Por Pedido
+                </button>
+              </div>
+
               <div className="relative">
                 <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
                 <input
@@ -548,9 +590,10 @@ export default function AffiliateResellerFinancial() {
 
           {/* Table */}
           {(() => {
+            const currentList = viewMode === 'itemized' ? filteredItemized : filteredSales;
             const startIndex = (currentPage - 1) * itemsPerPage;
-            const paginatedSales = filteredSales.slice(startIndex, startIndex + itemsPerPage);
-            const totalPages = Math.ceil(filteredSales.length / itemsPerPage);
+            const paginatedList = currentList.slice(startIndex, startIndex + itemsPerPage);
+            const totalPages = Math.ceil(currentList.length / itemsPerPage);
 
             if (loading) {
               return (
@@ -561,7 +604,7 @@ export default function AffiliateResellerFinancial() {
               );
             }
 
-            if (filteredSales.length === 0) {
+            if (currentList.length === 0) {
               return (
                 <div className="py-16 text-center bg-slate-50/50 rounded-3xl border border-dashed border-slate-200">
                   <Receipt size={40} className="text-slate-300 mx-auto mb-3" />
@@ -578,70 +621,134 @@ export default function AffiliateResellerFinancial() {
             return (
               <>
                 <div className="overflow-x-auto">
-                  <table className="w-full text-left border-separate border-spacing-y-2.5">
-                    <thead>
-                      <tr className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                        <th className="px-5 py-2">ID DO PEDIDO</th>
-                        <th className="px-5 py-2">CLIENTE / COMPRADOR</th>
-                        <th className="px-5 py-2">DATA</th>
-                        <th className="px-5 py-2 text-right">VALOR VENDA</th>
-                        <th className="px-5 py-2 text-right">SEM. (2%)</th>
-                        <th className="px-5 py-2 text-right text-amber-600 font-black">MENSAL (2%)</th>
-                        <th className="px-5 py-2 text-right">ANUAL (2%)</th>
-                        <th className="px-5 py-2 text-right">TOTAL COMISSÃO</th>
-                        <th className="px-5 py-2 text-center">STATUS</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {paginatedSales.map((sale: any) => (
-                        <tr
-                          key={sale.orderId}
-                          className="bg-slate-50/70 hover:bg-white hover:shadow-lg hover:shadow-slate-100 transition-all rounded-2xl text-xs font-medium"
-                        >
-                          <td className="px-5 py-4 rounded-l-2xl font-black text-midnight font-mono">
-                            #{sale.orderId}
-                          </td>
-                          <td className="px-5 py-4 font-bold text-slate-700">
-                            {sale.customerName}
-                          </td>
-                          <td className="px-5 py-4 text-slate-500 text-[11px]">
-                            {new Date(sale.date).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                          </td>
-                          <td className="px-5 py-4 text-right font-mono font-bold text-slate-800">
-                            R$ {sale.orderAmount.toFixed(2).replace('.', ',')}
-                          </td>
-                          <td className="px-5 py-4 text-right font-mono text-indigo-600 font-bold">
-                            R$ {sale.semanal.toFixed(2).replace('.', ',')}
-                          </td>
-                          <td className="px-5 py-4 text-right font-mono text-amber-600 font-black bg-amber-50/50">
-                            R$ {sale.mensal.toFixed(2).replace('.', ',')}
-                          </td>
-                          <td className="px-5 py-4 text-right font-mono text-emerald-600 font-bold">
-                            R$ {sale.anual.toFixed(2).replace('.', ',')}
-                          </td>
-                          <td className="px-5 py-4 text-right font-mono font-black text-midnight">
-                            R$ {sale.totalCommission.toFixed(2).replace('.', ',')}
-                          </td>
-                          <td className="px-5 py-4 text-center rounded-r-2xl">
-                            <span className={`inline-flex items-center gap-1 text-[9px] font-black px-2.5 py-1 rounded-full uppercase tracking-wider ${
-                              sale.status === 'completed' || sale.status === 'pago'
-                                ? 'bg-emerald-100 text-emerald-800'
-                                : 'bg-amber-100 text-amber-800'
-                            }`}>
-                              {sale.status === 'completed' || sale.status === 'pago' ? 'Liquidado' : 'Aguardando'}
-                            </span>
-                          </td>
+                  {viewMode === 'itemized' ? (
+                    /* Tabela Detalhada com Nível REG e Categoria/Período */
+                    <table className="w-full text-left border-separate border-spacing-y-2.5">
+                      <thead>
+                        <tr className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                          <th className="px-5 py-2">ID DO PEDIDO</th>
+                          <th className="px-5 py-2">AFILIADO / ORIGEM</th>
+                          <th className="px-5 py-2 text-center">NÍVEL</th>
+                          <th className="px-5 py-2 text-center">CATEGORIA / PERÍODO</th>
+                          <th className="px-5 py-2">DATA</th>
+                          <th className="px-5 py-2 text-right">VALOR</th>
+                          <th className="px-5 py-2 text-center">STATUS</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody>
+                        {paginatedList.map((tx: any) => (
+                          <tr
+                            key={tx.id}
+                            className="bg-slate-50/70 hover:bg-white hover:shadow-lg hover:shadow-slate-100 transition-all rounded-2xl text-xs font-medium"
+                          >
+                            <td className="px-5 py-4 rounded-l-2xl font-black text-midnight font-mono">
+                              #{tx.orderId}
+                            </td>
+                            <td className="px-5 py-4 font-bold text-slate-700">
+                              {tx.affiliateName}
+                            </td>
+                            <td className="px-5 py-4 text-center">
+                              <span className="px-2.5 py-1 bg-purple-100 text-purple-700 font-black rounded-lg text-[9px] tracking-wider uppercase border border-purple-200/60">
+                                REG
+                              </span>
+                            </td>
+                            <td className="px-5 py-4 text-center">
+                              <span className={`px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-wider ${
+                                tx.category.includes('SEMANAL') 
+                                  ? 'bg-indigo-50 text-indigo-600 border border-indigo-100' 
+                                  : tx.category.includes('MENSAL')
+                                    ? 'bg-amber-50 text-amber-600 border border-amber-100'
+                                    : 'bg-emerald-50 text-emerald-600 border border-emerald-100'
+                              }`}>
+                                {tx.category}
+                              </span>
+                            </td>
+                            <td className="px-5 py-4 text-slate-500 text-[11px]">
+                              {new Date(tx.date).toLocaleDateString('pt-BR')}
+                            </td>
+                            <td className="px-5 py-4 text-right font-mono font-black text-emerald-600">
+                              +R$ {tx.amount.toFixed(2).replace('.', ',')}
+                            </td>
+                            <td className="px-5 py-4 text-center rounded-r-2xl">
+                              <span className={`inline-flex items-center gap-1 text-[9px] font-black px-2.5 py-1 rounded-full uppercase tracking-wider ${
+                                tx.status === 'PAGO'
+                                  ? 'bg-emerald-100 text-emerald-800'
+                                  : 'bg-amber-100 text-amber-800'
+                              }`}>
+                                {tx.status}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  ) : (
+                    /* Tabela Consolidada por Pedido */
+                    <table className="w-full text-left border-separate border-spacing-y-2.5">
+                      <thead>
+                        <tr className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                          <th className="px-5 py-2">ID DO PEDIDO</th>
+                          <th className="px-5 py-2">CLIENTE / COMPRADOR</th>
+                          <th className="px-5 py-2">DATA</th>
+                          <th className="px-5 py-2 text-right">VALOR VENDA</th>
+                          <th className="px-5 py-2 text-right">SEM. (2%)</th>
+                          <th className="px-5 py-2 text-right text-amber-600 font-black">MENSAL (2%)</th>
+                          <th className="px-5 py-2 text-right">ANUAL (2%)</th>
+                          <th className="px-5 py-2 text-right">TOTAL COMISSÃO</th>
+                          <th className="px-5 py-2 text-center">STATUS</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {paginatedList.map((sale: any) => (
+                          <tr
+                            key={sale.orderId}
+                            className="bg-slate-50/70 hover:bg-white hover:shadow-lg hover:shadow-slate-100 transition-all rounded-2xl text-xs font-medium"
+                          >
+                            <td className="px-5 py-4 rounded-l-2xl font-black text-midnight font-mono">
+                              #{sale.orderId}
+                            </td>
+                            <td className="px-5 py-4 font-bold text-slate-700">
+                              {sale.customerName}
+                            </td>
+                            <td className="px-5 py-4 text-slate-500 text-[11px]">
+                              {new Date(sale.date).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                            </td>
+                            <td className="px-5 py-4 text-right font-mono font-bold text-slate-800">
+                              R$ {sale.orderAmount.toFixed(2).replace('.', ',')}
+                            </td>
+                            <td className="px-5 py-4 text-right font-mono text-indigo-600 font-bold">
+                              R$ {sale.semanal.toFixed(2).replace('.', ',')}
+                            </td>
+                            <td className="px-5 py-4 text-right font-mono text-amber-600 font-black bg-amber-50/50">
+                              R$ {sale.mensal.toFixed(2).replace('.', ',')}
+                            </td>
+                            <td className="px-5 py-4 text-right font-mono text-emerald-600 font-bold">
+                              R$ {sale.anual.toFixed(2).replace('.', ',')}
+                            </td>
+                            <td className="px-5 py-4 text-right font-mono font-black text-midnight">
+                              R$ {sale.totalCommission.toFixed(2).replace('.', ',')}
+                            </td>
+                            <td className="px-5 py-4 text-center rounded-r-2xl">
+                              <span className={`inline-flex items-center gap-1 text-[9px] font-black px-2.5 py-1 rounded-full uppercase tracking-wider ${
+                                sale.status === 'completed' || sale.status === 'pago'
+                                  ? 'bg-emerald-100 text-emerald-800'
+                                  : 'bg-amber-100 text-amber-800'
+                              }`}>
+                                {sale.status === 'completed' || sale.status === 'pago' ? 'Liquidado' : 'Aguardando'}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
                 </div>
 
                 {/* Pagination */}
                 {totalPages > 1 && (
                   <div className="flex items-center justify-between pt-4 border-t border-slate-100">
                     <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">
-                      Mostrando {startIndex + 1} a {Math.min(startIndex + itemsPerPage, filteredSales.length)} de {filteredSales.length} registros
+                      Mostrando {startIndex + 1} a {Math.min(startIndex + itemsPerPage, currentList.length)} de {currentList.length} registros
                     </p>
                     <div className="flex items-center gap-2">
                       <button

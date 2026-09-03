@@ -33,7 +33,6 @@ export default function AffiliateWallet() {
   const [submitting, setSubmitting] = useState(false);
   const [stats, setStats] = useState<any>(null);
   const [transactions, setTransactions] = useState<any[]>([]);
-  const [categoryFilter, setCategoryFilter] = useState<'all' | 'network' | 'reseller'>('all');
   const [activeFilter, setActiveFilter] = useState<'all' | 'cd' | 'mensal' | 'anual'>('all');
   const [mmnLevelFilter, setMmnLevelFilter] = useState<'all' | '0' | '1' | '2'>('all');
   const [currentPage, setCurrentPage] = useState(1);
@@ -42,10 +41,9 @@ export default function AffiliateWallet() {
 
   const filteredTransactions = useMemo(() => {
     return transactions.filter(t => {
-      const matchesCategory = 
-        categoryFilter === 'all' || 
-        (categoryFilter === 'network' && (t.category === 'network' || t.level === '0' || t.level === '1' || t.level === '2')) ||
-        (categoryFilter === 'reseller' && (t.category === 'reseller' || t.level === 'REG' || t.isReseller));
+      // Excluir qualquer lançamento de nível REG ou revendedor da aba Financeiro de Rede
+      const isReseller = t.level === 'REG' || t.isReseller || t.category === 'reseller';
+      if (isReseller) return false;
 
       const matchesFilter = 
         activeFilter === 'all' || 
@@ -54,7 +52,6 @@ export default function AffiliateWallet() {
         (activeFilter === 'anual' && t.cashbackType?.includes('Anual'));
 
       const matchesLevel = 
-        categoryFilter !== 'network' || 
         mmnLevelFilter === 'all' || 
         t.level === mmnLevelFilter;
       
@@ -68,9 +65,9 @@ export default function AffiliateWallet() {
         t.status?.toLowerCase().includes(searchLower) ||
         String(t.amount).includes(searchQuery);
 
-      return matchesCategory && matchesFilter && matchesLevel && matchesSearch;
+      return matchesFilter && matchesLevel && matchesSearch;
     });
-  }, [transactions, categoryFilter, activeFilter, mmnLevelFilter, searchQuery]);
+  }, [transactions, activeFilter, mmnLevelFilter, searchQuery]);
 
   const totalPending = useMemo(() => {
     return filteredTransactions
@@ -80,7 +77,7 @@ export default function AffiliateWallet() {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [categoryFilter, activeFilter, mmnLevelFilter, searchQuery]);
+  }, [activeFilter, mmnLevelFilter, searchQuery]);
 
   const handleDownloadPDF = () => {
     const doc = new jsPDF();
@@ -109,7 +106,7 @@ export default function AffiliateWallet() {
     
     doc.setFontSize(10);
     doc.setFont('helvetica', 'normal');
-    doc.text(`Categoria: ${categoryFilter === 'all' ? 'Todos os Ganhos' : categoryFilter === 'network' ? `Rede MMN (${mmnLevelFilter === 'all' ? 'G0 ao G2' : 'Nível G' + mmnLevelFilter})` : 'Revendedor Regional'}`, 14, 62);
+    doc.text(`Categoria: Rede MMN (${mmnLevelFilter === 'all' ? 'G0 ao G2' : 'Nível G' + mmnLevelFilter})`, 14, 62);
     doc.text(`Tipo: ${activeFilter === 'all' ? 'Todos' : activeFilter === 'cd' ? 'Carteira Semanal' : activeFilter === 'mensal' ? 'Mensal' : 'Anual'}`, 14, 67);
     doc.text(`Registros: ${filteredTransactions.length}`, 14, 72);
     doc.text(`Total Acumulado: ${totalPending.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`, 14, 77);
@@ -424,59 +421,17 @@ export default function AffiliateWallet() {
 
         {/* Transactions List */}
         <div className="bg-white rounded-[2.5rem] border border-slate-100 shadow-sm p-10">
-            {/* Seletor de Categoria: Todos vs Rede Afiliados vs Revendedor Regional */}
-            <div className="flex bg-slate-100 p-1.5 rounded-2xl border border-slate-200 w-full max-w-2xl gap-2 mb-8">
-              <button
-                onClick={() => setCategoryFilter('all')}
-                className={`flex-1 py-3 px-4 rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer ${
-                  categoryFilter === 'all'
-                    ? 'bg-midnight text-white shadow-md'
-                    : 'text-slate-500 hover:text-midnight'
-                }`}
-              >
-                📊 Todos os Ganhos
-              </button>
-              <button
-                onClick={() => setCategoryFilter('network')}
-                className={`flex-1 py-3 px-4 rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer ${
-                  categoryFilter === 'network'
-                    ? 'bg-gradient-to-r from-indigo-600 to-indigo-700 text-white shadow-md'
-                    : 'text-slate-500 hover:text-indigo-600'
-                }`}
-              >
-                👥 Rede MMN (G0 ao G2)
-              </button>
-              <button
-                onClick={() => setCategoryFilter('reseller')}
-                className={`flex-1 py-3 px-4 rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer ${
-                  categoryFilter === 'reseller'
-                    ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-md'
-                    : 'text-slate-500 hover:text-purple-600'
-                }`}
-              >
-                🏢 Revendedor Regional
-              </button>
-            </div>
-
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-8 mb-10">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-8 mb-8">
               <div>
                  <h2 className="text-2xl font-black text-midnight tracking-tighter uppercase italic underline decoration-primary-blue decoration-4 underline-offset-8 mb-2">
-                   {categoryFilter === 'reseller' 
-                     ? 'Repasses de Revendedor Regional' 
-                     : categoryFilter === 'network' 
-                       ? 'Comissões de Rede MMN' 
-                       : 'Histórico Financeiro Completo'}
+                   Comissões de Rede MMN
                  </h2>
                  <p className="text-slate-500 font-medium">
-                    {categoryFilter === 'reseller' 
-                      ? 'Exibindo comissões e repasses das vendas efetuadas na sua região/franquia.' 
-                      : categoryFilter === 'network'
-                        ? 'Exibindo comissões de sua compra própria (G0) e de sua rede de indicados (G1 e G2).'
-                        : 'Veja todos os créditos de cashback e repasses realizados na sua conta.'}
+                    Exibindo comissões de sua compra própria (G0) e de sua rede de indicados (G1 e G2).
                  </p>
               </div>
               <div className="flex items-center gap-4">
-                 {(activeFilter !== 'all' || (categoryFilter === 'network' && mmnLevelFilter !== 'all')) && (
+                 {(activeFilter !== 'all' || mmnLevelFilter !== 'all') && (
                    <button 
                      onClick={() => {
                        setActiveFilter('all');
@@ -511,68 +466,66 @@ export default function AffiliateWallet() {
            </div>
 
            {/* Subfiltro de Níveis MMN (G0, G1, G2 ou Todas) */}
-           {categoryFilter === 'network' && (
-             <div className="flex flex-wrap items-center gap-2 mb-6 bg-slate-50 p-2 rounded-2xl border border-slate-200/60 shadow-sm">
-               <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-3 py-1">
-                 Nível:
-               </span>
-               <button
-                 onClick={() => {
-                   setMmnLevelFilter('all');
-                   setCurrentPage(1);
-                 }}
-                 className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer ${
-                   mmnLevelFilter === 'all'
-                     ? 'bg-slate-900 text-white shadow-md'
-                     : 'text-slate-600 hover:text-slate-900 hover:bg-white'
-                 }`}
-               >
-                 Todas ({transactions.filter(t => t.category === 'network' || t.level === '0' || t.level === '1' || t.level === '2').length})
-               </button>
-               <button
-                 onClick={() => {
-                   setMmnLevelFilter('0');
-                   setCurrentPage(1);
-                 }}
-                 className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer flex items-center gap-2 ${
-                   mmnLevelFilter === '0'
-                     ? 'bg-amber-500 text-white shadow-md'
-                     : 'text-slate-700 hover:text-amber-600 hover:bg-amber-50/70'
-                 }`}
-               >
-                 <span className="size-2 rounded-full bg-amber-400" />
-                 G0 - Compra Própria ({transactions.filter(t => t.level === '0').length})
-               </button>
-               <button
-                 onClick={() => {
-                   setMmnLevelFilter('1');
-                   setCurrentPage(1);
-                 }}
-                 className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer flex items-center gap-2 ${
-                   mmnLevelFilter === '1'
-                     ? 'bg-emerald-600 text-white shadow-md'
-                     : 'text-slate-700 hover:text-emerald-600 hover:bg-emerald-50/70'
-                 }`}
-               >
-                 <span className="size-2 rounded-full bg-emerald-400" />
-                 G1 - Indicação Direta ({transactions.filter(t => t.level === '1').length})
-               </button>
-               <button
-                 onClick={() => {
-                   setMmnLevelFilter('2');
-                   setCurrentPage(1);
-                 }}
-                 className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer flex items-center gap-2 ${
-                   mmnLevelFilter === '2'
-                     ? 'bg-sky-600 text-white shadow-md'
-                     : 'text-slate-700 hover:text-sky-600 hover:bg-sky-50/70'
-                 }`}
-               >
-                 <span className="size-2 rounded-full bg-sky-400" />
-                 G2 - 2ª Geração ({transactions.filter(t => t.level === '2').length})
-               </button>
-             </div>
-           )}
+           <div className="flex flex-wrap items-center gap-2 mb-6 bg-slate-50 p-2 rounded-2xl border border-slate-200/60 shadow-sm">
+             <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-3 py-1">
+               Nível:
+             </span>
+             <button
+               onClick={() => {
+                 setMmnLevelFilter('all');
+                 setCurrentPage(1);
+               }}
+               className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer ${
+                 mmnLevelFilter === 'all'
+                   ? 'bg-slate-900 text-white shadow-md'
+                   : 'text-slate-600 hover:text-slate-900 hover:bg-white'
+               }`}
+             >
+               Todas ({transactions.filter(t => t.level !== 'REG' && !t.isReseller && t.category !== 'reseller').length})
+             </button>
+             <button
+               onClick={() => {
+                 setMmnLevelFilter('0');
+                 setCurrentPage(1);
+               }}
+               className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer flex items-center gap-2 ${
+                 mmnLevelFilter === '0'
+                   ? 'bg-amber-500 text-white shadow-md'
+                   : 'text-slate-700 hover:text-amber-600 hover:bg-amber-50/70'
+               }`}
+             >
+               <span className="size-2 rounded-full bg-amber-400" />
+               G0 - Compra Própria ({transactions.filter(t => t.level === '0').length})
+             </button>
+             <button
+               onClick={() => {
+                 setMmnLevelFilter('1');
+                 setCurrentPage(1);
+               }}
+               className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer flex items-center gap-2 ${
+                 mmnLevelFilter === '1'
+                   ? 'bg-emerald-600 text-white shadow-md'
+                   : 'text-slate-700 hover:text-emerald-600 hover:bg-emerald-50/70'
+               }`}
+             >
+               <span className="size-2 rounded-full bg-emerald-400" />
+               G1 - Indicação Direta ({transactions.filter(t => t.level === '1').length})
+             </button>
+             <button
+               onClick={() => {
+                 setMmnLevelFilter('2');
+                 setCurrentPage(1);
+               }}
+               className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer flex items-center gap-2 ${
+                 mmnLevelFilter === '2'
+                   ? 'bg-sky-600 text-white shadow-md'
+                   : 'text-slate-700 hover:text-sky-600 hover:bg-sky-50/70'
+               }`}
+             >
+               <span className="size-2 rounded-full bg-sky-400" />
+               G2 - 2ª Geração ({transactions.filter(t => t.level === '2').length})
+             </button>
+           </div>
 
            <div className="space-y-4">
               {(() => {

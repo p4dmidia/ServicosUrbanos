@@ -425,7 +425,7 @@ export default function AffiliateLuckyNumber() {
               Prêmio de R$ 5.000,00 Bruto
             </h4>
             <p className="text-xs md:text-sm text-emerald-800 leading-relaxed font-medium">
-              Valor de <strong>R$ 5.000,00 bruto</strong>, com desconto de Imposto de Renda conforme legislação vigente, pago em <strong>até 15 dias</strong> após envio da documentação.
+              Valor de <strong>R$ 5.000,00 bruto</strong>, terá o desconto de Imposto de Renda conforme legislação vigente, pago em <strong>até 15 dias</strong> após envio da documentação.
             </p>
           </div>
         </div>

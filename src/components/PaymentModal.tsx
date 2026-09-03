@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   X, 
   QrCode, 
@@ -10,7 +10,8 @@ import {
   Building2,
   User,
   Shield,
-  Hash
+  Hash,
+  Upload
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { generatePixPayload } from '../lib/pix';
@@ -39,6 +40,8 @@ export default function PaymentModal({ isOpen, onClose, selectedRecords, onConfi
   const [isProcessing, setIsProcessing] = useState(false);
   const [manualPixKey, setManualPixKey] = useState('');
   const [editingPix, setEditingPix] = useState(false);
+  const [receiptFile, setReceiptFile] = useState<File | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Reinicia o índice quando o modal é aberto
   useEffect(() => {
@@ -69,6 +72,7 @@ export default function PaymentModal({ isOpen, onClose, selectedRecords, onConfi
       } else {
         setEditingPix(true);
       }
+      setReceiptFile(null);
     }
   }, [currentIndex, currentRecord]);
 
@@ -114,7 +118,8 @@ export default function PaymentModal({ isOpen, onClose, selectedRecords, onConfi
         payeePixKey: manualPixKey,
         payeeWhatsapp: currentRecord.payeeWhatsapp,
         totalAmount: currentRecord.repasse,
-        orders: [currentRecord]
+        orders: [currentRecord],
+        receiptFile
       });
     } catch (error) {
       console.error(error);
@@ -190,9 +195,11 @@ export default function PaymentModal({ isOpen, onClose, selectedRecords, onConfi
               <div className="flex flex-col">
                 <div className="flex items-center gap-2">
                   <h2 className="text-3xl font-black text-midnight italic uppercase tracking-tighter">
-                    {currentRecord.buyerName === 'Rede MMN' || currentRecord.orderId?.startsWith('CASH-') 
-                      ? 'Liquidando Cashback Mensal' 
-                      : 'Liquidando Repasse Lojista'}
+                    {currentRecord.descLabel 
+                      ? `Liquidando ${currentRecord.descLabel}` 
+                      : (currentRecord.viewCategory === 'reseller' || currentRecord.orderId?.startsWith('RES-'))
+                      ? 'Liquidando Repasse Revendedor'
+                      : 'Liquidando Pagamento Afiliado'}
                   </h2>
                   <div className="flex items-center gap-1 bg-slate-100 px-3 py-1 rounded-full border border-slate-200">
                     <Hash size={12} className="text-slate-400" />
@@ -205,7 +212,7 @@ export default function PaymentModal({ isOpen, onClose, selectedRecords, onConfi
                   <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">{currentRecord.payeeName}</span>
                   <span className="text-xs text-slate-300">•</span>
                   <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">
-                    {currentRecord.buyerName === 'Rede MMN' ? 'Fechamento Mensal' : 'Pagamento Único'}
+                    {currentRecord.descLabel || (currentRecord.buyerName === 'Rede MMN' ? 'Cashback de Rede' : 'Comissão de Afiliado')}
                   </span>
                   {currentRecord.payeeCpf && (
                     <>
@@ -348,20 +355,39 @@ export default function PaymentModal({ isOpen, onClose, selectedRecords, onConfi
                  </button>
               </div>
 
-              <div className="flex items-center gap-4">
-                 <div className="hidden md:flex flex-col text-right">
-                    <p className="text-[8px] text-slate-400 font-black uppercase tracking-widest">Atenção</p>
-                    <p className="text-[10px] text-slate-500 font-bold leading-tight uppercase">Confirme o pagamento no seu banco<br/>antes de marcar como pago.</p>
-                 </div>
-                 <button 
-                   onClick={confirmCurrent}
-                   disabled={isProcessing || !manualPixKey || currentRecord.is_active === false}
-                   className="bg-indigo-600 text-white px-8 py-5 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-indigo-700 disabled:opacity-30 disabled:pointer-events-none transition-all flex items-center gap-2 shadow-xl shadow-indigo-600/20 active:scale-95 cursor-pointer"
-                 >
-                   {isProcessing ? <Loader2 size={18} className="animate-spin" /> : <CheckCircle2 size={18} />}
-                   Marcar como Pago
-                 </button>
-              </div>
+               <div className="flex flex-wrap items-center gap-3">
+                  {/* Botão de Anexo de Comprovante */}
+                  <div>
+                    <input 
+                      type="file" 
+                      ref={fileInputRef} 
+                      className="hidden" 
+                      accept="image/*,.pdf" 
+                      onChange={(e) => setReceiptFile(e.target.files?.[0] || null)}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      className={`px-4 py-4 rounded-2xl text-[10px] font-black uppercase tracking-wider flex items-center gap-2 transition-all cursor-pointer border ${
+                        receiptFile 
+                          ? 'bg-emerald-50 text-emerald-700 border-emerald-300 shadow-sm' 
+                          : 'bg-slate-100 text-slate-600 border-slate-200 hover:bg-slate-200'
+                      }`}
+                    >
+                      <Upload size={14} />
+                      {receiptFile ? 'Comprovante Anexado' : 'Anexar Comprovante'}
+                    </button>
+                  </div>
+
+                  <button 
+                    onClick={confirmCurrent}
+                    disabled={isProcessing || !manualPixKey || currentRecord.is_active === false}
+                    className="bg-indigo-600 text-white px-8 py-4 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-indigo-700 disabled:opacity-30 disabled:pointer-events-none transition-all flex items-center gap-2 shadow-xl shadow-indigo-600/20 active:scale-95 cursor-pointer"
+                  >
+                    {isProcessing ? <Loader2 size={18} className="animate-spin" /> : <CheckCircle2 size={18} />}
+                    Marcar como Pago
+                  </button>
+               </div>
            </div>
         </div>
 

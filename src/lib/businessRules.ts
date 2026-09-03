@@ -1025,34 +1025,42 @@ export const businessRules = {
       const transactions = (tResult.data || []).filter(t => ordersMap.get(t.order_id) !== 'Cancelado');
       const consumptionCount = oResult.data?.length || 0;
 
-      // Cálculo Real baseado no PRD (Divisão Tripla)
-      // Carteira Semanal (CD): soma de todas as comissões semanais (pending, completed ou pago)
+      const isResellerTx = (t: any) => 
+        t.description?.includes('Revendedor') || 
+        t.description?.includes('Regional') ||
+        t.description?.includes('(REG)');
+
+      // Cálculo Real baseado no PRD (Divisão Tripla) exclusivo da REDE MMN
+      // Carteira Semanal (CD): soma de todas as comissões de rede semanais (pending, completed ou pago)
       const walletBonus = transactions
         .filter(t => t.type === 'commission' && 
+                !isResellerTx(t) &&
                 (t.description?.includes('Digital') || t.description?.includes('(CD)') || t.description?.includes('Semanal')) && 
                 (t.status === 'completed' || t.status === 'pago' || t.status === 'pending'))
         .reduce((acc, t) => acc + Number(t.amount || 0), 0);
 
-      // Cashback Mensal e Anual: soma de todas as comissões (pending, completed ou pago)
+      // Cashback Mensal e Anual da Rede: soma de todas as comissões de rede (pending, completed ou pago)
       const monthlyBonus = transactions
         .filter(t => t.type === 'commission' && 
+                !isResellerTx(t) &&
                 t.description?.includes('Mensal') && 
                 (t.status === 'completed' || t.status === 'pago' || t.status === 'pending'))
         .reduce((acc, t) => acc + Number(t.amount || 0), 0);
 
       const annualBonus = transactions
         .filter(t => t.type === 'commission' && 
+                !isResellerTx(t) &&
                 t.description?.includes('Anual') && 
                 (t.status === 'completed' || t.status === 'pago' || t.status === 'pending'))
         .reduce((acc, t) => acc + Number(t.amount || 0), 0);
 
-      // totalEarnings: soma de todas as comissões (ganhos históricos acumulados)
+      // totalEarnings da Rede MMN: soma de todas as comissões da rede (ganhos históricos acumulados)
       const totalEarnings = monthlyBonus + annualBonus + walletBonus;
       
-      // O Saldo Disponível conforme o PRD é o da Carteira Digital (CD)
-      // Exclui resgates/pagamentos de Cashback Mensal e Anual para manter as carteiras independentes
+      // O Saldo Disponível conforme o PRD é o da Carteira Digital (CD) da rede
       const totalWithdrawn = transactions
         .filter(t => t.type === 'withdrawal' && 
+                 !isResellerTx(t) &&
                  !t.description?.includes('Mensal') && 
                  !t.description?.includes('Anual') &&
                  (t.status === 'completed' || t.status === 'pago'))
@@ -2013,13 +2021,13 @@ export const businessRules = {
     }
 
     // Queries construídas dinamicamente
-    let currentRevenueQuery = supabase.from('orders').select('amount, order_date').in('status', ['Pago, Aguardando Retirada', 'Concluído']).gte('order_date', startDate.toISOString());
-    let lastRevenueQuery = supabase.from('orders').select('amount').in('status', ['Pago, Aguardando Retirada', 'Concluído']).gte('order_date', previousStartDate.toISOString()).lt('order_date', startDate.toISOString());
+    let currentRevenueQuery = supabase.from('orders').select('amount, order_date, created_at').in('status', ['Pago', 'Pago, Aguardando Retirada', 'Concluído']).gte('order_date', startDate.toISOString());
+    let lastRevenueQuery = supabase.from('orders').select('amount, order_date, created_at').in('status', ['Pago', 'Pago, Aguardando Retirada', 'Concluído']).gte('order_date', previousStartDate.toISOString()).lt('order_date', startDate.toISOString());
     let currentUserGrowthQuery = supabase.from('profiles').select('*', { count: 'exact', head: true }).gte('created_at', startDate.toISOString());
     let lastUserGrowthQuery = supabase.from('profiles').select('*', { count: 'exact', head: true }).gte('created_at', previousStartDate.toISOString()).lt('created_at', startDate.toISOString());
     let currentCommissionsQuery = supabase.from('transactions').select('amount, description, order_id').eq('type', 'commission').gte('created_at', startDate.toISOString());
     let lastCommissionsQuery = supabase.from('transactions').select('amount, description, order_id').eq('type', 'commission').gte('created_at', previousStartDate.toISOString()).lt('created_at', startDate.toISOString());
-    let chartRawDataQuery = supabase.from('orders').select('amount, order_date').in('status', ['Pago, Aguardando Retirada', 'Concluído']).gte('order_date', startDate.toISOString());
+    let chartRawDataQuery = supabase.from('orders').select('amount, order_date, created_at').in('status', ['Pago', 'Pago, Aguardando Retirada', 'Concluído']).gte('order_date', startDate.toISOString());
 
     if (customStartDate && customEndDate) {
       currentRevenueQuery = currentRevenueQuery.lte('order_date', endDate.toISOString());
@@ -2081,7 +2089,7 @@ export const businessRules = {
         labels.push(label);
         
         const dayTotal = chartRawData?.filter(o => {
-          const od = new Date(o.order_date);
+          const od = new Date(o.order_date || o.created_at);
           return od.getDate() === d.getDate() && od.getMonth() === d.getMonth() && od.getFullYear() === d.getFullYear();
         }).reduce((acc, o) => acc + Number(o.amount), 0) || 0;
         
@@ -2094,7 +2102,7 @@ export const businessRules = {
         labels.push(monthsNames[d.getMonth()]);
 
         const monthTotal = chartRawData?.filter(o => {
-          const od = new Date(o.order_date);
+          const od = new Date(o.order_date || o.created_at);
           return od.getMonth() === d.getMonth() && od.getFullYear() === d.getFullYear();
         }).reduce((acc, o) => acc + Number(o.amount), 0) || 0;
 
@@ -2263,6 +2271,7 @@ export const businessRules = {
             levels: level ? [level] : [],
             order_numbers: orderNum ? [orderNum] : [],
             order_number: orderNum || '',
+            transactions: [],
             mensal: 0,
             anual: 0,
             digital: 0,
@@ -2282,15 +2291,30 @@ export const businessRules = {
         const amount = Number(t.amount);
 
         if (t.type === 'commission') {
+          let cycleType = 'Semanal';
           if (desc.includes('Mensal')) {
             report[affiliateId].mensal += amount;
+            cycleType = 'Mensal';
           } else if (desc.includes('Anual')) {
             report[affiliateId].anual += amount;
+            cycleType = 'Anual';
           } else if (desc.includes('Digital') || desc.includes('Semanal') || desc.includes('(CD)')) {
             report[affiliateId].digital += amount;
+            cycleType = 'Semanal';
           } else {
             report[affiliateId].digital += amount;
           }
+
+          report[affiliateId].transactions.push({
+            id: t.id,
+            date: t.created_at,
+            orderId: orderNum,
+            level: level || (filterCategory === 'reseller' ? 'REG' : 'G0'),
+            cycleType,
+            description: desc,
+            amount: Math.abs(amount),
+            status: t.status
+          });
         } else if (t.type === 'withdrawal') {
           if (desc.includes('Mensal')) {
             report[affiliateId].mensal += amount; // soma valor negativo (subtrai)
@@ -2866,7 +2890,7 @@ export const businessRules = {
     const [{ data: profiles, error: pError }, { data: subsData }, { data: ordersData }, { data: transactions, error: tError }] = await Promise.all([
       supabase
         .from('profiles')
-        .select('id, full_name, email, pix_key, bank_name, bank_branch, bank_account, whatsapp, role, city, state'),
+        .select('id, full_name, email, pix_key, bank_name, bank_branch, bank_account, whatsapp, role, city, state, cpf, cnpj'),
       supabase
         .from('subscriptions')
         .select('profile_id, status, end_date, plan_type'),
@@ -2883,14 +2907,27 @@ export const businessRules = {
     if (tError) throw tError;
 
     const now = new Date();
+    const currentRefMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+
+    // Buscar notas fiscais do mês atual
+    const invoices = await businessRules.getAffiliateInvoices(undefined, currentRefMonth);
+    const invoiceMap = new Map(invoices.map((inv: any) => [inv.profile_id, inv]));
+
+    // Filtra perfis estritamente pelo tipo solicitado
+    const targetProfiles = (profiles || []).filter(p => {
+      const isRegional = p.role === 'regional_reseller';
+      if (filterCategory === 'network') return !isRegional;
+      if (filterCategory === 'reseller') return isRegional;
+      return true;
+    });
 
     // 3. Processar saldos e status de adimplência por usuário
-    const payableList = (profiles || []).map(profile => {
+    const payableList = targetProfiles.map(profile => {
       // Filtra transações do usuário conforme a categoria solicitada
       const userTransactions = (transactions || []).filter(t => {
         if (t.profile_id !== profile.id) return false;
         const desc = t.description || '';
-        const isResellerTx = desc.includes('Revendedor') || desc.includes('Regional');
+        const isResellerTx = desc.includes('Revendedor') || desc.includes('Regional') || desc.includes('(REG)');
         if (filterCategory === 'network') return !isResellerTx;
         if (filterCategory === 'reseller') return isResellerTx;
         return true;
@@ -2928,7 +2965,7 @@ export const businessRules = {
           if (desc.includes('G0') || desc.includes('Titular')) lvl = 'G0';
           else if (desc.includes('G1')) lvl = 'G1';
           else if (desc.includes('G2')) lvl = 'G2';
-          else if (desc.includes('Revendedor') || desc.includes('Regional')) lvl = 'REG';
+          else if (desc.includes('Revendedor') || desc.includes('Regional') || desc.includes('(REG)')) lvl = 'REG';
           if (lvl && !levels.includes(lvl)) levels.push(lvl);
 
           let oNum = t.order_id ? String(t.order_id) : '';
@@ -2971,11 +3008,16 @@ export const businessRules = {
       const annualPending = Math.max(0, annualBonus - annualPaid);
       const digitalPending = Math.max(0, walletBonus - totalWithdrawn);
 
-      const isPJ = isCnpj(profile.cpf, profile.pix_key);
+      const isPJ = isCnpj(profile.cpf || profile.cnpj, profile.pix_key);
       const taxMonthly = calculateTaxDeductions(monthlyPending, isPJ);
       const taxAnnual = calculateTaxDeductions(annualPending, isPJ);
       const taxDigital = calculateTaxDeductions(digitalPending, isPJ);
       const taxTotal = calculateTaxDeductions(monthlyPending + annualPending + digitalPending, isPJ);
+
+      // Nota Fiscal Info
+      const userInvoice = invoiceMap.get(profile.id);
+      const hasInvoice = !!userInvoice;
+      const canPayMonthly = isEligible && hasInvoice;
 
       return {
         profileId: profile.id,
@@ -2984,7 +3026,7 @@ export const businessRules = {
         pixKey: profile.pix_key || 'Não informado',
         bankDetails: profile.bank_name ? `${profile.bank_name} / Ag: ${profile.bank_branch} / CC: ${profile.bank_account}` : 'Apenas PIX',
         whatsapp: profile.whatsapp || '',
-        cpf: profile.cpf || '',
+        cpf: profile.cpf || profile.cnpj || '',
         isPJ,
         monthlyPending: taxMonthly.bruto,
         monthlyInss: taxMonthly.inss,
@@ -3005,11 +3047,195 @@ export const businessRules = {
         levels,
         orderNumber: orderNumbers.join(', #'),
         orderNumbers,
-        polo: profile.city ? `${profile.city}${profile.state ? ` - ${profile.state}` : ''}` : ''
+        polo: profile.city ? `${profile.city}${profile.state ? ` - ${profile.state}` : ''}` : '',
+        // Informações da Nota Fiscal
+        hasInvoice,
+        canPayMonthly,
+        invoiceStatus: userInvoice?.status || 'none',
+        invoiceLink: userInvoice?.invoice_link || null,
+        invoiceFileUrl: userInvoice?.file_url || null,
+        invoiceNumber: userInvoice?.invoice_number || null,
+        invoiceId: userInvoice?.id || null
       };
     }).filter(p => p.monthlyPending > 0 || p.annualPending > 0 || p.digitalPending > 0);
 
     return payableList;
+  },
+
+  getAffiliateInvoiceSummary: async (userId: string, year?: number, month?: number) => {
+    const now = new Date();
+    const selYear = year !== undefined ? year : now.getFullYear();
+    const selMonth = month !== undefined ? month : now.getMonth();
+    const refMonthStr = `${selYear}-${String(selMonth + 1).padStart(2, '0')}`;
+
+    const startDate = new Date(selYear, selMonth, 1, 0, 0, 0, 0);
+    const endDate = new Date(selYear, selMonth + 1, 0, 23, 59, 59, 999);
+
+    const { data: txs } = await supabase
+      .from('transactions')
+      .select('*')
+      .eq('profile_id', userId)
+      .gte('created_at', startDate.toISOString())
+      .lte('created_at', endDate.toISOString());
+
+    const commissions = (txs || []).filter(t => t.type === 'commission' && (t.status === 'completed' || t.status === 'pago' || t.status === 'pending'));
+
+    const weeklyGross = commissions
+      .filter(t => (t.description?.includes('Digital') || t.description?.includes('Semanal') || t.description?.includes('(CD)')))
+      .reduce((acc, t) => acc + Number(t.amount || 0), 0);
+
+    const monthlyGross = commissions
+      .filter(t => t.description?.includes('Mensal'))
+      .reduce((acc, t) => acc + Number(t.amount || 0), 0);
+
+    const totalGross = weeklyGross + monthlyGross;
+
+    // Busca nota fiscal já enviada para o mês
+    const existingInvoices = await businessRules.getAffiliateInvoices(userId, refMonthStr);
+    const currentInvoice = existingInvoices[0] || null;
+
+    return {
+      referenceMonth: refMonthStr,
+      monthLabel: new Date(selYear, selMonth, 1).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' }),
+      weeklyGross,
+      monthlyGross,
+      totalGross,
+      currentInvoice
+    };
+  },
+
+  submitAffiliateInvoice: async (data: {
+    profile_id: string;
+    reference_month: string;
+    amount_gross: number;
+    invoice_number?: string;
+    invoice_link?: string;
+    file?: File;
+    notes?: string;
+  }) => {
+    let fileUrl: string | null = null;
+    if (data.file) {
+      fileUrl = await businessRules.uploadReceipt(data.file);
+    }
+
+    const payload = {
+      profile_id: data.profile_id,
+      reference_month: data.reference_month,
+      amount_gross: data.amount_gross,
+      invoice_number: data.invoice_number || null,
+      invoice_link: data.invoice_link || null,
+      file_url: fileUrl,
+      notes: data.notes || null,
+      status: 'pending'
+    };
+
+    try {
+      const { data: inserted, error } = await supabase
+        .from('affiliate_invoices')
+        .insert([payload])
+        .select()
+        .single();
+      if (!error && inserted) return inserted;
+    } catch (err) {
+      console.warn('affiliate_invoices table fallback to storage', err);
+    }
+
+    // Fallback via localStorage global para o Admin ler
+    const invoiceRecord = {
+      id: `inv-${Date.now()}`,
+      ...payload,
+      created_at: new Date().toISOString()
+    };
+    try {
+      const allInvoices = JSON.parse(localStorage.getItem('all_affiliate_invoices') || '[]');
+      const filtered = allInvoices.filter((i: any) => !(i.profile_id === data.profile_id && i.reference_month === data.reference_month));
+      filtered.push(invoiceRecord);
+      localStorage.setItem('all_affiliate_invoices', JSON.stringify(filtered));
+    } catch (e) {}
+
+    return invoiceRecord;
+  },
+
+  getAffiliateInvoices: async (userId?: string, referenceMonth?: string) => {
+    let results: any[] = [];
+    try {
+      let query = supabase.from('affiliate_invoices').select('*').order('created_at', { ascending: false });
+      if (userId) query = query.eq('profile_id', userId);
+      if (referenceMonth) query = query.eq('reference_month', referenceMonth);
+      const { data, error } = await query;
+      if (!error && data && data.length > 0) results = data;
+    } catch (err) {
+      console.warn('Fallback getting invoices', err);
+    }
+
+    if (results.length === 0) {
+      try {
+        const localAll = JSON.parse(localStorage.getItem('all_affiliate_invoices') || '[]');
+        results = localAll.filter((i: any) => {
+          if (userId && i.profile_id !== userId) return false;
+          if (referenceMonth && i.reference_month !== referenceMonth) return false;
+          return true;
+        });
+      } catch (e) {}
+    }
+
+    return results;
+  },
+
+  getPaymentHistory: async () => {
+    try {
+      const { data, error } = await supabase
+        .from('transactions')
+        .select('*, profiles:profile_id(id, full_name, email, cpf, cnpj, pix_key, pix_type, role, bank_name, bank_branch, bank_account)')
+        .eq('type', 'withdrawal')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      return (data || []).map((t: any) => {
+        const profile = t.profiles || {};
+        const isReseller = t.description?.includes('Revendedor') || t.description?.includes('Regional') || t.description?.includes('(REG)') || profile.role === 'regional_reseller';
+        let categoryLabel = 'Rede MMN';
+        if (isReseller) categoryLabel = 'Revendedor Regional';
+
+        let cycleLabel = 'Semanal';
+        if (t.description?.includes('Mensal')) cycleLabel = 'Mensal';
+        else if (t.description?.includes('Anual')) cycleLabel = 'Anual';
+
+        return {
+          id: t.id,
+          date: t.created_at,
+          profileId: t.profile_id,
+          userName: profile.full_name || 'Desconhecido',
+          userEmail: profile.email || 'N/A',
+          cpf: profile.cpf || profile.cnpj || 'N/A',
+          role: profile.role || 'affiliate',
+          pixKey: profile.pix_key || 'N/A',
+          pixType: profile.pix_type || 'PIX',
+          bankDetails: profile.bank_name ? `${profile.bank_name} - Ag: ${profile.bank_branch} / CC: ${profile.bank_account}` : 'PIX',
+          amount: Math.abs(Number(t.amount || 0)),
+          description: t.description ? t.description.replace(/\s*\[RECIBO:.*?\]/, '') : '',
+          receiptUrl: (() => {
+            if (t.receipt_url) return t.receipt_url;
+            if (t.description && t.description.includes('[RECIBO:')) {
+              const match = t.description.match(/\[RECIBO:(.*?)\]/);
+              if (match && match[1]) return match[1];
+            }
+            try {
+              return localStorage.getItem(`receipt_tx_${t.id}`) || null;
+            } catch (e) {
+              return null;
+            }
+          })(),
+          categoryLabel,
+          cycleLabel,
+          status: t.status
+        };
+      });
+    } catch (error) {
+      console.error('Error fetching payment history:', error);
+      return [];
+    }
   },
 
   getResellerFinancialSummary: async (userId: string, year?: number, month?: number) => {
@@ -3164,6 +3390,27 @@ export const businessRules = {
         receiptUrl: w.receipt_url || null
       }));
 
+      // Lançamentos individuais de nível REG para a visão detalhada do revendedor
+      const itemizedTransactions = monthCommissions.map(t => {
+        const orderId = String(t.order_id || (t.description?.match(/Pedido\s*#?\s*([a-zA-Z0-9_-]+)/i)?.[1] || '---'));
+        const orderInfo = ordersMap.get(orderId);
+        
+        let category = 'SEMANAL (REG)';
+        if (t.description?.includes('Mensal')) category = 'MENSAL (REG)';
+        else if (t.description?.includes('Anual')) category = 'ANUAL (REG)';
+
+        return {
+          id: t.id,
+          orderId,
+          affiliateName: orderInfo?.customer_name ? `${orderInfo.customer_name} (Regional)` : 'Regional',
+          level: 'REG',
+          category,
+          date: t.created_at,
+          amount: Number(t.amount || 0),
+          status: (t.status === 'completed' || t.status === 'pago') ? 'PAGO' : 'PENDENTE'
+        };
+      }).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
       return {
         profile,
         isPJ,
@@ -3187,6 +3434,7 @@ export const businessRules = {
         totalMonthlyPendingHistorical,
         tax: taxMonthly,
         salesList,
+        itemizedTransactions,
         salesCount: salesList.length,
         totalOrderVolume,
         withdrawalsList
@@ -3248,31 +3496,74 @@ export const businessRules = {
       ? `Pagamento Repasse Revendedor ${displayType}${taxDetail} - ${new Date().toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}`
       : `Pagamento Cashback Rede ${displayType}${taxDetail} - ${new Date().toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}`;
     
-    // O valor deduzido na transação do usuário é o valor integral de comissão quitada (-amount)
-    const { error } = await supabase
+    const descWithReceipt = receiptUrl ? `${description} [RECIBO:${receiptUrl}]` : description;
+
+    // Tenta primeiro com receipt_url caso a coluna exista na base
+    const insertPayload: any = {
+      profile_id: profileId,
+      type: 'withdrawal',
+      amount: -Math.abs(amount),
+      description: descWithReceipt,
+      status: 'completed'
+    };
+
+    if (receiptUrl) {
+      insertPayload.receipt_url = receiptUrl;
+    }
+
+    let { data: insertedData, error } = await supabase
       .from('transactions')
-      .insert([{
-        profile_id: profileId,
-        type: 'withdrawal',
-        amount: -Math.abs(amount),
-        description,
-        status: 'completed',
-        receipt_url: receiptUrl
-      }]);
+      .insert([insertPayload])
+      .select('id')
+      .single();
+
+    if (error && (error.code === 'PGRST204' || error.message?.includes('receipt_url'))) {
+      // Se a coluna receipt_url não existe no schema da tabela transactions, insere sem ela
+      delete insertPayload.receipt_url;
+      const retry = await supabase
+        .from('transactions')
+        .insert([insertPayload])
+        .select('id')
+        .single();
+      
+      error = retry.error;
+      insertedData = retry.data;
+    }
 
     if (error) throw error;
+
+    if (insertedData?.id && receiptUrl) {
+      try {
+        localStorage.setItem(`receipt_tx_${insertedData.id}`, receiptUrl);
+      } catch (e) {}
+    }
   },
 
   approveWithdrawal: async (transactionId: string, receiptUrl?: string) => {
-    const { error } = await supabase
+    const updatePayload: any = { status: 'completed' };
+    if (receiptUrl) updatePayload.receipt_url = receiptUrl;
+
+    let { error } = await supabase
       .from('transactions')
-      .update({ 
-        status: 'completed',
-        receipt_url: receiptUrl 
-      })
+      .update(updatePayload)
       .eq('id', transactionId);
 
+    if (error && (error.code === 'PGRST204' || error.message?.includes('receipt_url'))) {
+      delete updatePayload.receipt_url;
+      const retry = await supabase
+        .from('transactions')
+        .update(updatePayload)
+        .eq('id', transactionId);
+      error = retry.error;
+    }
+
     if (error) throw error;
+
+    if (receiptUrl) {
+      try {
+        localStorage.setItem(`receipt_tx_${transactionId}`, receiptUrl);
+      } catch (e) {}
+    }
   },
 
   rejectWithdrawal: async (transactionId: string) => {

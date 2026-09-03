@@ -83,6 +83,8 @@ export default function FinancialReportTable({
   const [selectedRecords, setSelectedRecords] = useState<string[]>([]);
   const [viewingOrder, setViewingOrder] = useState<FinancialRecord | null>(null);
   const [viewingReceipt, setViewingReceipt] = useState<FinancialRecord | null>(null);
+  const [viewingAffiliateExtrato, setViewingAffiliateExtrato] = useState<any | null>(null);
+  const [extratoCycleFilter, setExtratoCycleFilter] = useState<'all' | 'Mensal' | 'Semanal' | 'Anual'>('all');
   const [orderCommissions, setOrderCommissions] = useState<any[]>([]);
   const [loadingCommissions, setLoadingCommissions] = useState(false);
 
@@ -508,15 +510,16 @@ export default function FinancialReportTable({
                     {mode === 'resellers' ? 'Repasse Anual' : 'Cashback Anual'} <br/>
                     <span className="text-[7px] text-indigo-500">{mode === 'resellers' ? '(2% PAGO 10/DEZ)' : '(PAGO 10/DEZ)'}</span>
                   </th>
-                  <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right bg-slate-50/50">
-                    {hideReceiptButton ? (
-                      <>Total Apto <br/><span className="text-[7px] text-emerald-600 font-bold">(LIBERADO PIX)</span></>
-                    ) : (
-                      <>Total Pago <br/><span className="text-[7px] text-emerald-500 font-bold">(CONCLUÍDO)</span></>
-                    )}
+                  <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">
+                    Total Bruto <br/><span className="text-[7px] text-slate-400 font-bold">(ACUMULADO)</span>
                   </th>
-                  <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Chave PIX</th>
-                  <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Data Pagamento</th>
+                  <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">
+                    INSS Previsto <br/><span className="text-[7px] text-amber-500 font-bold">(11% PF)</span>
+                  </th>
+                  <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right bg-slate-50/50">
+                    Total Líquido <br/><span className="text-[7px] text-emerald-600 font-bold">(PROVISÃO)</span>
+                  </th>
+                  <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Extrato</th>
                 </>
               )}
             </tr>
@@ -604,39 +607,35 @@ export default function FinancialReportTable({
                 <>
                   <td className="p-6">
                       <div className="flex items-center gap-3.5">
-                        {/* Badge de Nível (G0, G1, G2, REG) substituindo o bonequinho */}
-                        {record.level ? (
-                          <div 
-                            title={`Nível de Comissionamento: ${record.level}`}
-                            className={`size-10 rounded-2xl font-black text-xs flex items-center justify-center shadow-md tracking-tighter shrink-0 ${
-                              record.level.includes('G0')
-                                ? 'bg-amber-500 text-white shadow-amber-500/30'
-                                : record.level.includes('G1')
-                                ? 'bg-emerald-600 text-white shadow-emerald-600/30'
-                                : record.level.includes('G2')
-                                ? 'bg-sky-600 text-white shadow-sky-600/30'
-                                : 'bg-purple-600 text-white shadow-purple-600/30'
-                            }`}
-                          >
-                             {record.level}
-                          </div>
-                        ) : (
-                          <div className={`size-10 rounded-2xl flex items-center justify-center shrink-0 ${
-                            record.is_active ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-100 text-slate-400'
-                          }`}>
-                             <User size={18} />
-                          </div>
-                        )}
+                        <div className={`size-10 rounded-2xl flex items-center justify-center font-black text-xs shrink-0 shadow-sm ${
+                          mode === 'resellers' 
+                            ? 'bg-purple-100 text-purple-700' 
+                            : record.is_active 
+                            ? 'bg-indigo-100 text-indigo-700' 
+                            : 'bg-slate-100 text-slate-400'
+                        }`}>
+                          {record.name ? record.name.substring(0, 2).toUpperCase() : <User size={16} />}
+                        </div>
                         <div className="flex flex-col">
-                           <div className="flex items-center gap-2 flex-wrap">
-                              <span className="text-xs font-black text-midnight uppercase tracking-tight">{record.name || record.payeeName}</span>
-                              {record.order_number && (
-                                <span className="bg-slate-100 text-slate-700 text-[9px] font-black px-2 py-0.5 rounded-md border border-slate-200">
-                                  Pedido #{record.order_number}
+                          <span className="text-xs font-black text-midnight uppercase tracking-tight">
+                            {record.name || record.payeeName}
+                          </span>
+                          <span className="text-[10px] text-slate-400 font-mono">CPF: {record.cpf || 'Não informado'}</span>
+                          {/* Mini-badges discretos por nível */}
+                          {record.levels && record.levels.length > 0 && (
+                            <div className="flex items-center gap-1 mt-1">
+                              {record.levels.map((lvl: string) => (
+                                <span key={lvl} className={`px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-tight ${
+                                  lvl === 'G0' ? 'bg-amber-100 text-amber-800' :
+                                  lvl === 'G1' ? 'bg-emerald-100 text-emerald-800' :
+                                  lvl === 'G2' ? 'bg-sky-100 text-sky-800' :
+                                  'bg-purple-100 text-purple-800'
+                                }`}>
+                                  {lvl}
                                 </span>
-                              )}
-                           </div>
-                           <span className="text-[9px] text-slate-400 font-bold">CPF: {record.cpf}</span>
+                              ))}
+                            </div>
+                          )}
                         </div>
                       </div>
                     </td>
@@ -669,55 +668,33 @@ export default function FinancialReportTable({
                     <td className="p-6 text-right text-xs font-bold text-indigo-500 tracking-tighter">
                       R$ {(record.anual || 0).toFixed(2).replace('.', ',')}
                     </td>
-                    <td className="p-6 text-right bg-slate-50/50">
-                      {record.is_active ? (
-                        <div className="flex flex-col items-end">
-                          <span className="text-sm font-black text-emerald-600 italic">
-                            R$ {(record.liquido_mensal !== undefined ? record.liquido_mensal : (record.mensal || 0)).toFixed(2).replace('.', ',')}
-                          </span>
-                          {!record.is_pj && record.inss_mensal > 0 && (
-                            <span className="text-[8px] font-bold text-amber-600">
-                              INSS (11%): -R$ {record.inss_mensal.toFixed(2).replace('.', ',')}
-                            </span>
-                          )}
-                          {record.is_pj && (
-                            <span className="text-[8px] font-bold text-blue-500 uppercase">
-                              PJ Isento
-                            </span>
-                          )}
-                        </div>
+                    <td className="p-6 text-right text-xs font-black text-midnight tracking-tighter">
+                      R$ {((record.mensal || 0) + (record.digital || 0) + (record.anual || 0)).toFixed(2).replace('.', ',')}
+                    </td>
+                    <td className="p-6 text-right text-xs font-mono">
+                      {record.is_pj ? (
+                        <span className="text-[9px] text-blue-600 font-bold uppercase">PJ Isento</span>
                       ) : (
-                        <div className="flex flex-col items-end">
-                          <span className="text-xs font-black text-slate-400 italic line-through">
-                            R$ {(record.mensal || 0).toFixed(2).replace('.', ',')}
-                          </span>
-                          <span className="text-[8px] font-bold text-red-500 uppercase tracking-tighter">
-                            Bloqueado (Inativo)
-                          </span>
-                        </div>
+                        <span className="text-amber-600 font-bold">
+                          -R$ {(record.inss_mensal || ((record.mensal || 0) * 0.11)).toFixed(2).replace('.', ',')}
+                        </span>
                       )}
                     </td>
-                    <td className="p-6 text-center">
-                      <div className="flex flex-col items-center">
-                         <span className="text-[10px] font-black text-slate-700 italic tracking-tighter">{record.pix_key || record.payeePixKey || '---'}</span>
-                         <span className="text-[8px] text-slate-400 font-bold uppercase tracking-widest mt-1">{record.pix_type || '---'}</span>
-                      </div>
+                    <td className="p-6 text-right bg-slate-50/50">
+                      <span className="text-sm font-black text-emerald-600 italic font-mono">
+                        R$ {((record.liquido_mensal !== undefined ? record.liquido_mensal : (record.mensal || 0)) + (record.digital || 0) + (record.anual || 0)).toFixed(2).replace('.', ',')}
+                      </span>
                     </td>
                     <td className="p-6 text-center">
-                      <div className="flex flex-col items-center">
-                        <span className="text-[10px] font-black text-indigo-600 italic tracking-tighter underline">{record.payDate || '---'}</span>
-                        <span className="text-[8px] text-slate-300 font-bold uppercase tracking-widest mt-1">
-                          {hideReceiptButton ? 'Previsto' : 'Liquidado'}
-                        </span>
-                        {!hideReceiptButton && (
-                          <button 
-                            onClick={() => setViewingReceipt(record)}
-                            className="mt-2 flex items-center gap-1.5 bg-emerald-50 text-emerald-600 px-3 py-1.5 rounded-lg border border-emerald-100 hover:bg-emerald-100 transition-all text-[9px] font-black uppercase tracking-tighter"
-                          >
-                            <FileText size={10} /> Comprovante
-                          </button>
-                        )}
-                      </div>
+                      <button 
+                        onClick={() => {
+                          setExtratoCycleFilter('all');
+                          setViewingAffiliateExtrato(record);
+                        }}
+                        className="inline-flex items-center gap-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 px-3.5 py-2 rounded-xl border border-indigo-100 transition-all text-[9px] font-black uppercase tracking-tight cursor-pointer shadow-sm"
+                      >
+                        <Eye size={12} /> Extrato
+                      </button>
                     </td>
                   </>
                 )}
@@ -816,7 +793,7 @@ export default function FinancialReportTable({
                          <Building2 size={20} />
                       </div>
                       <div className="flex-1">
-                         <p className="text-[9px] text-slate-400 font-black uppercase tracking-widest mb-0.5">Lojista / Beneficiário</p>
+                         <p className="text-[9px] text-slate-400 font-black uppercase tracking-widest mb-0.5">Afiliado / Beneficiário</p>
                          <p className="text-sm font-black text-midnight uppercase">{viewingOrder.payeeName || 'Não Informado'}</p>
                          {viewingOrder.payeeCpf && (
                            <div className="flex items-center gap-1 mt-1">
@@ -1004,6 +981,225 @@ export default function FinancialReportTable({
                 >
                   Fechar Visualização
                 </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Modal de Extrato Contábil Individual do Afiliado */}
+      <AnimatePresence>
+        {viewingAffiliateExtrato && (
+          <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setViewingAffiliateExtrato(null)}
+              className="absolute inset-0 bg-midnight/80 backdrop-blur-md"
+            />
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.9, opacity: 0, y: 20 }}
+              className="relative w-full max-w-2xl bg-white rounded-[3rem] shadow-2xl overflow-hidden border border-white/20 flex flex-col max-h-[90vh]"
+            >
+              <div className="p-8 md:p-10 space-y-6 overflow-y-auto custom-scrollbar">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-4">
+                    <div className="size-14 bg-indigo-600 rounded-2xl flex items-center justify-center text-white shadow-xl shadow-indigo-600/20">
+                      <FileText size={28} />
+                    </div>
+                    <div>
+                      <h4 className="text-xl md:text-2xl font-black text-midnight italic uppercase tracking-tighter leading-none">
+                        Extrato Contábil de Lançamentos
+                      </h4>
+                      <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">
+                        Auditoria detalhada de comissões geradas no período
+                      </p>
+                    </div>
+                  </div>
+                  <button 
+                    onClick={() => setViewingAffiliateExtrato(null)} 
+                    className="p-3 hover:bg-slate-100 rounded-2xl transition-all cursor-pointer"
+                  >
+                    <X size={22} className="text-slate-400" />
+                  </button>
+                </div>
+
+                {/* Info Card do Participante & Filtro de Ciclos */}
+                {(() => {
+                  const allTx = viewingAffiliateExtrato.transactions || [];
+                  const filteredTx = allTx.filter((t: any) => {
+                    if (extratoCycleFilter === 'all') return true;
+                    return t.cycleType === extratoCycleFilter;
+                  });
+                  const filteredSum = filteredTx.reduce((sum: number, t: any) => sum + Number(t.amount || 0), 0);
+
+                  return (
+                    <>
+                      <div className="bg-slate-50 p-6 rounded-[2rem] border border-slate-100 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                        <div>
+                          <span className="text-[9px] text-slate-400 font-black uppercase tracking-widest block mb-0.5">
+                            Participante Beneficiário
+                          </span>
+                          <h5 className="text-base font-black text-midnight uppercase">
+                            {viewingAffiliateExtrato.name}
+                          </h5>
+                          <div className="flex items-center gap-3 mt-1 text-xs text-slate-500 font-medium">
+                            <span>CPF: <strong className="font-mono">{viewingAffiliateExtrato.cpf || 'Não cadastrado'}</strong></span>
+                            <span>•</span>
+                            <span>Plano: <strong className="text-indigo-600">{viewingAffiliateExtrato.plan_name || 'Afiliado'}</strong></span>
+                          </div>
+                        </div>
+
+                        <div className="bg-white px-5 py-3 rounded-2xl border border-slate-200 shadow-sm text-right shrink-0">
+                          <span className="text-[9px] text-slate-400 font-black uppercase tracking-widest block">
+                            {extratoCycleFilter === 'all' ? 'Total Acumulado' : `Total Filtrado (${extratoCycleFilter})`}
+                          </span>
+                          <span className="text-lg font-black text-emerald-600 italic font-mono">
+                            R$ {filteredSum.toFixed(2).replace('.', ',')}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Lista de Transações Itemizadas */}
+                      <div>
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3 px-1">
+                          <h6 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                            Lançamentos do Período ({filteredTx.length})
+                          </h6>
+                          <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-xl border border-slate-200/80">
+                            <span className="text-[9px] font-bold text-slate-400 pl-1.5 pr-0.5">Ciclos:</span>
+                            <button
+                              type="button"
+                              onClick={() => setExtratoCycleFilter('all')}
+                              className={`px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all cursor-pointer ${
+                                extratoCycleFilter === 'all'
+                                  ? 'bg-white text-midnight shadow-sm border border-slate-200/50'
+                                  : 'text-slate-400 hover:text-slate-700'
+                              }`}
+                            >
+                              Todos ({allTx.length})
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setExtratoCycleFilter('Mensal')}
+                              className={`px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all cursor-pointer ${
+                                extratoCycleFilter === 'Mensal'
+                                  ? 'bg-emerald-600 text-white shadow-sm'
+                                  : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
+                              }`}
+                            >
+                              Mensal ({allTx.filter((t: any) => t.cycleType === 'Mensal').length})
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setExtratoCycleFilter('Semanal')}
+                              className={`px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all cursor-pointer ${
+                                extratoCycleFilter === 'Semanal'
+                                  ? 'bg-blue-600 text-white shadow-sm'
+                                  : 'bg-blue-50 text-blue-700 hover:bg-blue-100'
+                              }`}
+                            >
+                              Semanal ({allTx.filter((t: any) => t.cycleType === 'Semanal').length})
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setExtratoCycleFilter('Anual')}
+                              className={`px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all cursor-pointer ${
+                                extratoCycleFilter === 'Anual'
+                                  ? 'bg-indigo-600 text-white shadow-sm'
+                                  : 'bg-indigo-50 text-indigo-700 hover:bg-indigo-100'
+                              }`}
+                            >
+                              Anual ({allTx.filter((t: any) => t.cycleType === 'Anual').length})
+                            </button>
+                          </div>
+                        </div>
+
+                        {filteredTx.length === 0 ? (
+                          <div className="p-8 text-center bg-slate-50 rounded-2xl border border-slate-100 text-xs text-slate-400 font-bold">
+                            Nenhum lançamento encontrado para o ciclo "{extratoCycleFilter}".
+                          </div>
+                        ) : (
+                          <div className="overflow-x-auto border border-slate-100 rounded-2xl max-h-96 custom-scrollbar">
+                            <table className="w-full text-left border-collapse text-xs">
+                              <thead className="sticky top-0 bg-slate-50 z-10 shadow-sm">
+                                <tr className="border-b border-slate-200/80 text-[9px] font-black text-slate-400 uppercase tracking-widest">
+                                  <th className="p-3.5">Data</th>
+                                  <th className="p-3.5">Pedido</th>
+                                  <th className="p-3.5 text-center">Nível</th>
+                                  <th className="p-3.5 text-center">Ciclo</th>
+                                  <th className="p-3.5">Descrição</th>
+                                  <th className="p-3.5 text-right">Valor</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-slate-100">
+                                {filteredTx.map((tx: any, tIdx: number) => {
+                                  const txDate = tx.date ? new Date(tx.date).toLocaleDateString('pt-BR') : '---';
+                                  return (
+                                    <tr key={tx.id || tIdx} className="hover:bg-slate-50/60 transition-colors">
+                                      <td className="p-3.5 text-slate-500 font-mono whitespace-nowrap text-[11px]">{txDate}</td>
+                                      <td className="p-3.5 whitespace-nowrap">
+                                        {tx.orderId ? (
+                                          <span className="bg-slate-100 text-slate-700 text-[10px] font-black px-2 py-0.5 rounded border border-slate-200">
+                                            #{tx.orderId}
+                                          </span>
+                                        ) : (
+                                          <span className="text-slate-300 font-mono text-[10px]">---</span>
+                                        )}
+                                      </td>
+                                      <td className="p-3.5 text-center whitespace-nowrap">
+                                        <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase ${
+                                          tx.level === 'G0' ? 'bg-amber-100 text-amber-800' :
+                                          tx.level === 'G1' ? 'bg-emerald-100 text-emerald-800' :
+                                          tx.level === 'G2' ? 'bg-sky-100 text-sky-800' :
+                                          'bg-purple-100 text-purple-800'
+                                        }`}>
+                                          {tx.level}
+                                        </span>
+                                      </td>
+                                      <td className="p-3.5 text-center whitespace-nowrap">
+                                        <button
+                                          type="button"
+                                          onClick={() => setExtratoCycleFilter(tx.cycleType)}
+                                          title={`Filtrar apenas ciclo ${tx.cycleType}`}
+                                          className={`px-2 py-0.5 rounded text-[8px] font-black uppercase cursor-pointer hover:opacity-80 transition-opacity ${
+                                            tx.cycleType === 'Mensal' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' :
+                                            tx.cycleType === 'Anual' ? 'bg-indigo-50 text-indigo-700 border border-indigo-200' :
+                                            'bg-blue-50 text-blue-700 border border-blue-200'
+                                          }`}
+                                        >
+                                          {tx.cycleType}
+                                        </button>
+                                      </td>
+                                      <td className="p-3.5 text-slate-600 text-[11px] max-w-xs truncate" title={tx.description}>
+                                        {tx.description || 'Comissão de adesão na rede'}
+                                      </td>
+                                      <td className="p-3.5 text-right font-black font-mono text-emerald-600 whitespace-nowrap">
+                                        +R$ {Number(tx.amount || 0).toFixed(2).replace('.', ',')}
+                                      </td>
+                                    </tr>
+                                  );
+                                })}
+                              </tbody>
+                            </table>
+                          </div>
+                        )}
+                      </div>
+                    </>
+                  );
+                })()}
+
+                <div className="flex justify-end pt-2">
+                  <button
+                    onClick={() => setViewingAffiliateExtrato(null)}
+                    className="bg-slate-100 hover:bg-slate-200 text-slate-700 px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all cursor-pointer"
+                  >
+                    Fechar Extrato
+                  </button>
+                </div>
               </div>
             </motion.div>
           </div>

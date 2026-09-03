@@ -113,9 +113,9 @@ export default function AdminLayout({ children, title, subtitle }: AdminLayoutPr
     { name: 'Produtos', icon: Package, path: '/admin/produtos' },
     { name: 'Pedidos', icon: ShoppingBag, path: '/admin/pedidos' },
     { name: 'Usuários', icon: Users, path: '/admin/usuarios' },
-    { name: 'Relatórios', icon: PieChart, path: '/admin/relatorios' },
-    { name: 'Financeiro', icon: DollarSign, path: '/admin/financeiro' },
-    { name: 'Pagamentos', icon: CreditCard, path: '/admin/saques' },
+    { name: 'Relatórios & BI', icon: PieChart, path: '/admin/relatorios' },
+    { name: 'Fiscal & DRE', icon: DollarSign, path: '/admin/financeiro' },
+    { name: 'Pagamentos PIX', icon: CreditCard, path: '/admin/saques' },
     { name: 'Configurações', icon: Settings, path: '/admin/configuracoes' },
   ];
 

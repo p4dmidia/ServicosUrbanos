@@ -20,7 +20,8 @@ import {
   RefreshCw,
   HeartPulse,
   Target,
-  CircleDollarSign
+  CircleDollarSign,
+  Receipt
 } from 'lucide-react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
@@ -118,6 +119,7 @@ export default function AffiliateLayout({ children, title }: AffiliateLayoutProp
     ...(profile?.role === 'regional_reseller' ? [
       { path: '/afiliado/financeiro-revendedor', icon: CircleDollarSign, label: 'Financeiro do Revendedor' }
     ] : []),
+    { path: '/afiliado/nota-fiscal', icon: Receipt, label: 'Nota Fiscal' },
     { path: '/afiliado/pedidos', icon: ShoppingBag, label: 'Meus Pedidos' },
     { path: '/afiliado/renovacoes', icon: RefreshCw, label: 'Minhas Renovações' },
     { path: '/afiliado/ecossistema', icon: Globe, label: 'Ecossistema' },

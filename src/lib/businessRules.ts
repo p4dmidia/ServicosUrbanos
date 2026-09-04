@@ -3385,9 +3385,10 @@ export const businessRules = {
       }
 
       // Agrupar comissões por pedido para tabela de fechamentos/vendas do mês
+      // IMPORTANTE: Computa EXCLUSIVAMENTE as vendas fechadas no mês selecionado (monthCommissions)
       const groupedMap = new Map<string, any>();
 
-      displayCommissions.forEach(t => {
+      monthCommissions.forEach(t => {
         const orderId = String(t.order_id || (t.description?.match(/Pedido\s*#?\s*([a-zA-Z0-9_-]+)/i)?.[1] || t.id));
         if (!groupedMap.has(orderId)) {
           const orderInfo = ordersMap.get(orderId);

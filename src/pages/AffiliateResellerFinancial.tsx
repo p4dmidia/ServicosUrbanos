@@ -216,7 +216,10 @@ export default function AffiliateResellerFinancial() {
     toast.success('Extrato em PDF gerado com sucesso!');
   };
 
-  const nextPayoutDate = new Date(selectedYear, selectedMonth + 1, 10);
+  const isDecember = selectedMonth === 11;
+  const nextPayoutDate = isDecember 
+    ? new Date(selectedYear, 11, 10) 
+    : new Date(selectedYear, selectedMonth + 1, 10);
   const nextPayoutFormatted = nextPayoutDate.toLocaleDateString('pt-BR');
 
   return (
@@ -282,7 +285,7 @@ export default function AffiliateResellerFinancial() {
         {/* Main Highlight Card - O que tem a receber no mês */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           
-          {/* Card Principal: Repasse Mensal a Receber no Mês */}
+          {/* Card Principal: Repasse Mensal a Receber no Mês (ou Anual + Mensal em Dezembro) */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -299,7 +302,7 @@ export default function AffiliateResellerFinancial() {
                   </div>
                   <div>
                     <span className="text-[10px] font-black text-amber-400 uppercase tracking-widest block">
-                      Repasse Mensal da Revenda
+                      {isDecember ? 'Repasse Anual Acumulado + Mensal da Revenda' : 'Repasse Mensal da Revenda'}
                     </span>
                     <h2 className="text-lg font-bold text-slate-200">
                       Previsão de Pagamento para {MONTH_NAMES[selectedMonth]}/{selectedYear}
@@ -309,13 +312,13 @@ export default function AffiliateResellerFinancial() {
 
                 <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[10px] font-black uppercase tracking-widest">
                   <CheckCircle2 size={14} />
-                  Pagamento Dia 10 via PIX
+                  {isDecember ? 'Pagamento Dia 10/Dez via PIX (Anual + Mensal)' : 'Pagamento Dia 10 via PIX'}
                 </div>
               </div>
 
               <div className="my-6">
                 <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-1">
-                  Total Líquido a Receber no Mês
+                  {isDecember ? 'Total Líquido a Receber no Mês (Anual + Mensal)' : 'Total Líquido a Receber no Mês'}
                 </p>
                 <div className="flex flex-wrap items-baseline gap-4">
                   <h3 className="text-4xl md:text-5xl font-black text-amber-400 tracking-tighter">
@@ -337,7 +340,9 @@ export default function AffiliateResellerFinancial() {
             {/* Demonstrativo Fiscal e de Taxas */}
             <div className="relative z-10 pt-6 border-t border-white/10 grid grid-cols-2 md:grid-cols-4 gap-4 text-xs font-medium">
               <div>
-                <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest block">Comissão Bruta</span>
+                <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest block">
+                  {isDecember ? 'Bruto Total (Anual + Mensal)' : 'Comissão Bruta'}
+                </span>
                 <span className="text-white font-bold font-mono">
                   R$ {loading ? '...' : (data?.tax?.bruto ?? 0).toFixed(2).replace('.', ',')}
                 </span>
@@ -355,9 +360,13 @@ export default function AffiliateResellerFinancial() {
                 </span>
               </div>
               <div>
-                <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest block">Taxa Regional Mensal</span>
+                <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest block">
+                  {isDecember ? 'Anual Acumulado' : 'Taxa Regional Mensal'}
+                </span>
                 <span className="text-emerald-400 font-bold font-mono">
-                  {data?.rates?.mensal ?? 2.00}% sobre vendas
+                  {isDecember 
+                    ? `R$ ${(data?.annualToReceive ?? 0).toFixed(2).replace('.', ',')}` 
+                    : `${data?.rates?.mensal ?? 2.00}% sobre vendas`}
                 </span>
               </div>
             </div>
@@ -478,7 +487,7 @@ export default function AffiliateResellerFinancial() {
               R$ {loading ? '...' : (data?.annualToReceive ?? 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
             </h3>
             <p className="text-[10px] font-medium text-slate-400 mt-2">
-              Liberação programada para 10 de Dezembro
+              Saldo acumulado até 30/Nov (pago em 10 de Dezembro)
             </p>
           </motion.div>
 

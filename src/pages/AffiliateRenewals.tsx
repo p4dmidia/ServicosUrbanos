@@ -52,7 +52,8 @@ export default function AffiliateRenewals() {
       ];
       setPlansList(fetchedPlans);
 
-      let finalSub = subRes.data;
+      const activeSub = (historyRes.data || []).find(s => s.status === 'active' && new Date(s.end_date) >= new Date());
+      let finalSub = activeSub || (historyRes.data && historyRes.data.length > 0 ? historyRes.data[0] : subRes.data);
       if (!finalSub) {
         try {
           const savedMock = localStorage.getItem(`mock_subscription_${user.id}`);

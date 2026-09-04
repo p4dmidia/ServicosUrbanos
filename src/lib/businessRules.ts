@@ -819,11 +819,11 @@ export const businessRules = {
       }
       // Retorna um padrão inicial seguro para não quebrar a tela, mas permite salvar por cima
       return { 
-        depth: 6, 
+        depth: 3, 
         paymentType: 'percent' as const,
-        cashbackMensal: 2.75,
-        cashbackDigital: 1.00,
-        cashbackAnual: 0.75,
+        cashbackMensal: 2.00,
+        cashbackDigital: 2.00,
+        cashbackAnual: 2.00,
         commissionRegionalSemanal: 2.00,
         commissionRegionalMensal: 2.00,
         commissionRegionalAnual: 2.00
@@ -1068,19 +1068,22 @@ export const businessRules = {
 
       const availableBalance = walletBonus - totalWithdrawn;
 
-      // Buscar assinatura ativa ou última assinatura
-      const { data: lastSub } = await supabase
+      // Buscar todas as assinaturas do usuário
+      const { data: userSubs } = await supabase
         .from('subscriptions')
         .select('*')
         .eq('profile_id', userId)
-        .order('end_date', { ascending: false })
-        .limit(1)
-        .maybeSingle();
+        .order('end_date', { ascending: false });
 
       const SIC_COMERCIO_ID = '194e5265-cdb6-431f-9f77-8888b1ee74ae';
       const isSicComercio = userId === SIC_COMERCIO_ID;
+      const now = new Date();
 
-      let hasActiveSub = isSicComercio || (lastSub && lastSub.status === 'active' && new Date(lastSub.end_date) > new Date());
+      // Priorizar assinatura ativa e vigente (não expirada)
+      const activeSub = (userSubs || []).find(s => s.status === 'active' && new Date(s.end_date) >= now);
+      const targetSub = activeSub || (userSubs && userSubs.length > 0 ? userSubs[0] : null);
+
+      let hasActiveSub = isSicComercio || !!activeSub;
       let activeSubData = isSicComercio ? {
         id: 'sic-empresa-vitalicio',
         planType: 'Empresa (Vitalício)',
@@ -1089,18 +1092,18 @@ export const businessRules = {
         startDate: '2026-01-01',
         endDate: '2099-12-31',
         isActive: true
-      } : (lastSub ? {
-        id: lastSub.id,
-        planType: lastSub.plan_type,
-        amount: Number(lastSub.amount),
-        status: lastSub.status,
-        startDate: lastSub.start_date,
-        endDate: lastSub.end_date,
+      } : (targetSub ? {
+        id: targetSub.id,
+        planType: targetSub.plan_type,
+        amount: Number(targetSub.amount),
+        status: targetSub.status,
+        startDate: targetSub.start_date,
+        endDate: targetSub.end_date,
         isActive: hasActiveSub
       } : null);
 
       // Fallback para LocalStorage se não houver assinatura ativa no Supabase
-      if (!hasActiveSub) {
+      if (!hasActiveSub && typeof window !== 'undefined' && typeof localStorage !== 'undefined') {
         try {
           const savedMock = localStorage.getItem(`mock_subscription_${userId}`);
           if (savedMock) {
@@ -3295,22 +3298,10 @@ export const businessRules = {
       const weeklyEarned = monthCommissions
         .filter(t => t.description?.includes('Semanal'))
         .reduce((acc, t) => acc + Number(t.amount || 0), 0);
-      
-      const weeklyPaid = monthWithdrawals
-        .filter(t => t.description?.includes('Semanal') || (!t.description?.includes('Mensal') && !t.description?.includes('Anual')))
-        .reduce((acc, t) => acc + Math.abs(Number(t.amount || 0)), 0);
 
-      const weeklyAvailable = Math.max(0, weeklyEarned - weeklyPaid);
-
-      const annualEarned = monthCommissions
+      const annualEarnedMonth = monthCommissions
         .filter(t => t.description?.includes('Anual'))
         .reduce((acc, t) => acc + Number(t.amount || 0), 0);
-
-      const annualPaid = monthWithdrawals
-        .filter(t => t.description?.includes('Anual'))
-        .reduce((acc, t) => acc + Math.abs(Number(t.amount || 0)), 0);
-
-      const annualToReceive = Math.max(0, annualEarned - annualPaid);
 
       // Acumulado geral da revenda
       const allResellerCommissions = resellerTransactions.filter(t => 
@@ -3319,6 +3310,41 @@ export const businessRules = {
       const allResellerWithdrawals = resellerTransactions.filter(t => 
         t.type === 'withdrawal' && (t.status === 'completed' || t.status === 'pago')
       );
+
+      // Saldo acumulado disponível de semanal (não sacado)
+      const totalHistoricalWeekly = allResellerCommissions
+        .filter(t => t.description?.includes('Semanal'))
+        .reduce((acc, t) => acc + Number(t.amount || 0), 0);
+      const totalHistoricalWeeklyPaid = allResellerWithdrawals
+        .filter(t => t.description?.includes('Semanal') || (!t.description?.includes('Mensal') && !t.description?.includes('Anual')))
+        .reduce((acc, t) => acc + Math.abs(Number(t.amount || 0)), 0);
+      const weeklyAvailable = Math.max(0, totalHistoricalWeekly - totalHistoricalWeeklyPaid);
+
+      // Saldo acumulado do ciclo anual (todos os valores acumulados até 30 de Novembro para pagamento em 10 de Dezembro)
+      const annualAccumulatedEarned = allResellerCommissions
+        .filter(t => {
+          const tDate = new Date(t.created_at);
+          return t.description?.includes('Anual') && tDate.getFullYear() <= selYear;
+        })
+        .reduce((acc, t) => acc + Number(t.amount || 0), 0);
+
+      const annualAccumulatedPaid = allResellerWithdrawals
+        .filter(t => {
+          const tDate = new Date(t.created_at);
+          return t.description?.includes('Anual') && tDate.getFullYear() <= selYear;
+        })
+        .reduce((acc, t) => acc + Math.abs(Number(t.amount || 0)), 0);
+
+      // O repasse anual acumulado fica visível em todos os meses como total acumulado
+      const annualToReceive = Math.max(0, annualAccumulatedEarned - annualAccumulatedPaid);
+
+      // Mês de Dezembro: mês oficial de pagamento do cashback anual acumulado (10 de Dezembro)
+      const isDecember = selMonth === 11;
+
+      // No filtro do mês de Dezembro, o valor a receber no mês inclui o cashback anual acumulado
+      const grossToReceive = isDecember 
+        ? (monthlyToReceive + annualToReceive) 
+        : monthlyToReceive;
 
       const totalHistoricalMonthly = allResellerCommissions
         .filter(t => t.description?.includes('Mensal'))
@@ -3329,10 +3355,20 @@ export const businessRules = {
       const totalMonthlyPendingHistorical = Math.max(0, totalHistoricalMonthly - totalHistoricalMonthlyPaid);
 
       const isPJ = isCnpj(profile?.cpf || profile?.cnpj, profile?.pix_key);
-      const taxMonthly = calculateTaxDeductions(monthlyToReceive, isPJ);
+      const tax = calculateTaxDeductions(grossToReceive, isPJ);
 
-      // Buscar pedidos das comissões do mês
-      const orderIds = [...new Set(monthCommissions.map(t => {
+      // Em Dezembro, inclui as comissões anuais acumuladas para visualização detalhada e fechamento
+      let displayCommissions = [...monthCommissions];
+      if (isDecember && annualToReceive > 0) {
+        const annualComms = allResellerCommissions.filter(t => 
+          t.description?.includes('Anual') && 
+          !monthCommissions.some(m => m.id === t.id)
+        );
+        displayCommissions = [...monthCommissions, ...annualComms];
+      }
+
+      // Buscar pedidos das comissões exibidas
+      const orderIds = [...new Set(displayCommissions.map(t => {
         const match = t.description?.match(/Pedido\s*#?\s*([a-zA-Z0-9_-]+)/i);
         return t.order_id || (match ? match[1] : null);
       }).filter(Boolean))] as string[];
@@ -3349,7 +3385,7 @@ export const businessRules = {
       // Agrupar comissões por pedido para tabela de fechamentos/vendas do mês
       const groupedMap = new Map<string, any>();
 
-      monthCommissions.forEach(t => {
+      displayCommissions.forEach(t => {
         const orderId = String(t.order_id || (t.description?.match(/Pedido\s*#?\s*([a-zA-Z0-9_-]+)/i)?.[1] || t.id));
         if (!groupedMap.has(orderId)) {
           const orderInfo = ordersMap.get(orderId);
@@ -3407,7 +3443,7 @@ export const businessRules = {
       }));
 
       // Lançamentos individuais de nível REG para a visão detalhada do revendedor
-      const itemizedTransactions = monthCommissions.map(t => {
+      const itemizedTransactions = displayCommissions.map(t => {
         const orderId = String(t.order_id || (t.description?.match(/Pedido\s*#?\s*([a-zA-Z0-9_-]+)/i)?.[1] || '---'));
         const orderInfo = ordersMap.get(orderId);
         
@@ -3430,6 +3466,7 @@ export const businessRules = {
       return {
         profile,
         isPJ,
+        isDecember,
         year: selYear,
         month: selMonth,
         rates: {
@@ -3442,13 +3479,14 @@ export const businessRules = {
         monthlyPaid,
         monthlyToReceive,
         weeklyEarned,
-        weeklyPaid,
+        weeklyPaid: totalHistoricalWeeklyPaid,
         weeklyAvailable,
-        annualEarned,
-        annualPaid,
+        annualEarned: annualEarnedMonth,
+        annualPaid: annualAccumulatedPaid,
         annualToReceive,
+        grossToReceive,
         totalMonthlyPendingHistorical,
-        tax: taxMonthly,
+        tax,
         salesList,
         itemizedTransactions,
         salesCount: salesList.length,

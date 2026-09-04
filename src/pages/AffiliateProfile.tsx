@@ -80,15 +80,14 @@ export default function AffiliateProfile() {
     async function loadSubscription() {
       if (!user) return;
       try {
-        const { data } = await supabase
+        const { data: subs } = await supabase
           .from('subscriptions')
           .select('*')
           .eq('profile_id', user.id)
-          .order('end_date', { ascending: false })
-          .limit(1)
-          .maybeSingle();
+          .order('end_date', { ascending: false });
 
-        let finalSub = data;
+        const activeSub = (subs || []).find(s => s.status === 'active' && new Date(s.end_date) >= new Date());
+        let finalSub = activeSub || (subs && subs.length > 0 ? subs[0] : null);
         if (!finalSub) {
           try {
             const savedMock = localStorage.getItem(`mock_subscription_${user.id}`);

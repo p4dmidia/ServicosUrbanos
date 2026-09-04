@@ -53,12 +53,12 @@ export default function AdminSettings() {
   const [logsLoading, setLogsLoading] = useState(false);
 
   // MMN State
-  const [mmnDepth, setMmnDepth] = useState(6);
+  const [mmnDepth, setMmnDepth] = useState(3);
   const [mmnType, setMmnType] = useState<'percent' | 'fixed'>('percent');
   const [mmnLevels, setMmnLevels] = useState<any[]>([]);
-  const [cashbackMensal, setCashbackMensal] = useState(2.75);
-  const [cashbackDigital, setCashbackDigital] = useState(1.00);
-  const [cashbackAnual, setCashbackAnual] = useState(0.75);
+  const [cashbackMensal, setCashbackMensal] = useState(2.00);
+  const [cashbackDigital, setCashbackDigital] = useState(2.00);
+  const [cashbackAnual, setCashbackAnual] = useState(2.00);
   const [commissionRegionalSemanal, setCommissionRegionalSemanal] = useState(2.00);
   const [commissionRegionalMensal, setCommissionRegionalMensal] = useState(2.00);
   const [commissionRegionalAnual, setCommissionRegionalAnual] = useState(2.00);
@@ -78,32 +78,28 @@ export default function AdminSettings() {
   const [fullLogs, setFullLogs] = useState<any[]>([]);
   const [logFilter, setLogFilter] = useState<'all' | 'Success' | 'Warning' | 'Error' | 'Info'>('all');
 
-  // Automação de Níveis baseada na Regra Geral (Total / Profundidade)
+  // Automação de Níveis baseada na Regra Geral
+  // O valor total de cada nível MMN (G0, G1, G2...) é a soma dos 3 ciclos (Semanal + Mensal + Anual)
+  // Ex: 2% Semanal + 2% Mensal + 2% Anual = 6.00% por nível (sendo dividido por 3 na trigger do banco)
+  // A comissão regional pertence ao revendedor e é calculada separadamente.
   React.useEffect(() => {
-    const totalRepasse = 
-      (Number(cashbackMensal) || 0) + 
+    const totalNivel = 
       (Number(cashbackDigital) || 0) + 
-      (Number(cashbackAnual) || 0) +
-      (Number(commissionRegionalSemanal) || 0) +
-      (Number(commissionRegionalMensal) || 0) +
-      (Number(commissionRegionalAnual) || 0);
-    const perLevel = Number((totalRepasse / (mmnDepth || 1)).toFixed(6));
+      (Number(cashbackMensal) || 0) + 
+      (Number(cashbackAnual) || 0);
     
     setMmnLevels(prev => {
       const baseLevels = prev.length > 0 ? [...prev] : Array.from({ length: 10 }, (_, i) => ({ level: i + 1, value: 0 }));
       
       return baseLevels.map(lvl => ({
         ...lvl,
-        value: lvl.level <= mmnDepth ? perLevel : 0
+        value: lvl.level <= mmnDepth ? Number(totalNivel.toFixed(2)) : 0
       }));
     });
   }, [
     cashbackMensal, 
     cashbackDigital, 
     cashbackAnual, 
-    commissionRegionalSemanal, 
-    commissionRegionalMensal, 
-    commissionRegionalAnual, 
     mmnDepth
   ]);
 

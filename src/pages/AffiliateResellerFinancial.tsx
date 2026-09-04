@@ -461,7 +461,7 @@ export default function AffiliateResellerFinancial() {
               R$ {loading ? '...' : (data?.weeklyAvailable ?? 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
             </h3>
             <p className="text-[10px] font-medium text-slate-400 mt-2">
-              Saldo acumulado de repasses semanais de revenda
+              Repasses semanais gerados em {MONTH_NAMES[selectedMonth]}
             </p>
           </motion.div>
 

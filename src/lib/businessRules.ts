@@ -3299,6 +3299,12 @@ export const businessRules = {
         .filter(t => t.description?.includes('Semanal'))
         .reduce((acc, t) => acc + Number(t.amount || 0), 0);
 
+      const weeklyPaid = monthWithdrawals
+        .filter(t => t.description?.includes('Semanal') || (!t.description?.includes('Mensal') && !t.description?.includes('Anual')))
+        .reduce((acc, t) => acc + Math.abs(Number(t.amount || 0)), 0);
+
+      const weeklyAvailable = Math.max(0, weeklyEarned - weeklyPaid);
+
       const annualEarnedMonth = monthCommissions
         .filter(t => t.description?.includes('Anual'))
         .reduce((acc, t) => acc + Number(t.amount || 0), 0);
@@ -3311,14 +3317,10 @@ export const businessRules = {
         t.type === 'withdrawal' && (t.status === 'completed' || t.status === 'pago')
       );
 
-      // Saldo acumulado disponível de semanal (não sacado)
-      const totalHistoricalWeekly = allResellerCommissions
-        .filter(t => t.description?.includes('Semanal'))
-        .reduce((acc, t) => acc + Number(t.amount || 0), 0);
+      // Total histórico de semanal pago
       const totalHistoricalWeeklyPaid = allResellerWithdrawals
         .filter(t => t.description?.includes('Semanal') || (!t.description?.includes('Mensal') && !t.description?.includes('Anual')))
         .reduce((acc, t) => acc + Math.abs(Number(t.amount || 0)), 0);
-      const weeklyAvailable = Math.max(0, totalHistoricalWeekly - totalHistoricalWeeklyPaid);
 
       // Saldo acumulado do ciclo anual (todos os valores acumulados até 30 de Novembro para pagamento em 10 de Dezembro)
       const annualAccumulatedEarned = allResellerCommissions

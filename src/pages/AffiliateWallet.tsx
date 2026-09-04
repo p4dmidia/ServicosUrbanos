@@ -71,7 +71,7 @@ export default function AffiliateWallet() {
 
   const totalPending = useMemo(() => {
     return filteredTransactions
-      .filter(t => t.status !== 'Cancelado')
+      .filter(t => t.status === 'Pendente')
       .reduce((acc, t) => acc + Number(t.amount), 0);
   }, [filteredTransactions]);
 
@@ -621,9 +621,11 @@ export default function AffiliateWallet() {
                                 <span className={`text-[9px] font-black px-2.5 py-1 rounded-md uppercase whitespace-nowrap ${
                                   t.status === 'Cancelado' 
                                     ? 'bg-red-50 text-red-600 border border-red-100' 
-                                    : 'bg-emerald-50 text-emerald-600 border border-emerald-100'
+                                    : t.status === 'Pago'
+                                      ? 'bg-emerald-50 text-emerald-600 border border-emerald-100'
+                                      : 'bg-amber-50 text-amber-700 border border-amber-200'
                                 }`}>
-                                  {t.status === 'Cancelado' ? 'Cancelado' : 'Pago'}
+                                  {t.status === 'Cancelado' ? 'Cancelado' : t.status === 'Pago' ? 'Pago' : 'Pendente'}
                                 </span>
                               </td>
                             </motion.tr>

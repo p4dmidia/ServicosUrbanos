@@ -732,9 +732,11 @@ export default function AffiliateResellerFinancial() {
                               <span className={`inline-flex items-center gap-1 text-[9px] font-black px-2.5 py-1 rounded-full uppercase tracking-wider ${
                                 sale.status === 'completed' || sale.status === 'pago'
                                   ? 'bg-emerald-100 text-emerald-800'
-                                  : 'bg-amber-100 text-amber-800'
+                                  : sale.status === 'partial'
+                                    ? 'bg-indigo-100 text-indigo-800 border border-indigo-200'
+                                    : 'bg-amber-100 text-amber-800'
                               }`}>
-                                {sale.status === 'completed' || sale.status === 'pago' ? 'Liquidado' : 'Aguardando'}
+                                {sale.status === 'completed' || sale.status === 'pago' ? 'Liquidado' : sale.status === 'partial' ? 'Semanal Pago' : 'Aguardando'}
                               </span>
                             </td>
                           </tr>

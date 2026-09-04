@@ -1382,11 +1382,10 @@ export const businessRules = {
           .replace(/Comiss[aã]o Anual/gi, 'Cashback Anual');
 
         let displayStatus = 'Pendente';
-        const rawStatus = order?.status || (t.status === 'completed' ? 'Pago' : 'Pendente');
-        if (rawStatus === 'Pago, Aguardando Retirada' || rawStatus === 'Pago' || rawStatus === 'Concluído' || rawStatus === 'completed') {
-          displayStatus = 'Pago';
-        } else if (rawStatus === 'Cancelado') {
+        if (order?.status === 'Cancelado' || t.status === 'cancelled' || t.status === 'failed') {
           displayStatus = 'Cancelado';
+        } else if (t.status === 'completed' || t.status === 'pago') {
+          displayStatus = 'Pago';
         } else {
           displayStatus = 'Pendente';
         }
@@ -2913,16 +2912,9 @@ export const businessRules = {
     const invoices = await businessRules.getAffiliateInvoices(undefined, currentRefMonth);
     const invoiceMap = new Map(invoices.map((inv: any) => [inv.profile_id, inv]));
 
-    // Filtra perfis estritamente pelo tipo solicitado
-    const targetProfiles = (profiles || []).filter(p => {
-      const isRegional = p.role === 'regional_reseller';
-      if (filterCategory === 'network') return !isRegional;
-      if (filterCategory === 'reseller') return isRegional;
-      return true;
-    });
-
     // 3. Processar saldos e status de adimplência por usuário
-    const payableList = targetProfiles.map(profile => {
+    // Avalia todos os perfis; a filtragem por categoria é feita na natureza das comissões (userTransactions)
+    const payableList = (profiles || []).map(profile => {
       // Filtra transações do usuário conforme a categoria solicitada
       const userTransactions = (transactions || []).filter(t => {
         if (t.profile_id !== profile.id) return false;
@@ -2953,14 +2945,15 @@ export const businessRules = {
         });
       });
 
-      const isEligible = hasActiveSub || hasPaidSubOrder || profile.role === 'regional_reseller';
+      const isSicComercio = profile.id === '194e5265-cdb6-431f-9f77-8888b1ee74ae';
+      const isEligible = isSicComercio || hasActiveSub || hasPaidSubOrder || profile.role === 'regional_reseller';
 
       // Extrai níveis e pedidos das transações do usuário
       const levels: string[] = [];
       const orderNumbers: string[] = [];
       userTransactions.forEach(t => {
         const desc = t.description || '';
-        if (t.type === 'commission') {
+        if (t.type === 'commission' && t.status !== 'cancelled' && t.status !== 'failed') {
           let lvl = '';
           if (desc.includes('G0') || desc.includes('Titular')) lvl = 'G0';
           else if (desc.includes('G1')) lvl = 'G1';
@@ -3372,9 +3365,25 @@ export const businessRules = {
         const amt = Number(t.amount || 0);
         item.rawTransactions.push(t);
         item.totalCommission += amt;
-        if (t.description?.includes('Semanal')) item.semanal += amt;
-        else if (t.description?.includes('Mensal')) item.mensal += amt;
-        else if (t.description?.includes('Anual')) item.anual += amt;
+        const isTxPaid = t.status === 'completed' || t.status === 'pago';
+        if (t.description?.includes('Semanal')) {
+          item.semanal += amt;
+          if (isTxPaid) item.semanalPago = true;
+        } else if (t.description?.includes('Mensal')) {
+          item.mensal += amt;
+          if (isTxPaid) item.mensalPago = true;
+        } else if (t.description?.includes('Anual')) {
+          item.anual += amt;
+          if (isTxPaid) item.anualPago = true;
+        }
+      });
+
+      groupedMap.forEach(item => {
+        const allPaid = item.rawTransactions.length > 0 && item.rawTransactions.every((tx: any) => tx.status === 'completed' || tx.status === 'pago');
+        const anyPaid = item.rawTransactions.some((tx: any) => tx.status === 'completed' || tx.status === 'pago');
+        if (allPaid) item.status = 'completed';
+        else if (anyPaid || item.semanalPago) item.status = 'partial';
+        else item.status = 'pending';
       });
 
       const salesList = Array.from(groupedMap.values()).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
@@ -3536,6 +3545,44 @@ export const businessRules = {
       try {
         localStorage.setItem(`receipt_tx_${insertedData.id}`, receiptUrl);
       } catch (e) {}
+    }
+
+    // Dar baixa (status: 'completed') nas comissões pendentes correspondentes ao ciclo e categoria pagos
+    try {
+      const { data: pendingCommissions } = await supabase
+        .from('transactions')
+        .select('id, description')
+        .eq('profile_id', profileId)
+        .eq('type', 'commission')
+        .eq('status', 'pending');
+
+      const txIdsToComplete: any[] = [];
+      (pendingCommissions || []).forEach(tx => {
+        const desc = tx.description || '';
+        const isResellerTx = desc.includes('Revendedor') || desc.includes('Regional') || desc.includes('(REG)');
+        
+        // Verifica se pertence à categoria do pagamento (reseller vs network)
+        if (isReseller && !isResellerTx) return;
+        if (!isReseller && isResellerTx) return;
+
+        // Verifica o ciclo do pagamento
+        if (type === 'digital' && (desc.includes('Semanal') || desc.includes('Digital') || desc.includes('(CD)'))) {
+          txIdsToComplete.push(tx.id);
+        } else if (type === 'mensal' && desc.includes('Mensal')) {
+          txIdsToComplete.push(tx.id);
+        } else if (type === 'anual' && desc.includes('Anual')) {
+          txIdsToComplete.push(tx.id);
+        }
+      });
+
+      if (txIdsToComplete.length > 0) {
+        await supabase
+          .from('transactions')
+          .update({ status: 'completed' })
+          .in('id', txIdsToComplete);
+      }
+    } catch (updateErr) {
+      console.error("Erro ao dar baixa nas comissões vinculadas ao payout:", updateErr);
     }
   },
 

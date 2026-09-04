@@ -2946,7 +2946,7 @@ export const businessRules = {
       });
 
       const isSicComercio = profile.id === '194e5265-cdb6-431f-9f77-8888b1ee74ae';
-      const isEligible = isSicComercio || hasActiveSub || hasPaidSubOrder || profile.role === 'regional_reseller';
+      const isEligible = isSicComercio || hasActiveSub || hasPaidSubOrder;
 
       // Extrai níveis e pedidos das transações do usuário
       const levels: string[] = [];
@@ -3111,24 +3111,31 @@ export const businessRules = {
       fileUrl = await businessRules.uploadReceipt(data.file);
     }
 
-    const payload = {
+    const payload: any = {
       profile_id: data.profile_id,
       reference_month: data.reference_month,
       amount_gross: data.amount_gross,
       invoice_number: data.invoice_number || null,
       invoice_link: data.invoice_link || null,
       file_url: fileUrl,
-      notes: data.notes || null,
       status: 'pending'
     };
 
     try {
+      // Se já houver nota enviada para esta competência, remove para atualizar
+      await supabase
+        .from('affiliate_invoices')
+        .delete()
+        .eq('profile_id', data.profile_id)
+        .eq('reference_month', data.reference_month);
+
       const { data: inserted, error } = await supabase
         .from('affiliate_invoices')
         .insert([payload])
         .select()
         .single();
       if (!error && inserted) return inserted;
+      if (error) console.error('Erro ao inserir em affiliate_invoices:', error);
     } catch (err) {
       console.warn('affiliate_invoices table fallback to storage', err);
     }

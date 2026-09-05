@@ -3013,6 +3013,11 @@ export const businessRules = {
       // Nota Fiscal Info
       const userInvoice = invoiceMap.get(profile.id);
       const hasInvoice = !!userInvoice;
+      const invoiceGross = Number(userInvoice?.amount_gross || 0);
+      const isInvoiceAmountMatching = hasInvoice && (
+        Math.abs(invoiceGross - (monthlyPending + digitalPending)) < 0.05 ||
+        Math.abs(invoiceGross - monthlyPending) < 0.05
+      );
       const canPayMonthly = isEligible && hasInvoice;
 
       return {
@@ -3047,6 +3052,8 @@ export const businessRules = {
         // Informações da Nota Fiscal
         hasInvoice,
         canPayMonthly,
+        invoiceAmount: invoiceGross,
+        isInvoiceAmountMatching,
         invoiceStatus: userInvoice?.status || 'none',
         invoiceLink: userInvoice?.invoice_link || null,
         invoiceFileUrl: userInvoice?.file_url || null,
@@ -3108,6 +3115,7 @@ export const businessRules = {
     invoice_link?: string;
     file?: File;
     notes?: string;
+    status?: string;
   }) => {
     let fileUrl: string | null = null;
     if (data.file) {
@@ -3121,7 +3129,7 @@ export const businessRules = {
       invoice_number: data.invoice_number || null,
       invoice_link: data.invoice_link || null,
       file_url: fileUrl,
-      status: 'pending'
+      status: data.status || 'pending'
     };
 
     try {

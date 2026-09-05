@@ -627,9 +627,15 @@ export default function AdminWithdrawals() {
                           Nota Fiscal do Mês:
                         </span>
                         {w.hasInvoice ? (
-                          <div className="flex items-center gap-2">
-                            <span className="inline-flex items-center gap-1 text-[9px] font-black px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                              <CheckCircle2 size={11} /> NF Enviada ({w.invoiceNumber ? `#${w.invoiceNumber}` : 'Registrada'})
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className={`inline-flex items-center gap-1 text-[9px] font-black px-2.5 py-0.5 rounded-full border ${
+                              w.isInvoiceAmountMatching
+                                ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
+                                : 'bg-amber-500/20 text-amber-300 border-amber-500/30'
+                            }`}>
+                              <CheckCircle2 size={11} /> 
+                              {w.isInvoiceAmountMatching ? 'NF Conferida' : 'NF Registrada'} ({w.invoiceNumber ? `#${w.invoiceNumber}` : 'Registrada'}
+                              {w.invoiceAmount ? ` - R$ ${w.invoiceAmount.toFixed(2).replace('.', ',')}` : ''})
                             </span>
                             {(w.invoiceLink || w.invoiceFileUrl) && (
                               <a 

@@ -71,16 +71,15 @@ export default function GanheDinheiro() {
 
   const periodLabel = getPlanPeriodLabel(planPrice);
   
-  // Standard affiliate commission is 2% for G0, G1, G2.
-  // Regional Reseller gets an additional 2% weekly, 2% monthly, and 2% yearly.
-  const rate = 0.02;
+  // Comissão MMN consolidada: 4% Mensal + 2% Anual = 6% Total.
+  const rateMensal = 0.04;
+  const rateAnual = 0.02;
 
-  const cashSemanal = arrecadacao * rate;
-  const cashMensal = arrecadacao * rate;
-  const cashAnual = arrecadacao * rate;
+  const cashMensal = arrecadacao * rateMensal;
+  const cashAnual = arrecadacao * rateAnual;
 
-  // Bruto mensal a receber = Cash Semanal + Cash Mensal
-  const bruto = cashSemanal + cashMensal;
+  // Bruto mensal a receber = Cash Mensal (pago dia 10)
+  const bruto = cashMensal;
 
   const inss = computeINSS(bruto);
   const irrf = computeIRPF(bruto);
@@ -266,24 +265,20 @@ export default function GanheDinheiro() {
                 </div>
 
                 {/* Cashback Cards */}
-                <div className="grid grid-cols-3 gap-4">
+                <div className="grid grid-cols-2 gap-4">
                   <div className="bg-slate-950/40 p-4 rounded-2xl border border-white/5">
-                    <p className="text-[9px] text-slate-500 font-black uppercase tracking-wider mb-1">C. Semanal (2%)</p>
-                    <p className="text-md font-black text-white">R$ {cashSemanal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
-                  </div>
-                  <div className="bg-slate-950/40 p-4 rounded-2xl border border-white/5">
-                    <p className="text-[9px] text-slate-500 font-black uppercase tracking-wider mb-1">C. Mensal (2%)</p>
+                    <p className="text-[9px] text-slate-500 font-black uppercase tracking-wider mb-1">C. Mensal (4%)</p>
                     <p className="text-md font-black text-white">R$ {cashMensal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                   </div>
                   <div className="bg-slate-950/40 p-4 rounded-2xl border border-white/5">
-                    <p className="text-[9px] text-slate-500 font-black uppercase tracking-wider mb-1">C. Anual (2%)</p>
+                    <p className="text-[9px] text-slate-500 font-black uppercase tracking-wider mb-1">C. Anual (2% - 13º)</p>
                     <p className="text-md font-black text-white text-indigo-400">R$ {cashAnual.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                   </div>
                 </div>
 
                 <div className="pt-4 border-t border-white/5">
                   <div className="flex justify-between items-center mb-6">
-                    <span className="text-xs font-black text-slate-400 uppercase tracking-wider">Bruto Mensal a Receber (Semanal + Mensal)</span>
+                    <span className="text-xs font-black text-slate-400 uppercase tracking-wider">Bruto Mensal a Receber (Dia 10)</span>
                     <span className="text-xl font-black text-white">R$ {bruto.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                   </div>
 

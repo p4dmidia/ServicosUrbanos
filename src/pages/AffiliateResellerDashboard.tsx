@@ -27,7 +27,6 @@ export default function AffiliateResellerDashboard() {
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState<any>(null);
   const [regionalEarnings, setRegionalEarnings] = useState(0);
-  const [regWeeklyEarnings, setRegWeeklyEarnings] = useState(0);
   const [regMonthlyEarnings, setRegMonthlyEarnings] = useState(0);
   const [regAnnualEarnings, setRegAnnualEarnings] = useState(0);
   const [regionalConfig, setRegionalConfig] = useState<any>(null);
@@ -81,10 +80,6 @@ export default function AffiliateResellerDashboard() {
       const transactionsList = historyRes.data || [];
       const totalReg = transactionsList.reduce((acc, t) => acc + Number(t.amount || 0), 0);
       
-      const weeklyReg = transactionsList
-        .filter(t => t.description?.includes('Semanal'))
-        .reduce((acc, t) => acc + Number(t.amount || 0), 0);
-      
       const monthlyReg = transactionsList
         .filter(t => t.description?.includes('Mensal'))
         .reduce((acc, t) => acc + Number(t.amount || 0), 0);
@@ -93,13 +88,11 @@ export default function AffiliateResellerDashboard() {
         .filter(t => t.description?.includes('Anual'))
         .reduce((acc, t) => acc + Number(t.amount || 0), 0);
 
-      const weekly = statsData?.availableBalance ?? statsData?.walletBonus ?? 0;
       const monthly = statsData?.monthlyBonus || 0;
       const annual = statsData?.annualBonus || 0;
-      const total = statsData?.totalEarnings || (weekly + monthly + annual);
+      const total = statsData?.totalEarnings || (monthly + annual);
 
       setRegionalEarnings(total);
-      setRegWeeklyEarnings(weekly);
       setRegMonthlyEarnings(monthly);
       setRegAnnualEarnings(annual);
       setRegionalConfig(regConfigRes.data);
@@ -268,17 +261,13 @@ export default function AffiliateResellerDashboard() {
               </div>
             </div>
             <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Bônus de Liderança Regional</p>
-            <div className="flex gap-4 pt-1 font-black text-xs text-midnight">
+            <div className="flex gap-6 pt-1 font-black text-xs text-midnight">
               <div>
-                <span className="text-slate-400 font-bold block uppercase text-[8px]">Semanal</span>
-                <span className="text-purple-600 font-mono text-sm">+{regionalConfig?.commission_regional_semanal || '2.00'}%</span>
+                <span className="text-slate-400 font-bold block uppercase text-[8px]">Mensal (Dia 10)</span>
+                <span className="text-purple-600 font-mono text-sm">+{regionalConfig?.commission_regional_mensal || '4.00'}%</span>
               </div>
               <div>
-                <span className="text-slate-400 font-bold block uppercase text-[8px]">Mensal</span>
-                <span className="text-purple-600 font-mono text-sm">+{regionalConfig?.commission_regional_mensal || '2.00'}%</span>
-              </div>
-              <div>
-                <span className="text-slate-400 font-bold block uppercase text-[8px]">Anual</span>
+                <span className="text-slate-400 font-bold block uppercase text-[8px]">Anual (10/Dez)</span>
                 <span className="text-purple-600 font-mono text-sm">+{regionalConfig?.commission_regional_anual || '2.00'}%</span>
               </div>
             </div>

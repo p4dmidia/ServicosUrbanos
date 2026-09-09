@@ -143,17 +143,14 @@ export default function AdminOrders() {
         resellerProfile = pReseller;
       }
 
-      // 6. Calcular comissões triplas pagas por perfil
+      // 6. Calcular comissões pagas por perfil (Mensal 4% + Anual 2%)
       const calcCommissions = (profileId?: string, isReseller: boolean = false) => {
-        if (!profileId || !transactions) return { semanal: 0, mensal: 0, anual: 0, total: 0 };
+        if (!profileId || !transactions) return { mensal: 0, anual: 0, total: 0 };
         const userTxs = transactions.filter(t => {
           if (t.profile_id !== profileId) return false;
           const isRes = t.description?.includes('Revendedor') || t.description?.includes('Regional');
           return isReseller ? isRes : !isRes;
         });
-        const semanal = userTxs
-          .filter(t => t.description?.includes('Semanal'))
-          .reduce((acc, t) => acc + Number(t.amount || 0), 0);
         const mensal = userTxs
           .filter(t => t.description?.includes('Mensal'))
           .reduce((acc, t) => acc + Number(t.amount || 0), 0);
@@ -161,10 +158,9 @@ export default function AdminOrders() {
           .filter(t => t.description?.includes('Anual'))
           .reduce((acc, t) => acc + Number(t.amount || 0), 0);
         return {
-          semanal,
           mensal,
           anual,
-          total: semanal + mensal + anual,
+          total: mensal + anual,
           status: userTxs[0]?.status || 'pending',
           rawTxs: userTxs
         };
@@ -283,7 +279,7 @@ export default function AdminOrders() {
   };
 
   return (
-    <AdminLayout title="Faturas e Assinaturas MMN">
+    <AdminLayout title="Faturas e Assinaturas MMN" subtitle="Gestão de faturas e assinaturas do ecossistema">
       <div className="p-8 lg:p-12 space-y-10">
         
         {/* Header com Filtros */}
@@ -573,7 +569,7 @@ export default function AdminOrders() {
                         </h4>
                       </div>
                       <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 bg-white/5 px-3 py-1 rounded-full border border-white/5">
-                        Tri-Split Semanal, Mensal e Anual
+                        Divisão Mensal (4%) e Anual (2%)
                       </span>
                     </div>
 
@@ -599,13 +595,9 @@ export default function AdminOrders() {
                           <p className="text-[11px] text-slate-500 font-mono">PIX: {orderDetails?.g0?.profile?.pix_key || '---'}</p>
                         </div>
 
-                        <div className="grid grid-cols-3 gap-2 bg-white/5 p-3 rounded-xl text-center text-xs font-mono">
+                        <div className="grid grid-cols-2 gap-2 bg-white/5 p-3 rounded-xl text-center text-xs font-mono">
                           <div>
-                            <span className="text-[8px] font-bold text-slate-400 block uppercase">Semanal (2%)</span>
-                            <span className="text-white font-bold">R$ {orderDetails?.g0?.commissions?.semanal?.toFixed(2).replace('.', ',')}</span>
-                          </div>
-                          <div>
-                            <span className="text-[8px] font-bold text-slate-400 block uppercase">Mensal (2%)</span>
+                            <span className="text-[8px] font-bold text-slate-400 block uppercase">Mensal (4%)</span>
                             <span className="text-white font-bold">R$ {orderDetails?.g0?.commissions?.mensal?.toFixed(2).replace('.', ',')}</span>
                           </div>
                           <div>
@@ -644,13 +636,9 @@ export default function AdminOrders() {
                           <p className="text-[11px] text-slate-500 font-mono">PIX: {orderDetails?.g1?.profile?.pix_key || '---'}</p>
                         </div>
 
-                        <div className="grid grid-cols-3 gap-2 bg-white/5 p-3 rounded-xl text-center text-xs font-mono">
+                        <div className="grid grid-cols-2 gap-2 bg-white/5 p-3 rounded-xl text-center text-xs font-mono">
                           <div>
-                            <span className="text-[8px] font-bold text-slate-400 block uppercase">Semanal (2%)</span>
-                            <span className="text-white font-bold">R$ {orderDetails?.g1?.commissions?.semanal?.toFixed(2).replace('.', ',')}</span>
-                          </div>
-                          <div>
-                            <span className="text-[8px] font-bold text-slate-400 block uppercase">Mensal (2%)</span>
+                            <span className="text-[8px] font-bold text-slate-400 block uppercase">Mensal (4%)</span>
                             <span className="text-white font-bold">R$ {orderDetails?.g1?.commissions?.mensal?.toFixed(2).replace('.', ',')}</span>
                           </div>
                           <div>
@@ -689,13 +677,9 @@ export default function AdminOrders() {
                           <p className="text-[11px] text-slate-500 font-mono">PIX: {orderDetails?.g2?.profile?.pix_key || '---'}</p>
                         </div>
 
-                        <div className="grid grid-cols-3 gap-2 bg-white/5 p-3 rounded-xl text-center text-xs font-mono">
+                        <div className="grid grid-cols-2 gap-2 bg-white/5 p-3 rounded-xl text-center text-xs font-mono">
                           <div>
-                            <span className="text-[8px] font-bold text-slate-400 block uppercase">Semanal (2%)</span>
-                            <span className="text-white font-bold">R$ {orderDetails?.g2?.commissions?.semanal?.toFixed(2).replace('.', ',')}</span>
-                          </div>
-                          <div>
-                            <span className="text-[8px] font-bold text-slate-400 block uppercase">Mensal (2%)</span>
+                            <span className="text-[8px] font-bold text-slate-400 block uppercase">Mensal (4%)</span>
                             <span className="text-white font-bold">R$ {orderDetails?.g2?.commissions?.mensal?.toFixed(2).replace('.', ',')}</span>
                           </div>
                           <div>
@@ -736,13 +720,9 @@ export default function AdminOrders() {
                           <p className="text-[11px] text-slate-500 font-mono">PIX: {orderDetails?.reseller?.profile?.pix_key || '---'}</p>
                         </div>
 
-                        <div className="grid grid-cols-3 gap-2 bg-white/5 p-3 rounded-xl text-center text-xs font-mono">
+                        <div className="grid grid-cols-2 gap-2 bg-white/5 p-3 rounded-xl text-center text-xs font-mono">
                           <div>
-                            <span className="text-[8px] font-bold text-slate-400 block uppercase">Semanal (2%)</span>
-                            <span className="text-white font-bold">R$ {orderDetails?.reseller?.commissions?.semanal?.toFixed(2).replace('.', ',')}</span>
-                          </div>
-                          <div>
-                            <span className="text-[8px] font-bold text-slate-400 block uppercase">Mensal (2%)</span>
+                            <span className="text-[8px] font-bold text-slate-400 block uppercase">Mensal (4%)</span>
                             <span className="text-white font-bold">R$ {orderDetails?.reseller?.commissions?.mensal?.toFixed(2).replace('.', ',')}</span>
                           </div>
                           <div>

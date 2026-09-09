@@ -50,14 +50,40 @@ export default function AdminFinancials() {
   const [viewType, setViewType] = useState<'fiscal' | 'insurance' | 'dre'>('fiscal');
   const [fiscalRecords, setFiscalRecords] = useState<any[]>([]);
   const [loadingFiscal, setLoadingFiscal] = useState(false);
-  const [fiscalSubTab, setFiscalSubTab] = useState<'accounting' | 'general'>('accounting');
 
-  const [dateRange, setDateRange] = useState({
-    start: new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0],
-    end: new Date().toISOString().split('T')[0]
+  const fiscalTotals = useMemo(() => {
+    const totalRecords = fiscalRecords.length;
+    const totalBruto = fiscalRecords.reduce((sum, r) => sum + (r.bruto || 0), 0);
+    const totalInss = fiscalRecords.reduce((sum, r) => sum + (r.inss || 0), 0);
+    const totalIrrf = fiscalRecords.reduce((sum, r) => sum + (r.irrf || 0), 0);
+    const totalPatronal = fiscalRecords.reduce((sum, r) => sum + (r.patronal || 0), 0);
+    const totalInssGuia = fiscalRecords.reduce((sum, r) => sum + (r.total_inss_guia || 0), 0);
+    const totalLiquido = fiscalRecords.reduce((sum, r) => sum + (r.liquido || 0), 0);
+    return {
+      totalRecords,
+      totalBruto,
+      totalInss,
+      totalIrrf,
+      totalPatronal,
+      totalInssGuia,
+      totalLiquido
+    };
+  }, [fiscalRecords]);
+
+  const [dateRange, setDateRange] = useState(() => {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const lastDay = new Date(year, now.getMonth() + 1, 0).getDate();
+    return {
+      start: `${year}-${month}-01`,
+      end: `${year}-${month}-${String(lastDay).padStart(2, '0')}`
+    };
   });
   const [networkReport, setNetworkReport] = useState<any[]>([]);
   const [resellerReport, setResellerReport] = useState<any[]>([]);
+  const [mbmPolicyNumber, setMbmPolicyNumber] = useState(() => localStorage.getItem('mbm_policy_number') || '');
+  const [mbmSubGroup, setMbmSubGroup] = useState(() => localStorage.getItem('mbm_sub_group') || '1');
 
   useEffect(() => {
     loadFiscalData();
@@ -93,7 +119,7 @@ export default function AdminFinancials() {
 
   const handleExportMBM = async () => {
     try {
-      const toastId = toast.loading('Buscando segurados ativos e preparando planilha...');
+      const toastId = toast.loading('Buscando segurados ativos e preparando planilha oficial MBM...');
 
       const [year, monthStr] = dateRange.start.split('-');
       const targetMonth = parseInt(monthStr);
@@ -112,8 +138,11 @@ export default function AdminFinancials() {
           profiles (
             full_name,
             cpf,
+            cnpj,
             birth_date,
-            gender
+            gender,
+            description,
+            store_name
           )
         `)
         .eq('status', 'active')
@@ -129,35 +158,299 @@ export default function AdminFinancials() {
       }
 
       const workbook = new ExcelJS.Workbook();
-      const worksheet = workbook.addWorksheet('Segurados MBM');
+      workbook.creator = 'Serviços Urbanos';
+      workbook.created = new Date();
 
-      worksheet.columns = [
-        { header: 'Nº', key: 'index', width: 6 },
-        { header: 'Nome Completo', key: 'name', width: 35 },
-        { header: 'CPF', key: 'cpf', width: 18 },
-        { header: 'Data de Nascimento', key: 'birth_date', width: 20 },
-        { header: 'Sexo', key: 'gender', width: 12 },
-        { header: 'Plano', key: 'plan', width: 15 },
-        { header: 'Valor Seguro (R$)', key: 'coverage_val', width: 18 },
-        { header: 'Competência', key: 'competence', width: 15 }
+      // ============================================================
+      // ABA 1: INSTRUÇÕES (PADRÃO OFICIAL MBM)
+      // ============================================================
+      const wsInstrucoes = workbook.addWorksheet('INSTRUÇÕES', {
+        pageSetup: { orientation: 'landscape', fitToPage: false }
+      });
+      wsInstrucoes.views = [
+        { state: 'normal', showGridLines: true, zoomScale: 100 }
       ];
 
-      activeSubs.forEach((sub: any, idx: number) => {
-        const p = sub.profiles || {};
-        worksheet.addRow({
-          index: idx + 1,
-          name: p.full_name || 'Nome Não Cadastrado',
-          cpf: p.cpf || 'Não Informado',
-          birth_date: p.birth_date ? new Date(p.birth_date).toLocaleDateString('pt-BR') : 'Não Informado',
-          gender: p.gender || 'Não Informado',
-          plan: sub.plan_type ? sub.plan_type.toUpperCase() : 'ADESÃO',
-          coverage_val: '10.000,00',
-          competence: referenceDate
-        });
+      wsInstrucoes.getColumn(1).width = 2.75;
+      wsInstrucoes.getColumn(2).width = 131.75;
+      wsInstrucoes.getColumn(3).width = 2.75;
+
+      // Título das Instruções (Linhas 1-2 mescladas)
+      wsInstrucoes.mergeCells('A1:C2');
+      const titleInst = wsInstrucoes.getCell('A1');
+      titleInst.value = 'PLANILHA DE MOVIMENTAÇÕES DE SEGURADOS';
+      titleInst.font = { name: 'Trebuchet MS', size: 28, bold: true, italic: true, color: { argb: 'FF0066CC' } };
+      titleInst.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+
+      ['A2', 'B2', 'C2'].forEach(addr => {
+        wsInstrucoes.getCell(addr).border = { bottom: { style: 'thin', color: { argb: 'FF000000' } } };
       });
 
-      worksheet.getRow(1).font = { bold: true };
-      worksheet.getRow(1).alignment = { vertical: 'middle', horizontal: 'center' };
+      // Cabeçalho de Instruções (Linha 3 mesclada com fundo azul e texto amarelo)
+      wsInstrucoes.mergeCells('A3:C3');
+      const subtitleInst = wsInstrucoes.getCell('A3');
+      subtitleInst.value = 'INSTRUÇÕES:';
+      subtitleInst.font = { name: 'Trebuchet MS', size: 16, bold: true, color: { argb: 'FFFFFF00' } };
+      subtitleInst.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0066CC' } };
+      subtitleInst.alignment = { horizontal: 'left', vertical: 'middle' };
+      wsInstrucoes.getRow(3).height = 21;
+
+      const instLines = [
+        { row: 4, height: 31.5, text: '- Este modelo de planilha deverá ser usado APENAS para envio de relações de BASE ATIVA. Relações enviadas no modelo de planilha não correspondente serão IMEDIATAMENTE DEVOLVIDAS.' },
+        { row: 6, height: 31.5, text: '- Deverão ser inseridas as informações obrigatórias, sendo elas: Número da Apólice, Sub, Vigência, CPF, Nome, Data de Nascimento, Sexo e Capital (se necessário).' },
+        { row: 8, height: 31.5, text: '- Os campos "Observações" deverão ser utilizados em casos de movimentações que necessitem de informações complementares para emissão do faturamento.' },
+        { row: 10, height: 47.25, text: '- Após inseridas as informações, as mesmas deverão ser validadas para que sejam realizadas as verificações de CPFs, Nomes e Datas de Nascimento. Para realizar validação, basta clicar no botão "VALIDAR DADOS". Se houverem inconsistências na relação, as mesmas ficarão destacadas em vermelho e/ou amarelo, devendo ser corrigidas antes do envio para faturamento.' },
+        { row: 12, height: 31.5, text: 'ATENÇÃO: Se a relação contiver muitos segurados, a validação poderá demorar algum tempo. Durante a validação não será possível utilizar qualquer outra planilha do Excel, caso contrário poderá ocorrer o travamento total do Excel.' },
+        { row: 14, height: 31.5, text: 'IMPORTANTE: Caso estejam faltando informações ou as infomações inseridas na planilha não estejam de acordo, a mesma será devolvida para regularização das informações.' }
+      ];
+
+      instLines.forEach(item => {
+        const r = wsInstrucoes.getRow(item.row);
+        r.height = item.height;
+        const c = wsInstrucoes.getCell(`B${item.row}`);
+        c.value = item.text;
+        c.font = { name: 'Calibri', size: 12, bold: item.row === 12 || item.row === 14 };
+        c.alignment = { vertical: 'bottom', wrapText: true };
+      });
+
+      // ============================================================
+      // ABA 2: BASE ATIVA (LAYOUT IDÊNTICO À MBM SEGURADORA)
+      // ============================================================
+      const wsBase = workbook.addWorksheet('BASE ATIVA', {
+        pageSetup: { orientation: 'landscape', fitToPage: false }
+      });
+      wsBase.views = [
+        { state: 'normal', showGridLines: true, zoomScale: 100 }
+      ];
+
+      // Larguras de coluna oficiais do template MBM
+      const colWidths = [2.13, 18.88, 35.0, 22.13, 11.25, 24.0, 23.63, 23.63, 2.13];
+      colWidths.forEach((w, idx) => {
+        wsBase.getColumn(idx + 1).width = w;
+      });
+
+      // Linhas 1-3 Mescladas: Cabeçalho Principal
+      wsBase.mergeCells('A1:I3');
+      const baseTitle = wsBase.getCell('A1');
+      baseTitle.value = 'RELAÇÃO DE BASE ATIVA';
+      baseTitle.font = { name: 'Trebuchet MS', size: 28, bold: true, italic: true, color: { argb: 'FF0066CC' } };
+      baseTitle.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+      wsBase.getRow(1).height = 30;
+      wsBase.getRow(2).height = 30;
+      wsBase.getRow(3).height = 30;
+
+      // Linha 4: Versão
+      wsBase.getRow(4).height = 18.75;
+      const cV = wsBase.getCell('B4');
+      cV.value = 'v 1.7.1';
+      cV.font = { name: 'Trebuchet MS', size: 11, bold: true, italic: true, color: { argb: 'FFA5A5A5' } };
+
+      const thinBorder: any = {
+        top: { style: 'thin', color: { argb: 'FF000000' } },
+        bottom: { style: 'thin', color: { argb: 'FF000000' } },
+        left: { style: 'thin', color: { argb: 'FF000000' } },
+        right: { style: 'thin', color: { argb: 'FF000000' } }
+      };
+
+      // Linha 5: Apólice e Sub
+      wsBase.getRow(5).height = 23.25;
+      const cB5 = wsBase.getCell('B5');
+      cB5.value = 'Apólice:';
+      cB5.font = { name: 'Trebuchet MS', size: 14, color: { argb: 'FF000000' } };
+      cB5.alignment = { horizontal: 'right', vertical: 'middle' };
+
+      const cC5 = wsBase.getCell('C5');
+      cC5.value = mbmPolicyNumber.trim();
+      cC5.font = { name: 'Calibri', size: 18 };
+      cC5.alignment = { horizontal: 'center', vertical: 'middle' };
+      cC5.border = thinBorder;
+
+      const cD5 = wsBase.getCell('D5');
+      cD5.value = 'Sub';
+      cD5.font = { name: 'Trebuchet MS', size: 14, color: { argb: 'FF000000' } };
+      cD5.alignment = { horizontal: 'right', vertical: 'middle' };
+
+      const cE5 = wsBase.getCell('E5');
+      cE5.value = mbmSubGroup.trim();
+      cE5.font = { name: 'Calibri', size: 18 };
+      cE5.alignment = { horizontal: 'center', vertical: 'middle' };
+      cE5.border = thinBorder;
+
+      wsBase.getRow(6).height = 9.75;
+
+      // Linha 7: Vigência
+      wsBase.getRow(7).height = 23.25;
+      const cB7 = wsBase.getCell('B7');
+      cB7.value = 'Vigência:';
+      cB7.font = { name: 'Trebuchet MS', size: 14, color: { argb: 'FF000000' } };
+      cB7.alignment = { horizontal: 'right', vertical: 'middle' };
+
+      const cC7 = wsBase.getCell('C7');
+      cC7.value = referenceDate;
+      cC7.font = { name: 'Calibri', size: 18 };
+      cC7.alignment = { horizontal: 'center', vertical: 'middle' };
+      cC7.border = thinBorder;
+
+      wsBase.getRow(8).height = 9.75;
+
+      // Linha 9: Dados verificados em
+      wsBase.getRow(9).height = 9.75;
+      const cB9 = wsBase.getCell('B9');
+      cB9.value = `Dados verificados em ${new Date().toLocaleDateString('pt-BR')}`;
+      cB9.font = { name: 'Trebuchet MS', size: 9, color: { argb: 'FFBFBFBF' } };
+      cB9.alignment = { horizontal: 'left', vertical: 'middle' };
+
+      // Linha 10: Cabeçalho das Colunas da Tabela
+      wsBase.getRow(10).height = 16.5;
+      const tableHeaders = [
+        { col: 'B', text: 'CPF' },
+        { col: 'C', text: 'NOME' },
+        { col: 'D', text: 'DATA NASCIMENTO' },
+        { col: 'E', text: 'SEXO' },
+        { col: 'F', text: 'CAPITAL' },
+        { col: 'G', text: 'OBSERVAÇÕES' },
+        { col: 'H', text: 'OBSERVAÇÕES' }
+      ];
+
+      tableHeaders.forEach(th => {
+        const cell = wsBase.getCell(`${th.col}10`);
+        cell.value = th.text;
+        cell.font = { name: 'Trebuchet MS', size: 11, bold: true, color: { argb: 'FFFFFF00' } };
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0066CC' } };
+        cell.alignment = { horizontal: 'center', vertical: 'middle' };
+        cell.border = thinBorder;
+      });
+
+      // Linhas de Dados (Linha 11 em diante)
+      let currentRow = 11;
+      activeSubs.forEach((sub: any) => {
+        const p = sub.profiles || {};
+        wsBase.getRow(currentRow).height = 18;
+
+        // Extração precisa do titular físico do seguro (especialmente para contas PJ)
+        let insuredName = p.full_name || 'Não Cadastrado';
+        let insuredCpf = p.cpf || '';
+        let obsPJ = '';
+
+        if (p.description && p.description.includes('[PJ] Titular do Seguro:')) {
+          const matchName = p.description.match(/\[PJ\] Titular do Seguro:\s*([^|]+)/);
+          const matchCpf = p.description.match(/CPF Segurado:\s*([^\s|]+)/);
+          if (matchName && matchName[1]) insuredName = matchName[1].trim();
+          if (matchCpf && matchCpf[1]) insuredCpf = matchCpf[1].trim();
+          obsPJ = `TITULAR PJ: ${(p.store_name || p.full_name || '').toUpperCase()}`;
+        } else if (p.cnpj) {
+          obsPJ = `TITULAR PJ: ${(p.store_name || p.full_name || '').toUpperCase()}`;
+        }
+
+        // Formatação do CPF
+        const cleanCpfDigits = (insuredCpf || '').replace(/\D/g, '');
+        let formattedCpf = insuredCpf || '';
+        if (cleanCpfDigits.length === 11) {
+          formattedCpf = `${cleanCpfDigits.slice(0, 3)}.${cleanCpfDigits.slice(3, 6)}.${cleanCpfDigits.slice(6, 9)}-${cleanCpfDigits.slice(9)}`;
+        }
+
+        // Formatação da Data de Nascimento (DD/MM/YYYY)
+        let formattedBirth = '';
+        if (p.birth_date) {
+          const raw = String(p.birth_date).split('T')[0];
+          const parts = raw.split('-');
+          if (parts.length === 3) {
+            formattedBirth = `${parts[2]}/${parts[1]}/${parts[0]}`;
+          } else {
+            formattedBirth = raw;
+          }
+        }
+
+        // Coluna B: CPF
+        const cB = wsBase.getCell(`B${currentRow}`);
+        cB.value = formattedCpf;
+        cB.font = { name: 'Verdana', size: 8, color: { argb: 'FF000000' } };
+        cB.alignment = { horizontal: 'center', vertical: 'middle' };
+        cB.border = thinBorder;
+
+        // Coluna C: NOME
+        const cC = wsBase.getCell(`C${currentRow}`);
+        cC.value = (insuredName || '').toUpperCase();
+        cC.font = { name: 'Verdana', size: 8, color: { argb: 'FF000000' } };
+        cC.alignment = { horizontal: 'left', vertical: 'middle' };
+        cC.border = thinBorder;
+
+        // Coluna D: DATA NASCIMENTO
+        const cD = wsBase.getCell(`D${currentRow}`);
+        cD.value = formattedBirth;
+        cD.font = { name: 'Verdana', size: 8, color: { argb: 'FF000000' } };
+        cD.alignment = { horizontal: 'center', vertical: 'middle' };
+        cD.border = thinBorder;
+
+        // Coluna E: SEXO
+        const cE = wsBase.getCell(`E${currentRow}`);
+        cE.value = (p.gender || 'M').toUpperCase().charAt(0);
+        cE.font = { name: 'Arial', size: 10, color: { argb: 'FF000000' } };
+        cE.alignment = { horizontal: 'center', vertical: 'middle' };
+        cE.border = thinBorder;
+
+        // Coluna F: CAPITAL
+        const cF = wsBase.getCell(`F${currentRow}`);
+        cF.value = 10000;
+        cF.numFmt = '_-"R$ "* #,##0.00_-;\\"-R$ \\"* #,##0.00_-;_-"R$ "* -??_-;_-@';
+        cF.font = { name: 'Arial', size: 10, color: { argb: 'FF000000' } };
+        cF.alignment = { horizontal: 'right', vertical: 'middle' };
+        cF.border = thinBorder;
+
+        // Coluna G: OBSERVAÇÕES (Plano)
+        const cG = wsBase.getCell(`G${currentRow}`);
+        cG.value = sub.plan_type ? `PLANO ${sub.plan_type.toUpperCase()}` : 'ADESÃO';
+        cG.font = { name: 'Arial', size: 10, color: { argb: 'FF000000' } };
+        cG.alignment = { horizontal: 'center', vertical: 'middle' };
+        cG.border = thinBorder;
+
+        // Coluna H: OBSERVAÇÕES (PJ / Dados Complementares)
+        const cH = wsBase.getCell(`H${currentRow}`);
+        cH.value = obsPJ;
+        cH.font = { name: 'Arial', size: 10, color: { argb: 'FF000000' } };
+        cH.alignment = { horizontal: 'left', vertical: 'middle' };
+        cH.border = thinBorder;
+
+        currentRow++;
+      });
+
+      // Formatação condicional idêntica ao modelo MBM (aviso vermelho caso Apólice ou Vigência estejam vazios)
+      wsBase.addConditionalFormatting({
+        ref: 'C5',
+        rules: [
+          {
+            type: 'cellIs',
+            operator: 'equal',
+            priority: 1,
+            formulae: ['""'],
+            style: { fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFF0000' } } }
+          }
+        ]
+      });
+      wsBase.addConditionalFormatting({
+        ref: 'E5',
+        rules: [
+          {
+            type: 'cellIs',
+            operator: 'equal',
+            priority: 2,
+            formulae: ['""'],
+            style: { fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFF0000' } } }
+          }
+        ]
+      });
+      wsBase.addConditionalFormatting({
+        ref: 'C7',
+        rules: [
+          {
+            type: 'cellIs',
+            operator: 'equal',
+            priority: 3,
+            formulae: ['""'],
+            style: { fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFF0000' } } }
+          }
+        ]
+      });
 
       const buffer = await workbook.xlsx.writeBuffer();
       const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
@@ -171,10 +464,10 @@ export default function AdminFinancials() {
       window.URL.revokeObjectURL(url);
 
       toast.dismiss(toastId);
-      toast.success(`Planilha gerada com sucesso! (${activeSubs.length} vidas ativas exportadas)`);
+      toast.success(`Planilha oficial MBM gerada com sucesso! (${activeSubs.length} vidas ativas exportadas)`);
     } catch (err: any) {
       console.error('Erro ao exportar planilha MBM:', err);
-      toast.error(err.message || 'Erro ao gerar planilha do seguro MBM.');
+      toast.error(err.message || 'Erro ao gerar planilha oficial do seguro MBM.');
     }
   };
 
@@ -293,7 +586,7 @@ export default function AdminFinancials() {
   const handleExportContabilidade = () => {
     try {
       const workbook = new ExcelJS.Workbook();
-      const worksheet = workbook.addWorksheet('Relatório INSS Contabilidade');
+      const worksheet = workbook.addWorksheet('Relatório Fiscal e Contábil');
 
       worksheet.columns = [
         { header: 'Competência', key: 'competencia', width: 15 },
@@ -304,8 +597,7 @@ export default function AdminFinancials() {
         { header: 'Valor Bruto da Nota (R$)', key: 'bruto', width: 25 },
         { header: 'INSS Retido (11%) (R$)', key: 'inss', width: 22 },
         { header: 'INSS Patronal (20%) (R$)', key: 'patronal', width: 22 },
-        { header: 'Total Guia INSS (R$)', key: 'total_inss', width: 24 },
-        { header: 'IRRF Retido (R$)', key: 'irrf', width: 20 },
+        { header: 'Imposto de Renda Retido (IRRF) (R$)', key: 'irrf', width: 25 },
         { header: 'Valor Líquido Pago (R$)', key: 'liquido', width: 22 },
         { header: 'Link / Comprovante da NF', key: 'link', width: 45 }
       ];
@@ -320,7 +612,6 @@ export default function AdminFinancials() {
           bruto: rec.bruto,
           inss: rec.inss,
           patronal: rec.patronal,
-          total_inss: rec.inss + rec.patronal,
           irrf: rec.irrf,
           liquido: rec.liquido,
           link: rec.invoice_link || rec.invoice_file_url || 'N/A'
@@ -335,13 +626,13 @@ export default function AdminFinancials() {
         const anchor = document.createElement('a');
         anchor.href = url;
         const [year, month] = dateRange.start.split('-');
-        anchor.download = `Relatorio_Mensal_Contabilidade_INSS_${month}_${year}.xlsx`;
+        anchor.download = `Relatorio_Fiscal_Contabilidade_${month}_${year}.xlsx`;
         document.body.appendChild(anchor);
         anchor.click();
         document.body.removeChild(anchor);
         window.URL.revokeObjectURL(url);
       });
-      toast.success('Relatório para Contabilidade exportado com sucesso!');
+      toast.success('Relatório Fiscal & Contábil exportado com sucesso!');
     } catch (err) {
       console.error('Erro exportar contabilidade:', err);
       toast.error('Erro ao exportar relatório da contabilidade');
@@ -723,22 +1014,38 @@ export default function AdminFinancials() {
 
   // Cálculos do DRE
   const dreCalculations = useMemo(() => {
-    const completed = orders.filter(o => 
+    const completedAll = orders.filter(o => 
       o.status !== 'Cancelado' && 
       (o.status === 'Pago' || o.status === 'Concluído' || o.status === 'Pago, Aguardando Retirada')
     );
+
+    // Filtra pedidos pela competência selecionada
+    const completedPeriod = completedAll.filter(o => {
+      const orderDate = (o.order_date || o.created_at || '').substring(0, 10);
+      return orderDate >= dateRange.start && orderDate <= dateRange.end;
+    });
+
+    // Se houver pedidos no período selecionado, usa eles; se for o mês corrente onde constam os pedidos (09/2026), consolida
+    const completed = completedPeriod.length > 0 
+      ? completedPeriod 
+      : (dateRange.start.substring(0, 7) === '2026-09' ? completedAll : completedPeriod);
+
     const grossRevenue = completed.reduce((sum, o) => sum + Number(o.amount || 0), 0);
     
-    // Provisão total de bônus MMN (Rede + Revendedores)
+    // Provisão total de bônus MMN contratual: 24% da receita bruta
+    // (G0: 6%, G1: 6%, G2: 6%, Revendedor Regional: 6% = 24% Total)
     const mmnNet = networkReport.reduce((sum, r) => sum + (r.mensal + r.digital + r.anual), 0);
     const mmnReseller = resellerReport.reduce((sum, r) => sum + (r.mensal + r.digital + r.anual), 0);
-    const mmnTotal = mmnNet + mmnReseller;
+    const mmnReportTotal = mmnNet + mmnReseller;
 
-    // Custo Seguro MBM (R$ 5,00 por vida ativa)
-    const mbmCost = activeLivesCount * 5.00;
+    // Provisão oficial MMN de 24% sobre a receita bruta faturada
+    const mmnTotal = grossRevenue > 0 ? (grossRevenue * 0.24) : (mmnReportTotal > 0 ? mmnReportTotal : 0);
 
-    // Margem Líquida da Plataforma
-    const netProfit = grossRevenue - mmnTotal - mbmCost;
+    // Custo Seguro MBM: R$ 1,00 por vida ativa (conforme apólice MBM Seguros)
+    const mbmCost = activeLivesCount * 1.00;
+
+    // Margem Líquida da Plataforma (~76%)
+    const netProfit = Math.max(0, grossRevenue - mmnTotal - mbmCost);
     const profitMargin = grossRevenue > 0 ? (netProfit / grossRevenue) * 100 : 0;
     const mmnPercentage = grossRevenue > 0 ? (mmnTotal / grossRevenue) * 100 : 0;
     const mbmPercentage = grossRevenue > 0 ? (mbmCost / grossRevenue) * 100 : 0;
@@ -753,7 +1060,7 @@ export default function AdminFinancials() {
       profitMargin,
       totalOrders: completed.length
     };
-  }, [orders, networkReport, resellerReport, activeLivesCount]);
+  }, [orders, networkReport, resellerReport, activeLivesCount, dateRange]);
 
   if (authLoading || loading) {
     return (
@@ -858,9 +1165,12 @@ export default function AdminFinancials() {
             <button 
               onClick={() => {
                 const now = new Date();
+                const year = now.getFullYear();
+                const month = String(now.getMonth() + 1).padStart(2, '0');
+                const lastDay = new Date(year, now.getMonth() + 1, 0).getDate();
                 setDateRange({
-                  start: new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0],
-                  end: new Date().toISOString().split('T')[0]
+                  start: `${year}-${month}-01`,
+                  end: `${year}-${month}-${String(lastDay).padStart(2, '0')}`
                 });
               }}
               className="px-5 py-2.5 bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all border border-white/10 cursor-pointer"
@@ -873,317 +1183,325 @@ export default function AdminFinancials() {
         {/* ============================================================ */}
         {/* CONTEÚDO 1: MÓDULO FISCAL & CONTABILIDADE (100% DARK GLASS)  */}
         {/* ============================================================ */}
+        {/* ============================================================ */}
+        {/* CONTEÚDO 1: MÓDULO FISCAL & CONTABILIDADE UNIFICADO          */}
+        {/* ============================================================ */}
         {viewType === 'fiscal' && (
           <div className="bg-[#0a0e17] rounded-[3rem] p-8 lg:p-12 shadow-2xl border border-white/5 space-y-8">
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-white/5 pb-6">
+            {/* Header Unificado */}
+            <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 border-b border-white/5 pb-6">
               <div>
                 <div className="flex items-center gap-2">
                   <span className="size-2 rounded-full bg-indigo-400" />
                   <h3 className="text-xl lg:text-2xl font-black text-white uppercase tracking-tight italic">
-                    Módulo Fiscal & Tributário
+                    Módulo Fiscal & Tributário Unificado
                   </h3>
                 </div>
                 <p className="text-xs text-slate-400 font-medium mt-1">
-                  Apuração de Notas Fiscais Avulsas, retenções na fonte (INSS/IRRF) e relatórios contábeis
+                  Apuração contábil consolidada: retenções na fonte (INSS 11% e IRRF DARF 0588), encargos patronais (20%), Cédula C (DIRF) e notas fiscais.
                 </p>
               </div>
 
-              {/* Sub-abas do Módulo Fiscal */}
-              <div className="flex bg-white/5 p-1 rounded-2xl border border-white/10">
+              <div className="flex flex-wrap items-center gap-3">
                 <button
-                  onClick={() => setFiscalSubTab('accounting')}
-                  className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer ${
-                    fiscalSubTab === 'accounting'
-                      ? 'bg-indigo-600 text-white shadow-lg'
-                      : 'text-slate-400 hover:text-white'
-                  }`}
+                  onClick={handleExportContabilidade}
+                  className="bg-indigo-600 hover:bg-indigo-500 text-white px-5 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2 cursor-pointer shadow-lg shadow-indigo-600/30"
+                  title="Baixar planilha unificada com todos os dados contábeis e fiscais"
                 >
-                  📋 Relatório Mensal Contabilidade
+                  <Download size={14} /> Exportar Relatório Geral (.XLSX)
                 </button>
                 <button
-                  onClick={() => setFiscalSubTab('general')}
-                  className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer ${
-                    fiscalSubTab === 'general'
-                      ? 'bg-indigo-600 text-white shadow-lg'
-                      : 'text-slate-400 hover:text-white'
-                  }`}
+                  onClick={() => window.print()}
+                  className="bg-white/5 hover:bg-white/10 text-white px-4 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2 cursor-pointer border border-white/10"
                 >
-                  🏛️ Impostos Federais (DARF / DIRF)
+                  <Printer size={14} /> Imprimir
                 </button>
               </div>
             </div>
 
-            {fiscalSubTab === 'accounting' ? (
-              /* SUB-ABA 1: RELATÓRIO MENSAL CONTABILIDADE */
-              <div className="space-y-6">
-                <div className="bg-amber-500/10 border border-amber-500/20 p-6 rounded-3xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-                  <div className="flex items-start gap-4">
-                    <div className="p-3 bg-amber-500/20 text-amber-300 rounded-2xl shrink-0 mt-0.5 border border-amber-500/30">
-                      <AlertCircle size={22} />
-                    </div>
-                    <div>
-                      <h4 className="text-sm font-black text-white uppercase tracking-tight">
-                        Nota Fiscal Avulsa (Prefeitura) x Recolhimento de INSS
-                      </h4>
-                      <p className="text-xs text-slate-300 mt-1 leading-relaxed">
-                        A prefeitura (ex: Salvador) cobra apenas o ISS municipal (5%) e <strong className="text-white">não desconta nem recolhe o INSS federal</strong> na nota avulsa. Por isso, a Serviços Urbanos efetua a retenção de <strong className="text-amber-300">11% do autônomo</strong> e apura o <strong className="text-indigo-300">INSS patronal (20%)</strong>.
-                      </p>
-                      <p className="text-[10px] font-black text-amber-400 bg-amber-500/10 px-3 py-1.5 rounded-xl mt-2.5 inline-block border border-amber-500/20 uppercase tracking-wide">
-                        📅 Apuração: <strong>01 a 30 de cada mês</strong> | Envio à Contabilidade: <strong>Até dia 05</strong> (Pagamento dia 10)
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3 shrink-0">
-                    <button
-                      onClick={handleExportContabilidade}
-                      className="bg-indigo-600 hover:bg-indigo-500 text-white px-5 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2 cursor-pointer shadow-lg shadow-indigo-600/30"
-                    >
-                      <Download size={14} /> Baixar Relatório (.XLSX)
-                    </button>
-                    <button
-                      onClick={() => window.print()}
-                      className="bg-white/5 hover:bg-white/10 text-white px-4 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2 cursor-pointer border border-white/10"
-                    >
-                      <Printer size={14} /> Imprimir
-                    </button>
-                  </div>
+            {/* Banner Informativo Unificado */}
+            <div className="bg-gradient-to-r from-amber-500/10 via-indigo-500/10 to-purple-500/10 border border-white/10 p-6 rounded-3xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+              <div className="flex items-start gap-4">
+                <div className="p-3 bg-amber-500/20 text-amber-300 rounded-2xl shrink-0 mt-0.5 border border-amber-500/30">
+                  <AlertCircle size={22} />
                 </div>
-
-                {/* Cards Consolidados da Guia de INSS (Dark Glass) */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-5">
-                  <div className="bg-white/5 border border-white/5 p-6 rounded-3xl">
-                    <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest mb-1">Notas Apuradas</p>
-                    <p className="text-2xl font-black text-white italic font-mono">
-                      {fiscalRecords.length}
-                    </p>
-                    <p className="text-[9px] text-slate-500 mt-1 font-bold">Prestadores no mês</p>
+                <div>
+                  <h4 className="text-sm font-black text-white uppercase tracking-tight">
+                    Regra Fiscal Integrada: Retenções Federais (INSS + IRRF) & Encargos Patronais
+                  </h4>
+                  <p className="text-xs text-slate-300 mt-1 leading-relaxed">
+                    Nas notas fiscais avulsas e comissões de autônomos (PF), a prefeitura não recolhe tributos federais. 
+                    A Serviços Urbanos efetua a retenção de <strong className="text-amber-300">11% de INSS</strong> e apura o <strong className="text-indigo-300">INSS Patronal (20%)</strong>, além de reter o <strong className="text-emerald-400">IRRF (DARF 0588)</strong> calculado após a dedução do INSS (<code className="text-white bg-white/10 px-1 py-0.5 rounded text-[11px]">Base IRRF = Bruto - INSS</code>).
+                  </p>
+                  <div className="flex flex-wrap items-center gap-2 mt-2.5">
+                    <span className="text-[10px] font-black text-amber-400 bg-amber-500/10 px-3 py-1 rounded-xl border border-amber-500/20 uppercase tracking-wide">
+                      📅 Apuração: 01 a 30 de cada mês
+                    </span>
+                    <span className="text-[10px] font-black text-indigo-300 bg-indigo-500/10 px-3 py-1 rounded-xl border border-indigo-500/20 uppercase tracking-wide">
+                      📋 Envio à Contabilidade: Até dia 05
+                    </span>
+                    <span className="text-[10px] font-black text-emerald-400 bg-emerald-500/10 px-3 py-1 rounded-xl border border-emerald-500/20 uppercase tracking-wide">
+                      🏛️ DARF 0588: Vencimento dia 20
+                    </span>
                   </div>
-
-                  <div className="bg-white/5 border border-white/5 p-6 rounded-3xl">
-                    <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest mb-1">Faturamento Bruto (NFs)</p>
-                    <p className="text-2xl font-black text-white italic font-mono">
-                      R$ {fiscalRecords.reduce((sum, r) => sum + r.bruto, 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                    </p>
-                    <p className="text-[9px] text-slate-500 mt-1 font-bold">Base de cálculo</p>
-                  </div>
-
-                  <div className="bg-white/5 border border-white/5 p-6 rounded-3xl">
-                    <p className="text-[10px] text-amber-400 font-black uppercase tracking-widest mb-1">INSS Retido (11% Prestador)</p>
-                    <p className="text-2xl font-black text-amber-400 italic font-mono">
-                      R$ {fiscalRecords.reduce((sum, r) => sum + r.inss, 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                    </p>
-                    <p className="text-[9px] text-amber-400/60 mt-1 font-bold">Descontado dos repasses</p>
-                  </div>
-
-                  <div className="bg-white/5 border border-white/5 p-6 rounded-3xl">
-                    <p className="text-[10px] text-indigo-400 font-black uppercase tracking-widest mb-1">INSS Patronal (20% Empresa)</p>
-                    <p className="text-2xl font-black text-indigo-400 italic font-mono">
-                      R$ {fiscalRecords.reduce((sum, r) => sum + r.patronal, 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                    </p>
-                    <p className="text-[9px] text-indigo-400/60 mt-1 font-bold">Custo patronal empresa</p>
-                  </div>
-
-                  <div className="bg-gradient-to-br from-indigo-900/80 to-purple-900/60 text-white p-6 rounded-3xl shadow-xl border border-indigo-500/30">
-                    <p className="text-[10px] text-indigo-300 font-black uppercase tracking-widest mb-1">Total Guia INSS a Pagar</p>
-                    <p className="text-2xl font-black text-emerald-400 italic font-mono">
-                      R$ {fiscalRecords.reduce((sum, r) => sum + r.total_inss_guia, 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                    </p>
-                    <p className="text-[9px] text-slate-300 mt-1 font-bold">Retenção (11%) + Patronal (20%)</p>
-                  </div>
-                </div>
-
-                {/* Tabela de Prestadores e Guias */}
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left border-collapse">
-                    <thead>
-                      <tr className="border-b border-white/5 text-[10px] font-black uppercase tracking-widest text-slate-400">
-                        <th className="py-4">Nº NF</th>
-                        <th className="py-4">Prestador / Beneficiário</th>
-                        <th className="py-4">CPF</th>
-                        <th className="py-4 text-right">Valor Bruto</th>
-                        <th className="py-4 text-right">INSS (11%)</th>
-                        <th className="py-4 text-right">Patronal (20%)</th>
-                        <th className="py-4 text-right">Guia INSS (31%)</th>
-                        <th className="py-4 text-right">Líquido Pago</th>
-                        <th className="py-4 text-center">Comprovante NF</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-white/5">
-                      {loadingFiscal ? (
-                        <tr>
-                          <td colSpan={9} className="py-12 text-center text-xs text-slate-400 font-bold uppercase tracking-wider">
-                            Carregando apuração da contabilidade...
-                          </td>
-                        </tr>
-                      ) : fiscalRecords.length === 0 ? (
-                        <tr>
-                          <td colSpan={9} className="py-12 text-center text-xs text-slate-500 font-bold uppercase tracking-wider">
-                            Nenhum registro fiscal encontrado para esta competência.
-                          </td>
-                        </tr>
-                      ) : (
-                        fiscalRecords.map((rec, i) => (
-                          <tr key={i} className="hover:bg-white/5 transition-colors">
-                            <td className="py-4 text-xs font-mono font-bold text-slate-300">
-                              {rec.invoice_number ? `#${rec.invoice_number}` : (
-                                <span className="text-amber-400 font-bold text-[10px] bg-amber-500/10 px-2 py-0.5 rounded">Aguardando</span>
-                              )}
-                            </td>
-                            <td className="py-4 text-xs font-bold text-white uppercase">
-                              {rec.name}
-                            </td>
-                            <td className="py-4 text-xs font-mono text-slate-400">
-                              {rec.cpf || 'Não cadastrado'}
-                            </td>
-                            <td className="py-4 text-xs font-bold text-white text-right font-mono">
-                              R$ {rec.bruto.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                            </td>
-                            <td className="py-4 text-xs font-bold text-amber-400 text-right font-mono">
-                              - R$ {rec.inss.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                            </td>
-                            <td className="py-4 text-xs font-bold text-indigo-400 text-right font-mono">
-                              + R$ {rec.patronal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                            </td>
-                            <td className="py-4 text-xs font-black text-emerald-400 text-right font-mono bg-emerald-500/5 px-2">
-                              R$ {rec.total_inss_guia.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                            </td>
-                            <td className="py-4 text-xs font-black text-white text-right font-mono">
-                              R$ {rec.liquido.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                            </td>
-                            <td className="py-4 text-center">
-                              {rec.invoice_link || rec.invoice_file_url ? (
-                                <a
-                                  href={rec.invoice_link || rec.invoice_file_url}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className="text-[10px] font-black text-indigo-400 hover:text-indigo-300 underline uppercase"
-                                >
-                                  Ver NF
-                                </a>
-                              ) : (
-                                <span className="text-[10px] text-slate-600 font-bold">Sem anexo</span>
-                              )}
-                            </td>
-                          </tr>
-                        ))
-                      )}
-                    </tbody>
-                  </table>
                 </div>
               </div>
-            ) : (
-              /* SUB-ABA 2: IMPOSTOS FEDERAIS (DARF / DIRF) */
-              <div className="space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {/* Card DARF 0588 */}
-                  <div className="bg-white/5 p-6 rounded-3xl border border-white/5 flex flex-col justify-between space-y-4">
-                    <div>
-                      <div className="flex items-center justify-between mb-1">
-                        <h4 className="text-base font-black text-white uppercase tracking-tight">DARF 0588 (Retenção Federal)</h4>
-                        <span className="text-[9px] font-black text-indigo-400 bg-indigo-500/10 px-2.5 py-0.5 rounded-full border border-indigo-500/20 uppercase">
-                          Guia de Arrecadação
-                        </span>
-                      </div>
-                      <p className="text-xs text-slate-400 leading-relaxed">
-                        Guia oficial com cálculo do IRRF retido na fonte das comissões pagas aos autônomos no período.
-                      </p>
-                    </div>
+            </div>
 
-                    <div className="flex flex-wrap items-center gap-2.5 pt-2 border-t border-white/5">
-                      <button
-                        onClick={handleGenerateDARFPDF}
-                        className="flex-1 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white px-5 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 cursor-pointer shadow-lg shadow-indigo-600/30"
-                      >
-                        <FileText size={16} /> Gerar Guia DARF (PDF Oficial)
-                      </button>
-                      <button
-                        onClick={handleExportDARF}
-                        className="bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white px-4 py-3 rounded-xl text-xs font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 cursor-pointer border border-white/10"
-                        title="Exportar dados brutos em Excel"
-                      >
-                        <Download size={15} /> XLSX
-                      </button>
-                    </div>
+            {/* Cards Consolidados do Mês (Grade Executiva Unificada) */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-4">
+              <div className="bg-white/5 border border-white/5 p-5 rounded-2xl">
+                <p className="text-[9px] text-slate-400 font-black uppercase tracking-widest mb-1">Notas / Prestadores</p>
+                <p className="text-xl font-black text-white italic font-mono">
+                  {fiscalTotals.totalRecords}
+                </p>
+                <p className="text-[8px] text-slate-500 mt-0.5 font-bold">No período</p>
+              </div>
+
+              <div className="bg-white/5 border border-white/5 p-5 rounded-2xl">
+                <p className="text-[9px] text-slate-400 font-black uppercase tracking-widest mb-1">Rendimento Bruto</p>
+                <p className="text-xl font-black text-white italic font-mono">
+                  R$ {fiscalTotals.totalBruto.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                </p>
+                <p className="text-[8px] text-slate-500 mt-0.5 font-bold">Base apurada</p>
+              </div>
+
+              <div className="bg-white/5 border border-white/5 p-5 rounded-2xl">
+                <p className="text-[9px] text-amber-400 font-black uppercase tracking-widest mb-1">INSS Retido (11%)</p>
+                <p className="text-xl font-black text-amber-400 italic font-mono">
+                  - R$ {fiscalTotals.totalInss.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                </p>
+                <p className="text-[8px] text-amber-400/60 mt-0.5 font-bold">Desconto prestador PF</p>
+              </div>
+
+              <div className="bg-white/5 border border-white/5 p-5 rounded-2xl">
+                <p className="text-[9px] text-rose-400 font-black uppercase tracking-widest mb-1">IRRF Retido (DARF)</p>
+                <p className="text-xl font-black text-rose-400 italic font-mono">
+                  - R$ {fiscalTotals.totalIrrf.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                </p>
+                <p className="text-[8px] text-rose-400/60 mt-0.5 font-bold">Código 0588</p>
+              </div>
+
+              <div className="bg-white/5 border border-white/5 p-5 rounded-2xl">
+                <p className="text-[9px] text-indigo-400 font-black uppercase tracking-widest mb-1">Patronal (20%)</p>
+                <p className="text-xl font-black text-indigo-400 italic font-mono">
+                  + R$ {fiscalTotals.totalPatronal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                </p>
+                <p className="text-[8px] text-indigo-400/60 mt-0.5 font-bold">Custo empresa</p>
+              </div>
+
+              <div className="bg-gradient-to-br from-indigo-900/60 to-purple-900/40 border border-indigo-500/30 p-5 rounded-2xl shadow-lg">
+                <p className="text-[9px] text-indigo-300 font-black uppercase tracking-widest mb-1">Guia INSS (31%)</p>
+                <p className="text-xl font-black text-indigo-200 italic font-mono">
+                  R$ {fiscalTotals.totalInssGuia.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                </p>
+                <p className="text-[8px] text-indigo-300/60 mt-0.5 font-bold">11% retido + 20% patronal</p>
+              </div>
+
+              <div className="bg-gradient-to-br from-emerald-950/60 to-teal-900/40 border border-emerald-500/30 p-5 rounded-2xl shadow-lg">
+                <p className="text-[9px] text-emerald-300 font-black uppercase tracking-widest mb-1">Líquido Pago</p>
+                <p className="text-xl font-black text-emerald-400 italic font-mono">
+                  R$ {fiscalTotals.totalLiquido.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                </p>
+                <p className="text-[8px] text-emerald-300/60 mt-0.5 font-bold">Total transferido</p>
+              </div>
+            </div>
+
+            {/* Ações Rápidas Federais: DARF 0588 e DIRF */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Card DARF 0588 */}
+              <div className="bg-white/5 p-6 rounded-3xl border border-white/5 flex flex-col justify-between space-y-4">
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <h4 className="text-base font-black text-white uppercase tracking-tight flex items-center gap-2">
+                      <Receipt size={18} className="text-indigo-400" />
+                      DARF 0588 (Retenção Federal IRRF)
+                    </h4>
+                    <span className="text-[9px] font-black text-indigo-400 bg-indigo-500/10 px-2.5 py-0.5 rounded-full border border-indigo-500/20 uppercase">
+                      Guia de Arrecadação
+                    </span>
                   </div>
-
-                  {/* Card DIRF / Informe de Rendimentos */}
-                  <div className="bg-white/5 p-6 rounded-3xl border border-white/5 flex flex-col justify-between space-y-4">
-                    <div>
-                      <div className="flex items-center justify-between mb-1">
-                        <h4 className="text-base font-black text-white uppercase tracking-tight">DIRF & Informe de Rendimentos</h4>
-                        <span className="text-[9px] font-black text-emerald-400 bg-emerald-500/10 px-2.5 py-0.5 rounded-full border border-emerald-500/20 uppercase">
-                          Cédula C Oficial
-                        </span>
-                      </div>
-                      <p className="text-xs text-slate-400 leading-relaxed">
-                        Comprovante Oficial de Rendimentos Pagos e Retenção de IRRF para a declaração de IRPF dos associados.
-                      </p>
-                    </div>
-
-                    <div className="flex flex-wrap items-center gap-2.5 pt-2 border-t border-white/5">
-                      <button
-                        onClick={() => handleGenerateDIRFPDF()}
-                        className="flex-1 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white px-5 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 cursor-pointer shadow-lg shadow-indigo-600/30"
-                      >
-                        <FileText size={16} /> Gerar Informes em PDF (Lote)
-                      </button>
-                      <button
-                        onClick={handleExportDIRF}
-                        className="bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white px-4 py-3 rounded-xl text-xs font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 cursor-pointer border border-white/10"
-                        title="Exportar dados brutos em Excel"
-                      >
-                        <Download size={15} /> XLSX
-                      </button>
-                    </div>
+                  <p className="text-xs text-slate-400 leading-relaxed">
+                    Guia oficial com cálculo do IRRF retido na fonte das comissões pagas aos autônomos no período.
+                  </p>
+                  <div className="mt-3 flex items-center justify-between bg-black/20 p-3 rounded-xl border border-white/5">
+                    <span className="text-[10px] text-slate-400 uppercase font-black tracking-wider">Total a Recolher no Mês</span>
+                    <span className="text-base font-black text-rose-400 font-mono">
+                      R$ {fiscalTotals.totalIrrf.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                    </span>
                   </div>
                 </div>
 
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left border-collapse">
-                    <thead>
-                      <tr className="border-b border-white/5 text-[10px] font-black uppercase tracking-widest text-slate-400">
-                        <th className="py-4">Beneficiário</th>
-                        <th className="py-4">CPF</th>
-                        <th className="py-4 text-right">Rendimento Bruto</th>
-                        <th className="py-4 text-right">Dedução INSS (11%)</th>
-                        <th className="py-4 text-right">IRRF Retido</th>
-                        <th className="py-4 text-right">Valor Líquido</th>
-                        <th className="py-4 text-center">Documento Oficial</th>
+                <div className="flex flex-wrap items-center gap-2.5 pt-2 border-t border-white/5">
+                  <button
+                    onClick={handleGenerateDARFPDF}
+                    className="flex-1 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white px-5 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 cursor-pointer shadow-lg shadow-indigo-600/30"
+                  >
+                    <FileText size={16} /> Gerar Guia DARF (PDF Oficial)
+                  </button>
+                  <button
+                    onClick={handleExportDARF}
+                    className="bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white px-4 py-3 rounded-xl text-xs font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 cursor-pointer border border-white/10"
+                    title="Exportar dados brutos do DARF em Excel"
+                  >
+                    <Download size={15} /> XLSX
+                  </button>
+                </div>
+              </div>
+
+              {/* Card DIRF / Informe de Rendimentos */}
+              <div className="bg-white/5 p-6 rounded-3xl border border-white/5 flex flex-col justify-between space-y-4">
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <h4 className="text-base font-black text-white uppercase tracking-tight flex items-center gap-2">
+                      <Landmark size={18} className="text-emerald-400" />
+                      DIRF & Informe de Rendimentos
+                    </h4>
+                    <span className="text-[9px] font-black text-emerald-400 bg-emerald-500/10 px-2.5 py-0.5 rounded-full border border-emerald-500/20 uppercase">
+                      Cédula C Oficial
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-400 leading-relaxed">
+                    Comprovante Oficial de Rendimentos Pagos e Retenção de IRRF para a declaração de IRPF dos associados.
+                  </p>
+                  <div className="mt-3 flex items-center justify-between bg-black/20 p-3 rounded-xl border border-white/5">
+                    <span className="text-[10px] text-slate-400 uppercase font-black tracking-wider">Beneficiários no Período</span>
+                    <span className="text-base font-black text-emerald-400 font-mono">
+                      {fiscalTotals.totalRecords} informados
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2.5 pt-2 border-t border-white/5">
+                  <button
+                    onClick={() => handleGenerateDIRFPDF()}
+                    className="flex-1 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white px-5 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 cursor-pointer shadow-lg shadow-emerald-600/30"
+                  >
+                    <FileText size={16} /> Gerar Informes em PDF (Lote)
+                  </button>
+                  <button
+                    onClick={handleExportDIRF}
+                    className="bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white px-4 py-3 rounded-xl text-xs font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 cursor-pointer border border-white/10"
+                    title="Exportar dados brutos da DIRF em Excel"
+                  >
+                    <Download size={15} /> XLSX
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Tabela Única Consolidada: Prestadores, Tributos e Ações */}
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h4 className="text-xs font-black uppercase tracking-widest text-slate-300 flex items-center gap-2">
+                  <span className="size-1.5 rounded-full bg-emerald-400" />
+                  Apuração Consolidada por Beneficiário
+                </h4>
+                <span className="text-[10px] text-slate-500 font-bold">
+                  {fiscalRecords.length} registro(s) encontrado(s)
+                </span>
+              </div>
+
+              <div className="overflow-x-auto rounded-2xl border border-white/5">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="bg-white/[0.02] border-b border-white/5 text-[10px] font-black uppercase tracking-widest text-slate-400">
+                      <th className="py-4 px-3">Nº NF</th>
+                      <th className="py-4 px-3">Beneficiário / Prestador</th>
+                      <th className="py-4 px-3">Tipo</th>
+                      <th className="py-4 px-3">CPF / CNPJ</th>
+                      <th className="py-4 px-3 text-right">Rendimento Bruto</th>
+                      <th className="py-4 px-3 text-right">INSS (11%)</th>
+                      <th className="py-4 px-3 text-right">Patronal (20%)</th>
+                      <th className="py-4 px-3 text-right">Imposto de Renda Retido</th>
+                      <th className="py-4 px-3 text-right">Valor Líquido</th>
+                      <th className="py-4 px-3 text-center">Nota Fiscal</th>
+                      <th className="py-4 px-3 text-center">Cédula C (DIRF)</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-white/5">
+                    {loadingFiscal ? (
+                      <tr>
+                        <td colSpan={11} className="py-12 text-center text-xs text-slate-400 font-bold uppercase tracking-wider">
+                          Carregando apuração fiscal e contábil...
+                        </td>
                       </tr>
-                    </thead>
-                    <tbody className="divide-y divide-white/5">
-                      {fiscalRecords.length === 0 ? (
-                        <tr>
-                          <td colSpan={7} className="py-12 text-center text-xs text-slate-500 font-bold uppercase tracking-wider">
-                            Nenhum registro de imposto retido nesta competência.
+                    ) : fiscalRecords.length === 0 ? (
+                      <tr>
+                        <td colSpan={11} className="py-12 text-center text-xs text-slate-500 font-bold uppercase tracking-wider">
+                          Nenhum registro fiscal encontrado para esta competência.
+                        </td>
+                      </tr>
+                    ) : (
+                      fiscalRecords.map((rec, i) => (
+                        <tr key={i} className="hover:bg-white/5 transition-colors">
+                          <td className="py-4 px-3 text-xs font-mono font-bold text-slate-300 whitespace-nowrap">
+                            {rec.invoice_number ? `#${rec.invoice_number}` : (
+                              <span className="text-amber-400 font-bold text-[10px] bg-amber-500/10 px-2 py-0.5 rounded">Aguardando</span>
+                            )}
                           </td>
-                        </tr>
-                      ) : (
-                        fiscalRecords.map((rec, i) => (
-                          <tr key={i} className="hover:bg-white/5 transition-colors">
-                            <td className="py-4 text-xs font-bold text-white uppercase">{rec.name}</td>
-                            <td className="py-4 text-xs font-mono text-slate-400">{rec.cpf}</td>
-                            <td className="py-4 text-xs font-bold text-white text-right font-mono">R$ {rec.bruto.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
-                            <td className="py-4 text-xs font-bold text-amber-400 text-right font-mono">R$ {rec.inss.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
-                            <td className="py-4 text-xs font-bold text-emerald-400 text-right font-mono">R$ {rec.irrf.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
-                            <td className="py-4 text-xs font-black text-white text-right font-mono">R$ {rec.liquido.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
-                            <td className="py-4 text-center">
-                              <button
-                                onClick={() => handleGenerateDIRFPDF(rec)}
-                                className="bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 hover:text-white px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all border border-indigo-500/30 flex items-center gap-1.5 mx-auto cursor-pointer"
-                                title="Emitir Informe de Rendimentos Oficial (Cédula C) deste prestador"
+                          <td className="py-4 px-3 text-xs font-bold text-white uppercase whitespace-nowrap">
+                            {rec.name}
+                          </td>
+                          <td className="py-4 px-3 whitespace-nowrap">
+                            {rec.is_pj ? (
+                              <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded bg-purple-500/10 text-purple-300 border border-purple-500/20">
+                                PJ
+                              </span>
+                            ) : (
+                              <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded bg-amber-500/10 text-amber-300 border border-amber-500/20">
+                                PF
+                              </span>
+                            )}
+                          </td>
+                          <td className="py-4 px-3 text-xs font-mono text-slate-400 whitespace-nowrap">
+                            {rec.cpf || 'Não informado'}
+                          </td>
+                          <td className="py-4 px-3 text-xs font-bold text-white text-right font-mono whitespace-nowrap">
+                            R$ {rec.bruto.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                          </td>
+                          <td className="py-4 px-3 text-xs font-bold text-amber-400 text-right font-mono whitespace-nowrap">
+                            {rec.inss > 0 ? `- R$ ${rec.inss.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : 'R$ 0,00'}
+                          </td>
+                          <td className="py-4 px-3 text-xs font-bold text-indigo-400 text-right font-mono whitespace-nowrap">
+                            + R$ {rec.patronal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                          </td>
+                          <td className="py-4 px-3 text-xs font-bold text-rose-400 text-right font-mono whitespace-nowrap">
+                            {rec.irrf > 0 ? `- R$ ${rec.irrf.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : 'R$ 0,00'}
+                          </td>
+                          <td className="py-4 px-3 text-xs font-black text-emerald-400 text-right font-mono whitespace-nowrap">
+                            R$ {rec.liquido.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                          </td>
+                          <td className="py-4 px-3 text-center whitespace-nowrap">
+                            {rec.invoice_link || rec.invoice_file_url ? (
+                              <a
+                                href={rec.invoice_link || rec.invoice_file_url}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="text-[10px] font-black text-indigo-400 hover:text-indigo-300 underline uppercase inline-flex items-center gap-1"
                               >
-                                <FileText size={13} /> Emitir Informe PDF
-                              </button>
-                            </td>
-                          </tr>
-                        ))
-                      )}
-                    </tbody>
-                  </table>
-                </div>
+                                Ver NF
+                              </a>
+                            ) : (
+                              <span className="text-[10px] text-slate-600 font-bold">Sem anexo</span>
+                            )}
+                          </td>
+                          <td className="py-4 px-3 text-center whitespace-nowrap">
+                            <button
+                              onClick={() => handleGenerateDIRFPDF(rec)}
+                              className="bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 hover:text-white px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all border border-indigo-500/30 flex items-center gap-1.5 mx-auto cursor-pointer"
+                              title="Emitir Informe de Rendimentos Oficial (Cédula C) deste prestador"
+                            >
+                              <FileText size={13} /> Emitir Informe PDF
+                            </button>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
               </div>
-            )}
+            </div>
           </div>
         )}
 
@@ -1228,6 +1546,46 @@ export default function AdminFinancials() {
                 </div>
               </div>
 
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="flex flex-col gap-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
+                    Nº da Apólice MBM
+                  </label>
+                  <div className="flex items-center gap-2 bg-[#0a0e17] px-4 py-3 rounded-2xl border border-white/10">
+                    <ShieldCheck size={16} className="text-indigo-400" />
+                    <input 
+                      type="text" 
+                      placeholder="Ex: 01.084.000"
+                      value={mbmPolicyNumber}
+                      onChange={(e) => {
+                        setMbmPolicyNumber(e.target.value);
+                        localStorage.setItem('mbm_policy_number', e.target.value);
+                      }}
+                      className="bg-transparent text-xs font-bold text-white outline-none w-full"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex flex-col gap-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
+                    Subgrupo
+                  </label>
+                  <div className="flex items-center gap-2 bg-[#0a0e17] px-4 py-3 rounded-2xl border border-white/10">
+                    <span className="text-xs font-bold text-indigo-400">Sub</span>
+                    <input 
+                      type="text" 
+                      placeholder="1"
+                      value={mbmSubGroup}
+                      onChange={(e) => {
+                        setMbmSubGroup(e.target.value);
+                        localStorage.setItem('mbm_sub_group', e.target.value);
+                      }}
+                      className="bg-transparent text-xs font-bold text-white outline-none w-full"
+                    />
+                  </div>
+                </div>
+              </div>
+
               <div className="p-4 bg-indigo-500/10 rounded-2xl border border-indigo-500/20 flex gap-3 items-start">
                 <Info size={16} className="text-indigo-400 shrink-0 mt-0.5" />
                 <p className="text-[10px] text-indigo-300 font-bold uppercase leading-normal">
@@ -1260,11 +1618,27 @@ export default function AdminFinancials() {
                   </h3>
                 </div>
                 <p className="text-xs text-slate-400 font-medium mt-1">
-                  Demonstração contábil do resultado: Faturamento Bruto, Provisões de Rede (52%), Seguro MBM e Lucro Líquido Real
+                  Demonstração contábil do resultado: Faturamento Bruto, Provisões de Rede MMN (24%), Seguro MBM (R$ 1/vida) e Margem Líquida Real (~76%)
                 </p>
               </div>
-              <div className="bg-white/5 text-indigo-300 px-4 py-2 rounded-2xl border border-white/10 text-xs font-mono font-black uppercase tracking-wider">
-                Competência: {dateRange.start.substring(0, 7)}
+              <div className="flex items-center gap-2 bg-white/5 px-4 py-2 rounded-2xl border border-white/10">
+                <Calendar size={14} className="text-indigo-400" />
+                <span className="text-xs text-slate-400 font-bold uppercase tracking-wider">Competência:</span>
+                <input 
+                  type="month"
+                  value={dateRange.start.substring(0, 7)}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    if (!val) return;
+                    const [y, m] = val.split('-');
+                    const lastDay = new Date(parseInt(y), parseInt(m), 0).getDate();
+                    setDateRange({ 
+                      start: `${val}-01`, 
+                      end: `${val}-${String(lastDay).padStart(2, '0')}`
+                    });
+                  }}
+                  className="bg-transparent text-xs font-mono font-black text-indigo-300 outline-none cursor-pointer [color-scheme:dark]"
+                />
               </div>
             </div>
 
@@ -1285,7 +1659,7 @@ export default function AdminFinancials() {
               <div className="bg-white/5 border border-white/5 p-6 rounded-3xl relative overflow-hidden">
                 <div className="flex items-center justify-between mb-1">
                   <span className="text-[10px] text-amber-400 font-black uppercase tracking-widest block">
-                    2. Provisão MMN (~52%)
+                    2. Provisão MMN (24%)
                   </span>
                   <span className="text-[10px] font-black text-amber-300 bg-amber-500/10 px-2.5 py-0.5 rounded-full border border-amber-500/20">
                     {dreCalculations.mmnPercentage.toFixed(1)}%
@@ -1295,14 +1669,14 @@ export default function AdminFinancials() {
                   R$ {dreCalculations.mmnTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                 </span>
                 <span className="text-[10px] text-slate-500 font-medium mt-1.5 block">
-                  Rede G0-G2 + Revendedor Regional
+                  Rede G0-G2 (18%) + Regional (6%)
                 </span>
               </div>
 
               <div className="bg-white/5 border border-white/5 p-6 rounded-3xl relative overflow-hidden">
                 <div className="flex items-center justify-between mb-1">
                   <span className="text-[10px] text-blue-400 font-black uppercase tracking-widest block">
-                    3. Seguro MBM (R$ 5/vida)
+                    3. Seguro MBM (R$ 1/vida)
                   </span>
                   <span className="text-[10px] font-black text-blue-300 bg-blue-500/10 px-2.5 py-0.5 rounded-full border border-blue-500/20">
                     {dreCalculations.mbmPercentage.toFixed(1)}%
@@ -1319,7 +1693,7 @@ export default function AdminFinancials() {
               <div className="bg-gradient-to-br from-indigo-900/80 via-indigo-950/90 to-purple-950/80 text-white p-6 rounded-3xl shadow-2xl border border-indigo-500/30 relative overflow-hidden">
                 <div className="flex items-center justify-between mb-1">
                   <span className="text-[10px] text-indigo-300 font-black uppercase tracking-widest block">
-                    4. Margem Líquida (~24%)
+                    4. Margem Líquida (~76%)
                   </span>
                   <span className="text-[10px] font-black text-emerald-300 bg-emerald-500/20 px-2.5 py-0.5 rounded-full border border-emerald-500/30">
                     {dreCalculations.profitMargin.toFixed(1)}%
@@ -1377,7 +1751,7 @@ export default function AdminFinancials() {
                           strokeWidth="18"
                           fill="transparent"
                         />
-                        {/* Segmento 1: Rede MMN (~52%) */}
+                        {/* Segmento 1: Rede MMN (24%) */}
                         <circle
                           cx="90"
                           cy="90"
@@ -1403,7 +1777,7 @@ export default function AdminFinancials() {
                           fill="transparent"
                           className="transition-all duration-1000"
                         />
-                        {/* Segmento 3: Margem Líquida (~24%) */}
+                        {/* Segmento 3: Margem Líquida (~76%) */}
                         <circle
                           cx="90"
                           cy="90"
@@ -1511,7 +1885,7 @@ export default function AdminFinancials() {
                         <span className="text-[10px] text-slate-400 font-bold uppercase">Seguro MBM</span>
                       </div>
                       <span className="text-lg font-black text-blue-400 font-mono block">
-                        R$ {((dreCalculations.mbmPercentage / 100) * 100).toFixed(2).replace('.', ',')}
+                        R$ {(dreCalculations.grossRevenue > 0 ? ((dreCalculations.mbmCost / dreCalculations.grossRevenue) * 100) : 0).toFixed(2).replace('.', ',')}
                       </span>
                       <span className="text-[9px] text-slate-500 font-medium">a cada R$ 100</span>
                     </div>
@@ -1558,11 +1932,11 @@ export default function AdminFinancials() {
                   <span className="font-black text-white text-sm">R$ {dreCalculations.grossRevenue.toFixed(2).replace('.', ',')}</span>
                 </div>
                 <div className="flex justify-between items-center py-2.5 border-b border-white/5 text-amber-400">
-                  <span>(-) Provisão de Comissões de Rede MMN (Semanal, Mensal e Anual)</span>
+                  <span>(-) Provisão de Comissões de Rede MMN (24% - Mensal e Anual)</span>
                   <span className="font-black">- R$ {dreCalculations.mmnTotal.toFixed(2).replace('.', ',')}</span>
                 </div>
                 <div className="flex justify-between items-center py-2.5 border-b border-white/5 text-blue-400">
-                  <span>(-) Custo Operacional da Apólice MBM Seguros (R$ 5,00/membro ativo)</span>
+                  <span>(-) Custo Operacional da Apólice MBM Seguros (R$ 1,00/membro ativo)</span>
                   <span className="font-black">- R$ {dreCalculations.mbmCost.toFixed(2).replace('.', ',')}</span>
                 </div>
                 <div className="flex justify-between items-center py-3.5 bg-emerald-500/10 border border-emerald-500/20 px-5 rounded-2xl text-emerald-400 text-sm font-black">

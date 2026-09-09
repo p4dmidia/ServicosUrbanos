@@ -142,7 +142,7 @@ export default function AffiliateDashboard() {
         
         {/* Top Stats Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          {/* 1. Semanal */}
+          {/* 1. Mensal */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -153,16 +153,16 @@ export default function AffiliateDashboard() {
                 <Wallet size={22} />
               </div>
               <div className="flex items-center gap-1 text-[10px] font-black text-indigo-500 bg-indigo-50 px-2 py-1 rounded-lg uppercase">
-                 Carteira Semanal
+                 Saldo Mensal
               </div>
             </div>
-            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Saldo para Resgate</p>
+            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Disponível Dia 10</p>
             <h3 className="text-2xl font-black text-midnight tracking-tighter">
               R$ {stats.availableBalance.toFixed(2)}
             </h3>
           </motion.div>
 
-          {/* 2. Mensal */}
+          {/* 2. Total Acumulado */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -174,12 +174,12 @@ export default function AffiliateDashboard() {
                 <TrendingUp size={22} />
               </div>
               <div className="flex items-center gap-1 text-[10px] font-black text-blue-500 bg-blue-50 px-2 py-1 rounded-lg uppercase">
-                 Cashback Mensal
+                 Total Acumulado
               </div>
             </div>
-            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Total Recebido</p>
+            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Ganhos de Rede</p>
             <h3 className="text-2xl font-black text-midnight tracking-tighter text-blue-600">
-              R$ {stats.monthlyBonus.toFixed(2)}
+              R$ {stats.totalEarnings.toFixed(2)}
             </h3>
           </motion.div>
 
@@ -246,7 +246,7 @@ export default function AffiliateDashboard() {
                 <h2 className="text-2xl font-black text-midnight tracking-tight mb-2 italic uppercase">Indique e Ganhe</h2>
                 <p className="text-slate-500 font-medium">
                   Indique uma vez, ganhe sempre. <br />
-                  Receba Cashback mensal, semanal e anual recorrentes sobre todas as compras que seus indicados fizerem.
+                  Receba Cashback mensal e anual recorrentes sobre todas as compras que seus indicados fizerem.
                 </p>
               </div>
 

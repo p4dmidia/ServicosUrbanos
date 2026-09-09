@@ -149,8 +149,7 @@ export default function AffiliateResellerFinancial() {
     doc.setFont('helvetica', 'normal');
     doc.text(`Total de Vendas Fechadas no Mês: ${data.salesCount} pedidos`, 14, 66);
     doc.text(`Faturamento Total de Revenda: R$ ${data.totalOrderVolume.toFixed(2).replace('.', ',')}`, 14, 72);
-    doc.text(`Repasse Semanal da Revenda: R$ ${data.weeklyAvailable.toFixed(2).replace('.', ',')}`, 14, 78);
-    doc.text(`Repasse Anual da Revenda: R$ ${data.annualToReceive.toFixed(2).replace('.', ',')}`, 14, 84);
+    doc.text(`Repasse Mensal da Revenda: R$ ${data.monthlyToReceive.toFixed(2).replace('.', ',')}`, 14, 78);
 
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(217, 119, 6); // Amber
@@ -169,7 +168,6 @@ export default function AffiliateResellerFinancial() {
       s.customerName,
       new Date(s.date).toLocaleDateString('pt-BR'),
       `R$ ${s.orderAmount.toFixed(2).replace('.', ',')}`,
-      `R$ ${s.semanal.toFixed(2).replace('.', ',')}`,
       `R$ ${s.mensal.toFixed(2).replace('.', ',')}`,
       `R$ ${s.anual.toFixed(2).replace('.', ',')}`,
       `R$ ${s.totalCommission.toFixed(2).replace('.', ',')}`,
@@ -178,7 +176,7 @@ export default function AffiliateResellerFinancial() {
 
     autoTable(doc, {
       startY: 92,
-      head: [['PEDIDO', 'CLIENTE', 'DATA', 'VALOR VENDA', 'SEM. (2%)', 'MENS. (2%)', 'ANUAL (2%)', 'TOTAL REG.', 'STATUS']],
+      head: [['PEDIDO', 'CLIENTE', 'DATA', 'VALOR VENDA', 'MENSAL (4%)', 'ANUAL (2%)', 'TOTAL REG. (6%)', 'STATUS']],
       body: tableData,
       theme: 'grid',
       headStyles: {
@@ -195,15 +193,14 @@ export default function AffiliateResellerFinancial() {
       columnStyles: {
         0: { fontStyle: 'bold' },
         3: { halign: 'right' },
-        4: { halign: 'right' },
-        5: { halign: 'right', fontStyle: 'bold', textColor: [217, 119, 6] },
-        6: { halign: 'right' },
-        7: { halign: 'right', fontStyle: 'bold' },
-        8: { halign: 'center' }
+        4: { halign: 'right', fontStyle: 'bold', textColor: [217, 119, 6] },
+        5: { halign: 'right' },
+        6: { halign: 'right', fontStyle: 'bold' },
+        7: { halign: 'center' }
       }
     });
 
-    const pageCount = doc.internal.getNumberOfPages();
+    const pageCount = (doc.internal as any).getNumberOfPages();
     for (let i = 1; i <= pageCount; i++) {
       doc.setPage(i);
       doc.setFontSize(8);
@@ -436,34 +433,8 @@ export default function AffiliateResellerFinancial() {
           </motion.div>
         </div>
 
-        {/* 3 Secondary Cards: Semanal, Anual e Volume de Vendas */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          
-          {/* 1. Repasse Semanal */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.15 }}
-            className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-sm hover:shadow-md transition-all"
-          >
-            <div className="flex justify-between items-start mb-4">
-              <div className="p-3 rounded-2xl bg-indigo-50 text-indigo-600">
-                <Wallet size={22} />
-              </div>
-              <div className="text-[10px] font-black text-indigo-600 bg-indigo-50 px-2 py-1 rounded-lg uppercase">
-                Semanal ({data?.rates?.semanal ?? 2}% reg.)
-              </div>
-            </div>
-            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">
-              Repasse Semanal da Revenda
-            </p>
-            <h3 className="text-2xl font-black text-midnight tracking-tighter">
-              R$ {loading ? '...' : (data?.weeklyAvailable ?? 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-            </h3>
-            <p className="text-[10px] font-medium text-slate-400 mt-2">
-              Repasses semanais gerados em {MONTH_NAMES[selectedMonth]}
-            </p>
-          </motion.div>
+        {/* 2 Secondary Cards: Anual e Volume de Vendas */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
 
           {/* 2. Repasse Anual */}
           <motion.div
@@ -663,11 +634,9 @@ export default function AffiliateResellerFinancial() {
                             </td>
                             <td className="px-5 py-4 text-center">
                               <span className={`px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-wider ${
-                                tx.category.includes('SEMANAL') 
-                                  ? 'bg-indigo-50 text-indigo-600 border border-indigo-100' 
-                                  : tx.category.includes('MENSAL')
-                                    ? 'bg-amber-50 text-amber-600 border border-amber-100'
-                                    : 'bg-emerald-50 text-emerald-600 border border-emerald-100'
+                                tx.category.includes('MENSAL')
+                                  ? 'bg-amber-50 text-amber-600 border border-amber-100'
+                                  : 'bg-emerald-50 text-emerald-600 border border-emerald-100'
                               }`}>
                                 {tx.category}
                               </span>
@@ -700,10 +669,9 @@ export default function AffiliateResellerFinancial() {
                           <th className="px-5 py-2">CLIENTE / COMPRADOR</th>
                           <th className="px-5 py-2">DATA</th>
                           <th className="px-5 py-2 text-right">VALOR VENDA</th>
-                          <th className="px-5 py-2 text-right">SEM. (2%)</th>
-                          <th className="px-5 py-2 text-right text-amber-600 font-black">MENSAL (2%)</th>
+                          <th className="px-5 py-2 text-right text-amber-600 font-black">MENSAL (4%)</th>
                           <th className="px-5 py-2 text-right">ANUAL (2%)</th>
-                          <th className="px-5 py-2 text-right">TOTAL COMISSÃO</th>
+                          <th className="px-5 py-2 text-right">TOTAL COMISSÃO (6%)</th>
                           <th className="px-5 py-2 text-center">STATUS</th>
                         </tr>
                       </thead>
@@ -725,9 +693,6 @@ export default function AffiliateResellerFinancial() {
                             <td className="px-5 py-4 text-right font-mono font-bold text-slate-800">
                               R$ {sale.orderAmount.toFixed(2).replace('.', ',')}
                             </td>
-                            <td className="px-5 py-4 text-right font-mono text-indigo-600 font-bold">
-                              R$ {sale.semanal.toFixed(2).replace('.', ',')}
-                            </td>
                             <td className="px-5 py-4 text-right font-mono text-amber-600 font-black bg-amber-50/50">
                               R$ {sale.mensal.toFixed(2).replace('.', ',')}
                             </td>
@@ -741,11 +706,9 @@ export default function AffiliateResellerFinancial() {
                               <span className={`inline-flex items-center gap-1 text-[9px] font-black px-2.5 py-1 rounded-full uppercase tracking-wider ${
                                 sale.status === 'completed' || sale.status === 'pago'
                                   ? 'bg-emerald-100 text-emerald-800'
-                                  : sale.status === 'partial'
-                                    ? 'bg-indigo-100 text-indigo-800 border border-indigo-200'
-                                    : 'bg-amber-100 text-amber-800'
+                                  : 'bg-amber-100 text-amber-800'
                               }`}>
-                                {sale.status === 'completed' || sale.status === 'pago' ? 'Liquidado' : sale.status === 'partial' ? 'Semanal Pago' : 'Aguardando'}
+                                {sale.status === 'completed' || sale.status === 'pago' ? 'Liquidado' : 'Aguardando'}
                               </span>
                             </td>
                           </tr>

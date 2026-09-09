@@ -63,9 +63,33 @@ export default function AffiliatePolicy() {
             {/* Grid de Dados */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
               <div>
-                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-2">Segurado</p>
-                <p className="text-base font-black uppercase">{profile?.full_name || 'Afiliado do Sistema'}</p>
-                <p className="text-xs text-slate-400 font-mono mt-1">CPF: {profile?.cpf || '---'}</p>
+                {(() => {
+                  const isPJ = !!profile?.cnpj || !!profile?.description?.includes('[PJ]');
+                  let insuredPerson = profile?.full_name || 'Afiliado do Sistema';
+                  let insuredPersonCpf = profile?.cpf || '---';
+
+                  if (isPJ && profile?.description?.includes('Titular do Seguro:')) {
+                    const match = profile.description.match(/Titular do Seguro:\s*([^|]+)/i);
+                    if (match && match[1]) insuredPerson = match[1].trim();
+                    const cpfMatch = profile.description.match(/CPF Segurado:\s*([0-9.-]+)/i);
+                    if (cpfMatch && cpfMatch[1]) insuredPersonCpf = cpfMatch[1].trim();
+                  }
+
+                  return (
+                    <>
+                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-2">
+                        {isPJ ? 'Titular Segurado (Pessoa Física)' : 'Segurado'}
+                      </p>
+                      <p className="text-base font-black uppercase text-emerald-400">{insuredPerson}</p>
+                      <p className="text-xs text-slate-400 font-mono mt-1">CPF: {insuredPersonCpf}</p>
+                      {isPJ && (profile?.store_name || profile?.cnpj) && (
+                        <p className="text-[9px] text-purple-300 font-bold uppercase mt-1.5 tracking-wider">
+                          Empresa: {profile.store_name || profile.full_name} • CNPJ: {profile.cnpj || 'Cadastrado'}
+                        </p>
+                      )}
+                    </>
+                  );
+                })()}
               </div>
 
               <div>

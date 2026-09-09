@@ -84,7 +84,7 @@ export default function FinancialReportTable({
   const [viewingOrder, setViewingOrder] = useState<FinancialRecord | null>(null);
   const [viewingReceipt, setViewingReceipt] = useState<FinancialRecord | null>(null);
   const [viewingAffiliateExtrato, setViewingAffiliateExtrato] = useState<any | null>(null);
-  const [extratoCycleFilter, setExtratoCycleFilter] = useState<'all' | 'Mensal' | 'Semanal' | 'Anual'>('all');
+  const [extratoCycleFilter, setExtratoCycleFilter] = useState<'all' | 'Mensal' | 'Anual'>('all');
   const [orderCommissions, setOrderCommissions] = useState<any[]>([]);
   const [loadingCommissions, setLoadingCommissions] = useState(false);
 
@@ -117,7 +117,6 @@ export default function FinancialReportTable({
     affiliateName: string;
     orderId: string;
     mensal: number;
-    digital: number;
     anual: number;
     total: number;
   };
@@ -125,10 +124,9 @@ export default function FinancialReportTable({
   const addCommissionAmount = (row: GroupedCommission, description: string, amount: number) => {
     const desc = description || '';
     if (desc.includes('Mensal')) row.mensal += amount;
-    else if (desc.includes('Digital') || desc.includes('Semanal')) row.digital += amount;
     else if (desc.includes('Anual')) row.anual += amount;
     else row.mensal += amount;
-    row.total = row.mensal + row.digital + row.anual;
+    row.total = row.mensal + row.anual;
   };
 
   const groupedCommissions: GroupedCommission[] = React.useMemo(() => {
@@ -161,14 +159,12 @@ export default function FinancialReportTable({
 
   const totals = React.useMemo(() => {
     let mensal = 0;
-    let digital = 0;
     let anual = 0;
     groupedCommissions.forEach((row) => {
       mensal += row.mensal;
-      digital += row.digital;
       anual += row.anual;
     });
-    return { mensal, digital, anual, total: mensal + digital + anual };
+    return { mensal, anual, total: mensal + anual };
   }, [groupedCommissions]);
 
   const filteredData = (mode === 'merchants' ? data : affiliateData).filter((record: any) => {
@@ -500,18 +496,14 @@ export default function FinancialReportTable({
                   </th>
                   <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">
                     {mode === 'resellers' ? 'Repasse Mensal' : 'Cashback Mensal'} <br/>
-                    <span className="text-[7px] text-emerald-500">{mode === 'resellers' ? '(2% PIX MENSAL)' : '(PAGO TODO MÊS)'}</span>
-                  </th>
-                  <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">
-                    {mode === 'resellers' ? 'Repasse Semanal' : 'Cashback Semanal'} <br/>
-                    <span className="text-[7px] text-blue-500">{mode === 'resellers' ? '(2% CARTEIRA DIGITAL)' : '(CARTEIRA DIGITAL)'}</span>
+                    <span className="text-[7px] text-emerald-500">{mode === 'resellers' ? '(4% PIX MENSAL)' : '(4% PAGO DIA 10)'}</span>
                   </th>
                   <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">
                     {mode === 'resellers' ? 'Repasse Anual' : 'Cashback Anual'} <br/>
-                    <span className="text-[7px] text-indigo-500">{mode === 'resellers' ? '(2% PAGO 10/DEZ)' : '(PAGO 10/DEZ)'}</span>
+                    <span className="text-[7px] text-indigo-500">{mode === 'resellers' ? '(2% PAGO 10/DEZ)' : '(2% PAGO 10/DEZ)'}</span>
                   </th>
                   <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">
-                    Total Bruto <br/><span className="text-[7px] text-slate-400 font-bold">(ACUMULADO)</span>
+                    Total Bruto <br/><span className="text-[7px] text-slate-400 font-bold">(6% ACUMULADO)</span>
                   </th>
                   <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">
                     INSS Previsto <br/><span className="text-[7px] text-amber-500 font-bold">(11% PF)</span>
@@ -662,14 +654,11 @@ export default function FinancialReportTable({
                     <td className="p-6 text-right text-xs font-black text-emerald-600 italic tracking-tighter">
                       R$ {(record.mensal || 0).toFixed(2).replace('.', ',')}
                     </td>
-                    <td className="p-6 text-right text-xs font-bold text-blue-500 tracking-tighter">
-                      R$ {(record.digital || 0).toFixed(2).replace('.', ',')}
-                    </td>
                     <td className="p-6 text-right text-xs font-bold text-indigo-500 tracking-tighter">
                       R$ {(record.anual || 0).toFixed(2).replace('.', ',')}
                     </td>
                     <td className="p-6 text-right text-xs font-black text-midnight tracking-tighter">
-                      R$ {((record.mensal || 0) + (record.digital || 0) + (record.anual || 0)).toFixed(2).replace('.', ',')}
+                      R$ {((record.mensal || 0) + (record.anual || 0)).toFixed(2).replace('.', ',')}
                     </td>
                     <td className="p-6 text-right text-xs font-mono">
                       {record.is_pj ? (
@@ -682,7 +671,7 @@ export default function FinancialReportTable({
                     </td>
                     <td className="p-6 text-right bg-slate-50/50">
                       <span className="text-sm font-black text-emerald-600 italic font-mono">
-                        R$ {((record.liquido_mensal !== undefined ? record.liquido_mensal : (record.mensal || 0)) + (record.digital || 0) + (record.anual || 0)).toFixed(2).replace('.', ',')}
+                        R$ {((record.liquido_mensal !== undefined ? record.liquido_mensal : (record.mensal || 0)) + (record.anual || 0)).toFixed(2).replace('.', ',')}
                       </span>
                     </td>
                     <td className="p-6 text-center">
@@ -881,38 +870,29 @@ export default function FinancialReportTable({
                                        <div className="text-right shrink-0">
                                           <span className="text-sm font-black text-indigo-600 italic tracking-tighter">R$ {row.total.toFixed(2).replace('.', ',')}</span>
                                        </div>
-                                    </div>
-                                    <div className="grid grid-cols-3 gap-2 pl-11">
-                                       <div className="bg-white rounded-xl px-3 py-2 border border-slate-100">
-                                          <p className="text-[8px] text-slate-400 font-black uppercase tracking-widest">Mensal</p>
-                                          <p className="text-[11px] font-black text-emerald-600">R$ {row.mensal.toFixed(2).replace('.', ',')}</p>
-                                       </div>
-                                       <div className="bg-white rounded-xl px-3 py-2 border border-slate-100">
-                                          <p className="text-[8px] text-slate-400 font-black uppercase tracking-widest">Digital</p>
-                                          <p className="text-[11px] font-black text-blue-500">R$ {row.digital.toFixed(2).replace('.', ',')}</p>
-                                       </div>
-                                       <div className="bg-white rounded-xl px-3 py-2 border border-slate-100">
-                                          <p className="text-[8px] text-slate-400 font-black uppercase tracking-widest">Anual</p>
-                                          <p className="text-[11px] font-black text-indigo-500">R$ {row.anual.toFixed(2).replace('.', ',')}</p>
-                                       </div>
+                                       <div className="grid grid-cols-2 gap-3 pl-11">
+                                         <div className="bg-white rounded-xl px-3 py-2 border border-slate-100">
+                                            <p className="text-[8px] text-slate-400 font-black uppercase tracking-widest">Mensal (4%)</p>
+                                            <p className="text-[11px] font-black text-emerald-600">R$ {row.mensal.toFixed(2).replace('.', ',')}</p>
+                                         </div>
+                                         <div className="bg-white rounded-xl px-3 py-2 border border-slate-100">
+                                            <p className="text-[8px] text-slate-400 font-black uppercase tracking-widest">Anual (2%)</p>
+                                            <p className="text-[11px] font-black text-indigo-500">R$ {row.anual.toFixed(2).replace('.', ',')}</p>
+                                         </div>
+                                      </div>
                                     </div>
                                  </div>
                                ))}
                             </div>
-                            {/* Summary footer based on the spreadsheet distribution */}
+                            {/* Summary footer */}
                             <div className="bg-indigo-50/50 p-4 px-6 border-t border-slate-100 flex items-center justify-between text-[10px] font-black text-slate-500 uppercase tracking-wider flex-wrap gap-3">
                                <div className="flex items-center gap-1">
-                                  <span>Mensal:</span>
+                                  <span>Mensal (4%):</span>
                                   <span className="text-indigo-600 font-black">R$ {totals.mensal.toFixed(2).replace('.', ',')}</span>
                                </div>
                                <div className="hidden sm:inline text-slate-300">|</div>
                                <div className="flex items-center gap-1">
-                                  <span>Digital:</span>
-                                  <span className="text-indigo-600 font-black">R$ {totals.digital.toFixed(2).replace('.', ',')}</span>
-                               </div>
-                               <div className="hidden sm:inline text-slate-300">|</div>
-                               <div className="flex items-center gap-1">
-                                  <span>Anual:</span>
+                                  <span>Anual (2%):</span>
                                   <span className="text-indigo-600 font-black">R$ {totals.anual.toFixed(2).replace('.', ',')}</span>
                                </div>
                                <div className="hidden sm:inline text-slate-300">|</div>
@@ -1092,17 +1072,6 @@ export default function FinancialReportTable({
                               }`}
                             >
                               Mensal ({allTx.filter((t: any) => t.cycleType === 'Mensal').length})
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setExtratoCycleFilter('Semanal')}
-                              className={`px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all cursor-pointer ${
-                                extratoCycleFilter === 'Semanal'
-                                  ? 'bg-blue-600 text-white shadow-sm'
-                                  : 'bg-blue-50 text-blue-700 hover:bg-blue-100'
-                              }`}
-                            >
-                              Semanal ({allTx.filter((t: any) => t.cycleType === 'Semanal').length})
                             </button>
                             <button
                               type="button"

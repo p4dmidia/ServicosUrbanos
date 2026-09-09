@@ -33,7 +33,7 @@ async function test() {
     digitalPending: emersonAdmin?.digitalPending,
     monthlyPending: emersonAdmin?.monthlyPending,
     annualPending: emersonAdmin?.annualPending,
-    netDigital: emersonAdmin?.taxDigital?.netAmount,
+    netMonthly: emersonAdmin?.taxMonthly?.netAmount,
     levels: emersonAdmin?.levels
   });
 
@@ -45,7 +45,7 @@ async function test() {
     digitalPending: sicAdmin?.digitalPending,
     monthlyPending: sicAdmin?.monthlyPending,
     annualPending: sicAdmin?.annualPending,
-    netDigital: sicAdmin?.taxDigital?.netAmount,
+    netMonthly: sicAdmin?.taxMonthly?.netAmount,
     levels: sicAdmin?.levels
   });
 

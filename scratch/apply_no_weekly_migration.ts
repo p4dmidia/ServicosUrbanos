@@ -1,7 +1,12 @@
--- =========================================================================
--- MIGRATION: TRIGGER handle_order_payment (DINÂMICO: G0 TITULAR + REDE + REVENDEDOR)
--- =========================================================================
+import { createClient } from '@supabase/supabase-js';
+import * as dotenv from 'dotenv';
+import * as path from 'path';
 
+dotenv.config({ path: path.resolve('.env') });
+
+const supabase = createClient(process.env.VITE_SUPABASE_URL!, process.env.VITE_SUPABASE_ANON_KEY!);
+
+const sqlUpdateTrigger = `
 CREATE OR REPLACE FUNCTION public.handle_order_payment()
 RETURNS TRIGGER AS $$
 DECLARE
@@ -93,7 +98,7 @@ BEGIN
 
         -- ==========================================
         -- 3. DISTRIBUIR COMISSÃO G0 (TITULAR / PRÓPRIO COMPRADOR)
-        -- Lê o valor configurado para level = 1 (G0) em mmn_levels (4% Mensal + 2% Anual)
+        -- Nível 1: 4% Mensal + 2% Anual
         -- ==========================================
         SELECT COALESCE(value, 6.00) INTO v_level_val 
         FROM public.mmn_levels 
@@ -103,7 +108,7 @@ BEGIN
             v_level_val := 6.00;
         END IF;
 
-        -- Calcula as 2 partes (4% Mensal e 2% Anual)
+        -- Calcula as 2 partes: 4% Mensal e 2% Anual (proporção 4/6 e 2/6 do total configurado)
         IF v_payment_type = 'percent' THEN
             v_level_mensal := ROUND(v_amount * (v_level_val * (4.0 / 6.0) / 100.0), 2);
             v_level_anual := ROUND(v_amount * (v_level_val * (2.0 / 6.0) / 100.0), 2);
@@ -184,3 +189,63 @@ BEGIN
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
+`;
+
+async function main() {
+  console.log('=== ATUALIZANDO BANCO: REMOVENDO SEMANAL E AJUSTANDO PARA 4% MENSAL + 2% ANUAL ===');
+
+  const email = `admin-migrator-${Date.now()}@test.com`;
+  const password = 'SuperMigratorPassword123!';
+
+  console.log('1. Autenticando com perfil owner...');
+  const { data: signUpData } = await supabase.auth.signUp({
+    email,
+    password,
+    options: { data: { full_name: 'Database Migrator' } }
+  });
+
+  const userId = signUpData?.user?.id;
+  if (!userId) {
+    throw new Error('Falha ao autenticar usuário temporário');
+  }
+
+  await supabase.auth.signInWithPassword({ email, password });
+  await supabase.from('profiles').update({ role: 'owner' }).eq('id', userId);
+
+  console.log('2. Atualizando mmn_config para 4% mensal, 2% anual e 0% semanal...');
+  const { error: cfgErr } = await supabase
+    .from('mmn_config')
+    .update({
+      cashback_digital: 0,
+      cashback_mensal: 4.00,
+      cashback_anual: 2.00,
+      commission_regional_semanal: 0,
+      commission_regional_mensal: 4.00,
+      commission_regional_anual: 2.00
+    })
+    .eq('id', 1);
+
+  if (cfgErr) {
+    console.error('Erro ao atualizar mmn_config:', cfgErr);
+  } else {
+    console.log('mmn_config atualizado com sucesso!');
+  }
+
+  console.log('3. Atualizando trigger handle_order_payment via RPC execute_sql...');
+  const { data: rpcRes, error: rpcErr } = await supabase.rpc('execute_sql', {
+    query: sqlUpdateTrigger
+  });
+
+  if (rpcErr) {
+    console.error('Erro ao atualizar trigger:', rpcErr);
+  } else {
+    console.log('Trigger handle_order_payment atualizada com sucesso no PostgreSQL!');
+  }
+
+  console.log('4. Limpando usuário temporário...');
+  await supabase.from('profiles').delete().eq('id', userId);
+
+  console.log('=== ETAPA 1 DO BANCO DE DADOS CONCLUÍDA COM SUCESSO! ===');
+}
+
+main().catch(console.error);

@@ -272,24 +272,18 @@ export default function AffiliateInvoice() {
                 Este é o valor exato que deve constar no campo <strong>Valor dos Serviços</strong> na sua Nota Fiscal. O sistema fará a conferência automática deste valor.
               </p>
 
-              {/* Discriminação Semanal + Mensal */}
+              {/* Discriminação Mensal */}
               <div className="space-y-3 bg-slate-50 p-5 rounded-2xl border border-slate-100 text-xs">
                 <div className="flex justify-between items-center text-slate-600">
-                  <span className="font-medium">Cashback Semanal Bruto (CD):</span>
+                  <span className="font-medium">Cashback Mensal Bruto (4%):</span>
                   <span className="font-mono font-bold text-midnight">
-                    R$ {(summary?.weeklyGross || 0).toFixed(2).replace('.', ',')}
-                  </span>
-                </div>
-                <div className="flex justify-between items-center text-slate-600">
-                  <span className="font-medium">Cashback Mensal Bruto:</span>
-                  <span className="font-mono font-bold text-midnight">
-                    R$ {(summary?.monthlyGross || 0).toFixed(2).replace('.', ',')}
+                    R$ {(summary?.monthlyGross || summary?.totalGross || 0).toFixed(2).replace('.', ',')}
                   </span>
                 </div>
                 <div className="pt-2 border-t border-slate-200 flex justify-between items-center font-bold text-midnight">
-                  <span>Soma Total Exata da Nota:</span>
+                  <span>Valor Exato da Nota a Emitir:</span>
                   <span className="font-mono text-indigo-600">
-                    R$ {(summary?.totalGross || 0).toFixed(2).replace('.', ',')}
+                    R$ {(summary?.totalGross || summary?.monthlyGross || 0).toFixed(2).replace('.', ',')}
                   </span>
                 </div>
               </div>

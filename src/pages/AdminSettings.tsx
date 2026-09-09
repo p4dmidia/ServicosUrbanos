@@ -56,11 +56,11 @@ export default function AdminSettings() {
   const [mmnDepth, setMmnDepth] = useState(3);
   const [mmnType, setMmnType] = useState<'percent' | 'fixed'>('percent');
   const [mmnLevels, setMmnLevels] = useState<any[]>([]);
-  const [cashbackMensal, setCashbackMensal] = useState(2.00);
-  const [cashbackDigital, setCashbackDigital] = useState(2.00);
+  const [cashbackMensal, setCashbackMensal] = useState(4.00);
+  const [cashbackDigital, setCashbackDigital] = useState(0.00);
   const [cashbackAnual, setCashbackAnual] = useState(2.00);
-  const [commissionRegionalSemanal, setCommissionRegionalSemanal] = useState(2.00);
-  const [commissionRegionalMensal, setCommissionRegionalMensal] = useState(2.00);
+  const [commissionRegionalSemanal, setCommissionRegionalSemanal] = useState(0.00);
+  const [commissionRegionalMensal, setCommissionRegionalMensal] = useState(4.00);
   const [commissionRegionalAnual, setCommissionRegionalAnual] = useState(2.00);
 
   // Financeiro State
@@ -79,12 +79,9 @@ export default function AdminSettings() {
   const [logFilter, setLogFilter] = useState<'all' | 'Success' | 'Warning' | 'Error' | 'Info'>('all');
 
   // Automação de Níveis baseada na Regra Geral
-  // O valor total de cada nível MMN (G0, G1, G2...) é a soma dos 3 ciclos (Semanal + Mensal + Anual)
-  // Ex: 2% Semanal + 2% Mensal + 2% Anual = 6.00% por nível (sendo dividido por 3 na trigger do banco)
-  // A comissão regional pertence ao revendedor e é calculada separadamente.
+  // O valor total de cada nível MMN (G0, G1, G2...) é a soma dos 2 ciclos (Mensal 4% + Anual 2% = 6.00%)
   React.useEffect(() => {
     const totalNivel = 
-      (Number(cashbackDigital) || 0) + 
       (Number(cashbackMensal) || 0) + 
       (Number(cashbackAnual) || 0);
     
@@ -98,7 +95,6 @@ export default function AdminSettings() {
     });
   }, [
     cashbackMensal, 
-    cashbackDigital, 
     cashbackAnual, 
     mmnDepth
   ]);
@@ -389,9 +385,9 @@ export default function AdminSettings() {
                           </div>
                         </div>
 
-                        <div className="grid grid-cols-3 gap-4">
+                        <div className="grid grid-cols-2 gap-4">
                            <div className="space-y-2">
-                              <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1">Cashback Mensal</label>
+                              <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1">Cashback Mensal (Dia 10)</label>
                               <div className="relative">
                                 <input 
                                   type="number" 
@@ -404,20 +400,7 @@ export default function AdminSettings() {
                               </div>
                            </div>
                            <div className="space-y-2">
-                              <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1">Cashback Semanal</label>
-                              <div className="relative">
-                                <input 
-                                  type="number" 
-                                  step="0.01"
-                                  value={cashbackDigital}
-                                  onChange={e => setCashbackDigital(Number(e.target.value))}
-                                  className="w-full bg-white/5 border border-white/5 px-4 py-4 rounded-2xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-white font-black text-center"
-                                />
-                                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-indigo-500/50 text-[10px] font-black">%</span>
-                              </div>
-                           </div>
-                           <div className="space-y-2">
-                              <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1">Cashback Anual</label>
+                              <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1">Cashback Anual (10/Dez)</label>
                               <div className="relative">
                                 <input 
                                   type="number" 
@@ -426,30 +409,17 @@ export default function AdminSettings() {
                                   onChange={e => setCashbackAnual(Number(e.target.value))}
                                   className="w-full bg-white/5 border border-white/5 px-4 py-4 rounded-2xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-white font-black text-center"
                                 />
-                                 <span className="absolute right-3 top-1/2 -translate-y-1/2 text-indigo-500/50 text-[10px] font-black">%</span>
-                                </div>
+                                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-indigo-500/50 text-[10px] font-black">%</span>
+                              </div>
                            </div>
                         </div>
 
                         {/* Comissão Regional */}
                         <div className="space-y-4 pt-4 border-t border-white/5">
                           <h4 className="text-[11px] font-black uppercase tracking-widest text-indigo-400">Comissões do Revendedor Regional</h4>
-                          <div className="grid grid-cols-3 gap-4">
+                          <div className="grid grid-cols-2 gap-4">
                             <div className="space-y-2">
-                               <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1">Reg. Semanal</label>
-                               <div className="relative">
-                                 <input 
-                                   type="number" 
-                                   step="0.01"
-                                   value={commissionRegionalSemanal}
-                                   onChange={e => setCommissionRegionalSemanal(Number(e.target.value))}
-                                   className="w-full bg-white/5 border border-white/5 px-4 py-4 rounded-2xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-white font-black text-center"
-                                 />
-                                 <span className="absolute right-3 top-1/2 -translate-y-1/2 text-indigo-500/50 text-[10px] font-black">%</span>
-                               </div>
-                            </div>
-                            <div className="space-y-2">
-                               <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1">Reg. Mensal</label>
+                               <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1">Reg. Mensal (Dia 10)</label>
                                <div className="relative">
                                  <input 
                                    type="number" 
@@ -462,7 +432,7 @@ export default function AdminSettings() {
                                </div>
                             </div>
                             <div className="space-y-2">
-                               <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1">Reg. Anual</label>
+                               <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1">Reg. Anual (10/Dez)</label>
                                <div className="relative">
                                  <input 
                                    type="number" 

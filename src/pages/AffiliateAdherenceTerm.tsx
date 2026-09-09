@@ -638,10 +638,10 @@ export default function AffiliateAdherenceTerm() {
                 <h3 className="font-bold text-midnight font-sans uppercase text-xs tracking-wider">Pagamento das Comissões</h3>
                 <ul className="list-disc pl-5 space-y-2">
                   <li>
-                    O pagamento será realizado semanalmente, mensalmente e anualmente, mediante crédito em conta bancária cadastrada pelo afiliado.
+                    O pagamento será realizado mensalmente e anualmente, mediante crédito em conta bancária cadastrada pelo afiliado.
                   </li>
                   <li>
-                    O afiliado deverá estar adimplente com suas obrigações financeiras para receber as comissões semanais, mensais e anuais.
+                    O afiliado deverá estar adimplente com suas obrigações financeiras para receber as comissões mensais e anuais.
                   </li>
                   <li>
                     Em caso de inadimplência ou cancelamento da apólice, o direito às comissões será suspenso.
@@ -837,9 +837,9 @@ export default function AffiliateAdherenceTerm() {
               <div className="space-y-3">
                 <h4 className="font-bold text-midnight font-sans text-sm uppercase">3. Cashback Durante o Período de Inadimplência</h4>
                 <ul className="list-disc pl-5 space-y-2">
-                  <li>Mesmo durante o período de inadimplência, o segurado continuará acumulando cashback semanal, mensal e anual referente à sua rede G1 e G2.</li>
+                  <li>Mesmo durante o período de inadimplência, o segurado continuará acumulando cashback mensal e anual referente à sua rede G1 e G2.</li>
                   <li>Esses valores permanecerão bloqueados até que o segurado regularize sua situação.</li>
-                  <li>O cashback semanal, mensal e anual G0, vinculado diretamente aos pagamentos das assinaturas do próprio segurado, somente será retomado após a regularização das parcelas em atraso.</li>
+                  <li>O cashback mensal e anual G0, vinculado diretamente aos pagamentos das assinaturas do próprio segurado, somente será retomado após a regularização das parcelas em atraso.</li>
                 </ul>
               </div>
 

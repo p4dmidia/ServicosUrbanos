@@ -39,7 +39,7 @@ export default function AdminWithdrawals() {
   const [loading, setLoading] = useState(true);
   const [payableBalances, setPayableBalances] = useState<any[]>([]);
   const [viewTab, setViewTab] = useState<'network' | 'reseller' | 'history'>('network');
-  const [cycleFilter, setCycleFilter] = useState<'all' | 'weekly' | 'monthly' | 'annual'>('all');
+  const [cycleFilter, setCycleFilter] = useState<'all' | 'monthly' | 'annual'>('all');
   const [searchTerm, setSearchTerm] = useState('');
 
   // Tranca inteligente de data: Pagamento Anual é liberado exclusivamente em 10 de Dezembro
@@ -122,53 +122,62 @@ export default function AdminWithdrawals() {
     let amountToPay = 0;
     let grossAmount = 0;
     let inssAmount = 0;
+    let irrfAmount = 0;
     let descLabel = '';
+    let splitDetails: any = null;
 
     if (payoutType === 'mensal') {
       amountToPay = userItem.monthlyLiquid !== undefined ? userItem.monthlyLiquid : userItem.monthlyPending;
       grossAmount = userItem.monthlyPending;
       inssAmount = userItem.monthlyInss || 0;
+      irrfAmount = userItem.monthlyIrrf || 0;
       descLabel = 'Cashback Mensal';
     } else if (payoutType === 'digital') {
       amountToPay = userItem.digitalLiquid !== undefined ? userItem.digitalLiquid : userItem.digitalPending;
       grossAmount = userItem.digitalPending;
       inssAmount = userItem.digitalInss || 0;
+      irrfAmount = userItem.digitalIrrf || 0;
       descLabel = 'Cashback Semanal';
     } else if (payoutType === 'anual') {
       amountToPay = userItem.annualLiquid !== undefined ? userItem.annualLiquid : userItem.annualPending;
       grossAmount = userItem.annualPending;
       inssAmount = userItem.annualInss || 0;
+      irrfAmount = userItem.annualIrrf || 0;
       descLabel = 'Cashback Anual';
     } else {
-      // Payout total / liberados hoje (Semanal + Mensal se NF enviada, Anual só se for >= 10/Dez)
-      let calcGross = userItem.digitalPending || 0;
-      let calcLiquid = userItem.digitalLiquid || 0;
-      let calcInss = userItem.digitalInss || 0;
-      const labels: string[] = ['Semanal'];
+      // Payout total / liberados hoje (Mensal somado no mês)
+      const payableLiq = userItem.liberadoLiquid !== undefined 
+        ? userItem.liberadoLiquid 
+        : (userItem.canPayMonthly ? (userItem.monthlyLiquid || 0) : 0);
 
-      if (userItem.canPayMonthly && (userItem.monthlyPending || 0) > 0) {
-        calcGross += userItem.monthlyPending;
-        calcLiquid += (userItem.monthlyLiquid || 0);
-        calcInss += (userItem.monthlyInss || 0);
-        labels.push('Mensal');
-      }
-
-      if (isDecemberAnnualWindow && (userItem.annualPending || 0) > 0) {
-        calcGross += userItem.annualPending;
-        calcLiquid += (userItem.annualLiquid || 0);
-        calcInss += (userItem.annualInss || 0);
-        labels.push('Anual');
-      }
-
-      if (calcLiquid <= 0) {
+      if (payableLiq <= 0) {
         toast.error('Nenhum valor liberado para pagamento no momento.');
         return;
       }
 
-      amountToPay = calcLiquid;
-      grossAmount = calcGross;
-      inssAmount = calcInss;
-      descLabel = `Pagamento Liberado (${labels.join(' + ')})`;
+      amountToPay = payableLiq;
+      grossAmount = userItem.liberadoPending !== undefined 
+        ? userItem.liberadoPending 
+        : (userItem.canPayMonthly ? (userItem.monthlyPending || 0) : 0);
+      inssAmount = userItem.liberadoInss || 0;
+      irrfAmount = userItem.liberadoIrrf || 0;
+      
+      descLabel = 'Pagamento Liberado (Mensal)';
+
+      splitDetails = {
+        digital: {
+          bruto: userItem.digitalPending || 0,
+          inss: userItem.digitalInss || 0,
+          irrf: userItem.digitalIrrf || 0,
+          liquido: userItem.digitalLiquid || 0
+        },
+        monthly: userItem.canPayMonthly && (userItem.monthlyPending || 0) > 0 ? {
+          bruto: userItem.monthlyPending,
+          inss: userItem.monthlyInss || 0,
+          irrf: userItem.monthlyIrrf || 0,
+          liquido: userItem.monthlyLiquid || 0
+        } : null
+      };
     }
 
     const record = {
@@ -181,10 +190,12 @@ export default function AdminWithdrawals() {
       repasse: amountToPay,
       bruto: grossAmount,
       inss: inssAmount,
+      irrf: irrfAmount,
       is_pj: userItem.isPJ,
       payoutType,
       viewCategory: viewTab,
-      descLabel
+      descLabel,
+      splitDetails
     };
 
     setSelectedForPayment([record]);
@@ -201,14 +212,18 @@ export default function AdminWithdrawals() {
         receiptUrl = await businessRules.uploadReceipt(payeeGroup.receiptFile);
       }
 
-      const pType = record.payoutType === 'total' ? 'mensal' : record.payoutType;
-
       await businessRules.processPayout(
         record.payeeId,
         record.bruto,
-        pType,
+        record.payoutType,
         receiptUrl,
-        record.viewCategory === 'reseller' ? 'reseller' : 'network'
+        record.viewCategory === 'reseller' ? 'reseller' : 'network',
+        {
+          inss: record.inss,
+          irrf: record.irrf,
+          liquido: record.repasse,
+          splitDetails: record.splitDetails
+        }
       );
 
       // Notificação WhatsApp opcional
@@ -246,7 +261,6 @@ export default function AdminWithdrawals() {
 
       const matchesCycle = 
         cycleFilter === 'all' ||
-        (cycleFilter === 'weekly' && w.digitalPending > 0) ||
         (cycleFilter === 'monthly' && w.monthlyPending > 0) ||
         (cycleFilter === 'annual' && w.annualPending > 0);
 
@@ -277,11 +291,17 @@ export default function AdminWithdrawals() {
 
   // Totais Gerais dos Pendentes
   const totalMonthlyPending = payableBalances.reduce((acc, curr) => acc + (curr.monthlyLiquid !== undefined ? curr.monthlyLiquid : (curr.monthlyPending || 0)), 0);
-  const totalAnnualPending = payableBalances.reduce((acc, curr) => acc + (curr.annualLiquid !== undefined ? curr.annualLiquid : (curr.annualPending || 0)), 0);
+  const totalAnnualPending = payableBalances.reduce((acc, curr) => acc + (curr.annualPending || 0), 0);
   const totalDigitalPending = payableBalances.reduce((acc, curr) => acc + (curr.digitalLiquid !== undefined ? curr.digitalLiquid : (curr.digitalPending || 0)), 0);
-  const totalPending = totalMonthlyPending + totalAnnualPending + totalDigitalPending;
+  const totalPending = payableBalances.reduce((acc, curr) => acc + (curr.liberadoLiquid !== undefined ? curr.liberadoLiquid : ((curr.digitalLiquid || 0) + (curr.canPayMonthly ? (curr.monthlyLiquid || 0) : 0))), 0);
 
-  // Exportar CSV de Pendentes
+  // Totais Gerais do Histórico (Auditoria Fiscal)
+  const totalHistoryBruto = filteredHistory.reduce((acc, curr) => acc + (curr.bruto || curr.amount || 0), 0);
+  const totalHistoryInss = filteredHistory.reduce((acc, curr) => acc + (curr.inss || 0), 0);
+  const totalHistoryIrrf = filteredHistory.reduce((acc, curr) => acc + (curr.irrf || 0), 0);
+  const totalHistoryLiquido = filteredHistory.reduce((acc, curr) => acc + (curr.liquido !== undefined ? curr.liquido : (curr.amount || 0)), 0);
+
+  // Exportar CSV de Pendentes e Histórico
   const handleExportCSV = () => {
     const csvContent: string[] = [];
     const reportTitle = viewTab === 'history' 
@@ -294,22 +314,26 @@ export default function AdminWithdrawals() {
     csvContent.push('');
 
     if (viewTab === 'history') {
-      csvContent.push('Data;Beneficiario;CPF;Categoria;Ciclo;Valor Pago;Chave PIX;Status;Comprovante');
+      csvContent.push('Data;Beneficiario;CPF/CNPJ;Tipo;Categoria;Ciclo;Rendimento Bruto;INSS Retido (11%);Imposto de Renda Retido;Valor Liquido;Chave PIX;Status;Comprovante');
       filteredHistory.forEach(h => {
         csvContent.push([
           new Date(h.date).toLocaleDateString('pt-BR'),
           `"${h.userName}"`,
           `"${h.cpf}"`,
+          h.isPJ ? 'PJ' : 'PF',
           h.categoryLabel,
           h.cycleLabel,
-          `R$ ${h.amount.toFixed(2).replace('.', ',')}`,
+          `R$ ${(h.bruto || h.amount || 0).toFixed(2).replace('.', ',')}`,
+          `R$ ${(h.inss || 0).toFixed(2).replace('.', ',')}`,
+          `R$ ${(h.irrf || 0).toFixed(2).replace('.', ',')}`,
+          `R$ ${(h.liquido !== undefined ? h.liquido : (h.amount || 0)).toFixed(2).replace('.', ',')}`,
           `"${h.pixKey}"`,
           h.status,
           h.receiptUrl || 'Sem comprovante'
         ].join(';'));
       });
     } else {
-      csvContent.push('Nivel;Pedido;Nome;Email;Tipo;Chave PIX;Status NF;Mensal Liquido;Semanal Liquido;Anual Liquido;Total Liquido');
+      csvContent.push('Nivel;Pedido;Nome;Email;Tipo;Chave PIX;Status NF;Mensal Liquido;Anual Liquido;Total Liquido');
       filteredBalances.forEach(w => {
         csvContent.push([
           w.level || 'G0',
@@ -320,7 +344,6 @@ export default function AdminWithdrawals() {
           `"${w.pixKey}"`,
           w.hasInvoice ? 'Enviada' : 'Pendente',
           `R$ ${(w.monthlyLiquid || 0).toFixed(2).replace('.', ',')}`,
-          `R$ ${(w.digitalLiquid || 0).toFixed(2).replace('.', ',')}`,
           `R$ ${(w.annualLiquid || 0).toFixed(2).replace('.', ',')}`,
           `R$ ${(w.totalLiquid || 0).toFixed(2).replace('.', ',')}`
         ].join(';'));
@@ -397,7 +420,7 @@ export default function AdminWithdrawals() {
 
         {/* Bloco de Métricas (Aparece para Afiliados e Revendedores) */}
         {viewTab !== 'history' && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-3 gap-6">
             <div className="flex items-center gap-5 bg-[#0a0e17] p-6 rounded-3xl border border-white/5 shadow-xl">
               <div className="size-14 bg-indigo-500/20 text-indigo-400 rounded-2xl flex items-center justify-center shrink-0">
                 <DollarSign size={28} />
@@ -406,18 +429,6 @@ export default function AdminWithdrawals() {
                 <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Total Geral Líquido</p>
                 <h3 className="text-2xl font-black text-white tracking-tight">
                   R$ {totalPending.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                </h3>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-5 bg-[#0a0e17] p-6 rounded-3xl border border-white/5 shadow-xl">
-              <div className="size-14 bg-purple-500/20 text-purple-400 rounded-2xl flex items-center justify-center shrink-0">
-                <Clock size={28} />
-              </div>
-              <div>
-                <p className="text-[10px] font-black text-purple-400 uppercase tracking-widest mb-1">Semanal (Pagar Sexta)</p>
-                <h3 className="text-2xl font-black text-white tracking-tight">
-                  R$ {totalDigitalPending.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                 </h3>
               </div>
             </div>
@@ -480,14 +491,6 @@ export default function AdminWithdrawals() {
                   }`}
                 >
                   Todos
-                </button>
-                <button
-                  onClick={() => setCycleFilter('weekly')}
-                  className={`px-3 py-2 rounded-xl transition-all cursor-pointer ${
-                    cycleFilter === 'weekly' ? 'bg-purple-600 text-white shadow-sm' : 'text-slate-400 hover:text-white'
-                  }`}
-                >
-                  🟢 Semanal
                 </button>
                 <button
                   onClick={() => setCycleFilter('monthly')}
@@ -659,24 +662,7 @@ export default function AdminWithdrawals() {
                     {/* Blocos de Valores por Ciclo */}
                     <div className="flex flex-wrap items-center gap-4 w-full xl:w-auto justify-between xl:justify-end border-t xl:border-t-0 pt-4 xl:pt-0 border-white/5">
                       
-                      {/* 1. Semanal */}
-                      <div className="bg-white/5 p-4 rounded-2xl border border-white/5 text-center min-w-[130px]">
-                        <span className="text-[9px] font-black text-purple-400 uppercase tracking-wider block mb-1">
-                          Semanal Líquido
-                        </span>
-                        <span className="text-lg font-black text-white font-mono block">
-                          R$ {(w.digitalLiquid || 0).toFixed(2).replace('.', ',')}
-                        </span>
-                        <button
-                          disabled={!w.isEligible || (w.digitalLiquid || 0) <= 0}
-                          onClick={() => handleOpenPaymentModal(w, 'digital')}
-                          className="mt-2 w-full py-1.5 px-3 bg-purple-600 hover:bg-purple-500 disabled:opacity-30 disabled:pointer-events-none text-white rounded-xl text-[9px] font-black uppercase tracking-wider transition-all cursor-pointer"
-                        >
-                          Pagar Semanal
-                        </button>
-                      </div>
-
-                      {/* 2. Mensal (Exige NF) */}
+                      {/* 1. Mensal (Exige NF) */}
                       <div className="bg-white/5 p-4 rounded-2xl border border-white/5 text-center min-w-[130px]">
                         <span className="text-[9px] font-black text-emerald-400 uppercase tracking-wider block mb-1">
                           Mensal Líquido
@@ -684,6 +670,11 @@ export default function AdminWithdrawals() {
                         <span className="text-lg font-black text-white font-mono block">
                           R$ {(w.monthlyLiquid || 0).toFixed(2).replace('.', ',')}
                         </span>
+                        {!w.isPJ && (w.monthlyPending || 0) > 0 && (
+                          <span className="text-[8px] text-slate-400 block mt-0.5" title={`Bruto: R$ ${w.monthlyPending.toFixed(2)} | INSS: -R$ ${w.monthlyInss.toFixed(2)} | IRRF: -R$ ${w.monthlyIrrf.toFixed(2)}`}>
+                            Bruto: R$ {(w.monthlyPending || 0).toFixed(2).replace('.', ',')}
+                          </span>
+                        )}
                         <button
                           disabled={!w.isEligible || (w.monthlyLiquid || 0) <= 0 || !w.canPayMonthly}
                           onClick={() => handleOpenPaymentModal(w, 'mensal')}
@@ -702,7 +693,7 @@ export default function AdminWithdrawals() {
                       <div className="bg-white/5 p-4 rounded-2xl border border-white/5 text-center min-w-[130px]">
                         <div className="flex items-center justify-center gap-1 mb-1">
                           <span className="text-[9px] font-black text-blue-400 uppercase tracking-wider block">
-                            Anual Líquido
+                            Anual (Bruto)
                           </span>
                           {!isDecemberAnnualWindow && (
                             <span title="Bloqueado até 10 de Dezembro">
@@ -711,10 +702,10 @@ export default function AdminWithdrawals() {
                           )}
                         </div>
                         <span className="text-lg font-black text-white font-mono block">
-                          R$ {(w.annualLiquid || 0).toFixed(2).replace('.', ',')}
+                          R$ {(w.annualPending || 0).toFixed(2).replace('.', ',')}
                         </span>
                         <button
-                          disabled={!w.isEligible || (w.annualLiquid || 0) <= 0 || !isDecemberAnnualWindow}
+                          disabled={!w.isEligible || (w.annualPending || 0) <= 0 || !isDecemberAnnualWindow}
                           onClick={() => handleOpenPaymentModal(w, 'anual')}
                           title={!isDecemberAnnualWindow ? 'Bloqueado: Liberado exclusivamente no dia 10 de Dezembro' : 'Pagar Bônus Anual'}
                           className={`mt-2 w-full py-1.5 px-3 rounded-xl text-[9px] font-black uppercase tracking-wider transition-all cursor-pointer flex items-center justify-center gap-1 ${
@@ -733,23 +724,40 @@ export default function AdminWithdrawals() {
                         </button>
                       </div>
 
-                      {/* 4. Total Consolidado (Liberado Hoje) */}
+                      {/* 4. Total Consolidado (Liberado Hoje: Mensal apurado no mês) */}
                       {(() => {
-                        const liquidPayableToday = (w.digitalLiquid || 0) + 
-                          (w.canPayMonthly ? (w.monthlyLiquid || 0) : 0) + 
-                          (isDecemberAnnualWindow ? (w.annualLiquid || 0) : 0);
+                        const liquidPayableToday = w.liberadoLiquid !== undefined 
+                          ? w.liberadoLiquid 
+                          : ((w.digitalLiquid || 0) + (w.canPayMonthly ? (w.monthlyLiquid || 0) : 0));
+                        const grossPayableToday = w.liberadoPending !== undefined
+                          ? w.liberadoPending
+                          : ((w.digitalPending || 0) + (w.canPayMonthly ? (w.monthlyPending || 0) : 0));
 
                         return (
-                          <div className="bg-gradient-to-br from-indigo-900/40 to-slate-900/60 p-4 rounded-2xl border border-indigo-500/30 text-center min-w-[140px]">
+                          <div className="bg-gradient-to-br from-indigo-900/40 to-slate-900/60 p-4 rounded-2xl border border-indigo-500/30 text-center min-w-[150px]">
                             <span className="text-[9px] font-black text-indigo-300 uppercase tracking-wider block mb-1">
-                              {isDecemberAnnualWindow ? 'Total Líquido' : 'Liberado Hoje'}
+                              Liberado Hoje
                             </span>
                             <span className="text-xl font-black text-amber-400 font-mono block">
                               R$ {liquidPayableToday.toFixed(2).replace('.', ',')}
                             </span>
-                            {!isDecemberAnnualWindow && (w.annualLiquid || 0) > 0 && (
-                              <span className="text-[8px] text-slate-400 block mt-0.5 font-medium">
-                                + R$ {(w.annualLiquid || 0).toFixed(2).replace('.', ',')} em 10/Dez
+                            {!w.isPJ && grossPayableToday > 0 && (
+                              <div className="text-[8px] text-slate-400 mt-1 space-y-0.5">
+                                <span className="block font-medium">Bruto: R$ {grossPayableToday.toFixed(2).replace('.', ',')}</span>
+                                <span className="block text-amber-300/80">INSS: -R$ {(w.liberadoInss || 0).toFixed(2).replace('.', ',')}</span>
+                                {(w.liberadoIrrf || 0) > 0 && (
+                                  <span className="block text-rose-300/80">IRRF: -R$ {(w.liberadoIrrf || 0).toFixed(2).replace('.', ',')}</span>
+                                )}
+                              </div>
+                            )}
+                            {w.isPJ && grossPayableToday > 0 && (
+                              <span className="text-[8px] text-blue-300 font-bold block mt-1">
+                                PJ Isento
+                              </span>
+                            )}
+                            {!isDecemberAnnualWindow && (w.annualPending || 0) > 0 && (
+                              <span className="text-[8px] text-slate-400 block mt-1 font-medium">
+                                + R$ {(w.annualPending || 0).toFixed(2).replace('.', ',')} em 10/Dez
                               </span>
                             )}
                             <button
@@ -757,7 +765,7 @@ export default function AdminWithdrawals() {
                               onClick={() => handleOpenPaymentModal(w, 'total')}
                               className="mt-2 w-full py-1.5 px-3 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-30 disabled:pointer-events-none text-white rounded-xl text-[9px] font-black uppercase tracking-wider shadow-lg shadow-indigo-600/30 transition-all cursor-pointer"
                             >
-                              {isDecemberAnnualWindow ? 'Pagar Total' : 'Pagar Liberados'}
+                              Pagar Liberados
                             </button>
                           </div>
                         );
@@ -773,104 +781,181 @@ export default function AdminWithdrawals() {
 
         {/* CONTEÚDO DA ABA 3: HISTÓRICO DE PAGAMENTOS (AUDITORIA COMPLETA) */}
         {viewTab === 'history' && (
-          <div className="bg-[#0a0e17] rounded-[2rem] border border-white/5 p-6 lg:p-8 shadow-2xl space-y-6">
-            <div className="flex flex-wrap items-center justify-between gap-4 pb-6 border-b border-white/5">
-              <div>
-                <h3 className="text-lg font-black text-white uppercase tracking-tight">
-                  Auditoria de Pagamentos Liquidados
-                </h3>
-                <p className="text-xs text-slate-400 mt-1">
-                  Registros oficiais de baixas realizadas via PIX com comprovantes e detalhamento contábil.
-                </p>
+          <div className="space-y-6">
+            {/* Cards de Resumo Fiscal da Auditoria */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+              <div className="flex items-center gap-5 bg-[#0a0e17] p-6 rounded-3xl border border-white/5 shadow-xl">
+                <div className="size-14 bg-white/10 text-white rounded-2xl flex items-center justify-center shrink-0 font-bold text-xl">
+                  Σ
+                </div>
+                <div>
+                  <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Rendimento Bruto</p>
+                  <h3 className="text-2xl font-black text-white font-mono tracking-tight">
+                    R$ {totalHistoryBruto.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                  </h3>
+                </div>
               </div>
-              <span className="text-xs font-mono font-bold text-emerald-400 bg-emerald-500/10 px-3 py-1.5 rounded-xl border border-emerald-500/20">
-                Total de Registros: {filteredHistory.length}
-              </span>
+
+              <div className="flex items-center gap-5 bg-[#0a0e17] p-6 rounded-3xl border border-white/5 shadow-xl">
+                <div className="size-14 bg-amber-500/20 text-amber-400 rounded-2xl flex items-center justify-center shrink-0">
+                  <Receipt size={26} />
+                </div>
+                <div>
+                  <p className="text-[10px] font-black text-amber-400 uppercase tracking-widest mb-1">INSS Retido (11%)</p>
+                  <h3 className="text-2xl font-black text-amber-400 font-mono tracking-tight">
+                    - R$ {totalHistoryInss.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                  </h3>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-5 bg-[#0a0e17] p-6 rounded-3xl border border-white/5 shadow-xl">
+                <div className="size-14 bg-rose-500/20 text-rose-400 rounded-2xl flex items-center justify-center shrink-0">
+                  <FileText size={26} />
+                </div>
+                <div>
+                  <p className="text-[10px] font-black text-rose-400 uppercase tracking-widest mb-1">Imposto de Renda Retido</p>
+                  <h3 className="text-2xl font-black text-rose-400 font-mono tracking-tight">
+                    - R$ {totalHistoryIrrf.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                  </h3>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-5 bg-[#0a0e17] p-6 rounded-3xl border border-white/5 shadow-xl">
+                <div className="size-14 bg-emerald-500/20 text-emerald-400 rounded-2xl flex items-center justify-center shrink-0">
+                  <DollarSign size={28} />
+                </div>
+                <div>
+                  <p className="text-[10px] font-black text-emerald-400 uppercase tracking-widest mb-1">Total Líquido Pago</p>
+                  <h3 className="text-2xl font-black text-emerald-400 font-mono tracking-tight">
+                    R$ {totalHistoryLiquido.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                  </h3>
+                </div>
+              </div>
             </div>
 
-            {loadingHistory ? (
-              <div className="py-20 text-center">
-                <Loader2 size={36} className="animate-spin text-emerald-500 mx-auto mb-4" />
-                <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Carregando histórico de auditoria...</p>
+            <div className="bg-[#0a0e17] rounded-[2rem] border border-white/5 p-6 lg:p-8 shadow-2xl space-y-6">
+              <div className="flex flex-wrap items-center justify-between gap-4 pb-6 border-b border-white/5">
+                <div>
+                  <h3 className="text-lg font-black text-white uppercase tracking-tight">
+                    Auditoria de Pagamentos Liquidados
+                  </h3>
+                  <p className="text-xs text-slate-400 mt-1">
+                    Registros oficiais de baixas realizadas via PIX com comprovantes, retenções de INSS e Imposto de Renda.
+                  </p>
+                </div>
+                <span className="text-xs font-mono font-bold text-emerald-400 bg-emerald-500/10 px-3 py-1.5 rounded-xl border border-emerald-500/20">
+                  Total de Registros: {filteredHistory.length}
+                </span>
               </div>
-            ) : filteredHistory.length === 0 ? (
-              <div className="py-20 text-center">
-                <Receipt size={48} className="text-slate-600 mx-auto mb-4 opacity-40" />
-                <h4 className="text-base font-black text-white uppercase tracking-tight">Nenhum histórico encontrado</h4>
-                <p className="text-xs text-slate-500 mt-1">
-                  Nenhuma transação de saída/saque liquidada corresponde aos filtros selecionados.
-                </p>
-              </div>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse text-xs">
-                  <thead>
-                    <tr className="border-b border-white/10 text-slate-400 text-[10px] font-black uppercase tracking-widest">
-                      <th className="py-4 px-4">Data / Hora</th>
-                      <th className="py-4 px-4">Beneficiário</th>
-                      <th className="py-4 px-4">Categoria</th>
-                      <th className="py-4 px-4">Ciclo</th>
-                      <th className="py-4 px-4 text-right">Valor Pago</th>
-                      <th className="py-4 px-4">Chave PIX</th>
-                      <th className="py-4 px-4 text-center">Comprovante</th>
-                      <th className="py-4 px-4 text-center">Status</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-white/5">
-                    {paginatedList.map((h: any) => (
-                      <tr key={h.id} className="hover:bg-white/5 transition-colors">
-                        <td className="py-4 px-4 text-slate-400 font-mono whitespace-nowrap">
-                          {new Date(h.date).toLocaleDateString('pt-BR')} às {new Date(h.date).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
-                        </td>
-                        <td className="py-4 px-4">
-                          <div className="flex flex-col">
-                            <span className="font-bold text-white uppercase">{h.userName}</span>
-                            <span className="text-[10px] text-slate-500 font-mono">CPF: {h.cpf}</span>
-                          </div>
-                        </td>
-                        <td className="py-4 px-4">
-                          <span className={`px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-wider ${
-                            h.categoryLabel === 'Revendedor Regional' 
-                              ? 'bg-purple-500/20 text-purple-300' 
-                              : 'bg-indigo-500/20 text-indigo-300'
-                          }`}>
-                            {h.categoryLabel}
-                          </span>
-                        </td>
-                        <td className="py-4 px-4 font-bold text-slate-300">
-                          {h.cycleLabel}
-                        </td>
-                        <td className="py-4 px-4 text-right font-mono font-black text-emerald-400 text-sm">
-                          R$ {h.amount.toFixed(2).replace('.', ',')}
-                        </td>
-                        <td className="py-4 px-4 font-mono text-slate-400 text-[11px]">
-                          {h.pixKey}
-                        </td>
-                        <td className="py-4 px-4 text-center">
-                          {h.receiptUrl ? (
-                            <a 
-                              href={h.receiptUrl} 
-                              target="_blank" 
-                              rel="noreferrer"
-                              className="inline-flex items-center gap-1 px-3 py-1 rounded-xl bg-indigo-500/20 hover:bg-indigo-500/30 text-indigo-300 font-black text-[9px] uppercase tracking-wider transition-colors"
-                            >
-                              <FileText size={12} /> Ver Recibo
-                            </a>
-                          ) : (
-                            <span className="text-[9px] text-slate-600 font-bold uppercase">---</span>
-                          )}
-                        </td>
-                        <td className="py-4 px-4 text-center">
-                          <span className="inline-flex items-center gap-1 text-[9px] font-black px-2.5 py-1 rounded-full bg-emerald-500/20 text-emerald-400 uppercase tracking-wider">
-                            <CheckCircle2 size={11} /> Liquidado
-                          </span>
-                        </td>
+
+              {loadingHistory ? (
+                <div className="py-20 text-center">
+                  <Loader2 size={36} className="animate-spin text-emerald-500 mx-auto mb-4" />
+                  <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Carregando histórico de auditoria...</p>
+                </div>
+              ) : filteredHistory.length === 0 ? (
+                <div className="py-20 text-center">
+                  <Receipt size={48} className="text-slate-600 mx-auto mb-4 opacity-40" />
+                  <h4 className="text-base font-black text-white uppercase tracking-tight">Nenhum histórico encontrado</h4>
+                  <p className="text-xs text-slate-500 mt-1">
+                    Nenhuma transação de saída/saque liquidada corresponde aos filtros selecionados.
+                  </p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse text-xs">
+                    <thead>
+                      <tr className="border-b border-white/10 text-slate-400 text-[10px] font-black uppercase tracking-widest">
+                        <th className="py-4 px-3">Data / Hora</th>
+                        <th className="py-4 px-3">Beneficiário</th>
+                        <th className="py-4 px-3 text-center">Tipo</th>
+                        <th className="py-4 px-3">Categoria</th>
+                        <th className="py-4 px-3">Ciclo</th>
+                        <th className="py-4 px-3 text-right">Rendimento Bruto</th>
+                        <th className="py-4 px-3 text-right">INSS (11%)</th>
+                        <th className="py-4 px-3 text-right">Imposto de Renda Retido</th>
+                        <th className="py-4 px-3 text-right">Valor Líquido</th>
+                        <th className="py-4 px-3">Chave PIX</th>
+                        <th className="py-4 px-3 text-center">Comprovante</th>
+                        <th className="py-4 px-3 text-center">Status</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
+                    </thead>
+                    <tbody className="divide-y divide-white/5">
+                      {paginatedList.map((h: any) => (
+                        <tr key={h.id} className="hover:bg-white/5 transition-colors">
+                          <td className="py-4 px-3 text-slate-400 font-mono whitespace-nowrap">
+                            {new Date(h.date).toLocaleDateString('pt-BR')} às {new Date(h.date).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                          </td>
+                          <td className="py-4 px-3">
+                            <div className="flex flex-col">
+                              <span className="font-bold text-white uppercase">{h.userName}</span>
+                              <span className="text-[10px] text-slate-500 font-mono">CPF: {h.cpf}</span>
+                            </div>
+                          </td>
+                          <td className="py-4 px-3 text-center whitespace-nowrap">
+                            {h.isPJ ? (
+                              <span className="px-2 py-0.5 rounded text-[9px] font-black uppercase bg-purple-500/10 text-purple-300 border border-purple-500/20">
+                                PJ
+                              </span>
+                            ) : (
+                              <span className="px-2 py-0.5 rounded text-[9px] font-black uppercase bg-amber-500/10 text-amber-300 border border-amber-500/20">
+                                PF
+                              </span>
+                            )}
+                          </td>
+                          <td className="py-4 px-3 whitespace-nowrap">
+                            <span className={`px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-wider ${
+                              h.categoryLabel === 'Revendedor Regional' 
+                                ? 'bg-purple-500/20 text-purple-300' 
+                                : 'bg-indigo-500/20 text-indigo-300'
+                            }`}>
+                              {h.categoryLabel}
+                            </span>
+                          </td>
+                          <td className="py-4 px-3 font-bold text-slate-300 whitespace-nowrap">
+                            {h.cycleLabel}
+                          </td>
+                          <td className="py-4 px-3 text-right font-mono font-bold text-white whitespace-nowrap">
+                            R$ {(h.bruto || h.amount || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                          </td>
+                          <td className="py-4 px-3 text-right font-mono font-bold text-amber-400 whitespace-nowrap">
+                            {(h.inss || 0) > 0 ? `- R$ ${(h.inss).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : 'R$ 0,00'}
+                          </td>
+                          <td className="py-4 px-3 text-right font-mono font-bold text-rose-400 whitespace-nowrap">
+                            {(h.irrf || 0) > 0 ? `- R$ ${(h.irrf).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : 'R$ 0,00'}
+                          </td>
+                          <td className="py-4 px-3 text-right font-mono font-black text-emerald-400 text-sm whitespace-nowrap">
+                            R$ {(h.liquido !== undefined ? h.liquido : (h.amount || 0)).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                          </td>
+                          <td className="py-4 px-3 font-mono text-slate-400 text-[11px] whitespace-nowrap">
+                            {h.pixKey}
+                          </td>
+                          <td className="py-4 px-3 text-center whitespace-nowrap">
+                            {h.receiptUrl ? (
+                              <a 
+                                href={h.receiptUrl} 
+                                target="_blank" 
+                                rel="noreferrer" 
+                                className="inline-flex items-center gap-1 px-3 py-1 rounded-xl bg-indigo-500/20 hover:bg-indigo-500/30 text-indigo-300 font-black text-[9px] uppercase tracking-wider transition-colors"
+                              >
+                                <FileText size={12} /> Ver Recibo
+                              </a>
+                            ) : (
+                              <span className="text-[9px] text-slate-600 font-bold uppercase">---</span>
+                            )}
+                          </td>
+                          <td className="py-4 px-3 text-center whitespace-nowrap">
+                            <span className="inline-flex items-center gap-1 text-[9px] font-black px-2.5 py-1 rounded-full bg-emerald-500/20 text-emerald-400 uppercase tracking-wider">
+                              <CheckCircle2 size={11} /> Liquidado
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
           </div>
         )}
 

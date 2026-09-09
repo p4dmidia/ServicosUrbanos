@@ -45,7 +45,10 @@ export default function Cadastro() {
     const [termsAccepted, setTermsAccepted] = useState(false);
     const [showTermsModal, setShowTermsModal] = useState(false);
 
-    // Form States
+    // Person Type State (Pessoa Física ou Pessoa Jurídica)
+    const [personType, setPersonType] = useState<'PF' | 'PJ'>('PF');
+
+    // Form States (Pessoa Física / Geral)
     const [fullName, setFullName] = useState('');
     const [whatsapp, setWhatsapp] = useState('');
     const [email, setEmail] = useState('');
@@ -54,6 +57,30 @@ export default function Cadastro() {
     const [gender, setGender] = useState('');
     const [password, setPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
+
+    // Form States (Pessoa Jurídica e Titular do Seguro)
+    const [companyName, setCompanyName] = useState('');
+    const [cnpj, setCnpj] = useState('');
+    const [insuredName, setInsuredName] = useState(''); // Nome da pessoa física titular do seguro
+    const [insuredCpf, setInsuredCpf] = useState(''); // CPF do titular do seguro
+
+    // Formatadores de Documentos
+    const formatCpf = (val: string) => {
+        const num = val.replace(/\D/g, '').slice(0, 11);
+        if (num.length <= 3) return num;
+        if (num.length <= 6) return `${num.slice(0, 3)}.${num.slice(3)}`;
+        if (num.length <= 9) return `${num.slice(0, 3)}.${num.slice(3, 6)}.${num.slice(6)}`;
+        return `${num.slice(0, 3)}.${num.slice(3, 6)}.${num.slice(6, 9)}-${num.slice(9)}`;
+    };
+
+    const formatCnpj = (val: string) => {
+        const num = val.replace(/\D/g, '').slice(0, 14);
+        if (num.length <= 2) return num;
+        if (num.length <= 5) return `${num.slice(0, 2)}.${num.slice(2)}`;
+        if (num.length <= 8) return `${num.slice(0, 2)}.${num.slice(2, 5)}.${num.slice(5)}`;
+        if (num.length <= 12) return `${num.slice(0, 2)}.${num.slice(2, 5)}.${num.slice(5, 8)}/${num.slice(8)}`;
+        return `${num.slice(0, 2)}.${num.slice(2, 5)}.${num.slice(5, 8)}/${num.slice(8, 12)}-${num.slice(12)}`;
+    };
 
     // Sponsor (Patrocinador MMN)
     const [referralCode, setReferralCode] = useState('');
@@ -69,6 +96,7 @@ export default function Cadastro() {
     const [isSearchingReseller, setIsSearchingReseller] = useState(false);
     const [isResellerLocked, setIsResellerLocked] = useState(false);
     const [isSameAsReseller, setIsSameAsReseller] = useState(false);
+    const [isIndicatedViaLink, setIsIndicatedViaLink] = useState(false);
 
     const [bankName, setBankName] = useState('');
     const [pixKey, setPixKey] = useState('');
@@ -76,37 +104,50 @@ export default function Cadastro() {
     const [bankAccount, setBankAccount] = useState('');
 
     useEffect(() => {
-        // 1. Ler parâmetros da URL
+        // 1. Ler parâmetros da URL (indicação ativa via link)
         const refParam = searchParams.get('ref') || searchParams.get('indicador');
         const revParam = searchParams.get('rev') || searchParams.get('reseller') || searchParams.get('revendedor');
 
-        // 2. Revendedor Regional
-        const storedRev = revParam || localStorage.getItem('urba_reseller');
-        if (storedRev) {
-            setResellerCode(storedRev);
-            fetchResellerName(storedRev);
-            if (revParam) setIsResellerLocked(true);
-        }
+        // Se houver indicação explícita na URL atual
+        if (refParam || revParam) {
+            setIsIndicatedViaLink(true);
 
-        // 3. Patrocinador MMN
-        // Se o ref for igual ao revendedor, ignorar para que o campo comece vazio!
-        const isRefSame = (refParam && storedRev && refParam.trim().toUpperCase() === storedRev.trim().toUpperCase()) ||
-                          (localStorage.getItem('urba_referral')?.trim().toUpperCase() === storedRev?.trim().toUpperCase());
+            // A) Se tem indicação de patrocinador MMN:
+            if (refParam) {
+                setReferralCode(refParam);
+                setIsReferralLocked(true);
+                localStorage.setItem('urba_referral', refParam);
+                fetchReferrerName(refParam, !revParam);
+            }
 
-        if (refParam && !isRefSame) {
-            setReferralCode(refParam);
-            fetchReferrerName(refParam);
+            // B) Se tem indicação de revendedor regional:
+            if (revParam) {
+                setResellerCode(revParam);
+                setIsResellerLocked(true);
+                localStorage.setItem('urba_reseller', revParam);
+                // Se NÃO tem outro patrocinador especificado, o próprio revendedor regional é também o patrocinador MMN!
+                fetchResellerName(revParam, !refParam);
+            }
         } else {
+            // Acesso direto pelo site (sem link de indicação)
+            // Remove qualquer dado residual de testes ou links anteriores do navegador
+            localStorage.removeItem('urba_referral');
+            localStorage.removeItem('urba_reseller');
+
+            setIsIndicatedViaLink(false);
             setReferralCode('');
             setReferrerName(null);
             setReferrerId(null);
+            setResellerCode('');
+            setResellerName(null);
+            setResellerId(null);
             setIsReferralLocked(false);
+            setIsResellerLocked(false);
             setIsSameAsReseller(false);
-            localStorage.removeItem('urba_referral');
         }
     }, [searchParams]);
 
-    const fetchReferrerName = async (codeOrId: string) => {
+    const fetchReferrerName = async (codeOrId: string, autoFillReseller: boolean = true) => {
         if (!codeOrId || codeOrId.trim().length < 3) {
             setReferrerName(null);
             setReferrerId(null);
@@ -121,33 +162,52 @@ export default function Cadastro() {
 
             const { data: results } = await supabase
                 .from('profiles')
-                .select('id, full_name, referral_code')
+                .select('id, full_name, referral_code, reseller_id, role')
                 .or(`referral_code.eq.${cleanCode},cpf.eq.${cleanCpf || 'none'}`)
                 .limit(1);
 
-            const byCode = results && results.length > 0 ? results[0] : null;
+            let sponsor = results && results.length > 0 ? results[0] : null;
 
-            if (byCode) {
-                setReferrerName(byCode.full_name);
-                setReferrerId(byCode.id);
-                setIsSearching(false);
-                return;
+            if (!sponsor) {
+                const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+                if (uuidRegex.test(codeOrId.trim())) {
+                    const { data: byId } = await supabase
+                        .from('profiles')
+                        .select('id, full_name, referral_code, reseller_id, role')
+                        .eq('id', codeOrId.trim())
+                        .single();
+                    if (byId) sponsor = byId;
+                }
             }
 
-            const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-            if (uuidRegex.test(codeOrId.trim())) {
-                const { data: byId } = await supabase
-                    .from('profiles')
-                    .select('id, full_name')
-                    .eq('id', codeOrId.trim())
-                    .single();
+            if (sponsor) {
+                setReferrerName(sponsor.full_name);
+                setReferrerId(sponsor.id);
+                setIsSearching(false);
 
-                if (byId) {
-                    setReferrerName(byId.full_name);
-                    setReferrerId(byId.id);
-                    setIsSearching(false);
-                    return;
+                // Se autoFillReseller estiver ativo e o patrocinador tiver um revendedor regional vinculado:
+                if (autoFillReseller) {
+                    if (sponsor.role === 'regional_reseller') {
+                        const rCode = sponsor.referral_code || sponsor.id;
+                        setResellerCode(rCode);
+                        setResellerName(sponsor.full_name);
+                        setResellerId(sponsor.id);
+                        setIsResellerLocked(true);
+                    } else if (sponsor.reseller_id) {
+                        const { data: resData } = await supabase
+                            .from('profiles')
+                            .select('id, full_name, referral_code, role')
+                            .eq('id', sponsor.reseller_id)
+                            .single();
+                        if (resData) {
+                            setResellerCode(resData.referral_code || resData.id);
+                            setResellerName(resData.full_name);
+                            setResellerId(resData.id);
+                            setIsResellerLocked(true);
+                        }
+                    }
                 }
+                return;
             }
 
             setReferrerName(null);
@@ -161,7 +221,7 @@ export default function Cadastro() {
         }
     };
 
-    const fetchResellerName = async (codeOrId: string) => {
+    const fetchResellerName = async (codeOrId: string, autoFillSponsor: boolean = false) => {
         if (!codeOrId || codeOrId.trim().length < 3) {
             setResellerName(null);
             setResellerId(null);
@@ -180,28 +240,34 @@ export default function Cadastro() {
                 .or(`referral_code.eq.${cleanCode},cpf.eq.${cleanCpf || 'none'}`)
                 .limit(1);
 
-            const found = results && results.length > 0 ? results[0] : null;
-            if (found) {
-                setResellerName(found.full_name);
-                setResellerId(found.id);
-                setIsSearchingReseller(false);
-                return;
+            let reseller = results && results.length > 0 ? results[0] : null;
+
+            if (!reseller) {
+                const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+                if (uuidRegex.test(codeOrId.trim())) {
+                    const { data: byId } = await supabase
+                        .from('profiles')
+                        .select('id, full_name, referral_code, role')
+                        .eq('id', codeOrId.trim())
+                        .single();
+                    if (byId) reseller = byId;
+                }
             }
 
-            const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-            if (uuidRegex.test(codeOrId.trim())) {
-                const { data: byId } = await supabase
-                    .from('profiles')
-                    .select('id, full_name')
-                    .eq('id', codeOrId.trim())
-                    .single();
+            if (reseller) {
+                setResellerName(reseller.full_name);
+                setResellerId(reseller.id);
+                setIsSearchingReseller(false);
 
-                if (byId) {
-                    setResellerName(byId.full_name);
-                    setResellerId(byId.id);
-                    setIsSearchingReseller(false);
-                    return;
+                // Se autoFillSponsor estiver ativo (pessoa entrou por link de revendedor sem outro ref),
+                // o próprio revendedor regional já preenche e confirma o Patrocinador MMN!
+                if (autoFillSponsor) {
+                    setReferralCode(reseller.referral_code || codeOrId);
+                    setReferrerName(reseller.full_name);
+                    setReferrerId(reseller.id);
+                    setIsReferralLocked(true);
                 }
+                return;
             }
 
             setResellerName(null);
@@ -348,20 +414,57 @@ export default function Cadastro() {
             return;
         }
 
-        if (!fullName.trim() || !whatsapp.trim() || !cpf.trim() || !email.trim()) {
-            setError("Por favor, preencha todos os dados pessoais básicos (Nome, WhatsApp, CPF e E-mail).");
-            setLoading(false);
-            return;
+        if (personType === 'PF') {
+            if (!fullName.trim() || !whatsapp.trim() || !cpf.trim() || !email.trim()) {
+                setError("Por favor, preencha todos os dados pessoais básicos (Nome, WhatsApp, CPF e E-mail).");
+                setLoading(false);
+                return;
+            }
+
+            if (cpf.replace(/\D/g, '').length !== 11) {
+                setError("O CPF informado deve conter exatamente 11 dígitos numéricos.");
+                setLoading(false);
+                return;
+            }
+        } else {
+            // Validações da Pessoa Jurídica
+            if (!companyName.trim() || !cnpj.trim() || !whatsapp.trim() || !email.trim()) {
+                setError("Por favor, preencha a Razão Social, CNPJ, WhatsApp e E-mail da empresa.");
+                setLoading(false);
+                return;
+            }
+
+            if (cnpj.replace(/\D/g, '').length !== 14) {
+                setError("O CNPJ informado deve conter 14 dígitos numéricos.");
+                setLoading(false);
+                return;
+            }
+
+            // Validação crucial: Titular do Seguro para PJ
+            if (!insuredName.trim()) {
+                setError("Por favor, informe o nome completo da pessoa física que terá direito ao seguro de vida MBM.");
+                setLoading(false);
+                return;
+            }
+
+            if (!insuredCpf.trim() || insuredCpf.replace(/\D/g, '').length !== 11) {
+                setError("Por favor, informe um CPF válido (11 dígitos) para o titular com direito ao seguro de vida.");
+                setLoading(false);
+                return;
+            }
         }
 
         if (!birthDate || !gender) {
-            setError("Data de nascimento e gênero são obrigatórios para a apólice de seguro.");
+            setError(personType === 'PJ' 
+                ? "Data de nascimento e sexo do titular do seguro são obrigatórios para a apólice MBM."
+                : "Data de nascimento e sexo são obrigatórios para a apólice de seguro."
+            );
             setLoading(false);
             return;
         }
 
         if (!zipCode || !address || !number || !neighborhood || !city || !state) {
-            setError("Por favor, preencha o endereço completo (CEP, logradouro, número, bairro, cidade e estado) para a apólice de seguro.");
+            setError("Por favor, preencha o endereço completo (CEP, logradouro, número, bairro, cidade e estado).");
             setLoading(false);
             return;
         }
@@ -387,15 +490,25 @@ export default function Cadastro() {
         const finalSponsorId = referrerId || SIC_COMERCIO_ID;
         const finalResellerId = resellerId || SIC_COMERCIO_ID;
 
+        const finalDisplayName = personType === 'PJ' ? companyName.trim() : fullName.trim();
+        const finalCpf = personType === 'PJ' ? insuredCpf.replace(/\D/g, '') : cpf.replace(/\D/g, '');
+        const cleanCnpj = personType === 'PJ' ? cnpj.replace(/\D/g, '') : null;
+        const finalInsuredName = personType === 'PJ' ? insuredName.trim() : fullName.trim();
+
         try {
             const { data, error: signUpError } = await supabase.auth.signUp({
                 email,
                 password,
                 options: {
                     data: {
-                        full_name: fullName,
+                        person_type: personType,
+                        full_name: finalDisplayName,
+                        store_name: personType === 'PJ' ? companyName.trim() : undefined,
+                        cnpj: cleanCnpj,
+                        cpf: finalCpf,
+                        insured_person_name: finalInsuredName,
+                        insured_person_cpf: finalCpf,
                         whatsapp: whatsapp,
-                        cpf: cpf.replace(/\D/g, ''),
                         role: 'affiliate',
                         referred_by: finalSponsorId,
                         reseller_id: finalResellerId,
@@ -410,7 +523,8 @@ export default function Cadastro() {
                         bank_name: bankName,
                         bank_branch: bankBranch,
                         bank_account: bankAccount,
-                        pix_key: pixKey
+                        pix_key: pixKey,
+                        pix_type: personType === 'PJ' ? 'cnpj' : 'cpf'
                     }
                 }
             });
@@ -426,10 +540,10 @@ export default function Cadastro() {
             }
 
             if (data?.user?.id) {
-                await supabase.from('profiles').update({
-                    full_name: fullName,
+                const profilePayload: any = {
+                    full_name: finalDisplayName,
                     whatsapp: whatsapp,
-                    cpf: cpf.replace(/\D/g, ''),
+                    cpf: finalCpf,
                     role: 'affiliate',
                     referred_by: finalSponsorId,
                     reseller_id: finalResellerId,
@@ -444,8 +558,17 @@ export default function Cadastro() {
                     bank_name: bankName,
                     bank_branch: bankBranch,
                     bank_account: bankAccount,
-                    pix_key: pixKey
-                }).eq('id', data.user.id);
+                    pix_key: pixKey,
+                    pix_type: personType === 'PJ' ? 'cnpj' : 'cpf'
+                };
+
+                if (personType === 'PJ') {
+                    profilePayload.cnpj = cleanCnpj;
+                    profilePayload.store_name = companyName.trim();
+                    profilePayload.description = `[PJ] Titular do Seguro: ${finalInsuredName} | CPF Segurado: ${finalCpf}`;
+                }
+
+                await supabase.from('profiles').update(profilePayload).eq('id', data.user.id);
             }
 
             toast.success('Conta criada com sucesso!', {
@@ -615,98 +738,349 @@ export default function Cadastro() {
                                 </div>
                             </div>
 
-                            {/* Seção 1: Dados Pessoais */}
+                            {/* Seção 1: Tipo de Conta e Identificação */}
                             <div className="space-y-6">
-                                <div className="flex items-center gap-3 mb-2 underline-offset-8">
-                                    <div className="size-1.5 rounded-full bg-emerald-500" />
-                                    <h3 className="text-[11px] font-black uppercase tracking-widest text-midnight">01. Identificação Pessoal</h3>
+                                <div className="flex items-center justify-between gap-3 mb-2 underline-offset-8 flex-wrap">
+                                    <div className="flex items-center gap-3">
+                                        <div className="size-1.5 rounded-full bg-emerald-500" />
+                                        <h3 className="text-[11px] font-black uppercase tracking-widest text-midnight">
+                                            01. Identificação e Perfil Tributário
+                                        </h3>
+                                    </div>
+                                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                                        Pessoa Física ou Jurídica
+                                    </span>
                                 </div>
 
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                    <div className="flex flex-col gap-2">
-                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Nome Completo</label>
-                                        <div className="relative group">
-                                            <User className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300 group-focus-within:text-emerald-500 transition-colors" size={18} />
-                                            <input
-                                                required
-                                                type="text"
-                                                value={fullName}
-                                                onChange={(e) => setFullName(e.target.value)}
-                                                placeholder="João da Silva Pereira"
-                                                className="w-full pl-12 pr-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500/50 transition-all font-bold text-midnight placeholder:text-slate-300"
-                                            />
+                                {/* SELETOR PF / PJ */}
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    {/* Botão Pessoa Física */}
+                                    <button
+                                        type="button"
+                                        onClick={() => setPersonType('PF')}
+                                        className={`p-5 rounded-2xl border text-left transition-all relative flex flex-col justify-between gap-3 cursor-pointer ${
+                                            personType === 'PF'
+                                                ? 'bg-emerald-50/60 border-emerald-500 ring-2 ring-emerald-500/20 shadow-md'
+                                                : 'bg-slate-50 border-slate-200 hover:bg-white hover:border-slate-300'
+                                        }`}
+                                    >
+                                        <div className="flex items-center justify-between">
+                                            <div className="flex items-center gap-3">
+                                                <div className={`size-9 rounded-xl flex items-center justify-center font-black ${
+                                                    personType === 'PF' ? 'bg-emerald-500 text-white shadow-sm' : 'bg-slate-200 text-slate-500'
+                                                }`}>
+                                                    <User size={18} />
+                                                </div>
+                                                <div>
+                                                    <span className="text-xs font-black text-midnight uppercase tracking-wide block">
+                                                        Pessoa Física (PF)
+                                                    </span>
+                                                    <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">
+                                                        Cadastro com CPF
+                                                    </span>
+                                                </div>
+                                            </div>
+                                            <span className={`text-[9px] font-black uppercase px-2.5 py-1 rounded-lg ${
+                                                personType === 'PF' ? 'bg-emerald-500 text-white shadow-sm' : 'bg-slate-200 text-slate-600'
+                                            }`}>
+                                                INSS / IRPF
+                                            </span>
                                         </div>
-                                    </div>
-                                    <div className="flex flex-col gap-2">
-                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">WhatsApp de Contato</label>
-                                        <div className="relative group">
-                                            <Smartphone className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300 group-focus-within:text-emerald-500 transition-colors" size={18} />
-                                            <input
-                                                required
-                                                type="tel"
-                                                value={whatsapp}
-                                                onChange={(e) => setWhatsapp(e.target.value)}
-                                                placeholder="(00) 90000-0000"
-                                                className="w-full pl-12 pr-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500/50 transition-all font-bold text-midnight placeholder:text-slate-300"
-                                            />
+                                        <p className="text-[11px] text-slate-500 font-medium leading-relaxed">
+                                            Paga os impostos normais (retenção na fonte de INSS 11% e tabela progressiva do IRRF). Seguro Vida Light MBM é emitido em seu próprio nome.
+                                        </p>
+                                    </button>
+
+                                    {/* Botão Pessoa Jurídica */}
+                                    <button
+                                        type="button"
+                                        onClick={() => setPersonType('PJ')}
+                                        className={`p-5 rounded-2xl border text-left transition-all relative flex flex-col justify-between gap-3 cursor-pointer ${
+                                            personType === 'PJ'
+                                                ? 'bg-purple-50/60 border-purple-500 ring-2 ring-purple-500/20 shadow-md'
+                                                : 'bg-slate-50 border-slate-200 hover:bg-white hover:border-slate-300'
+                                        }`}
+                                    >
+                                        <div className="flex items-center justify-between">
+                                            <div className="flex items-center gap-3">
+                                                <div className={`size-9 rounded-xl flex items-center justify-center font-black ${
+                                                    personType === 'PJ' ? 'bg-purple-600 text-white shadow-sm' : 'bg-slate-200 text-slate-500'
+                                                }`}>
+                                                    <Building2 size={18} />
+                                                </div>
+                                                <div>
+                                                    <span className="text-xs font-black text-midnight uppercase tracking-wide block">
+                                                        Pessoa Jurídica (PJ)
+                                                    </span>
+                                                    <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">
+                                                        Empresa com CNPJ
+                                                    </span>
+                                                </div>
+                                            </div>
+                                            <span className={`text-[9px] font-black uppercase px-2.5 py-1 rounded-lg ${
+                                                personType === 'PJ' ? 'bg-purple-600 text-white shadow-sm' : 'bg-slate-200 text-slate-600'
+                                            }`}>
+                                                PJ Isento (Sem Retenção)
+                                            </span>
                                         </div>
-                                    </div>
-                                    <div className="flex flex-col gap-2">
-                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Endereço de E-mail</label>
-                                        <div className="relative group">
-                                            <Globe className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300 group-focus-within:text-emerald-500 transition-colors" size={18} />
-                                            <input
-                                                required
-                                                type="email"
-                                                value={email}
-                                                onChange={(e) => setEmail(e.target.value)}
-                                                placeholder="contato@exemplo.com"
-                                                className="w-full pl-12 pr-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500/50 transition-all font-bold text-midnight placeholder:text-slate-300"
-                                            />
-                                        </div>
-                                    </div>
-                                    <div className="flex flex-col gap-2">
-                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Documento (CPF)</label>
-                                        <div className="relative group">
-                                            <ShieldCheck className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300 group-focus-within:text-emerald-500 transition-colors" size={18} />
-                                            <input
-                                                required
-                                                type="text"
-                                                value={cpf}
-                                                onChange={(e) => setCpf(e.target.value)}
-                                                placeholder="000.000.000-00"
-                                                className="w-full pl-12 pr-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500/50 transition-all font-bold text-midnight placeholder:text-slate-300"
-                                            />
-                                        </div>
-                                    </div>
-                                    <div className="flex flex-col gap-2">
-                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Data de Nascimento</label>
-                                        <div className="relative group">
-                                            <input
-                                                required
-                                                type="date"
-                                                value={birthDate}
-                                                onChange={(e) => setBirthDate(e.target.value)}
-                                                className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500/50 transition-all font-bold text-midnight"
-                                            />
-                                        </div>
-                                    </div>
-                                    <div className="flex flex-col gap-2">
-                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Sexo</label>
-                                        <div className="relative group">
-                                            <select
-                                                required
-                                                value={gender}
-                                                onChange={(e) => setGender(e.target.value)}
-                                                className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500/50 transition-all font-bold text-midnight appearance-none"
-                                            >
-                                                <option value="" disabled>Selecione...</option>
-                                                <option value="M">Masculino</option>
-                                                <option value="F">Feminino</option>
-                                            </select>
-                                        </div>
-                                    </div>
+                                        <p className="text-[11px] text-slate-500 font-medium leading-relaxed">
+                                            Não paga impostos retidos (isento de INSS e IRRF via NFS-e). Requer indicar o nome da pessoa física com direito ao seguro de vida.
+                                        </p>
+                                    </button>
                                 </div>
+
+                                {personType === 'PF' ? (
+                                    /* CAMPOS PESSOA FÍSICA */
+                                    <div className="space-y-6">
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                            <div className="flex flex-col gap-2">
+                                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Nome Completo</label>
+                                                <div className="relative group">
+                                                    <User className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300 group-focus-within:text-emerald-500 transition-colors" size={18} />
+                                                    <input
+                                                        required
+                                                        type="text"
+                                                        value={fullName}
+                                                        onChange={(e) => setFullName(e.target.value)}
+                                                        placeholder="João da Silva Pereira"
+                                                        className="w-full pl-12 pr-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500/50 transition-all font-bold text-midnight placeholder:text-slate-300"
+                                                    />
+                                                </div>
+                                            </div>
+                                            <div className="flex flex-col gap-2">
+                                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Documento (CPF)</label>
+                                                <div className="relative group">
+                                                    <ShieldCheck className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300 group-focus-within:text-emerald-500 transition-colors" size={18} />
+                                                    <input
+                                                        required
+                                                        type="text"
+                                                        value={cpf}
+                                                        onChange={(e) => setCpf(formatCpf(e.target.value))}
+                                                        placeholder="000.000.000-00"
+                                                        maxLength={14}
+                                                        className="w-full pl-12 pr-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500/50 transition-all font-bold text-midnight placeholder:text-slate-300 font-mono"
+                                                    />
+                                                </div>
+                                            </div>
+                                            <div className="flex flex-col gap-2">
+                                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">WhatsApp de Contato</label>
+                                                <div className="relative group">
+                                                    <Smartphone className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300 group-focus-within:text-emerald-500 transition-colors" size={18} />
+                                                    <input
+                                                        required
+                                                        type="tel"
+                                                        value={whatsapp}
+                                                        onChange={(e) => setWhatsapp(e.target.value)}
+                                                        placeholder="(00) 90000-0000"
+                                                        className="w-full pl-12 pr-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500/50 transition-all font-bold text-midnight placeholder:text-slate-300"
+                                                    />
+                                                </div>
+                                            </div>
+                                            <div className="flex flex-col gap-2">
+                                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Endereço de E-mail</label>
+                                                <div className="relative group">
+                                                    <Globe className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300 group-focus-within:text-emerald-500 transition-colors" size={18} />
+                                                    <input
+                                                        required
+                                                        type="email"
+                                                        value={email}
+                                                        onChange={(e) => setEmail(e.target.value)}
+                                                        placeholder="contato@exemplo.com"
+                                                        className="w-full pl-12 pr-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500/50 transition-all font-bold text-midnight placeholder:text-slate-300"
+                                                    />
+                                                </div>
+                                            </div>
+                                            <div className="flex flex-col gap-2">
+                                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Data de Nascimento (Titular)</label>
+                                                <div className="relative group">
+                                                    <input
+                                                        required
+                                                        type="date"
+                                                        value={birthDate}
+                                                        onChange={(e) => setBirthDate(e.target.value)}
+                                                        className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500/50 transition-all font-bold text-midnight"
+                                                    />
+                                                </div>
+                                            </div>
+                                            <div className="flex flex-col gap-2">
+                                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Sexo (Titular)</label>
+                                                <div className="relative group">
+                                                    <select
+                                                        required
+                                                        value={gender}
+                                                        onChange={(e) => setGender(e.target.value)}
+                                                        className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500/50 transition-all font-bold text-midnight appearance-none"
+                                                    >
+                                                        <option value="" disabled>Selecione...</option>
+                                                        <option value="M">Masculino</option>
+                                                        <option value="F">Feminino</option>
+                                                    </select>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div className="bg-emerald-500/10 border border-emerald-500/20 p-4 rounded-2xl flex items-center gap-3 text-xs text-emerald-900">
+                                            <ShieldCheck size={20} className="text-emerald-600 shrink-0" />
+                                            <span><strong>Seguro Vida Light MBM (R$ 5.000,00):</strong> Emitido automaticamente em seu próprio nome e CPF. Os recebimentos como Pessoa Física sofrem retenção fiscal de INSS e IRRF conforme legislação previdenciária.</span>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    /* CAMPOS PESSOA JURÍDICA */
+                                    <div className="space-y-6">
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                            <div className="flex flex-col gap-2">
+                                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Razão Social / Nome Empresarial *</label>
+                                                <div className="relative group">
+                                                    <Building2 className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300 group-focus-within:text-purple-500 transition-colors" size={18} />
+                                                    <input
+                                                        required
+                                                        type="text"
+                                                        value={companyName}
+                                                        onChange={(e) => setCompanyName(e.target.value)}
+                                                        placeholder="Acme Serviços e Comércio Ltda"
+                                                        className="w-full pl-12 pr-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:outline-none focus:ring-4 focus:ring-purple-500/10 focus:border-purple-500/50 transition-all font-bold text-midnight placeholder:text-slate-300"
+                                                    />
+                                                </div>
+                                            </div>
+                                            <div className="flex flex-col gap-2">
+                                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">CNPJ da Empresa *</label>
+                                                <div className="relative group">
+                                                    <ShieldCheck className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300 group-focus-within:text-purple-500 transition-colors" size={18} />
+                                                    <input
+                                                        required
+                                                        type="text"
+                                                        value={cnpj}
+                                                        onChange={(e) => setCnpj(formatCnpj(e.target.value))}
+                                                        placeholder="00.000.000/0000-00"
+                                                        maxLength={18}
+                                                        className="w-full pl-12 pr-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:outline-none focus:ring-4 focus:ring-purple-500/10 focus:border-purple-500/50 transition-all font-bold text-midnight placeholder:text-slate-300 font-mono"
+                                                    />
+                                                </div>
+                                            </div>
+                                            <div className="flex flex-col gap-2">
+                                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">WhatsApp Comercial da Empresa *</label>
+                                                <div className="relative group">
+                                                    <Smartphone className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300 group-focus-within:text-purple-500 transition-colors" size={18} />
+                                                    <input
+                                                        required
+                                                        type="tel"
+                                                        value={whatsapp}
+                                                        onChange={(e) => setWhatsapp(e.target.value)}
+                                                        placeholder="(00) 90000-0000"
+                                                        className="w-full pl-12 pr-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:outline-none focus:ring-4 focus:ring-purple-500/10 focus:border-purple-500/50 transition-all font-bold text-midnight placeholder:text-slate-300"
+                                                    />
+                                                </div>
+                                            </div>
+                                            <div className="flex flex-col gap-2">
+                                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">E-mail Corporativo / Financeiro *</label>
+                                                <div className="relative group">
+                                                    <Globe className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300 group-focus-within:text-purple-500 transition-colors" size={18} />
+                                                    <input
+                                                        required
+                                                        type="email"
+                                                        value={email}
+                                                        onChange={(e) => setEmail(e.target.value)}
+                                                        placeholder="financeiro@suaempresa.com.br"
+                                                        className="w-full pl-12 pr-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:outline-none focus:ring-4 focus:ring-purple-500/10 focus:border-purple-500/50 transition-all font-bold text-midnight placeholder:text-slate-300"
+                                                    />
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* BLOCO OBRIGATÓRIO: TITULAR DO SEGURO DE VIDA PARA PJ */}
+                                        <div className="bg-gradient-to-br from-amber-500/10 via-amber-500/5 to-transparent border-2 border-amber-500/30 p-6 rounded-3xl space-y-4 shadow-sm">
+                                            <div className="flex items-center justify-between border-b border-amber-500/10 pb-3 flex-wrap gap-2">
+                                                <div className="flex items-center gap-2.5">
+                                                    <div className="size-8 rounded-xl bg-amber-500 text-slate-900 flex items-center justify-center font-black">
+                                                        <ShieldCheck size={18} />
+                                                    </div>
+                                                    <div>
+                                                        <h4 className="text-xs font-black uppercase tracking-wider text-amber-950">
+                                                            Pessoa Física com Direito ao Seguro de Vida MBM
+                                                        </h4>
+                                                        <p className="text-[10px] text-amber-800/90 font-medium">
+                                                            A apólice exige uma Pessoa Física (sócio, titular ou colaborador) como segurado do Vida Light (R$ 5.000,00).
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                                <span className="px-2.5 py-1 bg-amber-500/20 text-amber-900 text-[9px] font-black uppercase rounded-lg border border-amber-500/30">
+                                                    Obrigatório para PJ
+                                                </span>
+                                            </div>
+
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                <div className="flex flex-col gap-1.5">
+                                                    <label className="text-[10px] font-black text-slate-600 uppercase tracking-widest ml-1">
+                                                        Nome Completo da Pessoa Segurada *
+                                                    </label>
+                                                    <div className="relative group">
+                                                        <User className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-amber-500 transition-colors" size={18} />
+                                                        <input
+                                                            required
+                                                            type="text"
+                                                            value={insuredName}
+                                                            onChange={(e) => setInsuredName(e.target.value)}
+                                                            placeholder="Nome do sócio ou pessoa física segurada"
+                                                            className="w-full pl-12 pr-5 py-3.5 bg-white border border-amber-200 rounded-2xl focus:outline-none focus:ring-4 focus:ring-amber-500/10 focus:border-amber-500/50 transition-all font-bold text-midnight text-sm placeholder:text-slate-300 shadow-sm"
+                                                        />
+                                                    </div>
+                                                </div>
+
+                                                <div className="flex flex-col gap-1.5">
+                                                    <label className="text-[10px] font-black text-slate-600 uppercase tracking-widest ml-1">
+                                                        CPF da Pessoa Segurada *
+                                                    </label>
+                                                    <div className="relative group">
+                                                        <ShieldCheck className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-amber-500 transition-colors" size={18} />
+                                                        <input
+                                                            required
+                                                            type="text"
+                                                            value={insuredCpf}
+                                                            onChange={(e) => setInsuredCpf(formatCpf(e.target.value))}
+                                                            placeholder="000.000.000-00"
+                                                            maxLength={14}
+                                                            className="w-full pl-12 pr-5 py-3.5 bg-white border border-amber-200 rounded-2xl focus:outline-none focus:ring-4 focus:ring-amber-500/10 focus:border-amber-500/50 transition-all font-bold text-midnight text-sm placeholder:text-slate-300 font-mono shadow-sm"
+                                                        />
+                                                    </div>
+                                                </div>
+
+                                                <div className="flex flex-col gap-1.5">
+                                                    <label className="text-[10px] font-black text-slate-600 uppercase tracking-widest ml-1">
+                                                        Data de Nascimento do Titular *
+                                                    </label>
+                                                    <input
+                                                        required
+                                                        type="date"
+                                                        value={birthDate}
+                                                        onChange={(e) => setBirthDate(e.target.value)}
+                                                        className="w-full px-5 py-3.5 bg-white border border-amber-200 rounded-2xl focus:outline-none focus:ring-4 focus:ring-amber-500/10 focus:border-amber-500/50 transition-all font-bold text-midnight text-sm shadow-sm"
+                                                    />
+                                                </div>
+
+                                                <div className="flex flex-col gap-1.5">
+                                                    <label className="text-[10px] font-black text-slate-600 uppercase tracking-widest ml-1">
+                                                        Sexo do Titular *
+                                                    </label>
+                                                    <select
+                                                        required
+                                                        value={gender}
+                                                        onChange={(e) => setGender(e.target.value)}
+                                                        className="w-full px-5 py-3.5 bg-white border border-amber-200 rounded-2xl focus:outline-none focus:ring-4 focus:ring-amber-500/10 focus:border-amber-500/50 transition-all font-bold text-midnight text-sm appearance-none shadow-sm"
+                                                    >
+                                                        <option value="" disabled>Selecione...</option>
+                                                        <option value="M">Masculino</option>
+                                                        <option value="F">Feminino</option>
+                                                    </select>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div className="bg-purple-500/10 border border-purple-500/20 p-4 rounded-2xl flex items-center gap-3 text-xs text-purple-950">
+                                            <Building2 size={20} className="text-purple-600 shrink-0" />
+                                            <span><strong>Isenção Fiscal PJ:</strong> Como Pessoa Jurídica com CNPJ, sua empresa receberá o valor total dos repasses sem retenção de INSS ou IRPF, mediante envio da Nota Fiscal de Prestação de Serviços (NFS-e).</span>
+                                        </div>
+                                    </div>
+                                )}
                             </div>
 
                             {/* Seção 2: Localização */}
@@ -807,13 +1181,18 @@ export default function Cadastro() {
                                         />
                                     </div>
                                     <div className="flex flex-col gap-2">
-                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Chave PIX</label>
+                                        <div className="flex items-center justify-between">
+                                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Chave PIX para Recebimento</label>
+                                            {personType === 'PJ' && (
+                                                <span className="text-[9px] font-black text-purple-600 uppercase tracking-wider">PIX CNPJ Recomendado</span>
+                                            )}
+                                        </div>
                                         <input
                                             required
                                             type="text"
                                             value={pixKey}
                                             onChange={(e) => setPixKey(e.target.value)}
-                                            placeholder="CPF, E-mail, Celular ou Chave Aleatória"
+                                            placeholder={personType === 'PJ' ? "CNPJ da empresa, E-mail, Celular ou Chave" : "CPF, E-mail, Celular ou Chave Aleatória"}
                                             className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500/50 transition-all font-bold text-midnight placeholder:text-slate-300"
                                         />
                                     </div>
@@ -940,11 +1319,16 @@ export default function Cadastro() {
                                     <div className="flex flex-col gap-2">
                                         <div className="flex justify-between items-center px-1">
                                             <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">
-                                                Cód. Patrocinador MMN (Opcional)
+                                                {isIndicatedViaLink || referralCode ? 'Cód. Patrocinador MMN' : 'Cód. Patrocinador MMN (Opcional)'}
                                             </label>
                                             {isSameAsReseller && (
                                                 <span className="text-[9px] font-black text-amber-500 uppercase tracking-widest">
                                                     Mesmo do Revendedor
+                                                </span>
+                                            )}
+                                            {isIndicatedViaLink && referralCode && (
+                                                <span className="text-[9px] font-black text-emerald-500 uppercase tracking-widest">
+                                                    Link de Indicação
                                                 </span>
                                             )}
                                         </div>
@@ -954,14 +1338,14 @@ export default function Cadastro() {
                                                 type="text"
                                                 value={referralCode}
                                                 onChange={(e) => {
-                                                    if (isSameAsReseller) return;
+                                                    if (isReferralLocked || isSameAsReseller) return;
                                                     const val = e.target.value;
                                                     setReferralCode(val);
-                                                    fetchReferrerName(val);
+                                                    fetchReferrerName(val, false);
                                                 }}
-                                                disabled={isSameAsReseller}
-                                                placeholder="EX: A1B2C3 ou CPF (ou em branco)"
-                                                className={`w-full pl-12 pr-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500/50 transition-all font-bold text-midnight placeholder:text-slate-300 uppercase ${isSameAsReseller ? 'opacity-70 cursor-not-allowed bg-slate-100/50' : ''}`}
+                                                disabled={isReferralLocked || isSameAsReseller}
+                                                placeholder={isIndicatedViaLink ? "Código do Patrocinador" : "EX: A1B2C3 ou CPF (ou em branco)"}
+                                                className={`w-full pl-12 pr-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500/50 transition-all font-bold text-midnight placeholder:text-slate-300 uppercase ${(isReferralLocked || isSameAsReseller) ? 'opacity-70 cursor-not-allowed bg-slate-100/50' : ''}`}
                                             />
                                         </div>
                                         {referrerName ? (
@@ -990,9 +1374,16 @@ export default function Cadastro() {
 
                                     {/* Código do Revendedor Regional */}
                                     <div className="flex flex-col gap-2">
-                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 block">
-                                            Cód. Revendedor Regional (Opcional)
-                                        </label>
+                                        <div className="flex justify-between items-center px-1">
+                                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">
+                                                {isIndicatedViaLink || resellerCode ? 'Cód. Revendedor Regional' : 'Cód. Revendedor Regional (Opcional)'}
+                                            </label>
+                                            {isIndicatedViaLink && resellerCode && (
+                                                <span className="text-[9px] font-black text-purple-500 uppercase tracking-widest">
+                                                    Polo Vinculado
+                                                </span>
+                                            )}
+                                        </div>
                                         <div className="relative group">
                                             <Building2 className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300" size={18} />
                                             <input
@@ -1002,10 +1393,14 @@ export default function Cadastro() {
                                                     if (isResellerLocked) return;
                                                     const val = e.target.value;
                                                     setResellerCode(val);
-                                                    fetchResellerName(val);
+                                                    fetchResellerName(val, false);
+                                                    if (isSameAsReseller) {
+                                                        setReferralCode(val);
+                                                        fetchReferrerName(val, false);
+                                                    }
                                                 }}
                                                 disabled={isResellerLocked}
-                                                placeholder="EX: REV123 ou CPF"
+                                                placeholder={isIndicatedViaLink ? "Código do Revendedor" : "EX: REV123 ou CPF"}
                                                 className={`w-full pl-12 pr-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:outline-none focus:ring-4 focus:ring-purple-500/10 focus:border-purple-500/50 transition-all font-bold text-midnight placeholder:text-slate-300 uppercase ${isResellerLocked ? 'opacity-70 cursor-not-allowed bg-slate-100/50' : ''}`}
                                             />
                                         </div>
@@ -1033,8 +1428,8 @@ export default function Cadastro() {
                                         )}
                                     </div>
 
-                                    {/* Checkbox de Indicação pelo Revendedor */}
-                                    {resellerCode && (
+                                    {/* Opção exclusiva para quem entra através do site (sem link de indicação prévia) */}
+                                    {!isIndicatedViaLink && (
                                         <div className="md:col-span-2">
                                             <label className="flex items-start sm:items-center gap-3 p-4 bg-amber-500/5 border border-amber-500/20 rounded-2xl cursor-pointer hover:bg-amber-500/10 transition-all select-none group">
                                                 <input
@@ -1044,24 +1439,24 @@ export default function Cadastro() {
                                                         const checked = e.target.checked;
                                                         setIsSameAsReseller(checked);
                                                         if (checked) {
-                                                            setReferralCode(resellerCode);
-                                                            fetchReferrerName(resellerCode);
-                                                            setIsReferralLocked(true);
+                                                            if (resellerCode) {
+                                                                setReferralCode(resellerCode);
+                                                                fetchReferrerName(resellerCode, false);
+                                                            }
                                                         } else {
                                                             setReferralCode('');
                                                             setReferrerName(null);
                                                             setReferrerId(null);
-                                                            setIsReferralLocked(false);
                                                         }
                                                     }}
                                                     className="mt-0.5 sm:mt-0 size-5 rounded-lg text-amber-500 focus:ring-amber-500 border-slate-300 accent-amber-500 cursor-pointer shrink-0"
                                                 />
                                                 <div className="flex flex-col">
                                                     <span className="text-xs font-black text-midnight group-hover:text-amber-600 transition-colors">
-                                                        Fui indicado diretamente por este revendedor {resellerName ? `(${resellerName})` : ''}
+                                                        Fui indicado diretamente por este revendedor
                                                     </span>
                                                     <span className="text-[10px] text-slate-500 font-medium">
-                                                        Marque esta opção se o revendedor for também seu patrocinador MMN. Caso outra pessoa tenha te indicado, deixe desmarcado e digite o código dela no campo ao lado.
+                                                        Marque esta opção se você foi indicado diretamente pelo revendedor regional. O código dele será utilizado automaticamente como seu patrocinador MMN.
                                                     </span>
                                                 </div>
                                             </label>

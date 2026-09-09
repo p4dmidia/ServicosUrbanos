@@ -112,7 +112,7 @@ export interface MarketplaceConfig {
   commissionRate: number;
 }
 
-// Funções Auxiliares Fiscais (INSS 11% para PF limitado a R$ 932,31 / 0% para PJ)
+// Funções Auxiliares Fiscais (INSS 11% limitado a R$ 932,31 + IRPF/IRRF Tabela Progressiva para PF / 0% para PJ)
 export function isCnpj(documentOrCpf?: string | null, pixType?: string | null): boolean {
   if (pixType === 'cnpj') return true;
   if (!documentOrCpf) return false;
@@ -120,40 +120,141 @@ export function isCnpj(documentOrCpf?: string | null, pixType?: string | null): 
   return digits.length > 11;
 }
 
-export function calculateTaxDeductions(bruto: number, isPjUser: boolean = false) {
-  const safeBruto = Math.max(0, bruto || 0);
+export interface CumulativeTaxInput {
+  payoutBruto: number;
+  alreadyPaidBrutoInMonth?: number;
+  alreadyRetainedInssInMonth?: number;
+  alreadyRetainedIrrfInMonth?: number;
+  isPjUser?: boolean;
+}
+
+export interface CumulativeTaxResult {
+  bruto: number;
+  inss: number;
+  irrf: number;
+  liquido: number;
+  patronal: number;
+  isPJ: boolean;
+  totalMonthBruto: number;
+  totalMonthInss: number;
+  totalMonthIrrf: number;
+  irrfBase: number;
+}
+
+/**
+ * Calcula retenções fiscais de RPA / Autônomo acumulando todos os pagamentos da mesma competência mensal (semanais + mensal).
+ * - INSS: 11% sobre o acumulado do mês, limitado ao teto máximo de R$ 932,31.
+ * - IRRF: Calculado sobre a base acumulada (Bruto Acumulado do Mês - INSS do Mês), aplicando a tabela progressiva oficial e deduzindo o IRRF já retido no mês.
+ * - PJ: Isento de retenção na fonte (INSS 0%, IRRF 0%).
+ */
+export function calculateCumulativeTaxDeductions({
+  payoutBruto,
+  alreadyPaidBrutoInMonth = 0,
+  alreadyRetainedInssInMonth = 0,
+  alreadyRetainedIrrfInMonth = 0,
+  isPjUser = false
+}: CumulativeTaxInput): CumulativeTaxResult {
+  const safeBruto = Math.max(0, Number(payoutBruto) || 0);
+
   if (isPjUser || safeBruto <= 0) {
     return {
       bruto: parseFloat(safeBruto.toFixed(2)),
       inss: 0,
-      inssRate: 0,
-      inssMax: 932.31,
+      irrf: 0,
       liquido: parseFloat(safeBruto.toFixed(2)),
-      isPJ: true,
-      patronal: 0
+      patronal: 0,
+      isPJ: !!isPjUser,
+      totalMonthBruto: parseFloat((alreadyPaidBrutoInMonth + safeBruto).toFixed(2)),
+      totalMonthInss: parseFloat(alreadyRetainedInssInMonth.toFixed(2)),
+      totalMonthIrrf: parseFloat(alreadyRetainedIrrfInMonth.toFixed(2)),
+      irrfBase: 0
     };
   }
 
-  // Regra PF solicitada:
-  // INSS: 11% fixo, limitado a R$ 932,31
-  const inssRate = 0.11;
-  const inssMax = 932.31;
-  const rawInss = safeBruto * inssRate;
-  const inss = Math.min(rawInss, inssMax);
-  const liquido = Math.max(0, safeBruto - inss);
-  
-  // INSS Patronal (Encargo da empresa): 20% sobre o bruto
+  // 1. Total bruto acumulado do mês com este pagamento
+  const totalMonthBruto = alreadyPaidBrutoInMonth + safeBruto;
+
+  // 2. INSS: 11% sobre a soma do mês, limitado ao teto previdenciário de R$ 932,31
+  const inssTetoMax = 932.31;
+  const totalMonthInss = Math.min(totalMonthBruto * 0.11, inssTetoMax);
+  const inssRemainingToTeto = Math.max(0, inssTetoMax - alreadyRetainedInssInMonth);
+  const inssToRetain = Math.min(safeBruto * 0.11, Math.max(0, totalMonthInss - alreadyRetainedInssInMonth), inssRemainingToTeto);
+
+  // 3. IRPF (IRRF): apurado sobre a soma do mês após dedução do INSS total do mês
+  const combinedMonthInss = alreadyRetainedInssInMonth + inssToRetain;
+  const baseIrrfMonth = Math.max(0, totalMonthBruto - combinedMonthInss);
+
+  // Tabela Progressiva Mensal Oficial IRPF
+  let totalMonthIrrf = 0;
+  if (baseIrrfMonth > 2259.20) {
+    if (baseIrrfMonth <= 2826.65) {
+      totalMonthIrrf = (baseIrrfMonth * 0.075) - 169.44;
+    } else if (baseIrrfMonth <= 3751.05) {
+      totalMonthIrrf = (baseIrrfMonth * 0.15) - 381.44;
+    } else if (baseIrrfMonth <= 4664.68) {
+      totalMonthIrrf = (baseIrrfMonth * 0.225) - 662.77;
+    } else {
+      totalMonthIrrf = (baseIrrfMonth * 0.275) - 896.00;
+    }
+  }
+  totalMonthIrrf = Math.max(0, totalMonthIrrf);
+
+  // IRRF a descontar neste pagamento: o que falta para atingir o IRRF total do mês
+  const irrfToRetain = Math.max(0, totalMonthIrrf - alreadyRetainedIrrfInMonth);
+
+  // 4. Líquido a transferir via PIX
+  const liquido = Math.max(0, safeBruto - inssToRetain - irrfToRetain);
+
+  // 5. INSS Patronal (Encargo da empresa): 20% sobre o bruto deste pagamento
   const patronal = safeBruto * 0.20;
 
   return {
     bruto: parseFloat(safeBruto.toFixed(2)),
-    inss: parseFloat(inss.toFixed(2)),
-    inssRate,
-    inssMax,
+    inss: parseFloat(inssToRetain.toFixed(2)),
+    irrf: parseFloat(irrfToRetain.toFixed(2)),
     liquido: parseFloat(liquido.toFixed(2)),
+    patronal: parseFloat(patronal.toFixed(2)),
     isPJ: false,
-    patronal: parseFloat(patronal.toFixed(2))
+    totalMonthBruto: parseFloat(totalMonthBruto.toFixed(2)),
+    totalMonthInss: parseFloat(totalMonthInss.toFixed(2)),
+    totalMonthIrrf: parseFloat(totalMonthIrrf.toFixed(2)),
+    irrfBase: parseFloat(baseIrrfMonth.toFixed(2))
   };
+}
+
+export function parseWithdrawalTaxDetails(tx: { amount?: number | string; description?: string; created_at?: string }) {
+  const bruto = Math.abs(Number(tx.amount || 0));
+  const desc = tx.description || '';
+
+  // Tags explícitas prioritárias: [INSS:123.45] [IRRF:12.34] [LIQ:864.21]
+  const inssMatch = desc.match(/\[INSS:([0-9.]+)\]/) || desc.match(/INSS.*?([0-9]+[.,][0-9]{2})/);
+  const irrfMatch = desc.match(/\[IRRF:([0-9.]+)\]/) || desc.match(/IRRF.*?([0-9]+[.,][0-9]{2})/);
+  const liqMatch = desc.match(/\[LIQ:([0-9.]+)\]/) || desc.match(/Líq.*?([0-9]+[.,][0-9]{2})/);
+
+  let inss = 0;
+  if (inssMatch) {
+    inss = parseFloat(inssMatch[1].replace(',', '.'));
+  }
+  let irrf = 0;
+  if (irrfMatch) {
+    irrf = parseFloat(irrfMatch[1].replace(',', '.'));
+  }
+  let liquido = bruto - inss - irrf;
+  if (liqMatch) {
+    liquido = parseFloat(liqMatch[1].replace(',', '.'));
+  }
+
+  return { bruto, inss, irrf, liquido };
+}
+
+export function calculateTaxDeductions(bruto: number, isPjUser: boolean = false) {
+  return calculateCumulativeTaxDeductions({
+    payoutBruto: bruto,
+    alreadyPaidBrutoInMonth: 0,
+    alreadyRetainedInssInMonth: 0,
+    alreadyRetainedIrrfInMonth: 0,
+    isPjUser
+  });
 }
 
 export const businessRules = {
@@ -821,11 +922,11 @@ export const businessRules = {
       return { 
         depth: 3, 
         paymentType: 'percent' as const,
-        cashbackMensal: 2.00,
-        cashbackDigital: 2.00,
+        cashbackMensal: 4.00,
+        cashbackDigital: 0.00,
         cashbackAnual: 2.00,
-        commissionRegionalSemanal: 2.00,
-        commissionRegionalMensal: 2.00,
+        commissionRegionalSemanal: 0.00,
+        commissionRegionalMensal: 4.00,
         commissionRegionalAnual: 2.00
       };
     }
@@ -833,11 +934,11 @@ export const businessRules = {
     return {
       depth: data.depth,
       paymentType: data.payment_type as 'percent' | 'fixed',
-      cashbackMensal: Number(data.cashback_mensal),
-      cashbackDigital: Number(data.cashback_digital),
-      cashbackAnual: Number(data.cashback_anual),
-      commissionRegionalSemanal: Number(data.commission_regional_semanal ?? 2.00),
-      commissionRegionalMensal: Number(data.commission_regional_mensal ?? 2.00),
+      cashbackMensal: Number(data.cashback_mensal ?? 4.00),
+      cashbackDigital: Number(data.cashback_digital ?? 0.00),
+      cashbackAnual: Number(data.cashback_anual ?? 2.00),
+      commissionRegionalSemanal: Number(data.commission_regional_semanal ?? 0.00),
+      commissionRegionalMensal: Number(data.commission_regional_mensal ?? 4.00),
       commissionRegionalAnual: Number(data.commission_regional_anual ?? 2.00)
     };
   },
@@ -1030,16 +1131,8 @@ export const businessRules = {
         t.description?.includes('Regional') ||
         t.description?.includes('(REG)');
 
-      // Cálculo Real baseado no PRD (Divisão Tripla) exclusivo da REDE MMN
-      // Carteira Semanal (CD): soma de todas as comissões de rede semanais (pending, completed ou pago)
-      const walletBonus = transactions
-        .filter(t => t.type === 'commission' && 
-                !isResellerTx(t) &&
-                (t.description?.includes('Digital') || t.description?.includes('(CD)') || t.description?.includes('Semanal')) && 
-                (t.status === 'completed' || t.status === 'pago' || t.status === 'pending'))
-        .reduce((acc, t) => acc + Number(t.amount || 0), 0);
-
-      // Cashback Mensal e Anual da Rede: soma de todas as comissões de rede (pending, completed ou pago)
+      // Cálculo baseado no modelo consolidado: 4% Mensal (disponível dia 10) + 2% Anual (13º)
+      // Cashback Mensal da Rede: soma de todas as comissões mensais
       const monthlyBonus = transactions
         .filter(t => t.type === 'commission' && 
                 !isResellerTx(t) &&
@@ -1047,6 +1140,7 @@ export const businessRules = {
                 (t.status === 'completed' || t.status === 'pago' || t.status === 'pending'))
         .reduce((acc, t) => acc + Number(t.amount || 0), 0);
 
+      // Bônus Anual da Rede
       const annualBonus = transactions
         .filter(t => t.type === 'commission' && 
                 !isResellerTx(t) &&
@@ -1054,19 +1148,18 @@ export const businessRules = {
                 (t.status === 'completed' || t.status === 'pago' || t.status === 'pending'))
         .reduce((acc, t) => acc + Number(t.amount || 0), 0);
 
-      // totalEarnings da Rede MMN: soma de todas as comissões da rede (ganhos históricos acumulados)
-      const totalEarnings = monthlyBonus + annualBonus + walletBonus;
-      
-      // O Saldo Disponível conforme o PRD é o da Carteira Digital (CD) da rede
-      const totalWithdrawn = transactions
+      // Pagamentos mensais já realizados
+      const monthlyPaid = transactions
         .filter(t => t.type === 'withdrawal' && 
                  !isResellerTx(t) &&
-                 !t.description?.includes('Mensal') && 
-                 !t.description?.includes('Anual') &&
+                 t.description?.includes('Mensal') && 
                  (t.status === 'completed' || t.status === 'pago'))
         .reduce((acc, t) => acc + Math.abs(Number(t.amount)), 0);
 
-      const availableBalance = walletBonus - totalWithdrawn;
+      // O Saldo Disponível agora é o saldo Mensal (liberado dia 10 com NF)
+      const availableBalance = Math.max(0, monthlyBonus - monthlyPaid);
+      const walletBonus = 0; // Ciclo semanal zerado e excluído
+      const totalEarnings = monthlyBonus + annualBonus;
 
       // Buscar todas as assinaturas do usuário
       const { data: userSubs } = await supabase
@@ -2981,11 +3074,7 @@ export const businessRules = {
         .filter(t => t.type === 'commission' && t.description?.includes('Anual') && (t.status === 'completed' || t.status === 'pago' || t.status === 'pending'))
         .reduce((acc, t) => acc + Number(t.amount || 0), 0);
 
-      const walletBonus = userTransactions
-        .filter(t => t.type === 'commission' && 
-                (t.description?.includes('Digital') || t.description?.includes('(CD)') || t.description?.includes('Semanal')) && 
-                (t.status === 'completed' || t.status === 'pago' || t.status === 'pending'))
-        .reduce((acc, t) => acc + Number(t.amount || 0), 0);
+      const walletBonus = 0; // Semanal excluído
 
       // Subtrair pagamentos já realizados
       const monthlyPaid = userTransactions
@@ -2996,29 +3085,82 @@ export const businessRules = {
         .filter(t => t.type === 'withdrawal' && t.description?.includes('Anual') && (t.status === 'completed' || t.status === 'pago'))
         .reduce((acc, t) => acc + Math.abs(Number(t.amount || 0)), 0);
 
-      const totalWithdrawn = userTransactions
-        .filter(t => t.type === 'withdrawal' && !t.description?.includes('Mensal') && !t.description?.includes('Anual'))
-        .reduce((acc, t) => acc + Math.abs(Number(t.amount || 0)), 0);
-
       const monthlyPending = Math.max(0, monthlyBonus - monthlyPaid);
       const annualPending = Math.max(0, annualBonus - annualPaid);
-      const digitalPending = Math.max(0, walletBonus - totalWithdrawn);
+      const digitalPending = 0;
 
-      const isPJ = isCnpj(profile.cpf || profile.cnpj, profile.pix_key);
-      const taxMonthly = calculateTaxDeductions(monthlyPending, isPJ);
-      const taxAnnual = calculateTaxDeductions(annualPending, isPJ);
-      const taxDigital = calculateTaxDeductions(digitalPending, isPJ);
-      const taxTotal = calculateTaxDeductions(monthlyPending + annualPending + digitalPending, isPJ);
+      // 1. Apuração dos saques já realizados dentro do mês civil atual
+      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+      const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+
+      const currentMonthPaidWithdrawals = userTransactions.filter(t => {
+        if (t.type !== 'withdrawal' || (t.status !== 'completed' && t.status !== 'pago')) return false;
+        const d = new Date(t.created_at || now);
+        return d >= startOfMonth && d <= endOfMonth;
+      });
+
+      let alreadyPaidBrutoMonth = 0;
+      let alreadyRetainedInssMonth = 0;
+      let alreadyRetainedIrrfMonth = 0;
+
+      currentMonthPaidWithdrawals.forEach(t => {
+        const parsed = parseWithdrawalTaxDetails(t);
+        alreadyPaidBrutoMonth += parsed.bruto;
+        alreadyRetainedInssMonth += parsed.inss;
+        alreadyRetainedIrrfMonth += parsed.irrf;
+      });
+
+      const isPJ = Boolean(profile.cnpj && profile.cnpj.replace(/\D/g, '').length > 11) || 
+                   isCnpj(profile.cnpj || profile.cpf, profile.pix_key) || 
+                   Boolean((profile as any).description?.includes('[PJ]')) || 
+                   false;
 
       // Nota Fiscal Info
       const userInvoice = invoiceMap.get(profile.id);
       const hasInvoice = !!userInvoice;
       const invoiceGross = Number(userInvoice?.amount_gross || 0);
       const isInvoiceAmountMatching = hasInvoice && (
-        Math.abs(invoiceGross - (monthlyPending + digitalPending)) < 0.05 ||
         Math.abs(invoiceGross - monthlyPending) < 0.05
       );
       const canPayMonthly = isEligible && hasInvoice;
+
+      // 2. Apuração dos impostos do Mensal (Dia 10) e Provisão Anual
+      // A) Semanal (zerado)
+      const taxDigital = { bruto: 0, inss: 0, irrf: 0, liquido: 0 };
+
+      // B) Mensal
+      const taxMonthly = calculateCumulativeTaxDeductions({
+        payoutBruto: monthlyPending,
+        alreadyPaidBrutoInMonth: alreadyPaidBrutoMonth,
+        alreadyRetainedInssInMonth: alreadyRetainedInssMonth,
+        alreadyRetainedIrrfInMonth: alreadyRetainedIrrfMonth,
+        isPjUser: isPJ
+      });
+
+      // C) Anual (referência de provisão anual)
+      const taxAnnual = calculateCumulativeTaxDeductions({
+        payoutBruto: annualPending,
+        alreadyPaidBrutoInMonth: alreadyPaidBrutoMonth + monthlyPending,
+        alreadyRetainedInssInMonth: alreadyRetainedInssMonth + taxMonthly.inss,
+        alreadyRetainedIrrfInMonth: alreadyRetainedIrrfMonth + taxMonthly.irrf,
+        isPjUser: isPJ
+      });
+
+      // D) Liberado Hoje (Mensal se tiver NF regularizada)
+      const liberadoPending = canPayMonthly ? taxMonthly.bruto : 0;
+      const liberadoInss = canPayMonthly ? taxMonthly.inss : 0;
+      const liberadoIrrf = canPayMonthly ? taxMonthly.irrf : 0;
+      const liberadoLiquid = canPayMonthly ? taxMonthly.liquido : 0;
+
+      // E) Total geral
+      const grossTotal = monthlyPending + annualPending;
+      const taxTotal = calculateCumulativeTaxDeductions({
+        payoutBruto: grossTotal,
+        alreadyPaidBrutoInMonth: alreadyPaidBrutoMonth,
+        alreadyRetainedInssInMonth: alreadyRetainedInssMonth,
+        alreadyRetainedIrrfInMonth: alreadyRetainedIrrfMonth,
+        isPjUser: isPJ
+      });
 
       return {
         profileId: profile.id,
@@ -3029,18 +3171,42 @@ export const businessRules = {
         whatsapp: profile.whatsapp || '',
         cpf: profile.cpf || profile.cnpj || '',
         isPJ,
+        
+        // Semanal (Zerado)
+        digitalPending: 0,
+        digitalInss: 0,
+        digitalIrrf: 0,
+        digitalLiquid: 0,
+
+        // Mensal
         monthlyPending: taxMonthly.bruto,
         monthlyInss: taxMonthly.inss,
+        monthlyIrrf: taxMonthly.irrf,
         monthlyLiquid: taxMonthly.liquido,
-        annualPending: taxAnnual.bruto,
+
+        // Anual
+        annualPending: annualPending,
         annualInss: taxAnnual.inss,
+        annualIrrf: taxAnnual.irrf,
         annualLiquid: taxAnnual.liquido,
-        digitalPending: taxDigital.bruto,
-        digitalInss: taxDigital.inss,
-        digitalLiquid: taxDigital.liquido,
+
+        // Liberado Hoje (Mensal se NF)
+        liberadoPending,
+        liberadoInss,
+        liberadoIrrf,
+        liberadoLiquid,
+
+        // Total
         totalPending: taxTotal.bruto,
         totalInss: taxTotal.inss,
+        totalIrrf: taxTotal.irrf,
         totalLiquid: taxTotal.liquido,
+
+        // Acúmulos fiscais do mês
+        alreadyPaidBrutoMonth,
+        alreadyRetainedInssMonth,
+        alreadyRetainedIrrfMonth,
+
         role: profile.role,
         isEligible,
         statusLabel: isEligible ? 'Adimplente / Ativo' : 'Inadimplente',
@@ -3083,15 +3249,13 @@ export const businessRules = {
 
     const commissions = (txs || []).filter(t => t.type === 'commission' && (t.status === 'completed' || t.status === 'pago' || t.status === 'pending'));
 
-    const weeklyGross = commissions
-      .filter(t => (t.description?.includes('Digital') || t.description?.includes('Semanal') || t.description?.includes('(CD)')))
-      .reduce((acc, t) => acc + Number(t.amount || 0), 0);
+    const weeklyGross = 0;
 
     const monthlyGross = commissions
       .filter(t => t.description?.includes('Mensal'))
       .reduce((acc, t) => acc + Number(t.amount || 0), 0);
 
-    const totalGross = weeklyGross + monthlyGross;
+    const totalGross = monthlyGross;
 
     // Busca nota fiscal já enviada para o mês
     const existingInvoices = await businessRules.getAffiliateInvoices(userId, refMonthStr);
@@ -3213,6 +3377,37 @@ export const businessRules = {
         if (t.description?.includes('Mensal')) cycleLabel = 'Mensal';
         else if (t.description?.includes('Anual')) cycleLabel = 'Anual';
 
+        const isPJ = Boolean(profile.cnpj && profile.cnpj.replace(/\D/g, '').length > 11) || 
+                     isCnpj(profile.cnpj || profile.cpf, profile.pix_key) || 
+                     Boolean(profile.description?.includes('[PJ]')) || 
+                     Boolean(t.description?.includes('(PJ Isento)'));
+
+        // Extração de tags fiscais se presentes no histórico
+        const brutoMatch = t.description?.match(/\[BRUTO:([0-9.]+)\]/);
+        const inssMatch = t.description?.match(/\[INSS:([0-9.]+)\]/);
+        const irrfMatch = t.description?.match(/\[IRRF:([0-9.]+)\]/);
+        const liqMatch = t.description?.match(/\[LIQ:([0-9.]+)\]/);
+
+        let bruto = Math.abs(Number(t.amount || 0));
+        let inss = 0;
+        let irrf = 0;
+        let liquido = bruto;
+
+        if (brutoMatch && inssMatch && irrfMatch && liqMatch) {
+          bruto = parseFloat(brutoMatch[1]);
+          inss = parseFloat(inssMatch[1]);
+          irrf = parseFloat(irrfMatch[1]);
+          liquido = parseFloat(liqMatch[1]);
+        } else {
+          const taxRes = calculateCumulativeTaxDeductions({
+            payoutBruto: bruto,
+            isPjUser: isPJ
+          });
+          inss = taxRes.inss;
+          irrf = taxRes.irrf;
+          liquido = taxRes.liquido;
+        }
+
         return {
           id: t.id,
           date: t.created_at,
@@ -3224,8 +3419,13 @@ export const businessRules = {
           pixKey: profile.pix_key || 'N/A',
           pixType: profile.pix_type || 'PIX',
           bankDetails: profile.bank_name ? `${profile.bank_name} - Ag: ${profile.bank_branch} / CC: ${profile.bank_account}` : 'PIX',
-          amount: Math.abs(Number(t.amount || 0)),
-          description: t.description ? t.description.replace(/\s*\[RECIBO:.*?\]/, '') : '',
+          amount: bruto,
+          bruto,
+          inss,
+          irrf,
+          liquido,
+          isPJ,
+          description: t.description ? t.description.replace(/\s*\[RECIBO:.*?\]/, '').replace(/\s*\[BRUTO:.*?\]\s*\[INSS:.*?\]\s*\[IRRF:.*?\]\s*\[LIQ:.*?\]/, '') : '',
           receiptUrl: (() => {
             if (t.receipt_url) return t.receipt_url;
             if (t.description && t.description.includes('[RECIBO:')) {
@@ -3303,15 +3503,9 @@ export const businessRules = {
 
       const monthlyToReceive = Math.max(0, monthlyEarned - monthlyPaid);
 
-      const weeklyEarned = monthCommissions
-        .filter(t => t.description?.includes('Semanal'))
-        .reduce((acc, t) => acc + Number(t.amount || 0), 0);
-
-      const weeklyPaid = monthWithdrawals
-        .filter(t => t.description?.includes('Semanal') || (!t.description?.includes('Mensal') && !t.description?.includes('Anual')))
-        .reduce((acc, t) => acc + Math.abs(Number(t.amount || 0)), 0);
-
-      const weeklyAvailable = Math.max(0, weeklyEarned - weeklyPaid);
+      const weeklyEarned = 0;
+      const weeklyPaid = 0;
+      const weeklyAvailable = 0;
 
       const annualEarnedMonth = monthCommissions
         .filter(t => t.description?.includes('Anual'))
@@ -3481,10 +3675,10 @@ export const businessRules = {
         year: selYear,
         month: selMonth,
         rates: {
-          semanal: Number(config?.commission_regional_semanal ?? 2.00),
-          mensal: Number(config?.commission_regional_mensal ?? 2.00),
+          semanal: 0,
+          mensal: Number(config?.commission_regional_mensal ?? 4.00),
           anual: Number(config?.commission_regional_anual ?? 2.00),
-          total: Number(config?.commission_regional_semanal ?? 2.00) + Number(config?.commission_regional_mensal ?? 2.00) + Number(config?.commission_regional_anual ?? 2.00)
+          total: Number(config?.commission_regional_mensal ?? 4.00) + Number(config?.commission_regional_anual ?? 2.00)
         },
         monthlyEarned,
         monthlyPaid,
@@ -3531,9 +3725,10 @@ export const businessRules = {
   processPayout: async (
     profileId: string, 
     amount: number, 
-    type: 'mensal' | 'anual' | 'digital', 
+    type: 'mensal' | 'anual' | 'digital' | 'total', 
     receiptUrl: string,
-    category: 'network' | 'reseller' = 'network'
+    category: 'network' | 'reseller' = 'network',
+    taxOverride?: { inss?: number; irrf?: number; liquido?: number; splitDetails?: any }
   ) => {
     // Validação estrita de adimplência
     const stats = await businessRules.getAffiliateStats(profileId);
@@ -3548,62 +3743,115 @@ export const businessRules = {
       .single();
 
     const isPJ = isCnpj(profile?.cpf, profile?.pix_key);
-    const tax = calculateTaxDeductions(amount, isPJ);
-
-    let displayType = '';
-    if (type === 'mensal') displayType = 'Mensal';
-    else if (type === 'anual') displayType = 'Anual';
-    else displayType = 'Digital';
-
     const isReseller = category === 'reseller';
-    const taxDetail = isPJ ? ' (PJ Isento)' : (tax.inss > 0 ? ` (Líq. R$ ${tax.liquido.toFixed(2)} | INSS 11%: -R$ ${tax.inss.toFixed(2)})` : '');
-    const description = isReseller 
-      ? `Pagamento Repasse Revendedor ${displayType}${taxDetail} - ${new Date().toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}`
-      : `Pagamento Cashback Rede ${displayType}${taxDetail} - ${new Date().toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}`;
-    
-    const descWithReceipt = receiptUrl ? `${description} [RECIBO:${receiptUrl}]` : description;
+    const monthYear = new Date().toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
 
-    // Tenta primeiro com receipt_url caso a coluna exista na base
-    const insertPayload: any = {
-      profile_id: profileId,
-      type: 'withdrawal',
-      amount: -Math.abs(amount),
-      description: descWithReceipt,
-      status: 'completed'
-    };
+    // Função interna para inserir uma transação de saque com tags fiscais
+    const insertSingleWithdrawal = async (
+      withdrawAmount: number,
+      cycleName: string,
+      inssVal: number,
+      irrfVal: number,
+      liqVal: number
+    ) => {
+      const taxDetail = isPJ 
+        ? ' (PJ Isento)' 
+        : ` (Líq. R$ ${liqVal.toFixed(2)} | INSS: -R$ ${inssVal.toFixed(2)} | IRRF: -R$ ${irrfVal.toFixed(2)})`;
+      
+      const tagStr = `[BRUTO:${withdrawAmount.toFixed(2)}] [INSS:${inssVal.toFixed(2)}] [IRRF:${irrfVal.toFixed(2)}] [LIQ:${liqVal.toFixed(2)}]`;
+      
+      const description = isReseller 
+        ? `Pagamento Repasse Revendedor ${cycleName}${taxDetail} ${tagStr} - ${monthYear}`
+        : `Pagamento Cashback Rede ${cycleName}${taxDetail} ${tagStr} - ${monthYear}`;
+      
+      const descWithReceipt = receiptUrl ? `${description} [RECIBO:${receiptUrl}]` : description;
 
-    if (receiptUrl) {
-      insertPayload.receipt_url = receiptUrl;
-    }
+      const insertPayload: any = {
+        profile_id: profileId,
+        type: 'withdrawal',
+        amount: -Math.abs(withdrawAmount),
+        description: descWithReceipt,
+        status: 'completed'
+      };
 
-    let { data: insertedData, error } = await supabase
-      .from('transactions')
-      .insert([insertPayload])
-      .select('id')
-      .single();
+      if (receiptUrl) {
+        insertPayload.receipt_url = receiptUrl;
+      }
 
-    if (error && (error.code === 'PGRST204' || error.message?.includes('receipt_url'))) {
-      // Se a coluna receipt_url não existe no schema da tabela transactions, insere sem ela
-      delete insertPayload.receipt_url;
-      const retry = await supabase
+      let { data: insertedData, error } = await supabase
         .from('transactions')
         .insert([insertPayload])
         .select('id')
         .single();
-      
-      error = retry.error;
-      insertedData = retry.data;
+
+      if (error && (error.code === 'PGRST204' || error.message?.includes('receipt_url'))) {
+        delete insertPayload.receipt_url;
+        const retry = await supabase
+          .from('transactions')
+          .insert([insertPayload])
+          .select('id')
+          .single();
+        
+        error = retry.error;
+        insertedData = retry.data;
+      }
+
+      if (error) throw error;
+
+      if (insertedData?.id && receiptUrl) {
+        try {
+          localStorage.setItem(`receipt_tx_${insertedData.id}`, receiptUrl);
+        } catch (e) {}
+      }
+
+      return insertedData;
+    };
+
+    if (type === 'total' && taxOverride?.splitDetails) {
+      const { digital, monthly } = taxOverride.splitDetails;
+      if (digital && digital.bruto > 0) {
+        await insertSingleWithdrawal(
+          digital.bruto,
+          'Semanal',
+          digital.inss || 0,
+          digital.irrf || 0,
+          digital.liquido !== undefined ? digital.liquido : (digital.bruto - (digital.inss || 0) - (digital.irrf || 0))
+        );
+      }
+      if (monthly && monthly.bruto > 0) {
+        await insertSingleWithdrawal(
+          monthly.bruto,
+          'Mensal',
+          monthly.inss || 0,
+          monthly.irrf || 0,
+          monthly.liquido !== undefined ? monthly.liquido : (monthly.bruto - (monthly.inss || 0) - (monthly.irrf || 0))
+        );
+      }
+    } else {
+      let inssVal = 0;
+      let irrfVal = 0;
+      let liqVal = amount;
+
+      if (taxOverride && taxOverride.inss !== undefined && taxOverride.liquido !== undefined) {
+        inssVal = taxOverride.inss;
+        irrfVal = taxOverride.irrf || 0;
+        liqVal = taxOverride.liquido;
+      } else {
+        const tax = calculateTaxDeductions(amount, isPJ);
+        inssVal = tax.inss;
+        irrfVal = tax.irrf;
+        liqVal = tax.liquido;
+      }
+
+      let displayType = 'Digital';
+      if (type === 'mensal') displayType = 'Mensal';
+      else if (type === 'anual') displayType = 'Anual';
+      else if (type === 'total') displayType = 'Liberados';
+
+      await insertSingleWithdrawal(amount, displayType, inssVal, irrfVal, liqVal);
     }
 
-    if (error) throw error;
-
-    if (insertedData?.id && receiptUrl) {
-      try {
-        localStorage.setItem(`receipt_tx_${insertedData.id}`, receiptUrl);
-      } catch (e) {}
-    }
-
-    // Dar baixa (status: 'completed') nas comissões pendentes correspondentes ao ciclo e categoria pagos
+    // Dar baixa (status: 'completed') nas comissões pendentes correspondentes aos ciclos pagos
     try {
       const { data: pendingCommissions } = await supabase
         .from('transactions')
@@ -3628,6 +3876,11 @@ export const businessRules = {
           txIdsToComplete.push(tx.id);
         } else if (type === 'anual' && desc.includes('Anual')) {
           txIdsToComplete.push(tx.id);
+        } else if (type === 'total') {
+          // Marca tanto as comissões semanais quanto mensais
+          if (desc.includes('Semanal') || desc.includes('Digital') || desc.includes('(CD)') || desc.includes('Mensal')) {
+            txIdsToComplete.push(tx.id);
+          }
         }
       });
 

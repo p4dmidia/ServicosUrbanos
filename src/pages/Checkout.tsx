@@ -357,20 +357,18 @@ export default function Checkout() {
   const subtotal = cartItems.reduce((acc, item) => acc + (item.price * item.quantity), 0);
   const total = subtotal; // Sem frete
 
-  // MMN Calculations for the whole order - Using dynamic Admin Rules (Excel Proportional Logic)
-  const pMensal = Number(mmnConfig?.cashbackMensal || 2.75);
-  const pDigital = Number(mmnConfig?.cashbackDigital || 1.0);
-  const pAnual = Number(mmnConfig?.cashbackAnual || 0.75);
-  const totalRatios = pMensal + pDigital + pAnual || 4.5;
+  // MMN Calculations for the whole order - Consolidado 4% Mensal + 2% Anual = 6% Total
+  const pMensal = Number(mmnConfig?.cashbackMensal ?? 4.0);
+  const pAnual = Number(mmnConfig?.cashbackAnual ?? 2.0);
+  const totalRatios = pMensal + pAnual || 6.0;
 
-  // Calculamos o ganho do usuário (G1) sobre os itens no carrinho
+  // Calculamos o ganho do usuário (G0/G1) sobre os itens no carrinho
   const userTotalCashbackAmount = cartItems.reduce((acc, item) => {
-    // Lógica correta (igual ao Marketplace/Produto): Preço * (G1 / 100)
     return acc + (item.price * (g1Value / 100) * item.quantity);
   }, 0);
 
   const totalMensal = userTotalCashbackAmount * (pMensal / totalRatios);
-  const totalDigital = userTotalCashbackAmount * (pDigital / totalRatios);
+  const totalDigital = 0;
   const totalAnual = userTotalCashbackAmount * (pAnual / totalRatios);
 
   useEffect(() => {
@@ -1219,15 +1217,11 @@ export default function Checkout() {
                       <TrendingUp size={14} /> Seu Retorno com esta compra:
                     </p>
                     <div className="flex justify-between items-center">
-                      <span className="text-xs font-bold text-emerald-600">Cashback Mensal</span>
+                      <span className="text-xs font-bold text-emerald-600">Cashback Mensal (4%)</span>
                       <span className="text-sm font-black text-emerald-600">+ R$ {totalMensal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
                     </div>
                     <div className="flex justify-between items-center">
-                      <span className="text-xs font-bold text-blue-600">Cashback Semanal</span>
-                      <span className="text-sm font-black text-blue-600">+ R$ {totalDigital.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-xs font-bold text-indigo-600">Cashback Anual</span>
+                      <span className="text-xs font-bold text-indigo-600">Cashback Anual (2%)</span>
                       <span className="text-sm font-black text-indigo-600">+ R$ {totalAnual.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
                     </div>
                   </div>

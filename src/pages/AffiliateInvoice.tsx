@@ -275,7 +275,7 @@ export default function AffiliateInvoice() {
               {/* Discriminação Mensal */}
               <div className="space-y-3 bg-slate-50 p-5 rounded-2xl border border-slate-100 text-xs">
                 <div className="flex justify-between items-center text-slate-600">
-                  <span className="font-medium">Cashback Mensal Bruto (4%):</span>
+                  <span className="font-medium">Cashback Mensal Bruto:</span>
                   <span className="font-mono font-bold text-midnight">
                     R$ {(summary?.monthlyGross || summary?.totalGross || 0).toFixed(2).replace('.', ',')}
                   </span>

@@ -91,11 +91,16 @@ export default function AdminReports() {
 
   // Pedidos válidos no período
   const completedOrders = useMemo(() => {
-    return orders.filter(o => 
-      o.status !== 'Cancelado' && 
-      (o.status === 'Pago' || o.status === 'Concluído' || o.status === 'Pago, Aguardando Retirada')
-    );
-  }, [orders]);
+    return orders.filter(o => {
+      const isPaid = o.status !== 'Cancelado' && 
+        (o.status === 'Pago' || o.status === 'Concluído' || o.status === 'Pago, Aguardando Retirada');
+      if (!isPaid) return false;
+      const orderDate = (o.order_date || o.created_at || '').substring(0, 10);
+      if (startDate && orderDate < startDate) return false;
+      if (endDate && orderDate > endDate) return false;
+      return true;
+    });
+  }, [orders, startDate, endDate]);
 
   // Ticket Médio
   const averageTicket = useMemo(() => {
@@ -528,7 +533,7 @@ export default function AdminReports() {
               <div className="space-y-6 relative z-10">
                  <div>
                     <h4 className="text-lg lg:text-xl font-black text-white tracking-tight uppercase italic">
-                      Incentivos & Cashback
+                       Incentivos & Cashback
                     </h4>
                     <p className="text-xs text-slate-400 mt-1">
                       Distribuição matemática por ciclo de pagamento
@@ -538,25 +543,25 @@ export default function AdminReports() {
                  <div className="space-y-5">
                     <div>
                        <div className="flex justify-between text-xs font-black uppercase tracking-wider mb-2">
-                          <span className="text-slate-400">Cashback Mensal (2.75%)</span>
+                          <span className="text-slate-400">Cashback Mensal ({reportData?.cashback?.monthlyRate ?? 5}%)</span>
                           <span className="text-indigo-400 font-mono">
                             R$ {Number(reportData?.cashback?.monthly || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                           </span>
                        </div>
                        <div className="h-2.5 bg-white/5 rounded-full overflow-hidden p-0.5 border border-white/5">
-                          <motion.div initial={{ width: 0 }} animate={{ width: '70%' }} className="h-full bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full shadow-sm" />
+                          <motion.div initial={{ width: 0 }} animate={{ width: `${Math.min(100, Math.max(10, (reportData?.cashback?.monthlyRate ?? 5) * 14))}%` }} className="h-full bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full shadow-sm" />
                        </div>
                     </div>
 
                     <div>
                        <div className="flex justify-between text-xs font-black uppercase tracking-wider mb-2">
-                          <span className="text-slate-400">Cashback Anual (0.75%)</span>
+                          <span className="text-slate-400">Cashback Anual ({reportData?.cashback?.yearlyRate ?? 2}%)</span>
                           <span className="text-blue-400 font-mono">
                             R$ {Number(reportData?.cashback?.yearly || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                           </span>
                        </div>
                        <div className="h-2.5 bg-white/5 rounded-full overflow-hidden p-0.5 border border-white/5">
-                          <motion.div initial={{ width: 0 }} animate={{ width: '35%' }} className="h-full bg-gradient-to-r from-blue-500 to-cyan-400 rounded-full shadow-sm" />
+                          <motion.div initial={{ width: 0 }} animate={{ width: `${Math.min(100, Math.max(10, (reportData?.cashback?.yearlyRate ?? 2) * 20))}%` }} className="h-full bg-gradient-to-r from-blue-500 to-cyan-400 rounded-full shadow-sm" />
                        </div>
                     </div>
                  </div>

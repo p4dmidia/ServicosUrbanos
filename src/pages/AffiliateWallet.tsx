@@ -32,8 +32,9 @@ export default function AffiliateWallet() {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [stats, setStats] = useState<any>(null);
+  const [mmnConfig, setMmnConfig] = useState<any>(null);
   const [transactions, setTransactions] = useState<any[]>([]);
-  const [activeFilter, setActiveFilter] = useState<'all' | 'cd' | 'mensal' | 'anual'>('all');
+  const [activeFilter, setActiveFilter] = useState<'all' | 'mensal' | 'anual'>('all');
   const [mmnLevelFilter, setMmnLevelFilter] = useState<'all' | '0' | '1' | '2'>('all');
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 8;
@@ -123,26 +124,28 @@ export default function AffiliateWallet() {
 
   const enrichedTransactions = useMemo(() => {
     return filteredTransactions.map(t => {
-      const tax = calculateItemTaxes(t.amount);
+      const bruto = Number(t.amount || 0);
+      const contractAmount = Number(t.contractAmount || 0);
+      const percentage = Number(t.percentage || 0);
       return {
         ...t,
-        tax
+        bruto,
+        contractAmount,
+        percentage
       };
     });
-  }, [filteredTransactions, isUserPJ]);
+  }, [filteredTransactions]);
 
   const totalsPending = useMemo(() => {
     const pendingList = enrichedTransactions.filter(t => t.status === 'Pendente');
-    const totalBruto = pendingList.reduce((acc, t) => acc + t.tax.bruto, 0);
-    const totalInss = pendingList.reduce((acc, t) => acc + t.tax.inss, 0);
-    const totalIrrf = pendingList.reduce((acc, t) => acc + t.tax.irrf, 0);
-    const totalLiquido = pendingList.reduce((acc, t) => acc + t.tax.liquido, 0);
+    const totalBruto = pendingList.reduce((acc, t) => acc + t.bruto, 0);
+    const totalContratos = pendingList.reduce((acc, t) => acc + t.contractAmount, 0);
+    const mediaPercentual = totalContratos > 0 ? (totalBruto / totalContratos) * 100 : 0;
 
     return {
       totalBruto,
-      totalInss,
-      totalIrrf,
-      totalLiquido,
+      totalContratos,
+      mediaPercentual,
       count: pendingList.length
     };
   }, [enrichedTransactions]);
@@ -176,18 +179,17 @@ export default function AffiliateWallet() {
     doc.setTextColor(15, 23, 42);
     doc.setFontSize(12);
     doc.setFont('helvetica', 'bold');
-    doc.text('Demonstrativo de Comissões & Apuração Tributária', 14, 52);
+    doc.text('Demonstrativo de Comissões & Cashback de Rede', 14, 52);
     
     doc.setFontSize(9);
     doc.setFont('helvetica', 'normal');
     doc.text(`Categoria: Rede MMN (${mmnLevelFilter === 'all' ? 'G0 ao G2' : 'Nível G' + mmnLevelFilter}) | Tipo: ${activeFilter === 'all' ? 'Todos' : activeFilter === 'mensal' ? 'Mensal' : 'Anual'}`, 14, 59);
-    doc.text(`Total Bruto Acumulado: ${totalsPending.totalBruto.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`, 14, 65);
-    doc.text(`(-) INSS Retido (11%): ${isUserPJ ? 'Isento (Pessoa Jurídica)' : totalsPending.totalInss.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`, 14, 71);
-    doc.text(`(-) Imposto de Renda (IRRF): ${isUserPJ || totalsPending.totalIrrf === 0 ? 'Isento' : totalsPending.totalIrrf.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`, 14, 77);
+    doc.text(`Total Valor dos Contratos: ${totalsPending.totalContratos.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`, 14, 65);
+    doc.text(`Percentual Médio de Repasse: ${totalsPending.mediaPercentual.toFixed(2)}%`, 14, 71);
     
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(16, 185, 129); // Emerald
-    doc.text(`(=) Valor Líquido Depositado: ${totalsPending.totalLiquido.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`, 14, 84);
+    doc.text(`(=) Valor Bruto do Cashback: ${totalsPending.totalBruto.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`, 14, 78);
 
     // Tabela
     const tableData = enrichedTransactions.map(t => [
@@ -196,16 +198,15 @@ export default function AffiliateWallet() {
       t.level,
       t.cashbackType,
       t.date,
-      t.tax.bruto.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }),
-      isUserPJ ? 'Isento' : `- ${t.tax.inss.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`,
-      isUserPJ || t.tax.irrf === 0 ? 'Isento' : `- ${t.tax.irrf.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`,
-      t.tax.liquido.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }),
+      t.contractAmount ? t.contractAmount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : '---',
+      t.percentage ? `${t.percentage.toFixed(2)}%` : '---',
+      t.bruto.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }),
       t.status
     ]);
 
     autoTable(doc, {
-      startY: 90,
-      head: [['ID PEDIDO', 'AFILIADO', 'NÍVEL', 'CASHBACK', 'DATA', 'VALOR BRUTO', 'INSS', 'IRRF', 'LÍQUIDO', 'STATUS']],
+      startY: 85,
+      head: [['ID PEDIDO', 'AFILIADO', 'NÍVEL', 'TIPO', 'DATA', 'VALOR CONTRATO', 'PERCENTUAL', 'VALOR BRUTO CASHBACK', 'STATUS']],
       body: tableData,
       theme: 'grid',
       headStyles: { 
@@ -224,10 +225,9 @@ export default function AffiliateWallet() {
         0: { fontStyle: 'bold' },
         2: { halign: 'center' },
         5: { halign: 'right' },
-        6: { halign: 'right', textColor: [225, 29, 72] },
-        7: { halign: 'right', textColor: [225, 29, 72] },
-        8: { halign: 'right', fontStyle: 'bold', textColor: [5, 150, 105] },
-        9: { halign: 'center' }
+        6: { halign: 'center', textColor: [79, 70, 229] },
+        7: { halign: 'right', fontStyle: 'bold', textColor: [5, 150, 105] },
+        8: { halign: 'center' }
       },
       styles: {
         lineColor: [241, 245, 249],
@@ -255,13 +255,15 @@ export default function AffiliateWallet() {
     
     try {
       setLoading(true);
-      const [statsData, activityData] = await Promise.all([
+      const [statsData, activityData, configData] = await Promise.all([
         businessRules.getAffiliateStats(user.id),
-        businessRules.getEcosystemActivity(user.id)
+        businessRules.getEcosystemActivity(user.id),
+        businessRules.getMMNConfig()
       ]);
       
       setStats(statsData);
       setTransactions(activityData);
+      setMmnConfig(configData);
     } catch (error) {
       console.error("Error loading wallet:", error);
     } finally {
@@ -308,9 +310,9 @@ export default function AffiliateWallet() {
         </div>
 
         {/* Balance Cards Grid - Credit Card Style */}
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
            
-           {/* Card 1: Saldo Disponível Mensal */}
+           {/* Card 1: Cashback Mensal Valor Bruto */}
            <motion.div 
              whileHover={{ y: -5 }}
              onClick={() => {
@@ -327,8 +329,7 @@ export default function AffiliateWallet() {
               
               <div className="relative z-10 flex justify-between items-start">
                  <div>
-                    <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Saldo Disponível em Carteira</p>
-                    <p className="text-[8px] font-bold text-slate-600 uppercase tracking-[0.2em]">Cashback Mensal (4%)</p>
+                    <p className="text-[11px] font-black text-slate-300 uppercase tracking-widest">CASHBACK MENSAL VALOR BRUTO</p>
                  </div>
                  <div className={`size-10 rounded-xl flex items-center justify-center border transition-colors ${
                    activeFilter === 'mensal' ? 'bg-emerald-500 text-white border-emerald-500' : 'bg-white/5 text-emerald-500 border-white/5'
@@ -355,7 +356,7 @@ export default function AffiliateWallet() {
               </div>
            </motion.div>
 
-           {/* Card 2: Bônus Anual */}
+           {/* Card 2: Cashback Valor Bruto Acumulado */}
            <motion.div 
              whileHover={{ y: -5 }}
              onClick={() => {
@@ -370,8 +371,7 @@ export default function AffiliateWallet() {
               
               <div className="relative z-10 flex justify-between items-start">
                  <div>
-                    <p className="text-[10px] font-black text-blue-200/60 uppercase tracking-widest mb-1">Bônus Anual (13º Salário)</p>
-                    <p className="text-[8px] font-bold text-blue-300/40 uppercase tracking-[0.2em]">Poupança Anual (2%)</p>
+                    <p className="text-[11px] font-black text-blue-200 uppercase tracking-widest">CASHBACK VALOR BRUTO ACUMULADO</p>
                  </div>
                  <div className={`size-10 rounded-xl flex items-center justify-center border transition-colors ${
                    activeFilter === 'anual' ? 'bg-white text-indigo-600 border-white' : 'bg-white/10 text-white border-white/10'
@@ -392,45 +392,6 @@ export default function AffiliateWallet() {
                     <div className="w-6 h-1 bg-white/20 rounded-full"></div>
                     <div className="w-3 h-1 bg-white/20 rounded-full"></div>
                  </div>
-                 <span className="text-[8px] font-black uppercase tracking-widest">13º SALÁRIO</span>
-              </div>
-           </motion.div>
-
-           {/* Card 3: Total Acumulado */}
-           <motion.div 
-             whileHover={{ y: -5 }}
-             onClick={() => {
-               setActiveFilter('all');
-               setCurrentPage(1);
-             }}
-             className={`aspect-[1.6/1] bg-gradient-to-br from-emerald-600 via-teal-700 to-slate-900 p-8 rounded-[2.5rem] text-white relative overflow-hidden flex flex-col justify-between shadow-2xl transition-all cursor-pointer group ${
-               activeFilter === 'all' ? 'ring-4 ring-emerald-400 shadow-emerald-500/20' : 'shadow-emerald-900/20'
-             }`}
-           >
-              <div className="absolute bottom-[-20%] right-[-10%] w-40 h-40 bg-white/10 rounded-full blur-3xl"></div>
-              
-              <div className="relative z-10 flex justify-between items-start">
-                 <div>
-                    <p className="text-[10px] font-black text-emerald-200/60 uppercase tracking-widest mb-1">Total de Ganhos</p>
-                    <p className="text-[8px] font-bold text-emerald-300/40 uppercase tracking-[0.2em]">Acumulado Geral</p>
-                 </div>
-                 <div className={`size-10 rounded-xl flex items-center justify-center border transition-colors ${
-                   activeFilter === 'all' ? 'bg-white text-emerald-600 border-white' : 'bg-white/10 text-white border-white/10'
-                 }`}>
-                    <TrendingUp size={20} />
-                 </div>
-              </div>
-
-              <div className="relative z-10">
-                 <h2 className="text-4xl font-black tracking-tighter italic uppercase mb-2">R$ {Number(stats.totalEarnings).toFixed(2)}</h2>
-                 <p className="text-[9px] font-black text-emerald-200/60 uppercase tracking-widest">MMN Consolidado</p>
-              </div>
-
-              <div className="relative z-10 flex justify-between items-center opacity-40">
-                 <div className="size-8 bg-white/10 rounded-full flex items-center justify-center">
-                    <QrCode size={14} />
-                 </div>
-                 <span className="text-[8px] font-black uppercase tracking-widest">TOTAL ACUMULADO</span>
               </div>
            </motion.div>
         </div>
@@ -627,43 +588,37 @@ export default function AffiliateWallet() {
 
                 return (
                   <>
-                    {/* Banner Consolidado de Apuração Fiscal / Tributária */}
+                    {/* Banner Consolidado de Cashback de Rede */}
                     <div className="p-6 bg-gradient-to-br from-slate-900 via-slate-950 to-midnight text-white rounded-3xl border border-white/10 shadow-xl space-y-4">
                       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-white/10 pb-4">
                         <div className="flex items-center gap-2.5">
-                          <span className={`size-3 rounded-full ${isUserPJ ? 'bg-purple-400 animate-pulse' : 'bg-emerald-400 animate-pulse'}`} />
+                          <span className="size-3 rounded-full bg-emerald-400 animate-pulse" />
                           <h4 className="text-xs font-black uppercase tracking-wider">
-                            Regime Fiscal do Afiliado: <span className={isUserPJ ? 'text-purple-300' : 'text-emerald-300'}>{isUserPJ ? 'Pessoa Jurídica (PJ)' : 'Pessoa Física (PF)'}</span>
+                            Resumo de Comissões e Cashback de Rede
                           </h4>
                         </div>
                         <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                          {isUserPJ ? 'Isenção de Retenção na Fonte (Emissão de NF)' : 'Retenção Oficial na Fonte (INSS 11% e IRRF Progressivo)'}
+                          Valores Brutos sem Descontos
                         </span>
                       </div>
 
-                      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                         <div className="bg-white/5 p-4 rounded-2xl border border-white/5">
-                          <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Total Bruto</p>
+                          <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Valor Total dos Contratos</p>
                           <p className="text-base lg:text-lg font-black text-white font-mono">
-                            {totalsPending.totalBruto.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                            {totalsPending.totalContratos.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                           </p>
                         </div>
                         <div className="bg-white/5 p-4 rounded-2xl border border-white/5">
-                          <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">(-) INSS (11%)</p>
-                          <p className={`text-base lg:text-lg font-black font-mono ${isUserPJ ? 'text-slate-400' : 'text-rose-400'}`}>
-                            {isUserPJ ? 'Isento (PJ)' : `- ${totalsPending.totalInss.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`}
-                          </p>
-                        </div>
-                        <div className="bg-white/5 p-4 rounded-2xl border border-white/5">
-                          <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">(-) Imposto de Renda</p>
-                          <p className={`text-base lg:text-lg font-black font-mono ${isUserPJ || totalsPending.totalIrrf === 0 ? 'text-slate-400' : 'text-rose-400'}`}>
-                            {isUserPJ ? 'Isento (PJ)' : totalsPending.totalIrrf === 0 ? 'Isento' : `- ${totalsPending.totalIrrf.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`}
+                          <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Percentual Médio de Repasse</p>
+                          <p className="text-base lg:text-lg font-black text-indigo-400 font-mono">
+                            {totalsPending.mediaPercentual.toFixed(2)}%
                           </p>
                         </div>
                         <div className="bg-emerald-500/10 p-4 rounded-2xl border border-emerald-500/20">
-                          <p className="text-[9px] font-black text-emerald-400 uppercase tracking-widest mb-1">(=) Líquido a Depositar</p>
+                          <p className="text-[9px] font-black text-emerald-400 uppercase tracking-widest mb-1">Valor Bruto do Cashback</p>
                           <p className="text-base lg:text-lg font-black text-emerald-400 font-mono">
-                            {totalsPending.totalLiquido.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                            {totalsPending.totalBruto.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                           </p>
                         </div>
                       </div>
@@ -678,10 +633,9 @@ export default function AffiliateWallet() {
                             <th className="px-3 py-2 text-center">NÍVEL</th>
                             <th className="px-4 py-2">CATEGORIA / PERÍODO</th>
                             <th className="px-4 py-2">DATA</th>
-                            <th className="px-5 py-2 text-right">VALOR BRUTO</th>
-                            <th className="px-4 py-2 text-right">(-) INSS (11%)</th>
-                            <th className="px-4 py-2 text-right">(-) IRRF</th>
-                            <th className="px-5 py-2 text-right text-emerald-700">LÍQUIDO DEPOSITADO</th>
+                            <th className="px-5 py-2 text-right">VALOR DO CONTRATO</th>
+                            <th className="px-4 py-2 text-center">PERCENTUAL</th>
+                            <th className="px-5 py-2 text-right text-emerald-700">VALOR BRUTO CASHBACK</th>
                             <th className="px-4 py-2 text-center">STATUS</th>
                           </tr>
                         </thead>
@@ -741,30 +695,19 @@ export default function AffiliateWallet() {
                               </td>
                               <td className="px-5 py-5 text-right border-y border-transparent group-hover:border-slate-100 whitespace-nowrap">
                                 <span className="text-xs font-black tracking-tight text-slate-800 font-mono">
-                                  +{t.tax.bruto.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                                  {Number(t.contractAmount || 0) > 0 
+                                    ? Number(t.contractAmount).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+                                    : '---'}
                                 </span>
                               </td>
-                              <td className="px-4 py-5 text-right border-y border-transparent group-hover:border-slate-100 whitespace-nowrap">
-                                {isUserPJ ? (
-                                  <span className="text-[10px] font-bold text-slate-400">Isento (PJ)</span>
-                                ) : (
-                                  <span className="text-xs font-bold text-rose-500 font-mono">
-                                    - {t.tax.inss.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                                  </span>
-                                )}
-                              </td>
-                              <td className="px-4 py-5 text-right border-y border-transparent group-hover:border-slate-100 whitespace-nowrap">
-                                {isUserPJ || t.tax.irrf === 0 ? (
-                                  <span className="text-[10px] font-bold text-slate-400">Isento</span>
-                                ) : (
-                                  <span className="text-xs font-bold text-rose-500 font-mono">
-                                    - {t.tax.irrf.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                                  </span>
-                                )}
+                              <td className="px-4 py-5 text-center border-y border-transparent group-hover:border-slate-100 whitespace-nowrap">
+                                <span className="inline-flex items-center px-2 py-0.5 rounded-lg text-xs font-black bg-indigo-50 text-indigo-700 border border-indigo-100 font-mono">
+                                  {Number(t.percentage || 0) > 0 ? `${Number(t.percentage).toFixed(2)}%` : '---'}
+                                </span>
                               </td>
                               <td className="px-5 py-5 text-right border-y border-transparent group-hover:border-slate-100 whitespace-nowrap">
                                 <p className="text-sm font-black tracking-tighter text-emerald-600 font-mono">
-                                  {t.status === 'Pago' ? '+' : ''}{t.tax.liquido.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                                  +{Number(t.bruto || t.amount || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                                 </p>
                               </td>
                               <td className="px-4 py-5 rounded-r-3xl text-center border-y border-transparent group-hover:border-slate-100 whitespace-nowrap">
@@ -790,16 +733,13 @@ export default function AffiliateWallet() {
                               </div>
                             </td>
                             <td className="px-5 py-4 text-right font-mono text-xs text-slate-200">
-                              {totalsPending.totalBruto.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                              {totalsPending.totalContratos.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                             </td>
-                            <td className="px-4 py-4 text-right font-mono text-xs text-rose-400">
-                              {isUserPJ ? 'R$ 0,00' : `- ${totalsPending.totalInss.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`}
-                            </td>
-                            <td className="px-4 py-4 text-right font-mono text-xs text-rose-400">
-                              {isUserPJ || totalsPending.totalIrrf === 0 ? 'R$ 0,00' : `- ${totalsPending.totalIrrf.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`}
+                            <td className="px-4 py-4 text-center font-mono text-xs text-indigo-300">
+                              {totalsPending.mediaPercentual > 0 ? `${totalsPending.mediaPercentual.toFixed(2)}%` : '---'}
                             </td>
                             <td className="px-5 py-4 text-right font-mono text-sm text-emerald-400 font-black">
-                              {totalsPending.totalLiquido.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                              {totalsPending.totalBruto.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                             </td>
                             <td className="px-4 py-4 rounded-r-2xl"></td>
                           </tr>

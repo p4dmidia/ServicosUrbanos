@@ -41,6 +41,7 @@ export default function AffiliateResellerFinancial() {
   const [data, setData] = useState<any>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'completed'>('all');
+  const [cycleFilter, setCycleFilter] = useState<'all' | 'mensal' | 'anual'>('all');
   const [viewMode, setViewMode] = useState<'itemized' | 'orders'>('itemized');
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 8;
@@ -79,6 +80,11 @@ export default function AffiliateResellerFinancial() {
   const filteredSales = useMemo(() => {
     if (!data?.salesList) return [];
     return data.salesList.filter((s: any) => {
+      const matchesCycle = 
+        cycleFilter === 'all' || 
+        (cycleFilter === 'mensal' && s.mensal > 0) ||
+        (cycleFilter === 'anual' && s.anual > 0);
+
       const matchesStatus = 
         statusFilter === 'all' || 
         (statusFilter === 'completed' && (s.status === 'completed' || s.status === 'pago')) ||
@@ -92,13 +98,18 @@ export default function AffiliateResellerFinancial() {
         String(s.orderAmount).includes(q) ||
         String(s.mensal).includes(q);
 
-      return matchesStatus && matchesSearch;
+      return matchesCycle && matchesStatus && matchesSearch;
     });
-  }, [data?.salesList, searchQuery, statusFilter]);
+  }, [data?.salesList, searchQuery, statusFilter, cycleFilter]);
 
   const filteredItemized = useMemo(() => {
     if (!data?.itemizedTransactions) return [];
     return data.itemizedTransactions.filter((tx: any) => {
+      const matchesCycle = 
+        cycleFilter === 'all' ||
+        (cycleFilter === 'mensal' && tx.category?.toLowerCase().includes('mensal')) ||
+        (cycleFilter === 'anual' && tx.category?.toLowerCase().includes('anual'));
+
       const matchesStatus = 
         statusFilter === 'all' || 
         (statusFilter === 'completed' && (tx.status === 'PAGO' || tx.status === 'completed' || tx.status === 'pago')) ||
@@ -112,9 +123,9 @@ export default function AffiliateResellerFinancial() {
         tx.category.toLowerCase().includes(q) ||
         String(tx.amount).includes(q);
 
-      return matchesStatus && matchesSearch;
+      return matchesCycle && matchesStatus && matchesSearch;
     });
-  }, [data?.itemizedTransactions, searchQuery, statusFilter]);
+  }, [data?.itemizedTransactions, searchQuery, statusFilter, cycleFilter]);
 
   const handleExportPDF = () => {
     if (!data) return;
@@ -174,9 +185,13 @@ export default function AffiliateResellerFinancial() {
       s.status === 'completed' || s.status === 'pago' ? 'Liquidado' : 'Aguardando Pagamento'
     ]);
 
+    const regMensalRate = data?.config?.commission_regional_mensal ?? 4;
+    const regAnualRate = data?.config?.commission_regional_anual ?? 2;
+    const regTotalRate = regMensalRate + regAnualRate;
+
     autoTable(doc, {
       startY: 92,
-      head: [['PEDIDO', 'CLIENTE', 'DATA', 'VALOR VENDA', 'MENSAL (4%)', 'ANUAL (2%)', 'TOTAL REG. (6%)', 'STATUS']],
+      head: [['PEDIDO', 'CLIENTE', 'DATA', 'VALOR VENDA', `MENSAL (${regMensalRate}%)`, `ANUAL (${regAnualRate}%)`, `TOTAL REG. (${regTotalRate}%)`, 'STATUS']],
       body: tableData,
       theme: 'grid',
       headStyles: {
@@ -277,6 +292,100 @@ export default function AffiliateResellerFinancial() {
               Exportar PDF
             </button>
           </div>
+        </div>
+
+        {/* Balance Cards Grid - Credit Card Style (Idêntico ao Financeiro de Rede) */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+           
+           {/* Card 1: Cashback Mensal Valor Bruto */}
+           <motion.div 
+             whileHover={{ y: -5 }}
+             onClick={() => {
+               setCycleFilter(cycleFilter === 'mensal' ? 'all' : 'mensal');
+               setCurrentPage(1);
+             }}
+             className={`aspect-[1.6/1] bg-slate-950 p-8 rounded-[2.5rem] text-white relative overflow-hidden flex flex-col justify-between shadow-2xl transition-all cursor-pointer group ${
+               cycleFilter === 'mensal' ? 'ring-4 ring-emerald-500 shadow-emerald-500/20' : 'shadow-slate-900/20'
+             }`}
+           >
+              {/* Design Elements */}
+              <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/10 rounded-full blur-3xl"></div>
+              <div className="absolute bottom-0 left-0 w-24 h-24 bg-primary-blue/10 rounded-full blur-2xl"></div>
+              
+              <div className="relative z-10 flex justify-between items-start">
+                 <div>
+                    <p className="text-[11px] font-black text-slate-300 uppercase tracking-widest">CASHBACK MENSAL VALOR BRUTO</p>
+                 </div>
+                 <div className={`size-10 rounded-xl flex items-center justify-center border transition-colors ${
+                   cycleFilter === 'mensal' ? 'bg-emerald-500 text-white border-emerald-500' : 'bg-white/5 text-emerald-500 border-white/5'
+                 }`}>
+                    <Wallet size={20} />
+                 </div>
+              </div>
+
+              <div className="relative z-10">
+                 <h2 className="text-4xl font-black tracking-tighter italic uppercase mb-2">
+                   R$ {Number(data?.monthlyToReceive !== undefined ? data.monthlyToReceive : (data?.monthlyEarned ?? 0)).toFixed(2)}
+                 </h2>
+                 <div className="flex items-center gap-2">
+                    <div className="size-2 bg-emerald-500 rounded-full animate-pulse"></div>
+                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Pagamentos Todo Dia 10</p>
+                 </div>
+              </div>
+
+              {/* Card Footer Decoration */}
+              <div className="relative z-10 flex justify-between items-center opacity-40 group-hover:opacity-100 transition-opacity">
+                 <div className="flex -space-x-2">
+                    <div className="size-6 rounded-full border border-white/20 bg-white/5"></div>
+                    <div className="size-6 rounded-full border border-white/20 bg-white/5"></div>
+                 </div>
+                 <span className="text-[8px] font-black uppercase tracking-widest">URBA WALLET</span>
+              </div>
+           </motion.div>
+
+           {/* Card 2: Cashback Valor Bruto Acumulado */}
+           <motion.div 
+             whileHover={{ y: -5 }}
+             onClick={() => {
+               setCycleFilter(cycleFilter === 'anual' ? 'all' : 'anual');
+               setCurrentPage(1);
+             }}
+             className={`aspect-[1.6/1] bg-gradient-to-br from-indigo-600 via-blue-700 to-slate-900 p-8 rounded-[2.5rem] text-white relative overflow-hidden flex flex-col justify-between shadow-2xl transition-all cursor-pointer group ${
+               cycleFilter === 'anual' ? 'ring-4 ring-blue-400 shadow-blue-500/20' : 'shadow-blue-900/20'
+             }`}
+           >
+              <div className="absolute top-[-20%] right-[-10%] w-40 h-40 bg-white/10 rounded-full blur-3xl"></div>
+              
+              <div className="relative z-10 flex justify-between items-start">
+                 <div>
+                    <p className="text-[11px] font-black text-blue-200 uppercase tracking-widest">CASHBACK VALOR BRUTO ACUMULADO</p>
+                 </div>
+                 <div className={`size-10 rounded-xl flex items-center justify-center border transition-colors ${
+                   cycleFilter === 'anual' ? 'bg-white text-indigo-600 border-white' : 'bg-white/10 text-white border-white/10'
+                 }`}>
+                    <Calendar size={20} />
+                 </div>
+              </div>
+
+              <div className="relative z-10">
+                 <h2 className="text-4xl font-black tracking-tighter italic uppercase mb-2">
+                   R$ {Number(data?.annualToReceive !== undefined ? data.annualToReceive : (data?.annualEarned ?? 0)).toFixed(2)}
+                 </h2>
+                 <div className="flex items-center gap-2">
+                    <Clock size={12} className="text-blue-300" />
+                    <p className="text-[9px] font-black text-blue-200 uppercase tracking-widest">Liberação em 10 de Dezembro</p>
+                 </div>
+              </div>
+
+              {/* Card Footer Decoration */}
+              <div className="relative z-10 flex justify-between items-center opacity-40 group-hover:opacity-100 transition-opacity">
+                 <div className="flex -space-x-2">
+                    <div className="size-6 rounded-full border border-white/20 bg-white/5"></div>
+                    <div className="size-6 rounded-full border border-white/20 bg-white/5"></div>
+                 </div>
+                 <span className="text-[8px] font-black uppercase tracking-widest">POUPANÇA URBA</span>
+              </div>
+           </motion.div>
         </div>
 
         {/* Main Highlight Card - O que tem a receber no mês */}
@@ -669,9 +778,9 @@ export default function AffiliateResellerFinancial() {
                           <th className="px-5 py-2">CLIENTE / COMPRADOR</th>
                           <th className="px-5 py-2">DATA</th>
                           <th className="px-5 py-2 text-right">VALOR VENDA</th>
-                          <th className="px-5 py-2 text-right text-amber-600 font-black">MENSAL (4%)</th>
-                          <th className="px-5 py-2 text-right">ANUAL (2%)</th>
-                          <th className="px-5 py-2 text-right">TOTAL COMISSÃO (6%)</th>
+                          <th className="px-5 py-2 text-right text-amber-600 font-black">MENSAL ({data?.config?.commission_regional_mensal ?? 4}%)</th>
+                          <th className="px-5 py-2 text-right">ANUAL ({data?.config?.commission_regional_anual ?? 2}%)</th>
+                          <th className="px-5 py-2 text-right">TOTAL COMISSÃO ({(Number(data?.config?.commission_regional_mensal ?? 4) + Number(data?.config?.commission_regional_anual ?? 2)).toFixed(0)}%)</th>
                           <th className="px-5 py-2 text-center">STATUS</th>
                         </tr>
                       </thead>

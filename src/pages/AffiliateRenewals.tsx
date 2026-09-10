@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { RefreshCw, CheckCircle2, AlertTriangle, Calendar, CreditCard, ChevronRight } from 'lucide-react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { RefreshCw, CheckCircle2, AlertTriangle, Calendar, CreditCard, ChevronRight, Gift } from 'lucide-react';
 import AffiliateLayout from '../components/AffiliateLayout';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
@@ -15,6 +15,33 @@ export default function AffiliateRenewals() {
   const [subscription, setSubscription] = useState<any | null>(null);
   const [subHistory, setSubHistory] = useState<any[]>([]);
   const [plansList, setPlansList] = useState<any[]>([]);
+
+  const getPlanOrder = (item: any): number => {
+    const p = ((item?.plan_type || item?.name || '') + '').toLowerCase();
+    if (p.includes('anual') || p.includes('ano') || p.includes('365')) return 1;
+    if (p.includes('semestral') || p.includes('180')) return 2;
+    if (p.includes('trimestral') || p.includes('90')) return 3;
+    if (p.includes('mensal') || p.includes('30')) return 4;
+    return 99;
+  };
+
+  const orderedPlans = useMemo(() => {
+    return [...plansList].sort((a, b) => getPlanOrder(a) - getPlanOrder(b));
+  }, [plansList]);
+
+  const getPlanDrawInfo = (planType?: string) => {
+    const p = (planType || '').toLowerCase();
+    if (p.includes('anual') || p.includes('ano')) {
+      return '365 dias  48 sorteios';
+    }
+    if (p.includes('semestral')) {
+      return '180 dias  24 sorteios';
+    }
+    if (p.includes('trimestral')) {
+      return '90 dias  12 sorteios';
+    }
+    return '30 dias  4 sorteios';
+  };
 
   const loadData = async () => {
     if (!user) return;
@@ -39,18 +66,20 @@ export default function AffiliateRenewals() {
           .select('*')
           .eq('is_subscription', true)
           .eq('status', 'Ativo')
-          .order('price', { ascending: true })
       ]);
 
       setStats(statsData);
 
-      const fetchedPlans = plansRes.data && plansRes.data.length > 0 ? plansRes.data : [
-        { id: 'sub-mensal', name: 'Plano Mensal', price: 20, duration_days: 30, plan_type: 'mensal', image: '📅' },
-        { id: 'sub-trimestral', name: 'Plano Trimestral', price: 30, duration_days: 90, plan_type: 'trimestral', image: '🌟' },
-        { id: 'sub-semestral', name: 'Plano Semestral', price: 40, duration_days: 180, plan_type: 'semestral', image: '💼' },
-        { id: 'sub-anual', name: 'Plano Anual', price: 60, duration_days: 365, plan_type: 'anual', image: '🏆' }
+      const rawPlans = plansRes.data && plansRes.data.length > 0 ? plansRes.data : [
+        { id: 'sub-anual', name: 'Plano Anual', price: 85, duration_days: 365, plan_type: 'anual', image: '🏆' },
+        { id: 'sub-semestral', name: 'Plano Semestral', price: 45, duration_days: 180, plan_type: 'semestral', image: '💼' },
+        { id: 'sub-trimestral', name: 'Plano Trimestral', price: 25, duration_days: 90, plan_type: 'trimestral', image: '🌟' },
+        { id: 'sub-mensal', name: 'Plano Mensal', price: 20, duration_days: 30, plan_type: 'mensal', image: '📅' }
       ];
-      setPlansList(fetchedPlans);
+
+      const sortedPlans = [...rawPlans].sort((a, b) => getPlanOrder(a) - getPlanOrder(b));
+
+      setPlansList(sortedPlans);
 
       const activeSub = (historyRes.data || []).find(s => s.status === 'active' && new Date(s.end_date) >= new Date());
       let finalSub = activeSub || (historyRes.data && historyRes.data.length > 0 ? historyRes.data[0] : subRes.data);
@@ -195,7 +224,7 @@ export default function AffiliateRenewals() {
                   }
                   const isRenewalDayOrLater = !renewalDate || today >= renewalDate;
 
-                  return plansList.map((planItem) => {
+                  return orderedPlans.map((planItem) => {
                     const isPopular = planItem.plan_type === 'trimestral' && !stats?.isEligible;
                     const isActivePlan = subscription && subscription.plan_type === planItem.plan_type && stats?.isEligible;
                     const isEcon = !stats?.isEligible && planItem.plan_type === 'anual';
@@ -229,9 +258,15 @@ export default function AffiliateRenewals() {
                         ) : null}
 
                         <div className="space-y-2">
-                          <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Opção</span>
-                          <h4 className="text-base font-black text-midnight uppercase tracking-tight">{planItem.name}</h4>
-                          <div className="pt-2">
+                          <div>
+                            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-0.5">Opção</span>
+                            <h4 className="text-base font-black text-midnight uppercase tracking-tight leading-tight">{planItem.name}</h4>
+                            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-100 border border-slate-200/80 text-xs font-black text-slate-700 mt-2">
+                              <Gift size={13} className="text-primary-blue shrink-0" />
+                              <span>{getPlanDrawInfo(planItem.plan_type)}</span>
+                            </div>
+                          </div>
+                          <div className="pt-1">
                             <span className="text-2xl font-black text-primary-blue font-mono">
                               R$ {Number(planItem.price).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                             </span>

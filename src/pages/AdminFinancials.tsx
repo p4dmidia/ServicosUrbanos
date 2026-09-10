@@ -84,6 +84,14 @@ export default function AdminFinancials() {
   const [resellerReport, setResellerReport] = useState<any[]>([]);
   const [mbmPolicyNumber, setMbmPolicyNumber] = useState(() => localStorage.getItem('mbm_policy_number') || '');
   const [mbmSubGroup, setMbmSubGroup] = useState(() => localStorage.getItem('mbm_sub_group') || '1');
+  const [activeSubscriptions, setActiveSubscriptions] = useState<any[]>([]);
+  const [mmnRates, setMmnRates] = useState({
+    networkRate: 21,
+    resellerMensalRate: 5,
+    resellerAnualRate: 2,
+    resellerRate: 7,
+    totalRepasseRate: 28
+  });
 
   useEffect(() => {
     loadFiscalData();
@@ -92,17 +100,51 @@ export default function AdminFinancials() {
   async function loadAdminData(silent = false) {
     try {
       if (!silent) setLoading(true);
-      const [ordersData, networkData, resellerData, subsData] = await Promise.all([
+      const [ordersData, networkData, resellerData, subsData, mmnConfigRes, mmnLevelsRes] = await Promise.all([
         businessRules.getAllOrders(),
         businessRules.getAffiliateCashbackReport(dateRange.start, `${dateRange.end}T23:59:59`, 'network'),
         businessRules.getAffiliateCashbackReport(dateRange.start, `${dateRange.end}T23:59:59`, 'reseller'),
-        supabase.from('subscriptions').select('id', { count: 'exact', head: true }).eq('status', 'active')
+        supabase
+          .from('subscriptions')
+          .select('id, profile_id, plan_type, amount, status, start_date, end_date')
+          .eq('status', 'active'),
+        supabase.from('mmn_config').select('*').single(),
+        supabase.from('mmn_levels').select('*')
       ]);
 
       setOrders(ordersData || []);
       setNetworkReport(networkData || []);
       setResellerReport(resellerData || []);
-      setActiveLivesCount(subsData.count || 0);
+
+      const rawSubs = subsData?.data || [];
+      const filteredSubs = rawSubs.filter(s => {
+        if (!s.start_date || !s.end_date) return true;
+        const start = s.start_date.substring(0, 10);
+        const end = s.end_date.substring(0, 10);
+        return start <= dateRange.end && end >= dateRange.start;
+      });
+      const finalSubs = filteredSubs.length > 0 ? filteredSubs : rawSubs;
+      setActiveSubscriptions(finalSubs);
+      setActiveLivesCount(finalSubs.length);
+
+      const mmnCfg = mmnConfigRes?.data;
+      const mmnLvls = mmnLevelsRes?.data;
+
+      const netRate = mmnLvls && mmnLvls.length > 0 
+        ? mmnLvls.reduce((acc: number, cur: any) => acc + Number(cur.value || 0), 0)
+        : 21;
+      
+      const rMensal = Number(mmnCfg?.commission_regional_mensal ?? 5);
+      const rAnual = Number(mmnCfg?.commission_regional_anual ?? 2);
+      const rTotal = rMensal + rAnual;
+
+      setMmnRates({
+        networkRate: netRate,
+        resellerMensalRate: rMensal,
+        resellerAnualRate: rAnual,
+        resellerRate: rTotal,
+        totalRepasseRate: netRate + rTotal
+      });
     } catch (error) {
       console.error('Erro ao carregar dados fiscais admin:', error);
       toast.error('Erro ao carregar dados da contabilidade');
@@ -391,22 +433,22 @@ export default function AdminFinancials() {
 
         // Coluna F: CAPITAL
         const cF = wsBase.getCell(`F${currentRow}`);
-        cF.value = 10000;
+        cF.value = 5000;
         cF.numFmt = '_-"R$ "* #,##0.00_-;\\"-R$ \\"* #,##0.00_-;_-"R$ "* -??_-;_-@';
         cF.font = { name: 'Arial', size: 10, color: { argb: 'FF000000' } };
         cF.alignment = { horizontal: 'right', vertical: 'middle' };
         cF.border = thinBorder;
 
-        // Coluna G: OBSERVAÇÕES (Plano)
+        // Coluna G: OBSERVAÇÕES (Plano) - Em branco conforme solicitação
         const cG = wsBase.getCell(`G${currentRow}`);
-        cG.value = sub.plan_type ? `PLANO ${sub.plan_type.toUpperCase()}` : 'ADESÃO';
+        cG.value = '';
         cG.font = { name: 'Arial', size: 10, color: { argb: 'FF000000' } };
         cG.alignment = { horizontal: 'center', vertical: 'middle' };
         cG.border = thinBorder;
 
-        // Coluna H: OBSERVAÇÕES (PJ / Dados Complementares)
+        // Coluna H: OBSERVAÇÕES (PJ / Dados Complementares) - Em branco conforme solicitação
         const cH = wsBase.getCell(`H${currentRow}`);
-        cH.value = obsPJ;
+        cH.value = '';
         cH.font = { name: 'Arial', size: 10, color: { argb: 'FF000000' } };
         cH.alignment = { horizontal: 'left', vertical: 'middle' };
         cH.border = thinBorder;
@@ -1032,35 +1074,111 @@ export default function AdminFinancials() {
 
     const grossRevenue = completed.reduce((sum, o) => sum + Number(o.amount || 0), 0);
     
-    // Provisão total de bônus MMN contratual: 24% da receita bruta
-    // (G0: 6%, G1: 6%, G2: 6%, Revendedor Regional: 6% = 24% Total)
-    const mmnNet = networkReport.reduce((sum, r) => sum + (r.mensal + r.digital + r.anual), 0);
-    const mmnReseller = resellerReport.reduce((sum, r) => sum + (r.mensal + r.digital + r.anual), 0);
-    const mmnReportTotal = mmnNet + mmnReseller;
+    // Provisão de bônus e repasses contratuais:
+    // Rede MMN Afiliados (G0 a G2 = 21% da receita bruta)
+    // Revendedores Regionais (5% Mensal + 2% Anual = 7% da receita bruta)
+    // Total de Repasse a Afiliados e Revendedores = 28%
+    const networkRate = mmnRates.networkRate || 21;
+    const resellerRate = mmnRates.resellerRate || 7;
+    const totalRepasseRate = mmnRates.totalRepasseRate || 28;
 
-    // Provisão oficial MMN de 24% sobre a receita bruta faturada
-    const mmnTotal = grossRevenue > 0 ? (grossRevenue * 0.24) : (mmnReportTotal > 0 ? mmnReportTotal : 0);
+    const networkTotal = grossRevenue > 0 ? (grossRevenue * (networkRate / 100)) : 0;
+    const resellerTotal = grossRevenue > 0 ? (grossRevenue * (resellerRate / 100)) : 0;
+    const mmnTotal = networkTotal + resellerTotal; // 28% Total de repasse
 
-    // Custo Seguro MBM: R$ 1,00 por vida ativa (conforme apólice MBM Seguros)
-    const mbmCost = activeLivesCount * 1.00;
+    // Custo Seguro MBM: Provisão em caixa conforme o ciclo contratado pelo segurado
+    // - Mensal: R$ 1,00 (1 mês de cobertura MBM)
+    // - Trimestral: R$ 3,00 (3 meses de cobertura MBM)
+    // - Semestral: R$ 6,00 (6 meses de cobertura MBM)
+    // - Anual: R$ 12,00 (12 meses de cobertura MBM)
+    let mbmMensalCount = 0;
+    let mbmTrimestralCount = 0;
+    let mbmSemestralCount = 0;
+    let mbmAnualCount = 0;
+    let mbmCost = 0;
 
-    // Margem Líquida da Plataforma (~76%)
+    if (activeSubscriptions.length > 0) {
+      activeSubscriptions.forEach((sub: any) => {
+        const plan = (sub.plan_type || '').toLowerCase();
+        if (plan.includes('anual') || plan.includes('ano') || plan.includes('12')) {
+          mbmAnualCount++;
+          mbmCost += 12.00;
+        } else if (plan.includes('semestral') || plan.includes('6')) {
+          mbmSemestralCount++;
+          mbmCost += 6.00;
+        } else if (plan.includes('trimestral') || plan.includes('3')) {
+          mbmTrimestralCount++;
+          mbmCost += 3.00;
+        } else {
+          // Mensal ou padrão
+          mbmMensalCount++;
+          mbmCost += 1.00;
+        }
+      });
+    } else {
+      // Se a lista de assinaturas estiver vazia, inspeciona os pedidos concluídos do período
+      completed.forEach((o: any) => {
+        const items = o.items || [];
+        items.forEach((it: any) => {
+          const plan = (it.plan_type || it.name || it.title || '').toLowerCase();
+          if (plan.includes('anual') || plan.includes('ano') || plan.includes('12')) {
+            mbmAnualCount++;
+            mbmCost += 12.00;
+          } else if (plan.includes('semestral') || plan.includes('6')) {
+            mbmSemestralCount++;
+            mbmCost += 6.00;
+          } else if (plan.includes('trimestral') || plan.includes('3')) {
+            mbmTrimestralCount++;
+            mbmCost += 3.00;
+          } else if (plan.includes('mensal') || it.is_subscription) {
+            mbmMensalCount++;
+            mbmCost += 1.00;
+          }
+        });
+      });
+
+      if (mbmCost === 0 && activeLivesCount > 0) {
+        mbmCost = activeLivesCount * 1.00;
+        mbmMensalCount = activeLivesCount;
+      }
+    }
+
+    const planBreakdownParts: string[] = [];
+    if (mbmAnualCount > 0) planBreakdownParts.push(`${mbmAnualCount}x Anual (R$ ${(mbmAnualCount * 12).toFixed(2).replace('.', ',')})`);
+    if (mbmSemestralCount > 0) planBreakdownParts.push(`${mbmSemestralCount}x Semestral (R$ ${(mbmSemestralCount * 6).toFixed(2).replace('.', ',')})`);
+    if (mbmTrimestralCount > 0) planBreakdownParts.push(`${mbmTrimestralCount}x Trimestral (R$ ${(mbmTrimestralCount * 3).toFixed(2).replace('.', ',')})`);
+    if (mbmMensalCount > 0) planBreakdownParts.push(`${mbmMensalCount}x Mensal (R$ ${(mbmMensalCount * 1).toFixed(2).replace('.', ',')})`);
+    const mbmPlanSummary = planBreakdownParts.length > 0 ? planBreakdownParts.join(' • ') : 'R$ 1,00/mês por plano';
+
+    // Margem Líquida da Plataforma (~72%)
     const netProfit = Math.max(0, grossRevenue - mmnTotal - mbmCost);
     const profitMargin = grossRevenue > 0 ? (netProfit / grossRevenue) * 100 : 0;
-    const mmnPercentage = grossRevenue > 0 ? (mmnTotal / grossRevenue) * 100 : 0;
+    
+    const mmnPercentage = grossRevenue > 0 ? (mmnTotal / grossRevenue) * 100 : totalRepasseRate;
+    const networkPercentage = grossRevenue > 0 ? (networkTotal / grossRevenue) * 100 : networkRate;
+    const resellerPercentage = grossRevenue > 0 ? (resellerTotal / grossRevenue) * 100 : resellerRate;
     const mbmPercentage = grossRevenue > 0 ? (mbmCost / grossRevenue) * 100 : 0;
 
     return {
       grossRevenue,
+      totalOrders: completed.length,
+      networkTotal,
+      networkPercentage,
+      resellerTotal,
+      resellerPercentage,
       mmnTotal,
       mmnPercentage,
       mbmCost,
       mbmPercentage,
+      mbmMensalCount,
+      mbmTrimestralCount,
+      mbmSemestralCount,
+      mbmAnualCount,
+      mbmPlanSummary,
       netProfit,
       profitMargin,
-      totalOrders: completed.length
     };
-  }, [orders, networkReport, resellerReport, activeLivesCount, dateRange]);
+  }, [orders, networkReport, resellerReport, activeLivesCount, activeSubscriptions, dateRange, mmnRates]);
 
   if (authLoading || loading) {
     return (
@@ -1618,7 +1736,7 @@ export default function AdminFinancials() {
                   </h3>
                 </div>
                 <p className="text-xs text-slate-400 font-medium mt-1">
-                  Demonstração contábil do resultado: Faturamento Bruto, Provisões de Rede MMN (24%), Seguro MBM (R$ 1/vida) e Margem Líquida Real (~76%)
+                  Demonstração contábil do resultado: Faturamento Bruto, Provisões de Repasse ({mmnRates.totalRepasseRate}%: Rede {mmnRates.networkRate}% + Revendedor {mmnRates.resellerRate}%), Seguro MBM (R$ 1/vida) e Margem Líquida Real (~{(100 - mmnRates.totalRepasseRate).toFixed(0)}%)
                 </p>
               </div>
               <div className="flex items-center gap-2 bg-white/5 px-4 py-2 rounded-2xl border border-white/10">
@@ -1659,7 +1777,7 @@ export default function AdminFinancials() {
               <div className="bg-white/5 border border-white/5 p-6 rounded-3xl relative overflow-hidden">
                 <div className="flex items-center justify-between mb-1">
                   <span className="text-[10px] text-amber-400 font-black uppercase tracking-widest block">
-                    2. Provisão MMN (24%)
+                    2. Repasse Total ({mmnRates.totalRepasseRate}%)
                   </span>
                   <span className="text-[10px] font-black text-amber-300 bg-amber-500/10 px-2.5 py-0.5 rounded-full border border-amber-500/20">
                     {dreCalculations.mmnPercentage.toFixed(1)}%
@@ -1668,15 +1786,15 @@ export default function AdminFinancials() {
                 <span className="text-2xl lg:text-3xl font-black text-amber-400 italic font-mono block">
                   R$ {dreCalculations.mmnTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                 </span>
-                <span className="text-[10px] text-slate-500 font-medium mt-1.5 block">
-                  Rede G0-G2 (18%) + Regional (6%)
+                <span className="text-[10px] text-slate-400 font-medium mt-1.5 block">
+                  Rede MMN ({mmnRates.networkRate}%) + Revendedor ({mmnRates.resellerRate}%: {mmnRates.resellerMensalRate}% M + {mmnRates.resellerAnualRate}% A)
                 </span>
               </div>
 
               <div className="bg-white/5 border border-white/5 p-6 rounded-3xl relative overflow-hidden">
                 <div className="flex items-center justify-between mb-1">
                   <span className="text-[10px] text-blue-400 font-black uppercase tracking-widest block">
-                    3. Seguro MBM (R$ 1/vida)
+                    3. Provisão Seguro MBM
                   </span>
                   <span className="text-[10px] font-black text-blue-300 bg-blue-500/10 px-2.5 py-0.5 rounded-full border border-blue-500/20">
                     {dreCalculations.mbmPercentage.toFixed(1)}%
@@ -1685,15 +1803,15 @@ export default function AdminFinancials() {
                 <span className="text-2xl lg:text-3xl font-black text-blue-400 italic font-mono block">
                   R$ {dreCalculations.mbmCost.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                 </span>
-                <span className="text-[10px] text-slate-500 font-medium mt-1.5 block">
-                  {activeLivesCount} vidas ativas na apólice
+                <span className="text-[10px] text-slate-400 font-medium mt-1.5 block">
+                  {activeLivesCount} {activeLivesCount === 1 ? 'vida ativa' : 'vidas ativas'} • {dreCalculations.mbmPlanSummary}
                 </span>
               </div>
 
               <div className="bg-gradient-to-br from-indigo-900/80 via-indigo-950/90 to-purple-950/80 text-white p-6 rounded-3xl shadow-2xl border border-indigo-500/30 relative overflow-hidden">
                 <div className="flex items-center justify-between mb-1">
                   <span className="text-[10px] text-indigo-300 font-black uppercase tracking-widest block">
-                    4. Margem Líquida (~76%)
+                    4. Margem Líquida (~{(100 - mmnRates.totalRepasseRate).toFixed(0)}%)
                   </span>
                   <span className="text-[10px] font-black text-emerald-300 bg-emerald-500/20 px-2.5 py-0.5 rounded-full border border-emerald-500/30">
                     {dreCalculations.profitMargin.toFixed(1)}%
@@ -1728,17 +1846,20 @@ export default function AdminFinancials() {
                     const radius = 70;
                     const circumference = 2 * Math.PI * radius; // ~439.82
                     
-                    const mmnPerc = dreCalculations.mmnPercentage / 100;
+                    const netPerc = (dreCalculations.networkPercentage || 21) / 100;
+                    const resPerc = (dreCalculations.resellerPercentage || 7) / 100;
                     const mbmPerc = dreCalculations.mbmPercentage / 100;
                     const profitPerc = Math.max(0, dreCalculations.profitMargin) / 100;
 
-                    const mmnLen = circumference * mmnPerc;
+                    const netLen = circumference * netPerc;
+                    const resLen = circumference * resPerc;
                     const mbmLen = circumference * mbmPerc;
                     const profitLen = circumference * profitPerc;
 
-                    const mmnOffset = 0;
-                    const mbmOffset = -mmnLen;
-                    const profitOffset = -(mmnLen + mbmLen);
+                    const netOffset = 0;
+                    const resOffset = -netLen;
+                    const mbmOffset = -(netLen + resLen);
+                    const profitOffset = -(netLen + resLen + mbmLen);
 
                     return (
                       <svg className="size-full -rotate-90" viewBox="0 0 180 180">
@@ -1751,20 +1872,33 @@ export default function AdminFinancials() {
                           strokeWidth="18"
                           fill="transparent"
                         />
-                        {/* Segmento 1: Rede MMN (24%) */}
+                        {/* Segmento 1: Rede MMN (21%) */}
                         <circle
                           cx="90"
                           cy="90"
                           r={radius}
                           stroke="#f59e0b"
                           strokeWidth="18"
-                          strokeDasharray={`${mmnLen} ${circumference}`}
-                          strokeDashoffset={mmnOffset}
+                          strokeDasharray={`${netLen} ${circumference}`}
+                          strokeDashoffset={netOffset}
                           strokeLinecap="round"
                           fill="transparent"
                           className="transition-all duration-1000"
                         />
-                        {/* Segmento 2: Seguro MBM */}
+                        {/* Segmento 2: Revendedor (7%) */}
+                        <circle
+                          cx="90"
+                          cy="90"
+                          r={radius}
+                          stroke="#a855f7"
+                          strokeWidth="18"
+                          strokeDasharray={`${resLen} ${circumference}`}
+                          strokeDashoffset={resOffset}
+                          strokeLinecap="round"
+                          fill="transparent"
+                          className="transition-all duration-1000"
+                        />
+                        {/* Segmento 3: Seguro MBM */}
                         <circle
                           cx="90"
                           cy="90"
@@ -1777,7 +1911,7 @@ export default function AdminFinancials() {
                           fill="transparent"
                           className="transition-all duration-1000"
                         />
-                        {/* Segmento 3: Margem Líquida (~76%) */}
+                        {/* Segmento 4: Margem Líquida (~72%) */}
                         <circle
                           cx="90"
                           cy="90"
@@ -1804,13 +1938,20 @@ export default function AdminFinancials() {
                 </div>
 
                 {/* Legenda do Donut */}
-                <div className="w-full grid grid-cols-3 gap-2 pt-2 border-t border-white/5 text-center">
+                <div className="w-full grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2 border-t border-white/5 text-center">
                   <div>
                     <div className="flex items-center justify-center gap-1.5 mb-1">
                       <span className="size-2.5 rounded-full bg-amber-400" />
                       <span className="text-[9px] font-bold text-slate-400 uppercase">Rede MMN</span>
                     </div>
-                    <span className="text-xs font-black text-white font-mono">{dreCalculations.mmnPercentage.toFixed(1)}%</span>
+                    <span className="text-xs font-black text-white font-mono">{dreCalculations.networkPercentage.toFixed(1)}%</span>
+                  </div>
+                  <div>
+                    <div className="flex items-center justify-center gap-1.5 mb-1">
+                      <span className="size-2.5 rounded-full bg-purple-400" />
+                      <span className="text-[9px] font-bold text-slate-400 uppercase">Revendedor</span>
+                    </div>
+                    <span className="text-xs font-black text-white font-mono">{dreCalculations.resellerPercentage.toFixed(1)}%</span>
                   </div>
                   <div>
                     <div className="flex items-center justify-center gap-1.5 mb-1">
@@ -1839,7 +1980,7 @@ export default function AdminFinancials() {
                     Destinação de Cada R$ 100,00 Faturados
                   </h4>
                   <p className="text-xs text-slate-400 mt-1">
-                    Visualização linear de como a receita se decompõe entre comissões, seguro obrigatório e retenção líquida
+                    Visualização linear de como a receita se decompõe entre comissões, revendedor, seguro obrigatório e retenção líquida
                   </p>
                 </div>
 
@@ -1848,9 +1989,15 @@ export default function AdminFinancials() {
                   <div className="h-6 w-full bg-white/5 rounded-2xl overflow-hidden p-1 flex gap-1 border border-white/5">
                     <motion.div 
                       initial={{ width: 0 }} 
-                      animate={{ width: `${Math.max(4, dreCalculations.mmnPercentage)}%` }} 
+                      animate={{ width: `${Math.max(4, dreCalculations.networkPercentage)}%` }} 
                       className="h-full bg-gradient-to-r from-amber-500 to-amber-600 rounded-xl flex items-center justify-center text-[9px] font-black text-black"
-                      title={`MMN: ${dreCalculations.mmnPercentage.toFixed(1)}%`}
+                      title={`MMN: ${dreCalculations.networkPercentage.toFixed(1)}%`}
+                    />
+                    <motion.div 
+                      initial={{ width: 0 }} 
+                      animate={{ width: `${Math.max(3, dreCalculations.resellerPercentage)}%` }} 
+                      className="h-full bg-gradient-to-r from-purple-500 to-purple-600 rounded-xl flex items-center justify-center text-[9px] font-black text-white"
+                      title={`Revendedor: ${dreCalculations.resellerPercentage.toFixed(1)}%`}
                     />
                     <motion.div 
                       initial={{ width: 0 }} 
@@ -1867,27 +2014,38 @@ export default function AdminFinancials() {
                   </div>
 
                   {/* Detalhes de Cada Rubrica */}
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-2">
                     <div className="p-4 bg-white/5 rounded-2xl border border-white/5">
                       <div className="flex items-center gap-2 mb-1">
                         <span className="size-2 rounded-full bg-amber-400" />
-                        <span className="text-[10px] text-slate-400 font-bold uppercase">Repasse Rede</span>
+                        <span className="text-[10px] text-slate-400 font-bold uppercase">Rede MMN</span>
                       </div>
                       <span className="text-lg font-black text-amber-400 font-mono block">
-                        R$ {((dreCalculations.mmnPercentage / 100) * 100).toFixed(2).replace('.', ',')}
+                        R$ {((dreCalculations.networkPercentage / 100) * 100).toFixed(2).replace('.', ',')}
                       </span>
-                      <span className="text-[9px] text-slate-500 font-medium">a cada R$ 100</span>
+                      <span className="text-[9px] text-slate-500 font-medium">a cada R$ 100 ({mmnRates.networkRate}%)</span>
+                    </div>
+
+                    <div className="p-4 bg-white/5 rounded-2xl border border-white/5">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="size-2 rounded-full bg-purple-400" />
+                        <span className="text-[10px] text-slate-400 font-bold uppercase">Revendedor</span>
+                      </div>
+                      <span className="text-lg font-black text-purple-400 font-mono block">
+                        R$ {((dreCalculations.resellerPercentage / 100) * 100).toFixed(2).replace('.', ',')}
+                      </span>
+                      <span className="text-[9px] text-slate-500 font-medium">a cada R$ 100 ({mmnRates.resellerMensalRate}% M + {mmnRates.resellerAnualRate}% A)</span>
                     </div>
 
                     <div className="p-4 bg-white/5 rounded-2xl border border-white/5">
                       <div className="flex items-center gap-2 mb-1">
                         <span className="size-2 rounded-full bg-blue-400" />
-                        <span className="text-[10px] text-slate-400 font-bold uppercase">Seguro MBM</span>
+                        <span className="text-[10px] text-slate-400 font-bold uppercase">Seguro MBM (Caixa)</span>
                       </div>
                       <span className="text-lg font-black text-blue-400 font-mono block">
                         R$ {(dreCalculations.grossRevenue > 0 ? ((dreCalculations.mbmCost / dreCalculations.grossRevenue) * 100) : 0).toFixed(2).replace('.', ',')}
                       </span>
-                      <span className="text-[9px] text-slate-500 font-medium">a cada R$ 100</span>
+                      <span className="text-[9px] text-slate-500 font-medium">a cada R$ 100 (Total Caixa: R$ {dreCalculations.mbmCost.toFixed(2).replace('.', ',')})</span>
                     </div>
 
                     <div className="p-4 bg-white/5 rounded-2xl border border-white/5">
@@ -1909,7 +2067,7 @@ export default function AdminFinancials() {
                     Modelo Sustentável 100% Digital
                   </span>
                   <span className="font-mono text-white font-bold">
-                    Split Efetivo: {dreCalculations.mmnPercentage.toFixed(0)} / {dreCalculations.profitMargin.toFixed(0)}
+                    Split Efetivo: Repasse {dreCalculations.mmnPercentage.toFixed(0)}% (MMN {dreCalculations.networkPercentage.toFixed(0)}% + Rev. {dreCalculations.resellerPercentage.toFixed(0)}%) / Lucro {dreCalculations.profitMargin.toFixed(0)}%
                   </span>
                 </div>
               </div>
@@ -1932,11 +2090,15 @@ export default function AdminFinancials() {
                   <span className="font-black text-white text-sm">R$ {dreCalculations.grossRevenue.toFixed(2).replace('.', ',')}</span>
                 </div>
                 <div className="flex justify-between items-center py-2.5 border-b border-white/5 text-amber-400">
-                  <span>(-) Provisão de Comissões de Rede MMN (24% - Mensal e Anual)</span>
-                  <span className="font-black">- R$ {dreCalculations.mmnTotal.toFixed(2).replace('.', ',')}</span>
+                  <span>(-) Provisão de Comissões de Rede MMN ({mmnRates.networkRate}% - Níveis G0 a G2)</span>
+                  <span className="font-black">- R$ {dreCalculations.networkTotal.toFixed(2).replace('.', ',')}</span>
+                </div>
+                <div className="flex justify-between items-center py-2.5 border-b border-white/5 text-purple-400">
+                  <span>(-) Provisão de Comissões de Revendedor ({mmnRates.resellerRate}% - {mmnRates.resellerMensalRate}% Mensal + {mmnRates.resellerAnualRate}% Anual)</span>
+                  <span className="font-black">- R$ {dreCalculations.resellerTotal.toFixed(2).replace('.', ',')}</span>
                 </div>
                 <div className="flex justify-between items-center py-2.5 border-b border-white/5 text-blue-400">
-                  <span>(-) Custo Operacional da Apólice MBM Seguros (R$ 1,00/membro ativo)</span>
+                  <span>(-) Provisão Caixa Seguro MBM ({dreCalculations.mbmPlanSummary})</span>
                   <span className="font-black">- R$ {dreCalculations.mbmCost.toFixed(2).replace('.', ',')}</span>
                 </div>
                 <div className="flex justify-between items-center py-3.5 bg-emerald-500/10 border border-emerald-500/20 px-5 rounded-2xl text-emerald-400 text-sm font-black">

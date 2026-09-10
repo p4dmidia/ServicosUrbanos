@@ -357,10 +357,10 @@ export default function Checkout() {
   const subtotal = cartItems.reduce((acc, item) => acc + (item.price * item.quantity), 0);
   const total = subtotal; // Sem frete
 
-  // MMN Calculations for the whole order - Consolidado 4% Mensal + 2% Anual = 6% Total
-  const pMensal = Number(mmnConfig?.cashbackMensal ?? 4.0);
+  // MMN Calculations for the whole order - Consolidado 5% Mensal + 2% Anual = 7% Total
+  const pMensal = Number(mmnConfig?.cashbackMensal ?? 5.0);
   const pAnual = Number(mmnConfig?.cashbackAnual ?? 2.0);
-  const totalRatios = pMensal + pAnual || 6.0;
+  const totalRatios = pMensal + pAnual || 7.0;
 
   // Calculamos o ganho do usuário (G0/G1) sobre os itens no carrinho
   const userTotalCashbackAmount = cartItems.reduce((acc, item) => {
@@ -1217,11 +1217,11 @@ export default function Checkout() {
                       <TrendingUp size={14} /> Seu Retorno com esta compra:
                     </p>
                     <div className="flex justify-between items-center">
-                      <span className="text-xs font-bold text-emerald-600">Cashback Mensal (4%)</span>
+                      <span className="text-xs font-bold text-emerald-600">Cashback Mensal ({pMensal}%)</span>
                       <span className="text-sm font-black text-emerald-600">+ R$ {totalMensal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
                     </div>
                     <div className="flex justify-between items-center">
-                      <span className="text-xs font-bold text-indigo-600">Cashback Anual (2%)</span>
+                      <span className="text-xs font-bold text-indigo-600">Cashback Anual ({pAnual}%)</span>
                       <span className="text-sm font-black text-indigo-600">+ R$ {totalAnual.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
                     </div>
                   </div>

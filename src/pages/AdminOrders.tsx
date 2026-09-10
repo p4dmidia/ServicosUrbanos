@@ -31,6 +31,7 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 import AdminLayout from '../components/AdminLayout';
 import { supabase } from '../lib/supabase';
+import { businessRules } from '../lib/businessRules';
 import toast from 'react-hot-toast';
 
 interface Order {
@@ -60,6 +61,17 @@ export default function AdminOrders() {
   // Estados para Inteligência e Rastreabilidade Completa do Pedido
   const [orderDetailsLoading, setOrderDetailsLoading] = useState(false);
   const [orderDetails, setOrderDetails] = useState<any>(null);
+  const [mmnConfig, setMmnConfig] = useState<{
+    cashbackMensal: number;
+    cashbackAnual: number;
+    commissionRegionalMensal: number;
+    commissionRegionalAnual: number;
+  }>({
+    cashbackMensal: 0.05,
+    cashbackAnual: 0.02,
+    commissionRegionalMensal: 0.05,
+    commissionRegionalAnual: 0.02
+  });
 
   const loadOrders = async () => {
     try {
@@ -81,6 +93,16 @@ export default function AdminOrders() {
 
   useEffect(() => {
     loadOrders();
+    businessRules.getMMNConfig().then(cfg => {
+      if (cfg) {
+        setMmnConfig({
+          cashbackMensal: Number(cfg.cashbackMensal) > 1 ? Number(cfg.cashbackMensal) / 100 : Number(cfg.cashbackMensal),
+          cashbackAnual: Number(cfg.cashbackAnual) > 1 ? Number(cfg.cashbackAnual) / 100 : Number(cfg.cashbackAnual),
+          commissionRegionalMensal: Number(cfg.commissionRegionalMensal) > 1 ? Number(cfg.commissionRegionalMensal) / 100 : Number(cfg.commissionRegionalMensal),
+          commissionRegionalAnual: Number(cfg.commissionRegionalAnual) > 1 ? Number(cfg.commissionRegionalAnual) / 100 : Number(cfg.commissionRegionalAnual)
+        });
+      }
+    });
   }, []);
 
   const handleOpenOrderDetails = async (order: Order) => {
@@ -569,7 +591,7 @@ export default function AdminOrders() {
                         </h4>
                       </div>
                       <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 bg-white/5 px-3 py-1 rounded-full border border-white/5">
-                        Divisão Mensal (4%) e Anual (2%)
+                        Divisão Mensal ({(mmnConfig.cashbackMensal * 100).toFixed(0)}%) e Anual ({(mmnConfig.cashbackAnual * 100).toFixed(0)}%)
                       </span>
                     </div>
 
@@ -585,7 +607,7 @@ export default function AdminOrders() {
                             </span>
                           </div>
                           <span className="text-[9px] font-bold px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 uppercase">
-                            Cashback Próprio (6%)
+                            Cashback Próprio ({((mmnConfig.cashbackMensal + mmnConfig.cashbackAnual) * 100).toFixed(0)}%)
                           </span>
                         </div>
 
@@ -597,11 +619,11 @@ export default function AdminOrders() {
 
                         <div className="grid grid-cols-2 gap-2 bg-white/5 p-3 rounded-xl text-center text-xs font-mono">
                           <div>
-                            <span className="text-[8px] font-bold text-slate-400 block uppercase">Mensal (4%)</span>
+                            <span className="text-[8px] font-bold text-slate-400 block uppercase">Mensal ({(mmnConfig.cashbackMensal * 100).toFixed(0)}%)</span>
                             <span className="text-white font-bold">R$ {orderDetails?.g0?.commissions?.mensal?.toFixed(2).replace('.', ',')}</span>
                           </div>
                           <div>
-                            <span className="text-[8px] font-bold text-slate-400 block uppercase">Anual (2%)</span>
+                            <span className="text-[8px] font-bold text-slate-400 block uppercase">Anual ({(mmnConfig.cashbackAnual * 100).toFixed(0)}%)</span>
                             <span className="text-white font-bold">R$ {orderDetails?.g0?.commissions?.anual?.toFixed(2).replace('.', ',')}</span>
                           </div>
                         </div>
@@ -624,7 +646,7 @@ export default function AdminOrders() {
                             </span>
                           </div>
                           <span className="text-[9px] font-bold px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 uppercase">
-                            1º Nível Upline (6%)
+                            1º Nível Upline ({((mmnConfig.cashbackMensal + mmnConfig.cashbackAnual) * 100).toFixed(0)}%)
                           </span>
                         </div>
 
@@ -638,11 +660,11 @@ export default function AdminOrders() {
 
                         <div className="grid grid-cols-2 gap-2 bg-white/5 p-3 rounded-xl text-center text-xs font-mono">
                           <div>
-                            <span className="text-[8px] font-bold text-slate-400 block uppercase">Mensal (4%)</span>
+                            <span className="text-[8px] font-bold text-slate-400 block uppercase">Mensal ({(mmnConfig.cashbackMensal * 100).toFixed(0)}%)</span>
                             <span className="text-white font-bold">R$ {orderDetails?.g1?.commissions?.mensal?.toFixed(2).replace('.', ',')}</span>
                           </div>
                           <div>
-                            <span className="text-[8px] font-bold text-slate-400 block uppercase">Anual (2%)</span>
+                            <span className="text-[8px] font-bold text-slate-400 block uppercase">Anual ({(mmnConfig.cashbackAnual * 100).toFixed(0)}%)</span>
                             <span className="text-white font-bold">R$ {orderDetails?.g1?.commissions?.anual?.toFixed(2).replace('.', ',')}</span>
                           </div>
                         </div>
@@ -665,7 +687,7 @@ export default function AdminOrders() {
                             </span>
                           </div>
                           <span className="text-[9px] font-bold px-2 py-0.5 rounded bg-sky-500/20 text-sky-300 uppercase">
-                            2º Nível Upline (6%)
+                            2º Nível Upline ({((mmnConfig.cashbackMensal + mmnConfig.cashbackAnual) * 100).toFixed(0)}%)
                           </span>
                         </div>
 
@@ -679,11 +701,11 @@ export default function AdminOrders() {
 
                         <div className="grid grid-cols-2 gap-2 bg-white/5 p-3 rounded-xl text-center text-xs font-mono">
                           <div>
-                            <span className="text-[8px] font-bold text-slate-400 block uppercase">Mensal (4%)</span>
+                            <span className="text-[8px] font-bold text-slate-400 block uppercase">Mensal ({(mmnConfig.cashbackMensal * 100).toFixed(0)}%)</span>
                             <span className="text-white font-bold">R$ {orderDetails?.g2?.commissions?.mensal?.toFixed(2).replace('.', ',')}</span>
                           </div>
                           <div>
-                            <span className="text-[8px] font-bold text-slate-400 block uppercase">Anual (2%)</span>
+                            <span className="text-[8px] font-bold text-slate-400 block uppercase">Anual ({(mmnConfig.cashbackAnual * 100).toFixed(0)}%)</span>
                             <span className="text-white font-bold">R$ {orderDetails?.g2?.commissions?.anual?.toFixed(2).replace('.', ',')}</span>
                           </div>
                         </div>
@@ -706,7 +728,7 @@ export default function AdminOrders() {
                             </span>
                           </div>
                           <span className="text-[9px] font-bold px-2 py-0.5 rounded bg-purple-500/20 text-purple-300 uppercase">
-                            Repasse Regional (6%)
+                            Repasse Regional ({((mmnConfig.commissionRegionalMensal + mmnConfig.commissionRegionalAnual) * 100).toFixed(0)}%)
                           </span>
                         </div>
 
@@ -722,11 +744,11 @@ export default function AdminOrders() {
 
                         <div className="grid grid-cols-2 gap-2 bg-white/5 p-3 rounded-xl text-center text-xs font-mono">
                           <div>
-                            <span className="text-[8px] font-bold text-slate-400 block uppercase">Mensal (4%)</span>
+                            <span className="text-[8px] font-bold text-slate-400 block uppercase">Mensal ({(mmnConfig.commissionRegionalMensal * 100).toFixed(0)}%)</span>
                             <span className="text-white font-bold">R$ {orderDetails?.reseller?.commissions?.mensal?.toFixed(2).replace('.', ',')}</span>
                           </div>
                           <div>
-                            <span className="text-[8px] font-bold text-slate-400 block uppercase">Anual (2%)</span>
+                            <span className="text-[8px] font-bold text-slate-400 block uppercase">Anual ({(mmnConfig.commissionRegionalAnual * 100).toFixed(0)}%)</span>
                             <span className="text-white font-bold">R$ {orderDetails?.reseller?.commissions?.anual?.toFixed(2).replace('.', ',')}</span>
                           </div>
                         </div>
@@ -749,12 +771,14 @@ export default function AdminOrders() {
                         (orderDetails?.g2?.commissions?.total || 0) +
                         (orderDetails?.reseller?.commissions?.total || 0);
                       const platformMargin = Math.max(0, selectedOrder.amount - totalDistributed);
+                      const totalCommissionPercent = ((mmnConfig.cashbackMensal + mmnConfig.cashbackAnual) * 3 + (mmnConfig.commissionRegionalMensal + mmnConfig.commissionRegionalAnual)) * 100;
+                      const companyMarginPercent = Math.max(0, 100 - totalCommissionPercent);
 
                       return (
                         <div className="p-4 bg-white/5 rounded-2xl border border-white/5 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs font-mono">
                           <div>
                             <span className="text-slate-400 font-bold block text-[10px] uppercase font-sans">
-                              Total Distribuído em Comissões (24%):
+                              Total Distribuído em Comissões ({totalCommissionPercent.toFixed(0)}%):
                             </span>
                             <span className="text-indigo-400 font-black text-sm">
                               R$ {totalDistributed.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
@@ -762,7 +786,7 @@ export default function AdminOrders() {
                           </div>
                           <div className="text-left sm:text-right">
                             <span className="text-slate-400 font-bold block text-[10px] uppercase font-sans">
-                              Margem Retida pela Empresa (76%):
+                              Margem Retida pela Empresa ({companyMarginPercent.toFixed(0)}%):
                             </span>
                             <span className="text-emerald-400 font-black text-sm">
                               R$ {platformMargin.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}

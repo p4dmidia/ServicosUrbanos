@@ -1,7 +1,30 @@
 -- =========================================================================
--- MIGRATION: TRIGGER handle_order_payment (100% DINÂMICO DO PAINEL ADMIN)
+-- MIGRATION: COMISSÕES DINÂMICAS 100% AUTOMÁTICAS E REMOÇÃO TOTAL DO SEMANAL
+-- Projeto: Serviços Urbanos (ioslywxfppswfuzxzwkn)
 -- =========================================================================
 
+-- 1. ZERAR QUALQUER CONFIGURAÇÃO DE SEMANAL E DEFINIR PADRÕES DINÂMICOS
+UPDATE public.mmn_config
+SET 
+    cashback_digital = 0,
+    commission_regional_semanal = 0,
+    cashback_mensal = COALESCE(cashback_mensal, 4.00),
+    cashback_anual = COALESCE(cashback_anual, 2.00),
+    commission_regional_mensal = COALESCE(commission_regional_mensal, 4.00),
+    commission_regional_anual = COALESCE(commission_regional_anual, 2.00),
+    updated_at = now()
+WHERE id = 1;
+
+-- 2. CANCELAR / REMOVER TRANSAÇÕES RESIDUAIS DE COMISSÃO SEMANAL
+DELETE FROM public.transactions 
+WHERE type = 'commission' 
+  AND (
+    description ILIKE '%Semanal%' 
+    OR description ILIKE '%Cashback Digital%' 
+    OR description ILIKE '%(CD)%'
+  );
+
+-- 3. FUNÇÃO E TRIGGER DINÂMICA: handle_order_payment
 CREATE OR REPLACE FUNCTION public.handle_order_payment()
 RETURNS TRIGGER AS $$
 DECLARE
@@ -40,7 +63,7 @@ BEGIN
         END IF;
 
         -- ==========================================
-        -- 1. CARREGAR PARÂMETROS CONFIGURADOS NO ADMIN (mmn_config)
+        -- 1. CARREGAR PARÂMETROS DINÂMICOS DO PAINEL ADMIN (mmn_config)
         -- ==========================================
         SELECT 
             COALESCE(depth, 3),
@@ -59,6 +82,7 @@ BEGIN
         FROM public.mmn_config
         WHERE id = 1;
 
+        -- Total das duas taxas configuradas no painel
         v_total_config := v_cashback_mensal + v_cashback_anual;
 
         -- ==========================================
@@ -128,7 +152,7 @@ BEGIN
             END IF;
         END IF;
 
-        -- Credita para o Titular (NEW.customer_id)
+        -- Inserir comissões G0 (Apenas Mensal e Anual - SEManal eliminado)
         INSERT INTO public.transactions (profile_id, type, description, amount, status, order_id)
         VALUES 
         (NEW.customer_id, 'commission', 'Comissão Mensal G0 (Titular) - Pedido #' || NEW.id, v_level_mensal, 'pending', NEW.id),
@@ -139,7 +163,7 @@ BEGIN
         -- ==========================================
         v_current_id := NEW.customer_id;
         SELECT referred_by INTO v_upline_id FROM public.profiles WHERE id = v_current_id;
-        v_current_level := 1; -- Começa no G1 (indicador direto)
+        v_current_level := 1; -- Começa no G1
 
         WHILE v_upline_id IS NOT NULL AND v_current_level < v_depth LOOP
             SELECT COALESCE(value, v_total_config) INTO v_level_val 
@@ -168,7 +192,7 @@ BEGIN
                 END IF;
             END IF;
 
-            -- Credita para o Upline G1, G2...
+            -- Inserir comissões para Upline (Mensal e Anual)
             INSERT INTO public.transactions (profile_id, type, description, amount, status, order_id)
             VALUES 
             (v_upline_id, 'commission', 'Comissão Mensal G' || v_current_level || ' - Pedido #' || NEW.id, v_level_mensal, 'pending', NEW.id),
@@ -210,3 +234,10 @@ BEGIN
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- 4. GARANTIR A TRIGGER ATIVA
+DROP TRIGGER IF EXISTS trg_handle_order_payment ON public.orders;
+CREATE TRIGGER trg_handle_order_payment
+AFTER UPDATE OF status ON public.orders
+FOR EACH ROW
+EXECUTE FUNCTION public.handle_order_payment();

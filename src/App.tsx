@@ -31,6 +31,8 @@ import AffiliateLuckyNumber from './pages/AffiliateLuckyNumber';
 import AffiliateRenewals from './pages/AffiliateRenewals';
 import AffiliateTelemedicina from './pages/AffiliateTelemedicina';
 import AffiliateInvoice from './pages/AffiliateInvoice';
+import AffiliateNetLiquido from './pages/AffiliateNetLiquido';
+import AffiliateFinancialSummary from './pages/AffiliateFinancialSummary';
 import ForgotPassword from './pages/ForgotPassword';
 import ResetPassword from './pages/ResetPassword';
 import TermosPrivacidade from './pages/TermosPrivacidade';
@@ -126,8 +128,16 @@ export default function App() {
               element={<ProtectedRoute allowedRoles={['affiliate', 'owner', 'manager', 'admin', 'regional_reseller']}><AffiliateWallet /></ProtectedRoute>} 
             />
             <Route 
+              path="/afiliado/financeiro-liquido" 
+              element={<ProtectedRoute allowedRoles={['affiliate', 'owner', 'manager', 'admin', 'regional_reseller']}><AffiliateNetLiquido /></ProtectedRoute>} 
+            />
+            <Route 
               path="/afiliado/financeiro-revendedor" 
               element={<ProtectedRoute allowedRoles={['regional_reseller', 'owner', 'admin']}><AffiliateResellerFinancial /></ProtectedRoute>} 
+            />
+            <Route 
+              path="/afiliado/financeiro-resumo" 
+              element={<ProtectedRoute allowedRoles={['affiliate', 'owner', 'manager', 'admin', 'regional_reseller']}><AffiliateFinancialSummary /></ProtectedRoute>} 
             />
             <Route 
               path="/afiliado/nota-fiscal" 

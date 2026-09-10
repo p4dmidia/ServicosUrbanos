@@ -22,10 +22,16 @@ import {
 import { motion } from 'motion/react';
 import { Link } from 'react-router-dom';
 import Header from '../components/Header';
+import { businessRules } from '../lib/businessRules';
 
 export default function GanheDinheiro() {
   const [totalMembrosStr, setTotalMembrosStr] = useState('10000');
   const [planPriceStr, setPlanPriceStr] = useState('60');
+  const [mmnConfig, setMmnConfig] = useState<any>(null);
+
+  useEffect(() => {
+    businessRules.getMMNConfig().then(setMmnConfig).catch(console.error);
+  }, []);
 
   const totalMembros = Number(totalMembrosStr) || 0;
   const planPrice = Number(planPriceStr) || 0;
@@ -71,9 +77,9 @@ export default function GanheDinheiro() {
 
   const periodLabel = getPlanPeriodLabel(planPrice);
   
-  // Comissão MMN consolidada: 4% Mensal + 2% Anual = 6% Total.
-  const rateMensal = 0.04;
-  const rateAnual = 0.02;
+  // Taxas carregadas dinamicamente do Painel Admin (mmn_config)
+  const rateMensal = (mmnConfig?.cashbackMensal ?? 5.00) / 100.0;
+  const rateAnual = (mmnConfig?.cashbackAnual ?? 2.00) / 100.0;
 
   const cashMensal = arrecadacao * rateMensal;
   const cashAnual = arrecadacao * rateAnual;
@@ -267,11 +273,11 @@ export default function GanheDinheiro() {
                 {/* Cashback Cards */}
                 <div className="grid grid-cols-2 gap-4">
                   <div className="bg-slate-950/40 p-4 rounded-2xl border border-white/5">
-                    <p className="text-[9px] text-slate-500 font-black uppercase tracking-wider mb-1">C. Mensal (4%)</p>
+                    <p className="text-[9px] text-slate-500 font-black uppercase tracking-wider mb-1">C. Mensal ({mmnConfig?.cashbackMensal ?? 5}%)</p>
                     <p className="text-md font-black text-white">R$ {cashMensal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                   </div>
                   <div className="bg-slate-950/40 p-4 rounded-2xl border border-white/5">
-                    <p className="text-[9px] text-slate-500 font-black uppercase tracking-wider mb-1">C. Anual (2% - 13º)</p>
+                    <p className="text-[9px] text-slate-500 font-black uppercase tracking-wider mb-1">C. Anual ({mmnConfig?.cashbackAnual ?? 2}% - 13º)</p>
                     <p className="text-md font-black text-white text-indigo-400">R$ {cashAnual.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                   </div>
                 </div>

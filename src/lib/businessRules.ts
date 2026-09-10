@@ -922,11 +922,11 @@ export const businessRules = {
       return { 
         depth: 3, 
         paymentType: 'percent' as const,
-        cashbackMensal: 4.00,
+        cashbackMensal: 5.00,
         cashbackDigital: 0.00,
         cashbackAnual: 2.00,
         commissionRegionalSemanal: 0.00,
-        commissionRegionalMensal: 4.00,
+        commissionRegionalMensal: 5.00,
         commissionRegionalAnual: 2.00
       };
     }
@@ -934,11 +934,11 @@ export const businessRules = {
     return {
       depth: data.depth,
       paymentType: data.payment_type as 'percent' | 'fixed',
-      cashbackMensal: Number(data.cashback_mensal ?? 4.00),
-      cashbackDigital: Number(data.cashback_digital ?? 0.00),
+      cashbackMensal: Number(data.cashback_mensal ?? 5.00),
+      cashbackDigital: 0.00,
       cashbackAnual: Number(data.cashback_anual ?? 2.00),
-      commissionRegionalSemanal: Number(data.commission_regional_semanal ?? 0.00),
-      commissionRegionalMensal: Number(data.commission_regional_mensal ?? 4.00),
+      commissionRegionalSemanal: 0.00,
+      commissionRegionalMensal: Number(data.commission_regional_mensal ?? 5.00),
       commissionRegionalAnual: Number(data.commission_regional_anual ?? 2.00)
     };
   },
@@ -1366,17 +1366,19 @@ export const businessRules = {
       // Extrair IDs de pedidos das descrições para buscar nomes dos compradores
       const orderIds = transactions
         .map(t => {
+          if (t.order_id) return String(t.order_id);
           const match = t.description?.match(/Pedido #([A-Z0-9-]+)/i);
           return match ? match[1] : null;
         })
         .filter(Boolean) as string[];
 
-      // 1. Buscar informações dos pedidos (nomes dos compradores)
+      // 1. Buscar informações dos pedidos (nomes dos compradores e valor do contrato)
       const { data: orders } = await supabase
         .from('orders')
         .select(`
           id, 
           customer_name, 
+          amount,
           status, 
           customer_id,
           profiles:customer_id (
@@ -1385,8 +1387,9 @@ export const businessRules = {
         `)
         .in('id', [...new Set(orderIds)]);
 
-      const ordersMap = new Map(orders?.map(o => [o.id, {
+      const ordersMap = new Map(orders?.map(o => [String(o.id), {
         ...o,
+        order_amount: Number(o.amount || 0),
         buyer_name: (o.profiles as any)?.full_name || o.customer_name || 'Desconhecido'
       }]) || []);
 
@@ -1421,22 +1424,21 @@ export const businessRules = {
 
       const activity = transactions.map(t => {
         const orderMatch = t.description?.match(/Pedido\s*#\s*([A-Z0-9-]+)/i);
-        const orderId = orderMatch ? orderMatch[1].trim() : null;
-        const order = orderId ? ordersMap.get(orderId) : null;
+        const orderId = t.order_id ? String(t.order_id) : (orderMatch ? orderMatch[1].trim() : null);
+        const order = orderId ? ordersMap.get(String(orderId)) : null;
 
         const desc = t.description || '';
         const isReseller = desc.includes('Revendedor') || desc.includes('Regional');
 
-        // Classificar saques e comissões como 'Semanal', 'Mensal' ou 'Anual' baseado na descrição
+        // Classificar saques e comissões como 'Mensal' ou 'Anual' baseado na descrição
         let cashbackType = 'Outros';
-        const typeMatch = desc.match(/(Mensal|Anual|Semanal|Digital|CD)/i);
+        const typeMatch = desc.match(/(Mensal|Anual)/i);
         if (typeMatch) {
           const matched = typeMatch[1].toLowerCase();
           if (matched === 'mensal') cashbackType = isReseller ? 'Mensal (REG)' : 'Mensal';
           else if (matched === 'anual') cashbackType = isReseller ? 'Anual (REG)' : 'Anual';
-          else cashbackType = isReseller ? 'Semanal (REG)' : 'Semanal';
         } else {
-          cashbackType = t.type === 'withdrawal' ? 'Semanal' : 'Outros';
+          cashbackType = t.type === 'withdrawal' ? 'Resgate' : (isReseller ? 'Comissão (REG)' : 'Cashback');
         }
 
         // Determinar o nível com precisão (G0, G1, G2 ou REG)
@@ -1470,10 +1472,6 @@ export const businessRules = {
         mappedDescription = mappedDescription
           .replace(/Comiss[aã]o MMN\s*\(Mensal\)/gi, 'Cashback Mensal')
           .replace(/Comiss[aã]o MMN\s*\(Anual\)/gi, 'Cashback Anual')
-          .replace(/Comiss[aã]o MMN\s*\(CD\)/gi, 'Cashback Semanal')
-          .replace(/Comiss[aã]o MMN\s*\(Semanal\)/gi, 'Cashback Semanal')
-          .replace(/Cashback Digital/gi, 'Cashback Semanal')
-          .replace(/Comiss[aã]o Semanal/gi, 'Cashback Semanal')
           .replace(/Comiss[aã]o Mensal/gi, 'Cashback Mensal')
           .replace(/Comiss[aã]o Anual/gi, 'Cashback Anual');
 
@@ -1493,6 +1491,15 @@ export const businessRules = {
           displayName = `${order.buyer_name} (Você)`;
         }
 
+        const contractAmount = Number(order?.order_amount || 0);
+        let percentage = 0;
+        if (contractAmount > 0) {
+          percentage = Number(((Number(t.amount || 0) / contractAmount) * 100).toFixed(2));
+        } else if (t.description) {
+          const pctMatch = t.description.match(/(\d+(\.\d+)?)%/);
+          if (pctMatch) percentage = parseFloat(pctMatch[1]);
+        }
+
         return {
           id: t.id,
           orderId: orderId || '---',
@@ -1502,7 +1509,9 @@ export const businessRules = {
           isReseller: isReseller,
           cashbackType: cashbackType,
           date: new Date(t.created_at).toLocaleDateString('pt-BR'),
-          amount: t.amount,
+          amount: Number(t.amount || 0),
+          contractAmount: contractAmount,
+          percentage: percentage,
           status: displayStatus,
           originalType: t.type,
           description: mappedDescription
@@ -1866,8 +1875,7 @@ export const businessRules = {
           let mappedDesc = t.description || '';
           mappedDesc = mappedDesc
             .replace(/Comiss[aã]o MMN\s*\(Mensal\)/gi, 'Cashback Mensal')
-            .replace(/Comiss[aã]o MMN\s*\(Anual\)/gi, 'Cashback Anual')
-            .replace(/Comiss[aã]o MMN\s*\(CD\)/gi, 'Cashback Semanal');
+            .replace(/Comiss[aã]o MMN\s*\(Anual\)/gi, 'Cashback Anual');
 
           logs.push({
             type: 'Success',
@@ -2140,7 +2148,8 @@ export const businessRules = {
       { data: lastCommissions },
       { data: config },
       { data: chartRawData },
-      allOrdersResult
+      allOrdersResult,
+      { data: mmnConfigData }
     ] = await Promise.all([
       currentRevenueQuery,
       lastRevenueQuery,
@@ -2150,7 +2159,8 @@ export const businessRules = {
       lastCommissionsQuery,
       supabase.from('marketplace_config').select('commission_rate').eq('id', 1).single(),
       chartRawDataQuery,
-      supabase.from('orders').select('id, status')
+      supabase.from('orders').select('id, status'),
+      supabase.from('mmn_config').select('*').single()
     ]);
 
     const ordersMap = new Map(allOrdersResult.data?.map(o => [o.id, o.status]) || []);
@@ -2164,6 +2174,10 @@ export const businessRules = {
     const lastPayout = lastCommissions
       ?.filter(t => !t.description?.includes('Estorno') && ordersMap.get(t.order_id) !== 'Cancelado')
       ?.reduce((acc, t) => acc + Number(t.amount), 0) || 0;
+
+    const monthlyCashbackRate = Number(mmnConfigData?.cashback_mensal ?? 5);
+    const yearlyCashbackRate = Number(mmnConfigData?.cashback_anual ?? 2);
+    const digitalCashbackRate = Number(mmnConfigData?.cashback_digital ?? 2);
 
     const calculateTrend = (current: number, last: number) => {
       if (last <= 0) return current > 0 ? 100 : 0;
@@ -2211,9 +2225,12 @@ export const businessRules = {
       userGrowth: { value: currentUserGrowth || 0, trend: calculateTrend(currentUserGrowth || 0, lastUserGrowth || 0) },
       payoutMMN: { value: currentPayout, trend: calculateTrend(currentPayout, lastPayout) },
       cashback: {
-        monthly: currentGMVTotal * 0.0275,
-        yearly: currentGMVTotal * 0.0075, // Yearly contribution for this period
-        digitalTotal: currentGMVTotal * 0.01
+        monthly: currentGMVTotal * (monthlyCashbackRate / 100),
+        yearly: currentGMVTotal * (yearlyCashbackRate / 100),
+        digitalTotal: currentGMVTotal * (digitalCashbackRate / 100),
+        monthlyRate: monthlyCashbackRate,
+        yearlyRate: yearlyCashbackRate,
+        digitalRate: digitalCashbackRate
       },
       chart: {
         values: values,
@@ -2386,18 +2403,15 @@ export const businessRules = {
         const amount = Number(t.amount);
 
         if (t.type === 'commission') {
-          let cycleType = 'Semanal';
+          let cycleType = 'Mensal';
           if (desc.includes('Mensal')) {
             report[affiliateId].mensal += amount;
             cycleType = 'Mensal';
           } else if (desc.includes('Anual')) {
             report[affiliateId].anual += amount;
             cycleType = 'Anual';
-          } else if (desc.includes('Digital') || desc.includes('Semanal') || desc.includes('(CD)')) {
-            report[affiliateId].digital += amount;
-            cycleType = 'Semanal';
           } else {
-            report[affiliateId].digital += amount;
+            report[affiliateId].mensal += amount;
           }
 
           report[affiliateId].transactions.push({
@@ -3373,9 +3387,9 @@ export const businessRules = {
         let categoryLabel = 'Rede MMN';
         if (isReseller) categoryLabel = 'Revendedor Regional';
 
-        let cycleLabel = 'Semanal';
-        if (t.description?.includes('Mensal')) cycleLabel = 'Mensal';
-        else if (t.description?.includes('Anual')) cycleLabel = 'Anual';
+        let cycleLabel = 'Mensal';
+        if (t.description?.includes('Anual')) cycleLabel = 'Anual';
+        else cycleLabel = 'Mensal';
 
         const isPJ = Boolean(profile.cnpj && profile.cnpj.replace(/\D/g, '').length > 11) || 
                      isCnpj(profile.cnpj || profile.cpf, profile.pix_key) || 
@@ -3461,7 +3475,7 @@ export const businessRules = {
       // 1. Buscar perfil do revendedor e configurações
       const [{ data: profile }, { data: config }] = await Promise.all([
         supabase.from('profiles').select('*').eq('id', userId).single(),
-        supabase.from('mmn_config').select('commission_regional_semanal, commission_regional_mensal, commission_regional_anual').single()
+        supabase.from('mmn_config').select('commission_regional_mensal, commission_regional_anual').single()
       ]);
 
       // 2. Buscar todas as transações do revendedor
@@ -3475,8 +3489,12 @@ export const businessRules = {
 
       // Filtrar apenas comissões e repasses de revendedor regional
       const resellerTransactions = (allTransactions || []).filter(t => {
-        const desc = t.description || '';
-        return desc.includes('Revendedor') || desc.includes('Regional');
+        const desc = (t.description || '').toLowerCase();
+        return desc.includes('revendedor') || 
+               desc.includes('regional') || 
+               desc.includes('revenda') || 
+               t.metadata?.is_reseller === true || 
+               t.metadata?.type === 'reseller';
       });
 
       // Transações do mês selecionado
@@ -3519,10 +3537,8 @@ export const businessRules = {
         t.type === 'withdrawal' && (t.status === 'completed' || t.status === 'pago')
       );
 
-      // Total histórico de semanal pago
-      const totalHistoricalWeeklyPaid = allResellerWithdrawals
-        .filter(t => t.description?.includes('Semanal') || (!t.description?.includes('Mensal') && !t.description?.includes('Anual')))
-        .reduce((acc, t) => acc + Math.abs(Number(t.amount || 0)), 0);
+      // Total histórico pago da revenda
+      const totalHistoricalWeeklyPaid = 0;
 
       // Saldo acumulado do ciclo anual (todos os valores acumulados até 30 de Novembro para pagamento em 10 de Dezembro)
       const annualAccumulatedEarned = allResellerCommissions
@@ -3652,9 +3668,8 @@ export const businessRules = {
         const orderId = String(t.order_id || (t.description?.match(/Pedido\s*#?\s*([a-zA-Z0-9_-]+)/i)?.[1] || '---'));
         const orderInfo = ordersMap.get(orderId);
         
-        let category = 'SEMANAL (REG)';
-        if (t.description?.includes('Mensal')) category = 'MENSAL (REG)';
-        else if (t.description?.includes('Anual')) category = 'ANUAL (REG)';
+        let category = 'MENSAL (REG)';
+        if (t.description?.includes('Anual')) category = 'ANUAL (REG)';
 
         return {
           id: t.id,
@@ -3692,6 +3707,10 @@ export const businessRules = {
         grossToReceive,
         totalMonthlyPendingHistorical,
         tax,
+        config: {
+          commission_regional_mensal: Number(config?.commission_regional_mensal ?? 4.00),
+          commission_regional_anual: Number(config?.commission_regional_anual ?? 2.00)
+        },
         salesList,
         itemizedTransactions,
         salesCount: salesList.length,
@@ -3808,16 +3827,7 @@ export const businessRules = {
     };
 
     if (type === 'total' && taxOverride?.splitDetails) {
-      const { digital, monthly } = taxOverride.splitDetails;
-      if (digital && digital.bruto > 0) {
-        await insertSingleWithdrawal(
-          digital.bruto,
-          'Semanal',
-          digital.inss || 0,
-          digital.irrf || 0,
-          digital.liquido !== undefined ? digital.liquido : (digital.bruto - (digital.inss || 0) - (digital.irrf || 0))
-        );
-      }
+      const { monthly } = taxOverride.splitDetails;
       if (monthly && monthly.bruto > 0) {
         await insertSingleWithdrawal(
           monthly.bruto,
@@ -3843,7 +3853,7 @@ export const businessRules = {
         liqVal = tax.liquido;
       }
 
-      let displayType = 'Digital';
+      let displayType = 'Mensal';
       if (type === 'mensal') displayType = 'Mensal';
       else if (type === 'anual') displayType = 'Anual';
       else if (type === 'total') displayType = 'Liberados';
@@ -3870,15 +3880,12 @@ export const businessRules = {
         if (!isReseller && isResellerTx) return;
 
         // Verifica o ciclo do pagamento
-        if (type === 'digital' && (desc.includes('Semanal') || desc.includes('Digital') || desc.includes('(CD)'))) {
-          txIdsToComplete.push(tx.id);
-        } else if (type === 'mensal' && desc.includes('Mensal')) {
+        if (type === 'mensal' && desc.includes('Mensal')) {
           txIdsToComplete.push(tx.id);
         } else if (type === 'anual' && desc.includes('Anual')) {
           txIdsToComplete.push(tx.id);
         } else if (type === 'total') {
-          // Marca tanto as comissões semanais quanto mensais
-          if (desc.includes('Semanal') || desc.includes('Digital') || desc.includes('(CD)') || desc.includes('Mensal')) {
+          if (desc.includes('Mensal')) {
             txIdsToComplete.push(tx.id);
           }
         }
@@ -4561,6 +4568,416 @@ export const businessRules = {
 
     if (error) throw error;
     return data;
+  },
+
+  getAffiliateMonthlyStatement: async (userId: string, year: number, month: number) => {
+    const selYear = year;
+    const selMonth = month - 1; // 0-indexed (0 = Jan, 8 = Set, 11 = Dez)
+
+    const startDate = new Date(selYear, selMonth, 1, 0, 0, 0, 0);
+    const lastDay = new Date(selYear, selMonth + 1, 0).getDate();
+    const endDate = new Date(selYear, selMonth, lastDay, 23, 59, 59, 999);
+
+    // Formatação de períodos
+    const periodoStr = `01.${String(month).padStart(2, '0')} A ${lastDay}.${String(month).padStart(2, '0')}.${selYear}`;
+
+    // Previsão de pagamento: dia 10 do mês subsequente
+    const nextMonth = month === 12 ? 1 : month + 1;
+    const nextYear = month === 12 ? selYear + 1 : selYear;
+    const previsaoPagamentoStr = `10.${String(nextMonth).padStart(2, '0')}.${nextYear}`;
+    const limiteNotaFiscalStr = `05.${String(nextMonth).padStart(2, '0')}.${nextYear}`;
+
+    // Ciclo de pagamento anual: programado para 10 de Dezembro de cada ano (mês apurado com pagamento em 10.12)
+    const isDecemberAnnualPayout = nextMonth === 12;
+    const annualPeriodLabel = `01.12.${String(nextYear - 1).slice(-2)} a 30.11.${String(nextYear).slice(-2)}`;
+
+    // 1. Buscar perfil do afiliado
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('id, full_name, cpf, cnpj, pix_key, pix_type, bank_name, bank_branch, bank_account, role, person_type, description')
+      .eq('id', userId)
+      .single();
+
+    const isPJ = profile?.person_type === 'PJ' || 
+                 (profile?.cnpj && profile.cnpj.replace(/\D/g, '').length === 14) || 
+                 (profile?.description && profile.description.includes('[PJ]'));
+
+    // 2. Buscar transações de comissão do usuário
+    const { data: userTxs } = await supabase
+      .from('transactions')
+      .select('*')
+      .eq('profile_id', userId)
+      .order('created_at', { ascending: false });
+
+    const allNetworkCommissions = (userTxs || []).filter(t => {
+      if (t.type !== 'commission') return false;
+      const desc = t.description || '';
+      return !desc.includes('Revendedor') && !desc.includes('Regional') && !desc.includes('(REG)');
+    });
+
+    // A) Cashback Mensal da Rede MMN (G0 ao G2) gerado no mês selecionado
+    const monthCommissions = allNetworkCommissions.filter(t => {
+      const d = new Date(t.created_at);
+      return d >= startDate && d <= endDate && t.description?.includes('Mensal');
+    });
+    const brutoMensal = monthCommissions.reduce((sum, t) => sum + Number(t.amount || 0), 0);
+
+    // B) Cashback Anual AFILIADO
+    // Se for o ciclo de pagamento de 10.12, inclui o acumulado anual do período 01.12 a 30.11
+    let brutoAnual = 0;
+    if (isDecemberAnnualPayout) {
+      const annualStartDate = new Date(nextYear - 1, 11, 1, 0, 0, 0, 0); // 01/12/(ano-1)
+      const annualEndDate = new Date(nextYear, 10, 30, 23, 59, 59, 999); // 30/11/ano
+      const annualCommissions = allNetworkCommissions.filter(t => {
+        const d = new Date(t.created_at);
+        return d >= annualStartDate && d <= annualEndDate && t.description?.includes('Anual');
+      });
+      brutoAnual = annualCommissions.reduce((sum, t) => sum + Number(t.amount || 0), 0);
+    }
+
+    const totalBruto = brutoMensal + brutoAnual;
+
+    // 3. Apuração Fiscal Oficial
+    const tax = calculateCumulativeTaxDeductions({
+      payoutBruto: totalBruto,
+      isPjUser: isPJ
+    });
+
+    // 4. Checar se já foi arquivado como efetivado na pasta de pagamentos
+    const refMonthStr = `${selYear}-${String(month).padStart(2, '0')}`;
+    let archivedRecord: any = null;
+    try {
+      const archives = JSON.parse(localStorage.getItem(`monthly_payout_archives_${refMonthStr}`) || '[]');
+      archivedRecord = archives.find((a: any) => a.userId === userId) || null;
+    } catch (e) {}
+
+    const payoutTx = (userTxs || []).find(t => {
+      if (t.type !== 'withdrawal' && t.type !== 'payout') return false;
+      const desc = t.description || '';
+      return desc.includes(refMonthStr) || desc.includes(`Ref: ${String(month).padStart(2, '0')}/${selYear}`);
+    });
+
+    const isPaid = !!archivedRecord || (payoutTx && payoutTx.status === 'completed');
+
+    return {
+      userId,
+      affiliateName: profile?.full_name || 'Afiliado',
+      pixKey: profile?.pix_key || 'Não cadastrada',
+      bankDetails: profile?.bank_name ? `${profile.bank_name} / Ag: ${profile.bank_branch} / CC: ${profile.bank_account}` : 'Chave PIX',
+      cpfCnpj: profile?.cpf || profile?.cnpj || '',
+      isPJ,
+      periodoStr,
+      previsaoPagamentoStr,
+      limiteNotaFiscalStr,
+      isDecemberAnnualPayout,
+      annualPeriodLabel,
+      brutoMensal,
+      brutoAnual,
+      totalBruto,
+      inss: tax.inss,
+      baseIrrf: tax.irrfBase || Math.max(0, totalBruto - tax.inss),
+      irrf: tax.irrf,
+      liquido: tax.liquido,
+      isPaid,
+      receiptUrl: archivedRecord?.receiptUrl || payoutTx?.receipt_url || null,
+      paidAt: archivedRecord?.paidAt || payoutTx?.created_at || null,
+      refMonth: refMonthStr,
+      monthCommissionsCount: monthCommissions.length
+    };
+  },
+
+  archiveMonthlyPayout: async (data: {
+    refMonth: string;
+    userId: string;
+    userName: string;
+    pixKey: string;
+    totalBruto: number;
+    inss: number;
+    irrf: number;
+    liquido: number;
+    receiptUrl?: string;
+    paidAt?: string;
+  }) => {
+    try {
+      const storageKey = `monthly_payout_archives_${data.refMonth}`;
+      const archives = JSON.parse(localStorage.getItem(storageKey) || '[]');
+      const filtered = archives.filter((a: any) => a.userId !== data.userId);
+      filtered.push({
+        ...data,
+        paidAt: data.paidAt || new Date().toISOString()
+      });
+      localStorage.setItem(storageKey, JSON.stringify(filtered));
+
+      // Salva também no índice geral de competências arquivadas
+      const allMonths = JSON.parse(localStorage.getItem('monthly_payout_archived_months') || '[]');
+      if (!allMonths.includes(data.refMonth)) {
+        allMonths.push(data.refMonth);
+        localStorage.setItem('monthly_payout_archived_months', JSON.stringify(allMonths));
+      }
+    } catch (e) {
+      console.error('Erro ao arquivar pagamento mensal:', e);
+    }
+  },
+
+  getMonthlyPayoutArchives: async (filter?: { refMonth?: string; userId?: string } | string) => {
+    try {
+      const targetMonth = typeof filter === 'string' ? filter : filter?.refMonth;
+      const targetUserId = typeof filter === 'object' ? filter?.userId : undefined;
+      const allMonths: string[] = JSON.parse(localStorage.getItem('monthly_payout_archived_months') || '[]');
+      let allRecords: any[] = [];
+      for (const m of allMonths) {
+        if (targetMonth && targetMonth !== m) continue;
+        const monthItems = JSON.parse(localStorage.getItem(`monthly_payout_archives_${m}`) || '[]');
+        allRecords.push(...monthItems);
+      }
+      if (targetUserId) {
+        allRecords = allRecords.filter(r => r.userId === targetUserId);
+      }
+      return allRecords.sort((a, b) => new Date(b.paidAt).getTime() - new Date(a.paidAt).getTime());
+    } catch (e) {
+      console.error('Erro ao buscar arquivos de pagamento:', e);
+      return [];
+    }
+  },
+
+  getArchivedMonths: async () => {
+    try {
+      return JSON.parse(localStorage.getItem('monthly_payout_archived_months') || '[]');
+    } catch (e) {
+      return [];
+    }
+  },
+
+  exportNetPayoutsCSV: (records: any[], refMonthStr: string) => {
+    const headers = [
+      'Nome do Afiliado',
+      'CPF/CNPJ',
+      'Chave PIX',
+      'Dados Bancarios',
+      'Periodo',
+      'Previsao Pagamento',
+      'Cashback Mensal (G0 ao G2)',
+      'Cashback Anual Acumulado',
+      'Total Bruto',
+      'INSS (Retencao)',
+      'IRRF (Retencao)',
+      'Liquido a Pagar PIX',
+      'Status'
+    ];
+
+    const rows = records.map(r => [
+      `"${r.affiliateName || r.userName || ''}"`,
+      `"${r.cpfCnpj || r.cpf || ''}"`,
+      `"${r.pixKey || ''}"`,
+      `"${r.bankDetails || ''}"`,
+      `"${r.periodoStr || refMonthStr}"`,
+      `"${r.previsaoPagamentoStr || ''}"`,
+      (r.brutoMensal || r.monthlyPending || 0).toFixed(2).replace('.', ','),
+      (r.brutoAnual || r.annualPending || 0).toFixed(2).replace('.', ','),
+      (r.totalBruto || r.totalPending || 0).toFixed(2).replace('.', ','),
+      (r.inss || r.totalInss || 0).toFixed(2).replace('.', ','),
+      (r.irrf || r.totalIrrf || 0).toFixed(2).replace('.', ','),
+      (r.liquido || r.totalLiquid || 0).toFixed(2).replace('.', ','),
+      `"${r.isPaid ? 'Pago' : 'Pendente'}"`
+    ]);
+
+    const csvContent = '\uFEFF' + [headers.join(';'), ...rows.map(row => row.join(';'))].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `programacao_pagamentos_pix_${refMonthStr}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  },
+
+  getConsolidatedFinancialStatement: async (userId: string, year: number, month: number) => {
+    const selYear = year;
+    const selMonth = month - 1; // 0-indexed
+
+    const startDate = new Date(selYear, selMonth, 1, 0, 0, 0, 0);
+    const lastDay = new Date(selYear, selMonth + 1, 0).getDate();
+    const endDate = new Date(selYear, selMonth, lastDay, 23, 59, 59, 999);
+
+    const periodoStr = `01.${String(month).padStart(2, '0')} A ${lastDay}.${String(month).padStart(2, '0')}.${selYear}`;
+    const nextMonth = month === 12 ? 1 : month + 1;
+    const nextYear = month === 12 ? selYear + 1 : selYear;
+    const previsaoPagamentoStr = `10.${String(nextMonth).padStart(2, '0')}.${nextYear}`;
+    const limiteNotaFiscalStr = `05.${String(nextMonth).padStart(2, '0')}.${nextYear}`;
+    const isDecemberAnnualPayout = nextMonth === 12;
+    const annualPeriodLabel = `01.12.${String(nextYear - 1).slice(-2)} a 30.11.${String(nextYear).slice(-2)}`;
+
+    // Perfil
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('id, full_name, cpf, cnpj, pix_key, pix_type, bank_name, bank_branch, bank_account, role, person_type, description')
+      .eq('id', userId)
+      .single();
+
+    const isPJ = profile?.person_type === 'PJ' || 
+                 (profile?.cnpj && profile.cnpj.replace(/\D/g, '').length === 14) || 
+                 (profile?.description && profile.description.includes('[PJ]'));
+
+    // Transações
+    const { data: userTxs } = await supabase
+      .from('transactions')
+      .select('*')
+      .eq('profile_id', userId)
+      .order('created_at', { ascending: false });
+
+    // 1. Cashback Mensal MMN (G0 ao G2)
+    const monthMmnCommissions = (userTxs || []).filter(t => {
+      if (t.type !== 'commission') return false;
+      const desc = (t.description || '').toLowerCase();
+      const isReseller = desc.includes('revendedor') || desc.includes('regional') || desc.includes('revenda') || desc.includes('(reg)') || t.metadata?.is_reseller;
+      if (isReseller) return false;
+      const d = new Date(t.created_at);
+      return d >= startDate && d <= endDate && desc.includes('mensal');
+    });
+    const brutoMensalMmn = monthMmnCommissions.reduce((sum, t) => sum + Number(t.amount || 0), 0);
+
+    // 2. Cashback Mensal do Revendedor
+    const monthResellerCommissions = (userTxs || []).filter(t => {
+      if (t.type !== 'commission') return false;
+      const desc = (t.description || '').toLowerCase();
+      const isReseller = desc.includes('revendedor') || desc.includes('regional') || desc.includes('revenda') || desc.includes('(reg)') || t.metadata?.is_reseller;
+      if (!isReseller) return false;
+      const d = new Date(t.created_at);
+      return d >= startDate && d <= endDate && desc.includes('mensal');
+    });
+    const brutoMensalRevendedor = monthResellerCommissions.reduce((sum, t) => sum + Number(t.amount || 0), 0);
+
+    // 3. Cashback Anual AFILIADO (MMN)
+    let brutoAnualMmn = 0;
+    const annualStartDate = new Date(nextYear - 1, 11, 1, 0, 0, 0, 0); // 01/12/(ano-1)
+    const annualEndDate = new Date(nextYear, 10, 30, 23, 59, 59, 999); // 30/11/ano
+    if (isDecemberAnnualPayout) {
+      const annualMmnComms = (userTxs || []).filter(t => {
+        if (t.type !== 'commission') return false;
+        const desc = (t.description || '').toLowerCase();
+        const isReseller = desc.includes('revendedor') || desc.includes('regional') || desc.includes('revenda') || desc.includes('(reg)') || t.metadata?.is_reseller;
+        if (isReseller) return false;
+        const d = new Date(t.created_at);
+        return d >= annualStartDate && d <= annualEndDate && desc.includes('anual');
+      });
+      brutoAnualMmn = annualMmnComms.reduce((sum, t) => sum + Number(t.amount || 0), 0);
+    }
+
+    // 4. Cashback Anual REVENDEDOR
+    let brutoAnualRevendedor = 0;
+    if (isDecemberAnnualPayout) {
+      const annualResellerComms = (userTxs || []).filter(t => {
+        if (t.type !== 'commission') return false;
+        const desc = (t.description || '').toLowerCase();
+        const isReseller = desc.includes('revendedor') || desc.includes('regional') || desc.includes('revenda') || desc.includes('(reg)') || t.metadata?.is_reseller;
+        if (!isReseller) return false;
+        const d = new Date(t.created_at);
+        return d >= annualStartDate && d <= annualEndDate && desc.includes('anual');
+      });
+      brutoAnualRevendedor = annualResellerComms.reduce((sum, t) => sum + Number(t.amount || 0), 0);
+    }
+
+    // Total Bruto
+    const totalBruto = brutoMensalMmn + brutoMensalRevendedor + brutoAnualMmn + brutoAnualRevendedor;
+
+    // Apuração Fiscal Oficial
+    const tax = calculateCumulativeTaxDeductions({
+      payoutBruto: totalBruto,
+      isPjUser: isPJ
+    });
+
+    const refMonthStr = `${selYear}-${String(month).padStart(2, '0')}`;
+    let archivedRecord: any = null;
+    try {
+      const archives = JSON.parse(localStorage.getItem(`consolidated_payout_archives_${refMonthStr}`) || localStorage.getItem(`monthly_payout_archives_${refMonthStr}`) || '[]');
+      archivedRecord = archives.find((a: any) => a.userId === userId) || null;
+    } catch (e) {}
+
+    const payoutTx = (userTxs || []).find(t => {
+      if (t.type !== 'withdrawal' && t.type !== 'payout') return false;
+      const desc = t.description || '';
+      return desc.includes(refMonthStr) || desc.includes(`Ref: ${String(month).padStart(2, '0')}/${selYear}`);
+    });
+
+    const isPaid = !!archivedRecord || (payoutTx && payoutTx.status === 'completed');
+
+    return {
+      userId,
+      beneficiaryName: profile?.full_name || 'Afiliado / Revendedor',
+      pixKey: profile?.pix_key || 'Não cadastrada',
+      bankDetails: profile?.bank_name ? `${profile.bank_name} / Ag: ${profile.bank_branch} / CC: ${profile.bank_account}` : 'Chave PIX',
+      cpfCnpj: profile?.cpf || profile?.cnpj || '',
+      isPJ,
+      periodoStr,
+      previsaoPagamentoStr,
+      limiteNotaFiscalStr,
+      isDecemberAnnualPayout,
+      annualPeriodLabel,
+      brutoMensalMmn,
+      brutoMensalRevendedor,
+      brutoAnualMmn,
+      brutoAnualRevendedor,
+      totalBruto,
+      inss: tax.inss,
+      baseIrrf: tax.irrfBase || Math.max(0, totalBruto - tax.inss),
+      irrf: tax.irrf,
+      liquido: tax.liquido,
+      isPaid,
+      receiptUrl: archivedRecord?.receiptUrl || payoutTx?.receipt_url || null,
+      paidAt: archivedRecord?.paidAt || payoutTx?.created_at || null,
+      refMonth: refMonthStr
+    };
+  },
+
+  exportConsolidatedPayoutsCSV: (records: any[], refMonthStr: string) => {
+    const headers = [
+      'Beneficiario',
+      'CPF/CNPJ',
+      'Tipo',
+      'Chave PIX',
+      'Dados Bancarios',
+      'Periodo',
+      'Previsao Pagamento',
+      'Cashback Mensal MMN (G0 ao G2)',
+      'Cashback Mensal Revendedor',
+      'Cashback Anual Afiliado',
+      'Cashback Anual Revendedor',
+      'Total Bruto',
+      'INSS Retido',
+      'IRRF Retido',
+      'Liquido a Receber PIX',
+      'Status'
+    ];
+
+    const rows = records.map(r => [
+      `"${r.beneficiaryName || r.affiliateName || r.userName || ''}"`,
+      `"${r.cpfCnpj || r.cpf || ''}"`,
+      r.isPJ ? 'PJ' : 'PF',
+      `"${r.pixKey || ''}"`,
+      `"${r.bankDetails || ''}"`,
+      `"${r.periodoStr || refMonthStr}"`,
+      `"${r.previsaoPagamentoStr || ''}"`,
+      (r.brutoMensalMmn || 0).toFixed(2).replace('.', ','),
+      (r.brutoMensalRevendedor || 0).toFixed(2).replace('.', ','),
+      (r.brutoAnualMmn || 0).toFixed(2).replace('.', ','),
+      (r.brutoAnualRevendedor || 0).toFixed(2).replace('.', ','),
+      (r.totalBruto || 0).toFixed(2).replace('.', ','),
+      (r.inss || 0).toFixed(2).replace('.', ','),
+      (r.irrf || 0).toFixed(2).replace('.', ','),
+      (r.liquido || 0).toFixed(2).replace('.', ','),
+      `"${r.isPaid ? 'Pago' : 'Pendente'}"`
+    ]);
+
+    const csvContent = '\uFEFF' + [headers.join(';'), ...rows.map(row => row.join(';'))].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `relatorio_consolidado_afiliado_revendedor_${refMonthStr}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   }
 };
 

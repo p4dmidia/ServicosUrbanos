@@ -56,11 +56,9 @@ export default function AdminSettings() {
   const [mmnDepth, setMmnDepth] = useState(3);
   const [mmnType, setMmnType] = useState<'percent' | 'fixed'>('percent');
   const [mmnLevels, setMmnLevels] = useState<any[]>([]);
-  const [cashbackMensal, setCashbackMensal] = useState(4.00);
-  const [cashbackDigital, setCashbackDigital] = useState(0.00);
+  const [cashbackMensal, setCashbackMensal] = useState(5.00);
   const [cashbackAnual, setCashbackAnual] = useState(2.00);
-  const [commissionRegionalSemanal, setCommissionRegionalSemanal] = useState(0.00);
-  const [commissionRegionalMensal, setCommissionRegionalMensal] = useState(4.00);
+  const [commissionRegionalMensal, setCommissionRegionalMensal] = useState(5.00);
   const [commissionRegionalAnual, setCommissionRegionalAnual] = useState(2.00);
 
   // Financeiro State
@@ -116,9 +114,7 @@ export default function AdminSettings() {
         setMmnDepth(mmnConfig.depth);
         setMmnType(mmnConfig.paymentType);
         setCashbackMensal(mmnConfig.cashbackMensal);
-        setCashbackDigital(mmnConfig.cashbackDigital);
         setCashbackAnual(mmnConfig.cashbackAnual);
-        setCommissionRegionalSemanal(mmnConfig.commissionRegionalSemanal);
         setCommissionRegionalMensal(mmnConfig.commissionRegionalMensal);
         setCommissionRegionalAnual(mmnConfig.commissionRegionalAnual);
         
@@ -213,9 +209,9 @@ export default function AdminSettings() {
           depth: mmnDepth, 
           paymentType: mmnType,
           cashbackMensal,
-          cashbackDigital,
+          cashbackDigital: 0,
           cashbackAnual,
-          commissionRegionalSemanal,
+          commissionRegionalSemanal: 0,
           commissionRegionalMensal,
           commissionRegionalAnual
         });
@@ -467,15 +463,62 @@ export default function AdminSettings() {
                       </div>
                     </div>
 
-                    <div className="bg-indigo-600/5 border border-indigo-500/10 rounded-[2.5rem] p-10 flex flex-col justify-center">
-                      <Zap className="text-indigo-500 mb-6" size={40} />
-                      <h4 className="text-lg font-black text-white tracking-tighter uppercase italic mb-4 text-left">Resumo da Rede</h4>
-                      <p className="text-sm text-slate-400 font-medium leading-relaxed mb-8">
-                        Ao selecionar <strong>{mmnType === 'percent' ? 'Percentual' : 'Valor Fixo'}</strong>, o total distribuído será de <strong>{mmnLevels.slice(0, mmnDepth).reduce((a, b) => a + b.value, 0)}{mmnType === 'percent' ? '%' : ' R$'}</strong> ao longo de <strong>{mmnDepth} gerações</strong>.
-                      </p>
-                      <div className="flex items-center gap-3 p-4 bg-white/5 rounded-2xl border border-white/10">
-                        <HelpCircle size={18} className="text-indigo-400" />
-                        <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Configuração Global Aplicada</span>
+                    <div className="bg-indigo-600/5 border border-indigo-500/10 rounded-[2.5rem] p-8 md:p-10 flex flex-col justify-between">
+                      <div>
+                        <div className="flex items-center justify-between mb-4">
+                          <Zap className="text-indigo-400" size={36} />
+                          <span className="px-3 py-1 bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 rounded-full text-[10px] font-black uppercase tracking-wider">
+                            Parâmetros Globais
+                          </span>
+                        </div>
+                        <h4 className="text-lg font-black text-white tracking-tighter uppercase italic mb-2 text-left">
+                          Resumo da Distribuição Total
+                        </h4>
+                        <p className="text-xs text-slate-400 font-medium leading-relaxed mb-6">
+                          Todos os cálculos e comissões do sistema seguem estritamente as porcentagens configuradas nesta tela:
+                        </p>
+
+                        <div className="space-y-3 mb-6 text-xs">
+                          {/* Rede MMN (3 Gerações) */}
+                          <div className="flex items-center justify-between p-3 bg-white/5 rounded-2xl border border-white/5">
+                            <div>
+                              <span className="font-bold text-white uppercase block">Rede MMN ({mmnDepth} Gerações: G0 a G{mmnDepth - 1})</span>
+                              <span className="text-[10px] text-slate-400">{mmnDepth} níveis × {((Number(cashbackMensal) || 0) + (Number(cashbackAnual) || 0)).toFixed(1)}% ({cashbackMensal}% Mensal + {cashbackAnual}% Anual)</span>
+                            </div>
+                            <span className="font-mono font-black text-indigo-400 text-sm">
+                              {mmnLevels.slice(0, mmnDepth).reduce((a, b) => a + Number(b.value || 0), 0).toFixed(1)}{mmnType === 'percent' ? '%' : ' R$'}
+                            </span>
+                          </div>
+
+                          {/* Revendedor Regional */}
+                          <div className="flex items-center justify-between p-3 bg-white/5 rounded-2xl border border-white/5">
+                            <div>
+                              <span className="font-bold text-white uppercase block">Revendedor Regional</span>
+                              <span className="text-[10px] text-slate-400">{commissionRegionalMensal}% Mensal + {commissionRegionalAnual}% Anual</span>
+                            </div>
+                            <span className="font-mono font-black text-purple-400 text-sm">
+                              {((Number(commissionRegionalMensal) || 0) + (Number(commissionRegionalAnual) || 0)).toFixed(1)}{mmnType === 'percent' ? '%' : ' R$'}
+                            </span>
+                          </div>
+
+                          {/* Total Geral (Rede + Revendedor = 28%) */}
+                          <div className="flex items-center justify-between p-3.5 bg-gradient-to-r from-indigo-900/40 to-purple-900/40 rounded-2xl border border-indigo-500/30">
+                            <div>
+                              <span className="font-black text-white uppercase block text-sm">Total Rede + Revendedor</span>
+                              <span className="text-[10px] text-indigo-200 font-medium">Distribuição máxima do ecossistema</span>
+                            </div>
+                            <span className="font-mono font-black text-emerald-400 text-base">
+                              {(mmnLevels.slice(0, mmnDepth).reduce((a, b) => a + Number(b.value || 0), 0) + (Number(commissionRegionalMensal) || 0) + (Number(commissionRegionalAnual) || 0)).toFixed(1)}{mmnType === 'percent' ? '%' : ' R$'}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-3 p-3.5 bg-white/5 rounded-2xl border border-white/10 mt-auto">
+                        <HelpCircle size={16} className="text-indigo-400 shrink-0" />
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                          Regra do Sistema: Todos os pedidos e relatórios aplicam estes percentuais ativos.
+                        </span>
                       </div>
                     </div>
                   </div>

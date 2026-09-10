@@ -21,7 +21,9 @@ import {
   HeartPulse,
   Target,
   CircleDollarSign,
-  Receipt
+  Receipt,
+  FileSpreadsheet,
+  BarChart3
 } from 'lucide-react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
@@ -116,9 +118,11 @@ export default function AffiliateLayout({ children, title }: AffiliateLayoutProp
     ] : []),
     { path: '/afiliado/rede', icon: Users, label: 'Cashback de rede' },
     { path: '/afiliado/financeiro', icon: Wallet, label: 'Financeiro de Rede' },
+    { path: '/afiliado/financeiro-liquido', icon: FileSpreadsheet, label: 'Financeiro da Rede Valor Líquido' },
     ...(profile?.role === 'regional_reseller' ? [
       { path: '/afiliado/financeiro-revendedor', icon: CircleDollarSign, label: 'Financeiro do Revendedor' }
     ] : []),
+    { path: '/afiliado/financeiro-resumo', icon: BarChart3, label: 'Financeiro Resumo' },
     { path: '/afiliado/nota-fiscal', icon: Receipt, label: 'Nota Fiscal' },
     { path: '/afiliado/pedidos', icon: ShoppingBag, label: 'Meus Pedidos' },
     { path: '/afiliado/renovacoes', icon: RefreshCw, label: 'Minhas Renovações' },

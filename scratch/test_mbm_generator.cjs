@@ -204,7 +204,7 @@ async function generateMBMWorkbook(options) {
 
     // Coluna F: CAPITAL
     const cF = wsBase.getCell(`F${currentRow}`);
-    cF.value = 10000;
+    cF.value = 5000;
     cF.numFmt = '_-"R$ "* #,##0.00_-;\\"-R$ \\"* #,##0.00_-;_-"R$ "* -??_-;_-@';
     cF.font = { name: 'Arial', size: 10, color: { argb: 'FF000000' } };
     cF.alignment = { horizontal: 'right', vertical: 'middle' };
@@ -212,14 +212,14 @@ async function generateMBMWorkbook(options) {
 
     // Coluna G: OBSERVAÇÕES (Plano)
     const cG = wsBase.getCell(`G${currentRow}`);
-    cG.value = sub.plan ? `PLANO ${sub.plan.toUpperCase()}` : '';
+    cG.value = '';
     cG.font = { name: 'Arial', size: 10, color: { argb: 'FF000000' } };
     cG.alignment = { horizontal: 'center', vertical: 'middle' };
     cG.border = thinBorder;
 
     // Coluna H: OBSERVAÇÕES (Empresa / PJ / Nota)
     const cH = wsBase.getCell(`H${currentRow}`);
-    cH.value = sub.obs || '';
+    cH.value = '';
     cH.font = { name: 'Arial', size: 10, color: { argb: 'FF000000' } };
     cH.alignment = { horizontal: 'left', vertical: 'middle' };
     cH.border = thinBorder;

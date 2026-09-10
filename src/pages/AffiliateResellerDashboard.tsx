@@ -52,7 +52,7 @@ export default function AffiliateResellerDashboard() {
           .like('description', '%Revendedor%'),
         supabase
           .from('mmn_config')
-          .select('commission_regional_semanal, commission_regional_mensal, commission_regional_anual')
+          .select('commission_regional_mensal, commission_regional_anual')
           .single(),
         supabase
           .from('transactions')

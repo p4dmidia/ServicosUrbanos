@@ -294,96 +294,96 @@ export default function AffiliateResellerFinancial() {
           </div>
         </div>
 
-        {/* Balance Cards Grid - Credit Card Style (Idêntico ao Financeiro de Rede) */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+        {/* Balance Cards - Credit Card Style (Idêntico ao Financeiro de Rede) */}
+        <div className="flex flex-col sm:flex-row items-stretch gap-6 md:gap-8">
            
            {/* Card 1: Cashback Mensal Valor Bruto */}
            <motion.div 
-             whileHover={{ y: -5 }}
+             whileHover={{ y: -4 }}
              onClick={() => {
                setCycleFilter(cycleFilter === 'mensal' ? 'all' : 'mensal');
                setCurrentPage(1);
              }}
-             className={`aspect-[1.6/1] bg-slate-950 p-8 rounded-[2.5rem] text-white relative overflow-hidden flex flex-col justify-between shadow-2xl transition-all cursor-pointer group ${
-               cycleFilter === 'mensal' ? 'ring-4 ring-emerald-500 shadow-emerald-500/20' : 'shadow-slate-900/20'
+             className={`w-full sm:w-[350px] aspect-[1.58/1] bg-slate-950 p-6 rounded-[1.75rem] text-white relative overflow-hidden flex flex-col justify-between shadow-xl transition-all cursor-pointer group shrink-0 ${
+               cycleFilter === 'mensal' ? 'ring-3 ring-emerald-500 shadow-emerald-500/20' : 'shadow-slate-900/20'
              }`}
            >
               {/* Design Elements */}
-              <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/10 rounded-full blur-3xl"></div>
-              <div className="absolute bottom-0 left-0 w-24 h-24 bg-primary-blue/10 rounded-full blur-2xl"></div>
+              <div className="absolute top-0 right-0 w-28 h-28 bg-emerald-500/10 rounded-full blur-2xl"></div>
+              <div className="absolute bottom-0 left-0 w-20 h-20 bg-primary-blue/10 rounded-full blur-xl"></div>
               
               <div className="relative z-10 flex justify-between items-start">
                  <div>
-                    <p className="text-[11px] font-black text-slate-300 uppercase tracking-widest">CASHBACK MENSAL VALOR BRUTO</p>
+                    <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest">CASHBACK MENSAL VALOR BRUTO</p>
                  </div>
-                 <div className={`size-10 rounded-xl flex items-center justify-center border transition-colors ${
+                 <div className={`size-8 rounded-lg flex items-center justify-center border transition-colors ${
                    cycleFilter === 'mensal' ? 'bg-emerald-500 text-white border-emerald-500' : 'bg-white/5 text-emerald-500 border-white/5'
                  }`}>
-                    <Wallet size={20} />
+                    <Wallet size={16} />
                  </div>
               </div>
 
-              <div className="relative z-10">
-                 <h2 className="text-4xl font-black tracking-tighter italic uppercase mb-2">
+              <div className="relative z-10 my-auto">
+                 <h2 className="text-2xl sm:text-3xl font-black tracking-tighter italic uppercase mb-1">
                    R$ {Number(data?.monthlyToReceive !== undefined ? data.monthlyToReceive : (data?.monthlyEarned ?? 0)).toFixed(2)}
                  </h2>
-                 <div className="flex items-center gap-2">
-                    <div className="size-2 bg-emerald-500 rounded-full animate-pulse"></div>
-                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Pagamentos Todo Dia 10</p>
+                 <div className="flex items-center gap-1.5">
+                    <div className="size-1.5 bg-emerald-500 rounded-full animate-pulse"></div>
+                    <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Pagamentos Todo Dia 10</p>
                  </div>
               </div>
 
               {/* Card Footer Decoration */}
               <div className="relative z-10 flex justify-between items-center opacity-40 group-hover:opacity-100 transition-opacity">
-                 <div className="flex -space-x-2">
-                    <div className="size-6 rounded-full border border-white/20 bg-white/5"></div>
-                    <div className="size-6 rounded-full border border-white/20 bg-white/5"></div>
+                 <div className="flex -space-x-1.5">
+                    <div className="size-4 rounded-full border border-white/20 bg-white/5"></div>
+                    <div className="size-4 rounded-full border border-white/20 bg-white/5"></div>
                  </div>
-                 <span className="text-[8px] font-black uppercase tracking-widest">URBA WALLET</span>
+                 <span className="text-[7px] font-black uppercase tracking-widest">URBA WALLET</span>
               </div>
            </motion.div>
 
            {/* Card 2: Cashback Valor Bruto Acumulado */}
            <motion.div 
-             whileHover={{ y: -5 }}
+             whileHover={{ y: -4 }}
              onClick={() => {
                setCycleFilter(cycleFilter === 'anual' ? 'all' : 'anual');
                setCurrentPage(1);
              }}
-             className={`aspect-[1.6/1] bg-gradient-to-br from-indigo-600 via-blue-700 to-slate-900 p-8 rounded-[2.5rem] text-white relative overflow-hidden flex flex-col justify-between shadow-2xl transition-all cursor-pointer group ${
-               cycleFilter === 'anual' ? 'ring-4 ring-blue-400 shadow-blue-500/20' : 'shadow-blue-900/20'
+             className={`w-full sm:w-[350px] aspect-[1.58/1] bg-gradient-to-br from-indigo-600 via-blue-700 to-slate-900 p-6 rounded-[1.75rem] text-white relative overflow-hidden flex flex-col justify-between shadow-xl transition-all cursor-pointer group shrink-0 ${
+               cycleFilter === 'anual' ? 'ring-3 ring-blue-400 shadow-blue-500/20' : 'shadow-blue-900/20'
              }`}
            >
-              <div className="absolute top-[-20%] right-[-10%] w-40 h-40 bg-white/10 rounded-full blur-3xl"></div>
+              <div className="absolute top-[-20%] right-[-10%] w-32 h-32 bg-white/10 rounded-full blur-2xl"></div>
               
               <div className="relative z-10 flex justify-between items-start">
                  <div>
-                    <p className="text-[11px] font-black text-blue-200 uppercase tracking-widest">CASHBACK VALOR BRUTO ACUMULADO</p>
+                    <p className="text-[10px] font-black text-blue-200 uppercase tracking-widest">CASHBACK VALOR BRUTO ACUMULADO</p>
                  </div>
-                 <div className={`size-10 rounded-xl flex items-center justify-center border transition-colors ${
+                 <div className={`size-8 rounded-lg flex items-center justify-center border transition-colors ${
                    cycleFilter === 'anual' ? 'bg-white text-indigo-600 border-white' : 'bg-white/10 text-white border-white/10'
                  }`}>
-                    <Calendar size={20} />
+                    <Calendar size={16} />
                  </div>
               </div>
 
-              <div className="relative z-10">
-                 <h2 className="text-4xl font-black tracking-tighter italic uppercase mb-2">
+              <div className="relative z-10 my-auto">
+                 <h2 className="text-2xl sm:text-3xl font-black tracking-tighter italic uppercase mb-1">
                    R$ {Number(data?.annualToReceive !== undefined ? data.annualToReceive : (data?.annualEarned ?? 0)).toFixed(2)}
                  </h2>
-                 <div className="flex items-center gap-2">
-                    <Clock size={12} className="text-blue-300" />
-                    <p className="text-[9px] font-black text-blue-200 uppercase tracking-widest">Liberação em 10 de Dezembro</p>
+                 <div className="flex items-center gap-1.5">
+                    <Clock size={11} className="text-blue-300" />
+                    <p className="text-[8px] font-black text-blue-200 uppercase tracking-widest">Liberação em 10 de Dezembro</p>
                  </div>
               </div>
 
               {/* Card Footer Decoration */}
               <div className="relative z-10 flex justify-between items-center opacity-40 group-hover:opacity-100 transition-opacity">
-                 <div className="flex -space-x-2">
-                    <div className="size-6 rounded-full border border-white/20 bg-white/5"></div>
-                    <div className="size-6 rounded-full border border-white/20 bg-white/5"></div>
+                 <div className="flex -space-x-1.5">
+                    <div className="size-4 rounded-full border border-white/20 bg-white/5"></div>
+                    <div className="size-4 rounded-full border border-white/20 bg-white/5"></div>
                  </div>
-                 <span className="text-[8px] font-black uppercase tracking-widest">POUPANÇA URBA</span>
+                 <span className="text-[7px] font-black uppercase tracking-widest">POUPANÇA URBA</span>
               </div>
            </motion.div>
         </div>

@@ -4570,6 +4570,176 @@ export const businessRules = {
     return data;
   },
 
+  // Processa a Régua de Disparos de Renovação (30 dias antes, 5 dias antes, vencido)
+  processSubscriptionRenewalAlerts: async (): Promise<{
+    success: boolean;
+    alerts30d: number;
+    alerts5d: number;
+    alertsExpired: number;
+    totalQueued: number;
+    details: string[];
+  }> => {
+    // 1. Tentar executar via função SQL do banco
+    try {
+      const { data: rpcData, error: rpcErr } = await supabase.rpc('process_subscription_renewal_alerts');
+      if (!rpcErr && rpcData) {
+        return {
+          success: true,
+          alerts30d: rpcData.alerts_30d || 0,
+          alerts5d: rpcData.alerts_5d || 0,
+          alertsExpired: rpcData.alerts_expired || 0,
+          totalQueued: rpcData.total_queued || 0,
+          details: [`Régua executada via banco: ${rpcData.total_queued || 0} mensagem(ns) enfileirada(s).`]
+        };
+      }
+    } catch (e) {
+      console.warn('RPC process_subscription_renewal_alerts fallback to JS:', e);
+    }
+
+    // 2. Execução direta via Javascript (fallback transparente)
+    try {
+      const now = new Date();
+      const { data: subs, error: subsErr } = await supabase
+        .from('subscriptions')
+        .select('id, profile_id, plan_type, end_date, status');
+
+      if (subsErr || !subs) {
+        throw subsErr || new Error('Nenhuma assinatura encontrada.');
+      }
+
+      const profileIds = Array.from(new Set(subs.map(s => s.profile_id).filter(Boolean)));
+      const { data: profiles, error: profErr } = await supabase
+        .from('profiles')
+        .select('id, full_name, whatsapp')
+        .in('id', profileIds);
+
+      if (profErr) throw profErr;
+
+      const profileMap = new Map((profiles || []).map(p => [p.id, p]));
+
+      // Alertas já disparados
+      let existingAlerts = new Set<string>();
+      try {
+        const { data: alertsData } = await supabase
+          .from('subscription_renewal_alerts')
+          .select('subscription_id, alert_type');
+        if (alertsData) {
+          alertsData.forEach(a => existingAlerts.add(`${a.subscription_id}_${a.alert_type}`));
+        }
+      } catch (errAlerts) {
+        const { data: msgLogs } = await supabase
+          .from('whatsapp_messages')
+          .select('phone, message, created_at')
+          .limit(300);
+        if (msgLogs) {
+          msgLogs.forEach(m => {
+            if (m.message.includes('30 dias')) existingAlerts.add(`${m.phone}_30_days`);
+            if (m.message.includes('5 dias')) existingAlerts.add(`${m.phone}_5_days`);
+            if (m.message.includes('venceu em')) existingAlerts.add(`${m.phone}_expired`);
+          });
+        }
+      }
+
+      let count30d = 0;
+      let count5d = 0;
+      let countExp = 0;
+      const details: string[] = [];
+
+      for (const sub of subs) {
+        if (!sub.end_date) continue;
+        const profile = profileMap.get(sub.profile_id);
+        if (!profile || !profile.whatsapp) continue;
+
+        let cleanPhone = profile.whatsapp.replace(/\D/g, '');
+        if (cleanPhone.length === 10 || cleanPhone.length === 11) {
+          cleanPhone = '55' + cleanPhone;
+        }
+        if (cleanPhone.length < 12) continue;
+
+        const firstName = (profile.full_name || 'Afiliado').split(' ')[0];
+        const endDate = new Date(sub.end_date);
+        const daysLeft = (endDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24);
+        const dateStr = endDate.toLocaleDateString('pt-BR');
+
+        // 1. Alerta de 30 dias (janela de 25 a 31 dias antes)
+        if (daysLeft <= 31 && daysLeft >= 25 && sub.status === 'active') {
+          const key = `${sub.id}_30_days`;
+          const phoneKey = `${cleanPhone}_30_days`;
+          if (!existingAlerts.has(key) && !existingAlerts.has(phoneKey)) {
+            const msg = `Olá, ${firstName}! 🚀 Informamos que faltam 30 dias para o vencimento do seu plano MMN Serviços Urbanos (vence em ${dateStr}). A renovação antecipada já está liberada no seu painel! Renove agora para continuar acumulando seus cashbacks de rede e manter sua Telemedicina 24h sem interrupção.`;
+            await businessRules.sendTestWhatsAppMessage(cleanPhone, msg);
+            try {
+              await supabase.from('subscription_renewal_alerts').insert([{
+                subscription_id: sub.id,
+                profile_id: sub.profile_id,
+                alert_type: '30_days',
+                phone: cleanPhone
+              }]);
+            } catch (e) {}
+            existingAlerts.add(key);
+            existingAlerts.add(phoneKey);
+            count30d++;
+            details.push(`[30 Dias] ${profile.full_name} (${cleanPhone})`);
+          }
+        }
+        // 2. Alerta de 5 dias (janela de 0 a 5 dias antes)
+        else if (daysLeft <= 5 && daysLeft > 0 && sub.status === 'active') {
+          const key = `${sub.id}_5_days`;
+          const phoneKey = `${cleanPhone}_5_days`;
+          if (!existingAlerts.has(key) && !existingAlerts.has(phoneKey)) {
+            const msg = `Atenção, ${firstName}! ⚠️ Faltam apenas 5 dias para o vencimento do seu licenciamento MMN (${dateStr}). Evite a retenção dos seus saques do dia 10 e a suspensão da sua Telemedicina 24h. Acesse o painel agora e faça sua renovação para manter sua conta ativa!`;
+            await businessRules.sendTestWhatsAppMessage(cleanPhone, msg);
+            try {
+              await supabase.from('subscription_renewal_alerts').insert([{
+                subscription_id: sub.id,
+                profile_id: sub.profile_id,
+                alert_type: '5_days',
+                phone: cleanPhone
+              }]);
+            } catch (e) {}
+            existingAlerts.add(key);
+            existingAlerts.add(phoneKey);
+            count5d++;
+            details.push(`[5 Dias] ${profile.full_name} (${cleanPhone})`);
+          }
+        }
+        // 3. Alerta de Vencido (venceu nos últimos 15 dias)
+        else if (daysLeft <= 0 && daysLeft >= -15) {
+          const key = `${sub.id}_expired`;
+          const phoneKey = `${cleanPhone}_expired`;
+          if (!existingAlerts.has(key) && !existingAlerts.has(phoneKey)) {
+            const msg = `Importante, ${firstName}: O seu plano MMN Serviços Urbanos venceu em ${dateStr} e sua conta está em estado de renovação pendente. Os saques de comissões do dia 10 foram retidos e a Telemedicina pausada. Acesse o painel e regularize hoje mesmo para reativar todos os seus benefícios e destravar seus pagamentos!`;
+            await businessRules.sendTestWhatsAppMessage(cleanPhone, msg);
+            try {
+              await supabase.from('subscription_renewal_alerts').insert([{
+                subscription_id: sub.id,
+                profile_id: sub.profile_id,
+                alert_type: 'expired',
+                phone: cleanPhone
+              }]);
+            } catch (e) {}
+            existingAlerts.add(key);
+            existingAlerts.add(phoneKey);
+            countExp++;
+            details.push(`[Vencido] ${profile.full_name} (${cleanPhone})`);
+          }
+        }
+      }
+
+      return {
+        success: true,
+        alerts30d: count30d,
+        alerts5d: count5d,
+        alertsExpired: countExp,
+        totalQueued: count30d + count5d + countExp,
+        details
+      };
+    } catch (err: any) {
+      console.error('Erro ao processar régua de renovação:', err);
+      throw err;
+    }
+  },
+
   getAffiliateMonthlyStatement: async (userId: string, year: number, month: number) => {
     const selYear = year;
     const selMonth = month - 1; // 0-indexed (0 = Jan, 8 = Set, 11 = Dez)

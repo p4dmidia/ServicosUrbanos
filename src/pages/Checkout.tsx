@@ -450,7 +450,7 @@ export default function Checkout() {
       return;
     }
 
-    // Bloqueia compra/recompra de plano se o usuário já possuir assinatura ativa antes da data de renovação
+    // Bloqueia compra/recompra de plano se o usuário já possuir assinatura ativa antes da abertura da janela de renovação (1 mês antes do vencimento)
     if (hasSubscription && authUser) {
       const { data: activeSub } = await supabase
         .from('subscriptions')
@@ -463,9 +463,21 @@ export default function Checkout() {
         .maybeSingle();
 
       if (activeSub) {
-        const renewalDate = new Date(activeSub.end_date);
-        toast.error(`Você já possui um plano ativo até ${renewalDate.toLocaleDateString('pt-BR')}. Não é permitida a recompra antes da data de renovação.`);
-        return;
+        const endDate = new Date(activeSub.end_date);
+        endDate.setHours(23, 59, 59, 999);
+        const openDate = new Date(endDate.getTime());
+        const targetMonth = openDate.getMonth() - 1;
+        openDate.setMonth(targetMonth);
+        if (openDate.getMonth() === (targetMonth + 12) % 12 + 1) {
+          openDate.setDate(0);
+        }
+        openDate.setHours(0, 0, 0, 0);
+
+        const today = new Date();
+        if (today < openDate) {
+          toast.error(`Você já possui um plano ativo até ${endDate.toLocaleDateString('pt-BR')}. A renovação ou troca de plano estará disponível a partir de ${openDate.toLocaleDateString('pt-BR')} (1 mês antes do vencimento).`);
+          return;
+        }
       }
     }
 

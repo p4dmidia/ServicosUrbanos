@@ -138,11 +138,11 @@ export default function AffiliateLayout({ children, title }: AffiliateLayoutProp
     <div className="min-h-screen bg-[#F8FAFC] flex font-sans text-midnight">
       {/* Sidebar Desktop */}
       <aside 
-        className={`hidden lg:flex flex-col bg-white border-r border-slate-200 transition-all duration-300 relative z-50 ${
+        className={`hidden lg:flex flex-col bg-white border-r border-slate-200 transition-all duration-300 relative z-50 h-screen sticky top-0 ${
           isSidebarOpen ? 'w-72' : 'w-24'
         }`}
       >
-        <div className="p-8 flex items-center gap-3">
+        <div className="p-8 flex items-center gap-3 shrink-0">
           <div className="size-10 bg-primary-blue rounded-2xl flex items-center justify-center text-white shadow-lg shadow-primary-blue/20 shrink-0">
             <LayoutGrid size={24} />
           </div>
@@ -157,7 +157,7 @@ export default function AffiliateLayout({ children, title }: AffiliateLayoutProp
           )}
         </div>
 
-        <nav className="flex-1 px-4 py-4 space-y-2 overflow-y-auto max-h-[calc(100vh-200px)] no-scrollbar">
+        <nav className="flex-1 px-4 py-4 space-y-2 overflow-y-auto custom-scrollbar">
           {menuItems.map((item) => {
             const isTermActive = location.pathname.startsWith('/afiliado/termo-adesao');
             const isActive = item.path === '/afiliado/termo-adesao' 
@@ -248,17 +248,18 @@ export default function AffiliateLayout({ children, title }: AffiliateLayoutProp
               </div>
             );
           })}
-        </nav>
 
-        <div className="p-4 border-t border-slate-100">
-          <button 
-            onClick={handleLogout}
-            className="flex items-center gap-4 w-full px-4 py-4 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-2xl transition-all group"
-          >
-            <LogOut size={22} className="group-hover:text-red-500" />
-            {isSidebarOpen && <span className="font-bold text-sm">Sair do Painel</span>}
-          </button>
-        </div>
+          {/* Sair do Painel - Integrado ao fim do menu com rolagem */}
+          <div className="pt-4 mt-2 border-t border-slate-100">
+            <button 
+              onClick={handleLogout}
+              className="flex items-center gap-4 w-full px-4 py-4 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-2xl transition-all group"
+            >
+              <LogOut size={22} className="group-hover:text-red-500 shrink-0" />
+              {isSidebarOpen && <span className="font-bold text-sm tracking-tight">Sair do Painel</span>}
+            </button>
+          </div>
+        </nav>
       </aside>
 
       {/* Main Content */}
@@ -521,15 +522,17 @@ export default function AffiliateLayout({ children, title }: AffiliateLayoutProp
                       </div>
                     );
                   })}
-                </nav>
 
-               <button 
-                 onClick={handleLogout}
-                 className="mt-auto flex items-center gap-4 w-full px-6 py-4 text-red-500 font-bold hover:bg-red-50 rounded-2xl transition-all"
-               >
-                 <LogOut size={20} />
-                 Sair
-               </button>
+                  <div className="pt-4 mt-2 border-t border-slate-100">
+                    <button 
+                      onClick={handleLogout}
+                      className="flex items-center gap-4 w-full px-6 py-4 text-red-500 font-bold hover:bg-red-50 rounded-2xl transition-all"
+                    >
+                      <LogOut size={20} />
+                      Sair do Painel
+                    </button>
+                  </div>
+                </nav>
             </motion.div>
           </>
         )}

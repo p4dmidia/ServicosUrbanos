@@ -51,6 +51,8 @@ export default function AdminSettings() {
   const [sendingTest, setSendingTest] = useState(false);
   const [whatsappLogs, setWhatsappLogs] = useState<any[]>([]);
   const [logsLoading, setLogsLoading] = useState(false);
+  const [runningRenewalCadence, setRunningRenewalCadence] = useState(false);
+  const [cadenceResult, setCadenceResult] = useState<any>(null);
 
   // MMN State
   const [mmnDepth, setMmnDepth] = useState(3);
@@ -180,6 +182,25 @@ export default function AdminSettings() {
       setSystemLogs([]);
     } finally {
       setSystemLogsLoading(false);
+    }
+  };
+
+  const handleProcessRenewalCadence = async () => {
+    setRunningRenewalCadence(true);
+    setCadenceResult(null);
+    try {
+      const res = await businessRules.processSubscriptionRenewalAlerts();
+      setCadenceResult(res);
+      if (res.totalQueued > 0) {
+        toast.success(`Régua processada! ${res.totalQueued} mensagem(ns) enfileirada(s) com sucesso.`);
+      } else {
+        toast.success('Régua verificada! Nenhuma nova notificação pendente no momento.');
+      }
+      setTimeout(loadWhatsAppLogs, 1000);
+    } catch (err: any) {
+      toast.error('Erro ao processar régua: ' + (err.message || err));
+    } finally {
+      setRunningRenewalCadence(false);
     }
   };
 
@@ -810,6 +831,142 @@ export default function AdminSettings() {
                         </div>
                       </div>
                     </div>
+                  </div>
+
+                  {/* Régua de Disparos Automáticos de Renovação */}
+                  <div className="bg-gradient-to-br from-indigo-950/40 via-[#0a0f1d] to-[#05070a] border border-indigo-500/20 rounded-[2.5rem] p-8 lg:p-10 space-y-8 shadow-2xl relative overflow-hidden">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6 pb-6 border-b border-white/5">
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-3">
+                          <div className="size-10 rounded-2xl bg-indigo-500/20 text-indigo-400 flex items-center justify-center border border-indigo-500/30 shadow-lg shadow-indigo-500/10">
+                            <Bell size={20} />
+                          </div>
+                          <div>
+                            <h3 className="text-xl font-black text-white tracking-tighter uppercase italic leading-none">
+                              Régua de Comunicação de Renovações (Z-API)
+                            </h3>
+                            <p className="text-[10px] text-indigo-300 font-bold uppercase tracking-widest mt-1">
+                              Automação de alertas preventivos e recuperação de afiliados
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-3">
+                        <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-[10px] font-black text-emerald-400 uppercase tracking-wider">
+                          <span className="size-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                          Régua Ativa
+                        </span>
+
+                        <button 
+                          type="button"
+                          onClick={handleProcessRenewalCadence}
+                          disabled={runningRenewalCadence}
+                          className="bg-indigo-600 hover:bg-indigo-500 text-white px-6 py-3.5 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all shadow-lg shadow-indigo-600/20 flex items-center gap-2 cursor-pointer disabled:opacity-50 active:scale-95"
+                        >
+                          {runningRenewalCadence ? (
+                            <>
+                              <div className="size-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                              <span>Processando...</span>
+                            </>
+                          ) : (
+                            <>
+                              <Zap size={14} />
+                              <span>Disparar Verificação Agora</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Cards dos 3 Marcos da Régua */}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                      
+                      {/* Marco 1: 30 Dias */}
+                      <div className="bg-white/5 border border-white/5 rounded-2xl p-6 space-y-4 relative hover:border-indigo-500/30 transition-all">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[9px] font-black text-indigo-400 uppercase tracking-widest px-2.5 py-1 rounded-lg bg-indigo-500/10 border border-indigo-500/20">
+                            Etapa 1 • 30 Dias Antes
+                          </span>
+                          <span className="text-lg">🚀</span>
+                        </div>
+                        <div>
+                          <h4 className="text-sm font-black text-white uppercase tracking-tight">Abertura de Renovação</h4>
+                          <p className="text-[11px] text-slate-400 leading-relaxed mt-2">
+                            Notifica o afiliado de que a renovação antecipada está aberta no painel, garantindo que ele não perca os dias restantes e continue ativo com Telemedicina.
+                          </p>
+                        </div>
+                        <div className="pt-2 border-t border-white/5 flex items-center justify-between text-[9px] font-bold text-slate-500 uppercase">
+                          <span>Gatilho</span>
+                          <span className="text-indigo-300 font-mono">25 a 30 dias</span>
+                        </div>
+                      </div>
+
+                      {/* Marco 2: 5 Dias */}
+                      <div className="bg-white/5 border border-white/5 rounded-2xl p-6 space-y-4 relative hover:border-amber-500/30 transition-all">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[9px] font-black text-amber-400 uppercase tracking-widest px-2.5 py-1 rounded-lg bg-amber-500/10 border border-amber-500/20">
+                            Etapa 2 • 5 Dias Antes
+                          </span>
+                          <span className="text-lg">⚠️</span>
+                        </div>
+                        <div>
+                          <h4 className="text-sm font-black text-white uppercase tracking-tight">Alerta Crítico Preventivo</h4>
+                          <p className="text-[11px] text-slate-400 leading-relaxed mt-2">
+                            Alerta urgente informando que a não renovação nos próximos 5 dias causará a retenção do saque de comissões do dia 10 e a suspensão da Telemedicina.
+                          </p>
+                        </div>
+                        <div className="pt-2 border-t border-white/5 flex items-center justify-between text-[9px] font-bold text-slate-500 uppercase">
+                          <span>Gatilho</span>
+                          <span className="text-amber-300 font-mono">1 a 5 dias</span>
+                        </div>
+                      </div>
+
+                      {/* Marco 3: Vencido */}
+                      <div className="bg-white/5 border border-white/5 rounded-2xl p-6 space-y-4 relative hover:border-rose-500/30 transition-all">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[9px] font-black text-rose-400 uppercase tracking-widest px-2.5 py-1 rounded-lg bg-rose-500/10 border border-rose-500/20">
+                            Etapa 3 • Vencido / Inadimplente
+                          </span>
+                          <span className="text-lg">🔒</span>
+                        </div>
+                        <div>
+                          <h4 className="text-sm font-black text-white uppercase tracking-tight">Aviso de Bloqueio & Resgate</h4>
+                          <p className="text-[11px] text-slate-400 leading-relaxed mt-2">
+                            Dispara imediatamente após o término do plano, informando que os saques foram retidos e a telemedicina pausada, fornecendo link para regularização rápida.
+                          </p>
+                        </div>
+                        <div className="pt-2 border-t border-white/5 flex items-center justify-between text-[9px] font-bold text-slate-500 uppercase">
+                          <span>Gatilho</span>
+                          <span className="text-rose-300 font-mono">0 a 15 dias pós-venc.</span>
+                        </div>
+                      </div>
+
+                    </div>
+
+                    {/* Resultado da Última Execução */}
+                    {cadenceResult && (
+                      <div className="bg-[#05070a] border border-white/10 rounded-2xl p-5 space-y-2">
+                        <div className="flex items-center justify-between text-xs font-bold text-slate-300">
+                          <span className="text-indigo-400 uppercase text-[10px] tracking-widest">Resultado da Execução:</span>
+                          <span>Total Enfileirado: <strong className="text-white font-mono">{cadenceResult.totalQueued}</strong></span>
+                        </div>
+                        <div className="grid grid-cols-3 gap-2 text-center text-xs font-mono pt-2 border-t border-white/5">
+                          <div className="bg-white/5 p-2 rounded-xl">
+                            <span className="text-[9px] text-slate-400 block uppercase">30 Dias</span>
+                            <span className="text-indigo-400 font-black">{cadenceResult.alerts30d}</span>
+                          </div>
+                          <div className="bg-white/5 p-2 rounded-xl">
+                            <span className="text-[9px] text-slate-400 block uppercase">5 Dias</span>
+                            <span className="text-amber-400 font-black">{cadenceResult.alerts5d}</span>
+                          </div>
+                          <div className="bg-white/5 p-2 rounded-xl">
+                            <span className="text-[9px] text-slate-400 block uppercase">Vencidos</span>
+                            <span className="text-rose-400 font-black">{cadenceResult.alertsExpired}</span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   {/* Logs Queue Log Table */}

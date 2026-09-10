@@ -118,17 +118,40 @@ export default function AffiliateRenewals() {
     loadData();
   }, [user]);
 
+  const getRenewalWindow = (endDateString?: string) => {
+    if (!endDateString) return null;
+    const endDate = new Date(endDateString);
+    endDate.setHours(23, 59, 59, 999);
+
+    const openDate = new Date(endDate.getTime());
+    const targetMonth = openDate.getMonth() - 1;
+    openDate.setMonth(targetMonth);
+    // Trata overflow de meses com dias diferentes (ex: 31 de março voltando para 28 de fevereiro)
+    if (openDate.getMonth() === (targetMonth + 12) % 12 + 1) {
+      openDate.setDate(0);
+    }
+    openDate.setHours(0, 0, 0, 0);
+
+    const today = new Date();
+    const isWindowOpen = today >= openDate;
+    const isExpired = today.getTime() > endDate.getTime();
+
+    return {
+      endDate,
+      openDate,
+      isWindowOpen,
+      isExpired
+    };
+  };
+
   const handlePay = async (plan: any) => {
     if (!user) return;
     
-    // Bloqueia qualquer compra de plano se já possuir assinatura ativa antes da data de renovação
+    // Bloqueia compra de plano se possuir assinatura ativa antes da abertura da janela de renovação (1 mês antes do vencimento)
     if (subscription && stats?.isEligible) {
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      const renewalDate = new Date(subscription.end_date);
-      renewalDate.setHours(0, 0, 0, 0);
-      if (today < renewalDate) {
-        toast.error(`Você já possui um plano ativo até ${renewalDate.toLocaleDateString('pt-BR')}. A renovação ou troca estará disponível apenas a partir desta data.`);
+      const rWindow = getRenewalWindow(subscription.end_date);
+      if (rWindow && !rWindow.isWindowOpen) {
+        toast.error(`Você já possui um plano ativo até ${rWindow.endDate.toLocaleDateString('pt-BR')}. A renovação ou troca de plano estará disponível a partir de ${rWindow.openDate.toLocaleDateString('pt-BR')} (1 mês antes do vencimento).`);
         return;
       }
     }
@@ -187,12 +210,30 @@ export default function AffiliateRenewals() {
                     </p>
                   </div>
                 </div>
-                {subscription && (
-                  <div className="bg-white/80 border border-emerald-200/50 px-6 py-3 rounded-2xl text-right self-stretch md:self-auto flex flex-col justify-center">
-                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest block leading-none mb-1">Próxima Renovação</span>
-                    <span className="text-sm font-black text-midnight">{new Date(subscription.end_date).toLocaleDateString('pt-BR')}</span>
-                  </div>
-                )}
+                {subscription && (() => {
+                  const rWindow = getRenewalWindow(subscription.end_date);
+                  return (
+                    <div className="bg-white/90 border border-emerald-200 px-6 py-3.5 rounded-2xl text-right self-stretch md:self-auto flex flex-col justify-center shadow-sm">
+                      {rWindow?.isWindowOpen ? (
+                        <>
+                          <div className="flex items-center justify-end gap-1.5 mb-1">
+                            <span className="size-2 rounded-full bg-emerald-500 animate-ping inline-block"></span>
+                            <span className="text-[9px] font-black text-emerald-600 uppercase tracking-widest leading-none">Renovação</span>
+                          </div>
+                          <span className="text-sm font-black text-emerald-600 uppercase tracking-tight">Liberada</span>
+                          <span className="text-[9px] font-bold text-slate-400 mt-1">Vence em {new Date(subscription.end_date).toLocaleDateString('pt-BR')}</span>
+                        </>
+                      ) : (
+                        <>
+                          <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest block leading-none mb-1">Próxima Renovação</span>
+                          <span className="text-sm font-black text-midnight font-mono">
+                            A PARTIR DE {rWindow?.openDate ? rWindow.openDate.toLocaleDateString('pt-BR') : new Date(subscription.end_date).toLocaleDateString('pt-BR')}
+                          </span>
+                        </>
+                      )}
+                    </div>
+                  );
+                })()}
               </div>
             ) : (
               <div className="bg-amber-50 border border-amber-200 p-8 rounded-[2.5rem] flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
@@ -216,21 +257,15 @@ export default function AffiliateRenewals() {
               
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                 {(() => {
-                  const today = new Date();
-                  today.setHours(0, 0, 0, 0);
-                  const renewalDate = subscription ? new Date(subscription.end_date) : null;
-                  if (renewalDate) {
-                    renewalDate.setHours(0, 0, 0, 0);
-                  }
-                  const isRenewalDayOrLater = !renewalDate || today >= renewalDate;
+                  const rWindow = getRenewalWindow(subscription?.end_date);
+                  const isWindowOpen = !rWindow || rWindow.isWindowOpen || !stats?.isEligible;
+                  // Bloqueia compra apenas se a conta for elegível e faltar mais de 1 mês para o vencimento
+                  const isButtonDisabled = Boolean(stats?.isEligible && !isWindowOpen);
 
                   return orderedPlans.map((planItem) => {
                     const isPopular = planItem.plan_type === 'trimestral' && !stats?.isEligible;
                     const isActivePlan = subscription && subscription.plan_type === planItem.plan_type && stats?.isEligible;
                     const isEcon = !stats?.isEligible && planItem.plan_type === 'anual';
-                    
-                    // Bloqueia tanto o próprio plano ativo quanto os demais enquanto a conta estiver ativa antes do dia de renovação
-                    const isButtonDisabled = Boolean(stats?.isEligible && !isRenewalDayOrLater);
                     
                     return (
                       <div 
@@ -296,9 +331,14 @@ export default function AffiliateRenewals() {
                                 ? (isButtonDisabled ? 'Bloqueado até Renovação' : 'Trocar para este') 
                                 : 'Escolher Plano'}
                           </button>
-                          {isButtonDisabled && subscription?.end_date && (
+                          {isButtonDisabled && rWindow && (
                             <p className="text-[8px] text-slate-400 font-bold text-center mt-1">
-                              Disponível em {new Date(subscription.end_date).toLocaleDateString('pt-BR')}
+                              Disponível a partir de {rWindow.openDate.toLocaleDateString('pt-BR')}
+                            </p>
+                          )}
+                          {!isButtonDisabled && stats?.isEligible && (
+                            <p className="text-[8px] text-emerald-600 font-bold text-center mt-1">
+                              {isActivePlan ? 'Renovação antecipada liberada' : 'Migração de plano liberada'}
                             </p>
                           )}
                         </div>

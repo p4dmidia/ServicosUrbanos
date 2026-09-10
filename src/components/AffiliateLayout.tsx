@@ -22,7 +22,6 @@ import {
   Target,
   CircleDollarSign,
   Receipt,
-  FileSpreadsheet,
   BarChart3
 } from 'lucide-react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
@@ -118,9 +117,6 @@ export default function AffiliateLayout({ children, title }: AffiliateLayoutProp
     ] : []),
     { path: '/afiliado/rede', icon: Users, label: 'Cashback de rede' },
     { path: '/afiliado/financeiro', icon: Wallet, label: 'Financeiro de Rede' },
-    ...(profile?.role !== 'regional_reseller' ? [
-      { path: '/afiliado/financeiro-liquido', icon: FileSpreadsheet, label: 'Financeiro da Rede Valor Líquido' }
-    ] : []),
     ...(profile?.role === 'regional_reseller' ? [
       { path: '/afiliado/financeiro-revendedor', icon: CircleDollarSign, label: 'Financeiro do Revendedor' }
     ] : []),

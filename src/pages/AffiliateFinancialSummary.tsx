@@ -146,7 +146,7 @@ export default function AffiliateFinancialSummary() {
         statement.isPJ ? 'Isento (PJ)' : statement.baseIrrf.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
       ],
       [
-        'IRRF - CONFORME TABELA DO CONTADOR',
+        'IRRF',
         statement.isPJ || statement.irrf === 0 ? 'Isento' : statement.irrf.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
       ],
       [
@@ -584,7 +584,7 @@ export default function AffiliateFinancialSummary() {
                 <div className="flex items-center justify-between p-3.5 rounded-xl bg-emerald-50 border border-emerald-100">
                   <div>
                     <span className="font-bold text-emerald-950 uppercase block">
-                      IRRF - CONFORME TABELA DO CONTADOR
+                      IRRF
                     </span>
                     <span className="text-[10px] text-emerald-700">
                       {statement.isPJ ? 'Isento para Pessoa Jurídica' : 'Retenção na Fonte conforme faixa de rendimentos da RFB'}

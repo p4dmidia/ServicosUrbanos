@@ -224,7 +224,7 @@ export default function AffiliateDashboard() {
             </p>
             <h3 className="text-base font-black text-midnight tracking-tighter">
               {stats.isEligible && stats.activeSubscription
-                ? `Vence em: ${new Date(stats.activeSubscription.endDate).toLocaleDateString('pt-BR')}`
+                ? `Renovar em: ${new Date(stats.activeSubscription.endDate).toLocaleDateString('pt-BR')}`
                 : 'Fatura Pendente'}
             </h3>
           </motion.div>

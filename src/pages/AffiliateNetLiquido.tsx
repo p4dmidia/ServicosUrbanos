@@ -16,6 +16,7 @@ import {
   Building2,
   Wallet
 } from 'lucide-react';
+import { Navigate } from 'react-router-dom';
 import AffiliateLayout from '../components/AffiliateLayout';
 import { useAuth } from '../contexts/AuthContext';
 import { businessRules } from '../lib/businessRules';
@@ -26,6 +27,11 @@ import autoTable from 'jspdf-autotable';
 export default function AffiliateNetLiquido() {
   const { user, profile } = useAuth();
   const [loading, setLoading] = useState(true);
+
+  // Redireciona revendedores regionais para o financeiro de revendedor
+  if (profile?.role === 'regional_reseller') {
+    return <Navigate to="/afiliado/financeiro-revendedor" replace />;
+  }
 
   // Competência selecionada (Mês e Ano)
   const [currentDate, setCurrentDate] = useState(() => {
@@ -133,7 +139,7 @@ export default function AffiliateNetLiquido() {
         statement.isPJ ? 'Isento (PJ)' : statement.baseIrrf.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
       ],
       [
-        'IRRF - CONFORME TABELA DO CONTADOR',
+        'IRRF',
         statement.isPJ || statement.irrf === 0 ? 'Isento' : statement.irrf.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
       ],
       [
@@ -524,7 +530,7 @@ export default function AffiliateNetLiquido() {
                 <div className="flex items-center justify-between p-3.5 rounded-xl bg-emerald-50/70 border border-emerald-200/70">
                   <div>
                     <span className="font-bold text-emerald-950 uppercase block">
-                      IRRF - CONFORME TABELA DO CONTADOR
+                      IRRF
                     </span>
                     <span className="text-[10px] text-emerald-800/80">Tabela progressiva mensal da Receita Federal</span>
                   </div>

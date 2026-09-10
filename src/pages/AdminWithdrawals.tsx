@@ -1635,7 +1635,7 @@ export default function AdminWithdrawals() {
 
                     <div className="flex items-center justify-between p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
                       <div>
-                        <span className="text-emerald-300 font-bold uppercase block">IRRF - CONFORME TABELA DO CONTADOR</span>
+                        <span className="text-emerald-300 font-bold uppercase block">IRRF</span>
                         <span className="text-[9px] text-emerald-400/70">Tabela progressiva da Receita Federal</span>
                       </div>
                       <span className={`font-mono font-black ${(statementData.irrf || 0) > 0 ? 'text-rose-400' : 'text-emerald-400'}`}>
@@ -1866,7 +1866,7 @@ export default function AdminWithdrawals() {
                     <div className="flex items-center justify-between p-3.5 rounded-xl bg-emerald-50 border border-emerald-100">
                       <div>
                         <span className="font-bold text-emerald-950 uppercase block">
-                          IRRF - CONFORME TABELA DO CONTADOR
+                          IRRF
                         </span>
                         <span className="text-[10px] text-emerald-700">
                           {consolidatedData.isPJ ? 'Isento para Pessoa Jurídica' : 'Retenção na Fonte conforme faixa de rendimentos da RFB'}

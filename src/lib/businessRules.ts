@@ -142,7 +142,7 @@ export interface CumulativeTaxResult {
 }
 
 /**
- * Calcula retenções fiscais de RPA / Autônomo acumulando todos os pagamentos da mesma competência mensal (semanais + mensal).
+ * Calcula retenções fiscais de RPA / Autônomo acumulando todos os pagamentos da mesma competência mensal.
  * - INSS: 11% sobre o acumulado do mês, limitado ao teto máximo de R$ 932,31.
  * - IRRF: Calculado sobre a base acumulada (Bruto Acumulado do Mês - INSS do Mês), aplicando a tabela progressiva oficial e deduzindo o IRRF já retido no mês.
  * - PJ: Isento de retenção na fonte (INSS 0%, IRRF 0%).
@@ -3616,7 +3616,6 @@ export const businessRules = {
             customerName: orderInfo?.customer_name || 'Cliente Direto',
             orderAmount: Number(orderInfo?.amount || 0),
             orderStatus: orderInfo?.status || 'Concluído',
-            semanal: 0,
             mensal: 0,
             anual: 0,
             totalCommission: 0,
@@ -3630,10 +3629,7 @@ export const businessRules = {
         item.rawTransactions.push(t);
         item.totalCommission += amt;
         const isTxPaid = t.status === 'completed' || t.status === 'pago';
-        if (t.description?.includes('Semanal')) {
-          item.semanal += amt;
-          if (isTxPaid) item.semanalPago = true;
-        } else if (t.description?.includes('Mensal')) {
+        if (t.description?.includes('Mensal')) {
           item.mensal += amt;
           if (isTxPaid) item.mensalPago = true;
         } else if (t.description?.includes('Anual')) {
@@ -3646,7 +3642,7 @@ export const businessRules = {
         const allPaid = item.rawTransactions.length > 0 && item.rawTransactions.every((tx: any) => tx.status === 'completed' || tx.status === 'pago');
         const anyPaid = item.rawTransactions.some((tx: any) => tx.status === 'completed' || tx.status === 'pago');
         if (allPaid) item.status = 'completed';
-        else if (anyPaid || item.semanalPago) item.status = 'partial';
+        else if (anyPaid) item.status = 'partial';
         else item.status = 'pending';
       });
 

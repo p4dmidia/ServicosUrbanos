@@ -221,7 +221,7 @@ export default function AffiliateRenewals() {
                             <span className="text-[9px] font-black text-emerald-600 uppercase tracking-widest leading-none">Renovação</span>
                           </div>
                           <span className="text-sm font-black text-emerald-600 uppercase tracking-tight">Liberada</span>
-                          <span className="text-[9px] font-bold text-slate-400 mt-1">Vence em {new Date(subscription.end_date).toLocaleDateString('pt-BR')}</span>
+                          <span className="text-[9px] font-bold text-slate-400 mt-1">Renovar em {new Date(subscription.end_date).toLocaleDateString('pt-BR')}</span>
                         </>
                       ) : (
                         <>

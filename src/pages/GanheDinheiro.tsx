@@ -163,7 +163,7 @@ export default function GanheDinheiro() {
                 </div>
                 <h3 className="text-xl font-bold mb-3 text-white">3. Receba em Rede</h3>
                 <p className="text-slate-400 leading-relaxed text-sm font-medium">
-                  Ganhe repasses recorrentes semanais, mensais e o bônus anual acumulado sobre as assinaturas de G0 a G2 da sua rede.
+                  Ganhe repasses recorrentes mensais e o bônus anual acumulado sobre as assinaturas de G0 a G2 da sua rede.
                 </p>
               </div>
             </div>

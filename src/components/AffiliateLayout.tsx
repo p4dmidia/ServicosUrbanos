@@ -118,7 +118,9 @@ export default function AffiliateLayout({ children, title }: AffiliateLayoutProp
     ] : []),
     { path: '/afiliado/rede', icon: Users, label: 'Cashback de rede' },
     { path: '/afiliado/financeiro', icon: Wallet, label: 'Financeiro de Rede' },
-    { path: '/afiliado/financeiro-liquido', icon: FileSpreadsheet, label: 'Financeiro da Rede Valor Líquido' },
+    ...(profile?.role !== 'regional_reseller' ? [
+      { path: '/afiliado/financeiro-liquido', icon: FileSpreadsheet, label: 'Financeiro da Rede Valor Líquido' }
+    ] : []),
     ...(profile?.role === 'regional_reseller' ? [
       { path: '/afiliado/financeiro-revendedor', icon: CircleDollarSign, label: 'Financeiro do Revendedor' }
     ] : []),

@@ -64,7 +64,7 @@ export default function AffiliateProfile() {
         whatsapp: profile.whatsapp || '',
         cpf: profile.cpf || '',
         birth_date: profile.birth_date ? profile.birth_date.split('T')[0] : '',
-        gender: profile.gender || '',
+        gender: profile.gender === 'Masculino' ? 'M' : (profile.gender === 'Feminino' ? 'F' : (profile.gender || '')),
         zip_code: profile.zip_code || '',
         address: profile.address || '',
         number: profile.number || '',
@@ -283,7 +283,7 @@ export default function AffiliateProfile() {
         whatsapp: formData.whatsapp.trim(),
         cpf: formData.cpf.trim(),
         birth_date: formData.birth_date || null,
-        gender: formData.gender || null,
+        gender: formData.gender ? (formData.gender.toUpperCase().startsWith('F') ? 'F' : 'M') : null,
         zip_code: formData.zip_code.replace(/\D/g, ''),
         address: formData.address.trim(),
         number: formData.number.trim(),
@@ -559,9 +559,8 @@ export default function AffiliateProfile() {
                   required
                 >
                   <option value="">Selecione o gênero...</option>
-                  <option value="Masculino">Masculino</option>
-                  <option value="Feminino">Feminino</option>
-                  <option value="Outro">Outro</option>
+                  <option value="M">Masculino</option>
+                  <option value="F">Feminino</option>
                 </select>
               </div>
 

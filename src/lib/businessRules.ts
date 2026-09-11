@@ -184,17 +184,17 @@ export function calculateCumulativeTaxDeductions({
   const combinedMonthInss = alreadyRetainedInssInMonth + inssToRetain;
   const baseIrrfMonth = Math.max(0, totalMonthBruto - combinedMonthInss);
 
-  // Tabela Progressiva Mensal Oficial IRPF
+  // Tabela Progressiva Mensal Oficial IRPF (Conforme Tabela 2026 da Receita Federal)
   let totalMonthIrrf = 0;
-  if (baseIrrfMonth > 2259.20) {
+  if (baseIrrfMonth > 2428.80) {
     if (baseIrrfMonth <= 2826.65) {
-      totalMonthIrrf = (baseIrrfMonth * 0.075) - 169.44;
+      totalMonthIrrf = (baseIrrfMonth * 0.075) - 182.16;
     } else if (baseIrrfMonth <= 3751.05) {
-      totalMonthIrrf = (baseIrrfMonth * 0.15) - 381.44;
+      totalMonthIrrf = (baseIrrfMonth * 0.15) - 394.16;
     } else if (baseIrrfMonth <= 4664.68) {
-      totalMonthIrrf = (baseIrrfMonth * 0.225) - 662.77;
+      totalMonthIrrf = (baseIrrfMonth * 0.225) - 675.49;
     } else {
-      totalMonthIrrf = (baseIrrfMonth * 0.275) - 896.00;
+      totalMonthIrrf = (baseIrrfMonth * 0.275) - 908.73;
     }
   }
   totalMonthIrrf = Math.max(0, totalMonthIrrf);

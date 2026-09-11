@@ -585,15 +585,15 @@ export default function AdminFinancials() {
 
         const baseIrrf = Math.max(0, bruto - inss);
         let irrf = 0;
-        if (!isPJ && baseIrrf > 2259.20) {
+        if (!isPJ && baseIrrf > 2428.80) {
           if (baseIrrf <= 2826.65) {
-            irrf = (baseIrrf * 0.075) - 169.44;
+            irrf = (baseIrrf * 0.075) - 182.16;
           } else if (baseIrrf <= 3751.05) {
-            irrf = (baseIrrf * 0.15) - 381.44;
+            irrf = (baseIrrf * 0.15) - 394.16;
           } else if (baseIrrf <= 4664.68) {
-            irrf = (baseIrrf * 0.225) - 662.77;
+            irrf = (baseIrrf * 0.225) - 675.49;
           } else {
-            irrf = (baseIrrf * 0.275) - 896.00;
+            irrf = (baseIrrf * 0.275) - 908.73;
           }
         }
 

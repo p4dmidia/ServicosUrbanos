@@ -94,17 +94,17 @@ export default function AffiliateWallet() {
     const inss = Math.min(bruto * 0.11, 932.31);
     const baseIrrf = Math.max(0, bruto - inss);
 
-    // Tabela Progressiva Mensal IRPF Receita Federal
+    // Tabela Progressiva Mensal IRPF Receita Federal (2026)
     let irrf = 0;
-    if (baseIrrf > 2259.20) {
+    if (baseIrrf > 2428.80) {
       if (baseIrrf <= 2826.65) {
-        irrf = (baseIrrf * 0.075) - 169.44;
+        irrf = (baseIrrf * 0.075) - 182.16;
       } else if (baseIrrf <= 3751.05) {
-        irrf = (baseIrrf * 0.15) - 381.44;
+        irrf = (baseIrrf * 0.15) - 394.16;
       } else if (baseIrrf <= 4664.68) {
-        irrf = (baseIrrf * 0.225) - 662.77;
+        irrf = (baseIrrf * 0.225) - 675.49;
       } else {
-        irrf = (baseIrrf * 0.275) - 896.00;
+        irrf = (baseIrrf * 0.275) - 908.73;
       }
     }
 

@@ -205,7 +205,10 @@ export default function AffiliateNetLiquido() {
   };
 
   return (
-    <AffiliateLayout title="Financeiro da Rede Valor Líquido">
+    <AffiliateLayout 
+      title="Financeiro da Rede Valor Líquido"
+      customBalance={statement?.liquido}
+    >
       <div className="p-6 md:p-10 lg:p-12 space-y-8 max-w-5xl mx-auto">
         
         {/* Header com Navegação Mês a Mês */}

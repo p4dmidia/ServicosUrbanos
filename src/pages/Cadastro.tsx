@@ -29,6 +29,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import Header from '../components/Header';
 import PWAInstallPrompt from '../components/PWAInstallPrompt';
 import { supabase } from '../lib/supabase';
+import { businessRules } from '../lib/businessRules';
 import { toast } from 'react-hot-toast';
 
 // Empresa Matriz (Fallback Padrão para evitar afiliados órfãos)
@@ -496,6 +497,98 @@ export default function Cadastro() {
         const finalInsuredName = personType === 'PJ' ? insuredName.trim() : fullName.trim();
 
         try {
+            // Checagem prévia: verificar se CPF já possui cadastro para evitar erro 500 do banco
+            if (finalCpf) {
+                const { data: existingCpf } = await supabase
+                    .from('profiles')
+                    .select('id')
+                    .eq('cpf', finalCpf)
+                    .maybeSingle();
+
+                if (existingCpf) {
+                    const msg = "Este CPF já possui cadastro no sistema. Se você já possui uma conta, faça login ou solicite a recuperação de senha.";
+                    setError(msg);
+                    toast.error("Este CPF já está cadastrado no sistema.", {
+                        duration: 7000,
+                        style: {
+                            borderRadius: '16px',
+                            background: '#dc2626',
+                            color: '#fff',
+                            fontWeight: 'bold',
+                            fontSize: '12px'
+                        }
+                    });
+                    setLoading(false);
+                    return;
+                }
+            }
+
+            // Checagem prévia: verificar se CNPJ já possui cadastro
+            if (cleanCnpj) {
+                const { data: existingCnpj } = await supabase
+                    .from('profiles')
+                    .select('id')
+                    .eq('cnpj', cleanCnpj)
+                    .maybeSingle();
+
+                if (existingCnpj) {
+                    const msg = "Este CNPJ já possui cadastro no sistema. Se você já possui uma conta, faça login ou solicite a recuperação de senha.";
+                    setError(msg);
+                    toast.error("Este CNPJ já está cadastrado no sistema.", {
+                        duration: 7000,
+                        style: {
+                            borderRadius: '16px',
+                            background: '#dc2626',
+                            color: '#fff',
+                            fontWeight: 'bold',
+                            fontSize: '12px'
+                        }
+                    });
+                    setLoading(false);
+                    return;
+                }
+            }
+
+            // Checagem Antifraude: verificar se a chave PIX ou conta bancária já pertence a outro CPF
+            if (pixKey?.trim() || (bankBranch?.trim() && bankAccount?.trim())) {
+                const conflict = await businessRules.checkReceivingAccountConflict({
+                    cpf: finalCpf,
+                    cnpj: cleanCnpj || undefined,
+                    pixKey: pixKey,
+                    bankName: bankName,
+                    bankBranch: bankBranch,
+                    bankAccount: bankAccount,
+                    userName: finalDisplayName
+                });
+
+                if (conflict.hasConflict && conflict.conflictingProfile) {
+                    // Registrar alerta interno de fraude
+                    await businessRules.registerFraudAlert({
+                        attemptedName: finalDisplayName,
+                        attemptedCpf: finalCpf,
+                        attemptedEmail: email,
+                        existingProfile: conflict.conflictingProfile,
+                        conflictType: conflict.conflictType!,
+                        attemptedPixKey: pixKey,
+                        attemptedBankDetails: `${bankName} / Ag: ${bankBranch} / CC: ${bankAccount}`
+                    });
+
+                    setError(conflict.errorMessage || "Esta conta de recebimento (Chave PIX) já está vinculada a outro titular (CPF).");
+                    toast.error(conflict.errorMessage || "Conta de recebimento já cadastrada em outro titular.", {
+                        duration: 8000,
+                        style: {
+                            borderRadius: '16px',
+                            background: '#dc2626',
+                            color: '#fff',
+                            fontWeight: 'bold',
+                            fontSize: '12px'
+                        }
+                    });
+                    setLoading(false);
+                    return;
+                }
+            }
+
             const { data, error: signUpError } = await supabase.auth.signUp({
                 email,
                 password,
@@ -599,18 +692,29 @@ export default function Cadastro() {
         } catch (err: any) {
             console.error("Erro no Supabase Auth:", err);
 
-            let userMessage = "Ocorreu um erro inesperado ao salvar os dados.";
+            let userMessage = "Ocorreu um erro inesperado ao realizar o cadastro. Por favor, tente novamente.";
 
-            if (err.message === "Database error saving new user") {
-                userMessage = "Erro no banco de dados. Por favor, tente novamente mais tarde.";
-            } else if (err.message.includes("User already registered")) {
-                userMessage = "Este e-mail já está cadastrado.";
-            } else if (err.message.includes("Password should be at least")) {
+            if (err.message === "Database error saving new user" || err.message?.includes("Database error")) {
+                userMessage = "Não foi possível concluir o cadastro: o CPF, e-mail ou dados informados já podem estar em uso por outra conta.";
+            } else if (err.message?.includes("User already registered")) {
+                userMessage = "Este e-mail já está cadastrado no sistema. Faça login para acessar sua conta.";
+            } else if (err.message?.includes("Password should be at least")) {
                 userMessage = "A senha deve ter pelo menos 6 caracteres.";
+            } else if (err.message) {
+                userMessage = err.message;
             }
 
             setError(userMessage);
-            toast.error(userMessage);
+            toast.error(userMessage, {
+                duration: 7000,
+                style: {
+                    borderRadius: '16px',
+                    background: '#dc2626',
+                    color: '#fff',
+                    fontWeight: 'bold',
+                    fontSize: '12px'
+                }
+            });
         } finally {
             setLoading(false);
         }
@@ -1244,6 +1348,7 @@ export default function Cadastro() {
                                                 value={password}
                                                 onChange={handlePasswordChange}
                                                 placeholder="Pelo menos 8 caracteres"
+                                                autoComplete="new-password"
                                                 className="w-full pl-12 pr-12 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500/50 transition-all font-bold text-midnight"
                                             />
                                             <button
@@ -1279,7 +1384,7 @@ export default function Cadastro() {
                                                     </p>
                                                     <ul className="space-y-1">
                                                         {passwordTips.map((tip, idx) => (
-                                                            <li key={idx} className="text-[10px] font-bold text-slate-600 flex items-center gap-2">
+                                                             <li key={idx} className="text-[10px] font-bold text-slate-600 flex items-center gap-2">
                                                                 <div className="size-1 rounded-full bg-slate-300" />
                                                                 {tip}
                                                             </li>
@@ -1300,6 +1405,7 @@ export default function Cadastro() {
                                                 value={confirmPassword}
                                                 onChange={(e) => setConfirmPassword(e.target.value)}
                                                 placeholder="Repita a senha anterior"
+                                                autoComplete="new-password"
                                                 className="w-full pl-12 pr-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500/50 transition-all font-bold text-midnight"
                                             />
                                         </div>

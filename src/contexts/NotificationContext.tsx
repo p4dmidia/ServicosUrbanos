@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from './AuthContext';
+import { businessRules } from '../lib/businessRules';
 import { toast } from 'react-hot-toast';
 
 export interface Notification {
@@ -19,30 +20,83 @@ interface NotificationContextType {
   markAsRead: (id: string) => Promise<void>;
   markAllAsRead: () => Promise<void>;
   loading: boolean;
+  refreshNotifications: () => Promise<void>;
 }
 
 const NotificationContext = createContext<NotificationContextType | undefined>(undefined);
 
 export function NotificationProvider({ children }: { children: React.ReactNode }) {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(false);
 
   const fetchNotifications = async () => {
-    setNotifications([]);
+    if (!user) {
+      setNotifications([]);
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const notifs: Notification[] = [];
+
+      // 1. Notificações normais da tabela notifications
+      try {
+        const { data: dbNotifs } = await supabase
+          .from('notifications')
+          .select('*')
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: false })
+          .limit(20);
+
+        if (dbNotifs) {
+          notifs.push(...dbNotifs);
+        }
+      } catch (err) {
+        // Silencioso se tabela tiver restrição RLS
+      }
+
+      // 2. Se for admin, gestor ou dono, carregar os Alertas Internos de Fraude
+      const isAdminOrOwner = profile?.role === 'admin' || profile?.role === 'owner' || profile?.role === 'manager';
+      if (isAdminOrOwner) {
+        const fraudAlerts = await businessRules.getFraudAlerts();
+        fraudAlerts.forEach((a: any) => {
+          notifs.push({
+            id: a.id,
+            user_id: user.id,
+            title: a.title,
+            message: a.description,
+            type: 'system',
+            is_read: !!a.isRead,
+            created_at: a.timestamp
+          });
+        });
+      }
+
+      // Ordenar por mais recente
+      notifs.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+      setNotifications(notifs);
+    } catch (err) {
+      console.error('Error fetching notifications:', err);
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
-    setNotifications([]);
-  }, [user]);
+    fetchNotifications();
+    const interval = setInterval(fetchNotifications, 30000); // Sincroniza a cada 30s
+    return () => clearInterval(interval);
+  }, [user, profile]);
 
   const markAsRead = async (id: string) => {
     try {
-      const { error } = await supabase
-        .from('notifications')
-        .update({ is_read: true })
-        .eq('id', id);
-      if (error) throw error;
+      // Se for alerta do localStorage
+      if (typeof window !== 'undefined' && typeof localStorage !== 'undefined') {
+        const localAlerts = JSON.parse(localStorage.getItem('system_fraud_alerts') || '[]');
+        const updated = localAlerts.map((a: any) => a.id === id ? { ...a, isRead: true } : a);
+        localStorage.setItem('system_fraud_alerts', JSON.stringify(updated));
+      }
       setNotifications(prev => prev.map(n => n.id === id ? { ...n, is_read: true } : n));
     } catch (error) {
       console.error('Error marking notification as read:', error);
@@ -50,14 +104,12 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   };
 
   const markAllAsRead = async () => {
-    if (!user) return;
     try {
-      const { error } = await supabase
-        .from('notifications')
-        .update({ is_read: true })
-        .eq('user_id', user.id)
-        .eq('is_read', false);
-      if (error) throw error;
+      if (typeof window !== 'undefined' && typeof localStorage !== 'undefined') {
+        const localAlerts = JSON.parse(localStorage.getItem('system_fraud_alerts') || '[]');
+        const updated = localAlerts.map((a: any) => ({ ...a, isRead: true }));
+        localStorage.setItem('system_fraud_alerts', JSON.stringify(updated));
+      }
       setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
     } catch (error) {
       console.error('Error marking all as read:', error);
@@ -67,7 +119,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   const unreadCount = notifications.filter(n => !n.is_read).length;
 
   return (
-    <NotificationContext.Provider value={{ notifications, unreadCount, markAsRead, markAllAsRead, loading }}>
+    <NotificationContext.Provider value={{ notifications, unreadCount, markAsRead, markAllAsRead, loading, refreshNotifications: fetchNotifications }}>
       {children}
     </NotificationContext.Provider>
   );

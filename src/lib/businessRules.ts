@@ -1219,14 +1219,28 @@ export const businessRules = {
         }
       }
 
+      // Apuração consolidada líquida do mês atual (MMN + Revendedor com apuração fiscal oficial para o Dia 10)
+      let consolidatedLiquid = availableBalance;
+      try {
+        const currentYear = now.getFullYear();
+        const currentMonth = now.getMonth() + 1;
+        const stmt = await businessRules.getConsolidatedFinancialStatement(userId, currentYear, currentMonth);
+        if (stmt && typeof stmt.liquido === 'number') {
+          consolidatedLiquid = stmt.liquido;
+        }
+      } catch (e) {
+        console.warn('Erro ao obter demonstrativo consolidado para getAffiliateStats:', e);
+      }
+
       return {
         monthlyBonus,
         annualBonus,
         walletBonus,
-        walletBalance: availableBalance,
+        walletBalance: consolidatedLiquid,
         maintenanceFee: 0,
         totalEarnings,
-        availableBalance,
+        availableBalance: consolidatedLiquid,
+        networkAvailableBalance: availableBalance,
         cashbackBalance: 0,
         consumptionCount,
         isEligible: !!hasActiveSub,
@@ -3667,6 +3681,10 @@ export const businessRules = {
         let category = 'MENSAL (REG)';
         if (t.description?.includes('Anual')) category = 'ANUAL (REG)';
 
+        const contractAmount = Number(orderInfo?.amount || 0);
+        const amt = Number(t.amount || 0);
+        const percentage = contractAmount > 0 ? (amt / contractAmount) * 100 : (t.description?.includes('Mensal') ? 5 : 2);
+
         return {
           id: t.id,
           orderId,
@@ -3674,7 +3692,9 @@ export const businessRules = {
           level: 'REG',
           category,
           date: t.created_at,
-          amount: Number(t.amount || 0),
+          amount: amt,
+          contractAmount,
+          percentage,
           status: (t.status === 'completed' || t.status === 'pago') ? 'PAGO' : 'PENDENTE'
         };
       }).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
@@ -4760,13 +4780,14 @@ export const businessRules = {
     // 1. Buscar perfil do afiliado
     const { data: profile } = await supabase
       .from('profiles')
-      .select('id, full_name, cpf, cnpj, pix_key, pix_type, bank_name, bank_branch, bank_account, role, person_type, description')
+      .select('id, full_name, cpf, cnpj, pix_key, pix_type, bank_name, bank_branch, bank_account, role, description')
       .eq('id', userId)
       .single();
 
-    const isPJ = profile?.person_type === 'PJ' || 
+    const isPJ = (profile as any)?.person_type === 'PJ' || 
                  (profile?.cnpj && profile.cnpj.replace(/\D/g, '').length === 14) || 
-                 (profile?.description && profile.description.includes('[PJ]'));
+                 (profile?.description && profile.description.includes('[PJ]')) ||
+                 profile?.pix_type === 'CNPJ';
 
     // 2. Buscar transações de comissão do usuário
     const { data: userTxs } = await supabase
@@ -4977,13 +4998,14 @@ export const businessRules = {
     // Perfil
     const { data: profile } = await supabase
       .from('profiles')
-      .select('id, full_name, cpf, cnpj, pix_key, pix_type, bank_name, bank_branch, bank_account, role, person_type, description')
+      .select('id, full_name, cpf, cnpj, pix_key, pix_type, bank_name, bank_branch, bank_account, role, description')
       .eq('id', userId)
       .single();
 
-    const isPJ = profile?.person_type === 'PJ' || 
+    const isPJ = (profile as any)?.person_type === 'PJ' || 
                  (profile?.cnpj && profile.cnpj.replace(/\D/g, '').length === 14) || 
-                 (profile?.description && profile.description.includes('[PJ]'));
+                 (profile?.description && profile.description.includes('[PJ]')) ||
+                 profile?.pix_type === 'CNPJ';
 
     // Transações
     const { data: userTxs } = await supabase
@@ -5144,6 +5166,381 @@ export const businessRules = {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+  },
+
+  /**
+   * Valida se a conta de recebimento (Chave PIX ou Conta Bancária) já está vinculada a outro CPF.
+   * Impede que uma conta/chave seja reutilizada por titulares diferentes.
+   */
+  checkReceivingAccountConflict: async (params: {
+    userId?: string;
+    cpf?: string;
+    cnpj?: string;
+    pixKey?: string;
+    bankName?: string;
+    bankBranch?: string;
+    bankAccount?: string;
+    userName?: string;
+  }): Promise<{
+    hasConflict: boolean;
+    conflictType?: 'pix' | 'bank_account';
+    conflictingProfile?: {
+      id: string;
+      full_name: string;
+      cpf?: string;
+      cnpj?: string;
+      email?: string;
+      pix_key?: string;
+    };
+    errorMessage?: string;
+  }> => {
+    try {
+      const cleanUserCpf = (params.cpf || '').replace(/\D/g, '');
+      const cleanUserCnpj = (params.cnpj || '').replace(/\D/g, '');
+      const cleanInputPix = (params.pixKey || '').trim();
+      const cleanInputPixDigits = cleanInputPix.replace(/\D/g, '');
+
+      // 1. Validar Chave PIX
+      if (cleanInputPix) {
+        const { data: profiles, error } = await supabase
+          .from('profiles')
+          .select('id, full_name, cpf, cnpj, email, pix_key, bank_name, bank_branch, bank_account')
+          .not('pix_key', 'is', null);
+
+        if (!error && profiles) {
+          const conflicting = profiles.find(p => {
+            // Ignorar o próprio usuário se já tiver ID
+            if (params.userId && p.id === params.userId) return false;
+
+            const existingPix = (p.pix_key || '').trim();
+            if (!existingPix) return false;
+
+            const existingPixDigits = existingPix.replace(/\D/g, '');
+
+            // Comparar tanto texto puro (case-insensitive) quanto dígitos numéricos (para CPF/CNPJ/Telefone)
+            const isMatch = 
+              cleanInputPix.toLowerCase() === existingPix.toLowerCase() ||
+              (cleanInputPixDigits.length >= 10 && cleanInputPixDigits === existingPixDigits);
+
+            if (!isMatch) return false;
+
+            // Verificar se o CPF ou CNPJ é o mesmo titular
+            const existingCpf = (p.cpf || '').replace(/\D/g, '');
+            const existingCnpj = (p.cnpj || '').replace(/\D/g, '');
+
+            const isSameCpf = cleanUserCpf && existingCpf && cleanUserCpf === existingCpf;
+            const isSameCnpj = cleanUserCnpj && existingCnpj && cleanUserCnpj === existingCnpj;
+
+            // Se pertencer a outro CPF/CNPJ, temos um conflito de titularidade!
+            return !isSameCpf && !isSameCnpj;
+          });
+
+          if (conflicting) {
+            return {
+              hasConflict: true,
+              conflictType: 'pix',
+              conflictingProfile: {
+                id: conflicting.id,
+                full_name: conflicting.full_name || 'Outro Titular',
+                cpf: conflicting.cpf,
+                cnpj: conflicting.cnpj,
+                email: conflicting.email,
+                pix_key: conflicting.pix_key
+              },
+              errorMessage: `Esta Chave PIX já está cadastrada para outro titular (CPF). Por normas antifraude da plataforma, a conta de recebimento só pode pertencer ao próprio titular do CPF cadastrado.`
+            };
+          }
+        }
+      }
+
+      // 2. Validar Conta Bancária Tradicional (Banco + Agência + Conta)
+      const cleanBankName = (params.bankName || '').trim().toLowerCase();
+      const cleanBranch = (params.bankBranch || '').replace(/\D/g, '');
+      const cleanAccount = (params.bankAccount || '').replace(/\D/g, '');
+
+      if (cleanBankName && cleanBranch && cleanAccount) {
+        const { data: profiles, error } = await supabase
+          .from('profiles')
+          .select('id, full_name, cpf, cnpj, email, bank_name, bank_branch, bank_account')
+          .not('bank_account', 'is', null);
+
+        if (!error && profiles) {
+          const conflicting = profiles.find(p => {
+            if (params.userId && p.id === params.userId) return false;
+
+            const pBank = (p.bank_name || '').trim().toLowerCase();
+            const pBranch = (p.bank_branch || '').replace(/\D/g, '');
+            const pAccount = (p.bank_account || '').replace(/\D/g, '');
+
+            if (pBank === cleanBankName && pBranch === cleanBranch && pAccount === cleanAccount) {
+              const existingCpf = (p.cpf || '').replace(/\D/g, '');
+              const existingCnpj = (p.cnpj || '').replace(/\D/g, '');
+
+              const isSameCpf = cleanUserCpf && existingCpf && cleanUserCpf === existingCpf;
+              const isSameCnpj = cleanUserCnpj && existingCnpj && cleanUserCnpj === existingCnpj;
+
+              return !isSameCpf && !isSameCnpj;
+            }
+            return false;
+          });
+
+          if (conflicting) {
+            return {
+              hasConflict: true,
+              conflictType: 'bank_account',
+              conflictingProfile: {
+                id: conflicting.id,
+                full_name: conflicting.full_name || 'Outro Titular',
+                cpf: conflicting.cpf,
+                cnpj: conflicting.cnpj,
+                email: conflicting.email
+              },
+              errorMessage: `Esta conta bancária (Agência e Conta) já está cadastrada para outro titular (CPF). Por normas antifraude, a conta bancária de recebimento só pode pertencer ao titular do próprio CPF cadastrado.`
+            };
+          }
+        }
+      }
+
+      return { hasConflict: false };
+    } catch (err) {
+      console.error('Erro ao verificar conflito de conta de recebimento:', err);
+      return { hasConflict: false };
+    }
+  },
+
+  /**
+   * Registra um alerta interno de fraude no sistema quando uma tentativa de duplicação for identificada.
+   */
+  registerFraudAlert: async (params: {
+    attemptedUserId?: string;
+    attemptedName?: string;
+    attemptedCpf?: string;
+    attemptedEmail?: string;
+    existingProfile: {
+      id: string;
+      full_name: string;
+      cpf?: string;
+      cnpj?: string;
+      email?: string;
+      pix_key?: string;
+    };
+    conflictType: 'pix' | 'bank_account';
+    attemptedPixKey?: string;
+    attemptedBankDetails?: string;
+  }) => {
+    try {
+      const nowIso = new Date().toISOString();
+      const alertId = `fraud_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
+      const conflictLabel = params.conflictType === 'pix' 
+        ? `Chave PIX: "${params.attemptedPixKey}"` 
+        : `Conta: "${params.attemptedBankDetails}"`;
+
+      const alertDescription = `[ALERTA DE FRAUDE] Tentativa de vincular conta de recebimento duplicada: ${params.attemptedName || 'Usuário'} (CPF: ${params.attemptedCpf || 'Não informado'}) tentou cadastrar a ${conflictLabel}, que já pertence a ${params.existingProfile.full_name} (CPF: ${params.existingProfile.cpf || params.existingProfile.cnpj || '---'}). Ação bloqueada pelo sistema.`;
+
+      // 1. Gravar na tabela transactions como log oficial auditável
+      try {
+        const { data: authUser } = await supabase.auth.getUser();
+        const effectiveProfileId = params.attemptedUserId || authUser.user?.id || params.existingProfile.id;
+
+        await supabase.from('transactions').insert({
+          profile_id: effectiveProfileId,
+          amount: 0,
+          type: 'security_alert',
+          status: 'cancelled',
+          description: alertDescription,
+          receipt_url: JSON.stringify({
+            alertId,
+            alertType: 'duplicate_receiving_account',
+            conflictType: params.conflictType,
+            attemptedUserId: params.attemptedUserId,
+            attemptedName: params.attemptedName,
+            attemptedCpf: params.attemptedCpf,
+            attemptedEmail: params.attemptedEmail,
+            existingUserId: params.existingProfile.id,
+            existingName: params.existingProfile.full_name,
+            existingCpf: params.existingProfile.cpf || params.existingProfile.cnpj,
+            existingEmail: params.existingProfile.email,
+            pixKey: params.attemptedPixKey,
+            bankDetails: params.attemptedBankDetails,
+            timestamp: nowIso
+          })
+        });
+      } catch (dbErr) {
+        console.warn('Não foi possível gravar alerta em transactions:', dbErr);
+      }
+
+      // 2. Gravar no LocalStorage para sincronização imediata com os painéis administrativos
+      try {
+        if (typeof window !== 'undefined' && typeof localStorage !== 'undefined') {
+          const currentAlerts = JSON.parse(localStorage.getItem('system_fraud_alerts') || '[]');
+          currentAlerts.unshift({
+            id: alertId,
+            title: '🚨 ALERTA DE FRAUDE: Conta / PIX Duplicado',
+            description: alertDescription,
+            timestamp: nowIso,
+            isRead: false,
+            attemptedName: params.attemptedName,
+            attemptedCpf: params.attemptedCpf,
+            existingName: params.existingProfile.full_name,
+            existingCpf: params.existingProfile.cpf || params.existingProfile.cnpj,
+            pixKey: params.attemptedPixKey,
+            conflictType: params.conflictType
+          });
+          localStorage.setItem('system_fraud_alerts', JSON.stringify(currentAlerts.slice(0, 50)));
+        }
+      } catch (lsErr) {
+        console.warn('Erro ao salvar em localStorage:', lsErr);
+      }
+
+      // 3. Notificar administradores via WhatsApp (se houver Z-API configurada)
+      try {
+        const { data: admins } = await supabase
+          .from('profiles')
+          .select('whatsapp')
+          .in('role', ['admin', 'owner'])
+          .not('whatsapp', 'is', null)
+          .limit(2);
+
+        for (const adm of admins || []) {
+          if (adm.whatsapp) {
+            const cleanPhone = adm.whatsapp.replace(/\D/g, '');
+            if (cleanPhone.length >= 10) {
+              await businessRules.sendTestWhatsAppMessage(
+                cleanPhone,
+                `🚨 *ALERTA ANTIFRAUDE - SERVIÇOS URBANOS*\n\nIdentificamos uma tentativa de vincular conta de recebimento já cadastrada em outro titular!\n\n• *Tentativa:* ${params.attemptedName || 'Desconhecido'} (CPF: ${params.attemptedCpf || '---'})\n• *Titular Original:* ${params.existingProfile.full_name} (CPF: ${params.existingProfile.cpf || '---'})\n• *Chave/Conta:* ${params.attemptedPixKey || params.attemptedBankDetails}\n\n*Ação tomada:* O sistema BLOQUEOU o cadastro automaticamente.`
+              );
+            }
+          }
+        }
+      } catch (waErr) {
+        console.warn('WhatsApp alert warning:', waErr);
+      }
+    } catch (e) {
+      console.error('Erro geral ao registrar alerta de fraude:', e);
+    }
+  },
+
+  /**
+   * Retorna os alertas de fraude registrados para a gestão.
+   */
+  /**
+   * Retorna os alertas de fraude registrados para a gestão (filtrando os que já foram dispensados).
+   */
+  getFraudAlerts: async (): Promise<any[]> => {
+    const alerts: any[] = [];
+    
+    // Obter lista de IDs/descrições dispensadas pelo administrador
+    let dismissedIds: string[] = [];
+    try {
+      if (typeof window !== 'undefined' && typeof localStorage !== 'undefined') {
+        dismissedIds = JSON.parse(localStorage.getItem('dismissed_fraud_alerts') || '[]');
+      }
+    } catch (e) {}
+
+    // 1. Do banco de dados (transactions com tipo security_alert ou descrição de fraude)
+    try {
+      const { data, error } = await supabase
+        .from('transactions')
+        .select('*')
+        .or('type.eq.security_alert,description.ilike.%[ALERTA DE FRAUDE]%')
+        .order('created_at', { ascending: false })
+        .limit(50);
+
+      if (!error && data) {
+        data.forEach(t => {
+          const alertId = `tx_${t.id}`;
+          if (dismissedIds.includes(alertId) || dismissedIds.includes(t.description)) {
+            return;
+          }
+
+          let details: any = {};
+          try {
+            if (t.receipt_url && t.receipt_url.startsWith('{')) {
+              details = JSON.parse(t.receipt_url);
+            }
+          } catch (e) {}
+
+          alerts.push({
+            id: alertId,
+            title: '🚨 Tentativa de Fraude: Conta de Recebimento Duplicada',
+            description: t.description,
+            timestamp: t.created_at,
+            isRead: false,
+            attemptedName: details.attemptedName,
+            attemptedCpf: details.attemptedCpf,
+            existingName: details.existingName,
+            existingCpf: details.existingCpf,
+            pixKey: details.pixKey,
+            conflictType: details.conflictType
+          });
+        });
+      }
+    } catch (e) {
+      console.warn('Erro ao ler fraud alerts do banco:', e);
+    }
+
+    // 2. Do LocalStorage
+    try {
+      if (typeof window !== 'undefined' && typeof localStorage !== 'undefined') {
+        const localAlerts = JSON.parse(localStorage.getItem('system_fraud_alerts') || '[]');
+        localAlerts.forEach((la: any) => {
+          if (dismissedIds.includes(la.id) || dismissedIds.includes(la.description) || la.isRead) {
+            return;
+          }
+          if (!alerts.some(a => a.description === la.description)) {
+            alerts.push(la);
+          }
+        });
+      }
+    } catch (e) {}
+
+    alerts.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+    return alerts;
+  },
+
+  /**
+   * Marca um alerta de fraude como dispensado/lido pelo administrador.
+   */
+  dismissFraudAlert: (alertIdOrDesc: string): void => {
+    try {
+      if (typeof window !== 'undefined' && typeof localStorage !== 'undefined') {
+        const dismissedIds = JSON.parse(localStorage.getItem('dismissed_fraud_alerts') || '[]');
+        if (!dismissedIds.includes(alertIdOrDesc)) {
+          dismissedIds.push(alertIdOrDesc);
+          localStorage.setItem('dismissed_fraud_alerts', JSON.stringify(dismissedIds));
+        }
+
+        // Também marcar como lido em system_fraud_alerts
+        const localAlerts = JSON.parse(localStorage.getItem('system_fraud_alerts') || '[]');
+        const updated = localAlerts.map((a: any) => 
+          (a.id === alertIdOrDesc || a.description === alertIdOrDesc) ? { ...a, isRead: true } : a
+        );
+        localStorage.setItem('system_fraud_alerts', JSON.stringify(updated));
+      }
+    } catch (e) {
+      console.warn('Erro ao dispensar alerta de fraude:', e);
+    }
+  },
+
+  /**
+   * Dispensa todos os alertas de fraude ativos de uma vez.
+   */
+  dismissAllFraudAlerts: (alertIdsOrDescs: string[]): void => {
+    try {
+      if (typeof window !== 'undefined' && typeof localStorage !== 'undefined') {
+        const dismissedIds = JSON.parse(localStorage.getItem('dismissed_fraud_alerts') || '[]');
+        alertIdsOrDescs.forEach(id => {
+          if (!dismissedIds.includes(id)) dismissedIds.push(id);
+        });
+        localStorage.setItem('dismissed_fraud_alerts', JSON.stringify(dismissedIds));
+
+        const localAlerts = JSON.parse(localStorage.getItem('system_fraud_alerts') || '[]');
+        const updated = localAlerts.map((a: any) => ({ ...a, isRead: true }));
+        localStorage.setItem('system_fraud_alerts', JSON.stringify(updated));
+      }
+    } catch (e) {
+      console.warn('Erro ao dispensar todos os alertas de fraude:', e);
+    }
   }
 };
 

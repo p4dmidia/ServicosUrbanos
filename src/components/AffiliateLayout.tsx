@@ -36,10 +36,12 @@ import { ptBR } from 'date-fns/locale';
 interface AffiliateLayoutProps {
   children: React.ReactNode;
   title: string;
+  customBalance?: number;
+  customBalanceLabel?: string;
 }
 
 
-export default function AffiliateLayout({ children, title }: AffiliateLayoutProps) {
+export default function AffiliateLayout({ children, title, customBalance, customBalanceLabel }: AffiliateLayoutProps) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
@@ -277,10 +279,14 @@ export default function AffiliateLayout({ children, title }: AffiliateLayoutProp
           <div className="flex items-center gap-6">
             {/* Saldo Rápido Real do Banco de Dados */}
             <div className="hidden md:flex flex-col items-end">
-              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Saldo Mensal Disponível (Dia 10)</p>
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">
+                {customBalanceLabel || "Saldo Mensal Disponível (Dia 10)"}
+              </p>
               <div className="flex items-center gap-2">
                  <span className="text-lg font-black text-emerald-600 tracking-tighter">
-                   {stats ? `R$ ${stats.availableBalance.toFixed(2)}` : 'R$ 0,00'}
+                   {customBalance !== undefined
+                     ? `R$ ${Number(customBalance).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                     : (stats ? `R$ ${stats.availableBalance.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : 'R$ 0,00')}
                  </span>
                  <div className="size-6 bg-emerald-50 rounded-full flex items-center justify-center text-emerald-600">
                     <TrendingUp size={12} />

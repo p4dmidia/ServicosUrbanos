@@ -219,7 +219,10 @@ export default function AffiliateFinancialSummary() {
   };
 
   return (
-    <AffiliateLayout title="Financeiro Resumo">
+    <AffiliateLayout 
+      title="Financeiro Resumo"
+      customBalance={statement?.liquido}
+    >
       <div className="p-6 md:p-10 lg:p-12 space-y-8 max-w-5xl mx-auto">
         
         {/* Header com Navegação Mês a Mês */}

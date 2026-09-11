@@ -10,16 +10,22 @@ import {
   Calendar,
   ShieldCheck,
   TrendingUp,
-  BarChart2
+  BarChart2,
+  AlertTriangle,
+  Check,
+  CheckCheck,
+  X
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import AdminLayout from '../components/AdminLayout';
 import { businessRules } from '../lib/businessRules';
 import { supabase } from '../lib/supabase';
+import { toast } from 'react-hot-toast';
 
 export default function AdminDashboard() {
   const [globalStats, setGlobalStats] = React.useState<any>(null);
   const [orders, setOrders] = React.useState<any[]>([]);
+  const [fraudAlerts, setFraudAlerts] = React.useState<any[]>([]);
   const [loading, setLoading] = React.useState(true);
   
   // Period Filters
@@ -52,6 +58,14 @@ export default function AdminDashboard() {
         setOrders(ordersData || []);
       } catch (error) {
         console.error('Erro ao carregar pedidos para o dashboard:', error);
+      }
+
+      // Carregar alertas de fraude
+      try {
+        const alerts = await businessRules.getFraudAlerts();
+        setFraudAlerts(alerts);
+      } catch (error) {
+        console.error('Erro ao carregar alertas de fraude:', error);
       }
 
       setLoading(false);
@@ -208,10 +222,109 @@ export default function AdminDashboard() {
   const chartHeight = 240;
   const paddingY = 30;
 
+  const handleDismissAlert = (alertId: string, description: string) => {
+    businessRules.dismissFraudAlert(alertId);
+    businessRules.dismissFraudAlert(description);
+    setFraudAlerts(prev => prev.filter(a => a.id !== alertId && a.description !== description));
+    toast.success('Alerta marcado como ciente e dispensado.', {
+      style: {
+        borderRadius: '16px',
+        background: '#0a0e17',
+        color: '#fff',
+        fontWeight: 'bold',
+        fontSize: '12px'
+      }
+    });
+  };
+
+  const handleDismissAllAlerts = () => {
+    const ids = fraudAlerts.map(a => a.id).concat(fraudAlerts.map(a => a.description));
+    businessRules.dismissAllFraudAlerts(ids);
+    setFraudAlerts([]);
+    toast.success('Todos os alertas foram dispensados.', {
+      style: {
+        borderRadius: '16px',
+        background: '#0a0e17',
+        color: '#fff',
+        fontWeight: 'bold',
+        fontSize: '12px'
+      }
+    });
+  };
+
   return (
     <AdminLayout title="Painel de Controle" subtitle="Visão Geral do Ecossistema Serviços Urbanos">
       <div className="p-8 lg:p-12 space-y-12">
         
+        {/* Banner de Alertas Antifraude */}
+        {fraudAlerts.length > 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="p-6 bg-red-950/40 border border-red-500/30 rounded-[2.5rem] shadow-2xl space-y-4"
+          >
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-red-500/20 pb-4">
+              <div className="flex items-center gap-3">
+                <div className="size-10 rounded-xl bg-red-500/20 text-red-400 flex items-center justify-center shrink-0">
+                  <AlertTriangle size={22} className="animate-pulse" />
+                </div>
+                <div>
+                  <h4 className="text-sm font-black text-white uppercase tracking-tight flex items-center gap-2">
+                    Alertas de Segurança Antifraude
+                    <span className="px-2 py-0.5 rounded-full bg-red-500/30 border border-red-500/40 text-[9px] text-red-300 font-mono">
+                      {fraudAlerts.length} bloqueada(s)
+                    </span>
+                  </h4>
+                  <p className="text-xs text-red-300/80 font-medium">
+                    O sistema identificou e bloqueou tentativas de cadastrar a mesma conta de recebimento / Chave PIX em CPFs diferentes.
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 self-start sm:self-auto">
+                <span className="px-3 py-1 rounded-full bg-red-600 text-white text-[10px] font-black uppercase tracking-widest">
+                  Ação Bloqueada
+                </span>
+                <button
+                  onClick={handleDismissAllAlerts}
+                  title="Dispensar todos os alertas ativos"
+                  className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/10 hover:bg-white/20 text-slate-200 hover:text-white text-[10px] font-bold uppercase tracking-wider border border-white/10 transition-all cursor-pointer"
+                >
+                  <CheckCheck size={12} className="text-emerald-400" />
+                  <span>Dispensar Todos</span>
+                </button>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              {fraudAlerts.slice(0, 5).map((alert, idx) => (
+                <div key={idx} className="p-4 bg-black/40 border border-red-500/15 rounded-2xl flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs">
+                  <div className="space-y-1 flex-1">
+                    <p className="font-bold text-slate-200">
+                      {alert.description}
+                    </p>
+                    <p className="text-[10px] text-slate-400 font-mono">
+                      Registro do Sistema: {new Date(alert.timestamp).toLocaleString('pt-BR')}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0 self-start md:self-auto">
+                    <span className="px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider bg-red-500/10 text-red-400 border border-red-500/20">
+                      Tentativa Impedida
+                    </span>
+                    <button
+                      onClick={() => handleDismissAlert(alert.id, alert.description)}
+                      title="Marcar como ciente e dispensar este alerta"
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[10px] font-bold uppercase tracking-wider bg-white/5 hover:bg-emerald-500/20 text-slate-300 hover:text-emerald-300 border border-white/10 hover:border-emerald-500/30 transition-all cursor-pointer group"
+                    >
+                      <Check size={12} className="text-emerald-400 group-hover:scale-110 transition-transform" />
+                      <span>Dispensar</span>
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </motion.div>
+        )}
+
         {/* Stats Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
           {stats.map((stat, i) => {

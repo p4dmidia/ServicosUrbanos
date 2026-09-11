@@ -139,13 +139,28 @@ export default function AffiliateWallet() {
   const totalsPending = useMemo(() => {
     const pendingList = enrichedTransactions.filter(t => t.status === 'Pendente');
     const totalBruto = pendingList.reduce((acc, t) => acc + t.bruto, 0);
-    const totalContratos = pendingList.reduce((acc, t) => acc + t.contractAmount, 0);
-    const mediaPercentual = totalContratos > 0 ? (totalBruto / totalContratos) * 100 : 0;
+
+    // Agrupar valor de contratos por pedido para evitar duplicidade de valor em pedidos com múltiplos lançamentos (ex: 5% Mensal + 2% Anual do mesmo contrato)
+    const uniqueOrders = new Map<string, number>();
+    pendingList.forEach(t => {
+      const key = t.orderId && t.orderId !== '---' ? String(t.orderId) : `txn-${t.id}`;
+      const amount = Number(t.contractAmount || 0);
+      const existing = uniqueOrders.get(key) || 0;
+      if (amount > existing) {
+        uniqueOrders.set(key, amount);
+      } else if (!uniqueOrders.has(key)) {
+        uniqueOrders.set(key, amount);
+      }
+    });
+
+    const totalContratos = Array.from(uniqueOrders.values()).reduce((acc, v) => acc + v, 0);
+    const percentualRepasse = totalContratos > 0 ? (totalBruto / totalContratos) * 100 : 0;
 
     return {
       totalBruto,
       totalContratos,
-      mediaPercentual,
+      percentualRepasse,
+      mediaPercentual: percentualRepasse,
       count: pendingList.length
     };
   }, [enrichedTransactions]);
@@ -185,7 +200,7 @@ export default function AffiliateWallet() {
     doc.setFont('helvetica', 'normal');
     doc.text(`Categoria: Rede MMN (${mmnLevelFilter === 'all' ? 'G0 ao G2' : 'Nível G' + mmnLevelFilter}) | Tipo: ${activeFilter === 'all' ? 'Todos' : activeFilter === 'mensal' ? 'Mensal' : 'Anual'}`, 14, 59);
     doc.text(`Total Valor dos Contratos: ${totalsPending.totalContratos.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`, 14, 65);
-    doc.text(`Percentual Médio de Repasse: ${totalsPending.mediaPercentual.toFixed(2)}%`, 14, 71);
+    doc.text(`Percentual de Repasse: ${totalsPending.percentualRepasse.toFixed(2)}%`, 14, 71);
     
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(16, 185, 129); // Emerald
@@ -339,7 +354,7 @@ export default function AffiliateWallet() {
               </div>
 
               <div className="relative z-10 my-auto">
-                 <h2 className="text-2xl sm:text-3xl font-black tracking-tighter italic uppercase mb-1">R$ {Number(stats.availableBalance).toFixed(2)}</h2>
+                 <h2 className="text-2xl sm:text-3xl font-black tracking-tighter italic uppercase mb-1">R$ {Number(stats.networkAvailableBalance ?? stats.monthlyBonus ?? stats.availableBalance).toFixed(2)}</h2>
                  <div className="flex items-center gap-1.5">
                     <div className="size-1.5 bg-emerald-500 rounded-full animate-pulse"></div>
                     <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Pagamentos Todo Dia 10</p>
@@ -356,7 +371,7 @@ export default function AffiliateWallet() {
               </div>
            </motion.div>
 
-           {/* Card 2: Cashback Valor Bruto Acumulado */}
+           {/* Card 2: Cashback Anual Valor Bruto Acumulado */}
            <motion.div 
              whileHover={{ y: -4 }}
              onClick={() => {
@@ -371,7 +386,7 @@ export default function AffiliateWallet() {
               
               <div className="relative z-10 flex justify-between items-start">
                  <div>
-                    <p className="text-[10px] font-black text-blue-200 uppercase tracking-widest">CASHBACK VALOR BRUTO ACUMULADO</p>
+                    <p className="text-[10px] font-black text-blue-200 uppercase tracking-widest">CASHBACK ANUAL VALOR BRUTO ACUMULADO</p>
                  </div>
                  <div className={`size-8 rounded-lg flex items-center justify-center border transition-colors ${
                    activeFilter === 'anual' ? 'bg-white text-indigo-600 border-white' : 'bg-white/10 text-white border-white/10'
@@ -611,9 +626,9 @@ export default function AffiliateWallet() {
                           </p>
                         </div>
                         <div className="bg-white/5 p-4 rounded-2xl border border-white/5">
-                          <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Percentual Médio de Repasse</p>
+                          <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Percentual de Repasse</p>
                           <p className="text-base lg:text-lg font-black text-indigo-400 font-mono">
-                            {totalsPending.mediaPercentual.toFixed(2)}%
+                            {totalsPending.percentualRepasse.toFixed(2)}%
                           </p>
                         </div>
                         <div className="bg-emerald-500/10 p-4 rounded-2xl border border-emerald-500/20">
@@ -737,7 +752,7 @@ export default function AffiliateWallet() {
                               {totalsPending.totalContratos.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                             </td>
                             <td className="px-4 py-4 text-center font-mono text-xs text-indigo-300">
-                              {totalsPending.mediaPercentual > 0 ? `${totalsPending.mediaPercentual.toFixed(2)}%` : '---'}
+                              {totalsPending.percentualRepasse > 0 ? `${totalsPending.percentualRepasse.toFixed(2)}%` : '---'}
                             </td>
                             <td className="px-5 py-4 text-right font-mono text-sm text-emerald-400 font-black">
                               {totalsPending.totalBruto.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}

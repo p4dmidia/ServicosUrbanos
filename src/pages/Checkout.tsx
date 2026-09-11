@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { 
   ArrowLeft, 
@@ -86,6 +86,8 @@ export default function Checkout() {
   const [orderId, setOrderId] = useState<string | null>(null);
   const [paymentConfirmed, setPaymentConfirmed] = useState(false);
   const [isCopying, setIsCopying] = useState(false);
+  const isSubmittingRef = useRef(false);
+  const createdOrderIdRef = useRef<string | null>(null);
 
   const [birthDate, setBirthDate] = useState('');
   const [gender, setGender] = useState('');
@@ -386,39 +388,34 @@ export default function Checkout() {
 
   // Reset payment state when cart changes to avoid inconsistencies
   useEffect(() => {
-    if (orderId) {
+    if (orderId || createdOrderIdRef.current) {
       setOrderId(null);
+      createdOrderIdRef.current = null;
       setPixData(null);
       setShowPixModal(false);
     }
   }, [cartItems]);
 
   const handleCheckout = async () => {
+    // 0. Trava síncrona contra múltiplos cliques / duplo clique rápido
+    if (isSubmittingRef.current || isProcessing) {
+      console.warn('Checkout já em processamento, ignorando clique duplicado.');
+      return;
+    }
+
     if (!acceptTerms) {
       toast.error('Você precisa aceitar os Termos de Adesão do Seguro.');
       return;
     }
 
-    if (needsProfileUpdate) {
-      if (!birthDate || !gender) {
-        toast.error('Por favor, preencha sua data de nascimento e sexo.');
-        return;
-      }
-      
-      const { error: updateError } = await supabase
-        .from('profiles')
-        .update({
-          birth_date: birthDate,
-          gender: gender
-        })
-        .eq('id', authUser?.id);
+    if (!authUser || !profile) {
+      toast.error('Você precisa estar logado para finalizar a compra.');
+      return;
+    }
 
-      if (updateError) {
-        toast.error('Erro ao atualizar dados do perfil: ' + updateError.message);
-        return;
-      }
-      
-      setNeedsProfileUpdate(false);
+    if (needsProfileUpdate && (!birthDate || !gender)) {
+      toast.error('Por favor, preencha sua data de nascimento e sexo.');
+      return;
     }
 
     if (!hasSubscription) {
@@ -445,57 +442,71 @@ export default function Checkout() {
       }
     }
 
-    if (!authUser || !profile) {
-      toast.error('Você precisa estar logado para finalizar a compra.');
-      return;
-    }
-
-    // Bloqueia compra/recompra de plano se o usuário já possuir assinatura ativa antes da abertura da janela de renovação (1 mês antes do vencimento)
-    if (hasSubscription && authUser) {
-      const { data: activeSub } = await supabase
-        .from('subscriptions')
-        .select('*')
-        .eq('profile_id', authUser.id)
-        .eq('status', 'active')
-        .gt('end_date', new Date().toISOString())
-        .order('end_date', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      if (activeSub) {
-        const endDate = new Date(activeSub.end_date);
-        endDate.setHours(23, 59, 59, 999);
-        const openDate = new Date(endDate.getTime());
-        const targetMonth = openDate.getMonth() - 1;
-        openDate.setMonth(targetMonth);
-        if (openDate.getMonth() === (targetMonth + 12) % 12 + 1) {
-          openDate.setDate(0);
-        }
-        openDate.setHours(0, 0, 0, 0);
-
-        const today = new Date();
-        if (today < openDate) {
-          toast.error(`Você já possui um plano ativo até ${endDate.toLocaleDateString('pt-BR')}. A renovação ou troca de plano estará disponível a partir de ${openDate.toLocaleDateString('pt-BR')} (1 mês antes do vencimento).`);
-          return;
-        }
+    if (paymentMethod === 'wallet') {
+      if (walletBalance < 10) {
+        toast.error('Saldo mínimo de R$ 10,00 necessário para usar a carteira.');
+        return;
+      }
+      if (walletBalance < total) {
+        toast.error('Saldo insuficiente na carteira digital.');
+        return;
       }
     }
 
+    // Trava síncrona ativada imediatamente antes de qualquer chamada assíncrona
+    isSubmittingRef.current = true;
+    setIsProcessing(true);
+
     try {
-      setIsProcessing(true);
+      if (needsProfileUpdate) {
+        const { error: updateError } = await supabase
+          .from('profiles')
+          .update({
+            birth_date: birthDate,
+            gender: gender
+          })
+          .eq('id', authUser.id);
+
+        if (updateError) {
+          toast.error('Erro ao atualizar dados do perfil: ' + updateError.message);
+          return;
+        }
+        
+        setNeedsProfileUpdate(false);
+      }
+
+      // Bloqueia compra/recompra de plano se o usuário já possuir assinatura ativa antes da abertura da janela de renovação (1 mês antes do vencimento)
+      if (hasSubscription && authUser) {
+        const { data: activeSub } = await supabase
+          .from('subscriptions')
+          .select('*')
+          .eq('profile_id', authUser.id)
+          .eq('status', 'active')
+          .gt('end_date', new Date().toISOString())
+          .order('end_date', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (activeSub) {
+          const endDate = new Date(activeSub.end_date);
+          endDate.setHours(23, 59, 59, 999);
+          const openDate = new Date(endDate.getTime());
+          const targetMonth = openDate.getMonth() - 1;
+          openDate.setMonth(targetMonth);
+          if (openDate.getMonth() === (targetMonth + 12) % 12 + 1) {
+            openDate.setDate(0);
+          }
+          openDate.setHours(0, 0, 0, 0);
+
+          const today = new Date();
+          if (today < openDate) {
+            toast.error(`Você já possui um plano ativo até ${endDate.toLocaleDateString('pt-BR')}. A renovação ou troca de plano estará disponível a partir de ${openDate.toLocaleDateString('pt-BR')} (1 mês antes do vencimento).`);
+            return;
+          }
+        }
+      }
 
       if (paymentMethod === 'wallet') {
-        if (walletBalance < 10) {
-          toast.error('Saldo mínimo de R$ 10,00 necessário para usar a carteira.');
-          setIsProcessing(false);
-          return;
-        }
-        if (walletBalance < total) {
-          toast.error('Saldo insuficiente na carteira digital.');
-          setIsProcessing(false);
-          return;
-        }
-
         const loadingToast = toast.loading('Processando pagamento com saldo...');
 
         // 1. Criar o pedido (O ID agora é gerado pelo banco via sequence)
@@ -583,7 +594,7 @@ export default function Checkout() {
 
       const loadingToast = toast.loading('Gerando pagamento...');
 
-      let currentOrderId = orderId;
+      let currentOrderId = createdOrderIdRef.current || orderId;
 
       if (!currentOrderId) {
         // 1. Criar o pedido como 'Pendente' para visibilidade do lojista
@@ -611,6 +622,7 @@ export default function Checkout() {
 
         if (orderError) throw orderError;
         currentOrderId = orderData.id;
+        createdOrderIdRef.current = currentOrderId;
         setOrderId(currentOrderId);
 
         // Se for pagamento misto, debitar imediatamente a parte da carteira
@@ -740,13 +752,13 @@ export default function Checkout() {
         throw new Error('PIX QR Code não retornado');
       }
 
-
     } catch (err: any) {
       console.error('Checkout error:', err);
       toast.error(`Erro ao processar pagamento: ${err.message || 'Erro desconhecido'}`);
+    } finally {
+      isSubmittingRef.current = false;
       setIsProcessing(false);
     }
-
   };
 
   if (cartItems.length === 0) {
@@ -1289,10 +1301,20 @@ export default function Checkout() {
 
               <button 
                 onClick={handleCheckout}
-                disabled={isProcessing || !shippingMethod || (shippingMethod === 'pickup' && !selectedLocationId) || !acceptTerms || (needsProfileUpdate && (!birthDate || !gender))}
+                disabled={isProcessing || (!hasSubscription && (!shippingMethod || (shippingMethod === 'pickup' && !selectedLocationId))) || !acceptTerms || (needsProfileUpdate && (!birthDate || !gender))}
+                style={{ pointerEvents: isProcessing ? 'none' : 'auto' }}
                 className="w-full bg-primary-blue hover:bg-blue-600 text-white py-4 rounded-xl font-black text-sm uppercase tracking-widest transition-all shadow-lg shadow-primary-blue/30 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
               >
-                {isProcessing ? 'Processando...' : paymentMethod === 'wallet' ? 'Pagar com Carteira Digital' : 'Finalizar Pedido / Pagar'}
+                {isProcessing ? (
+                  <>
+                    <div className="size-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    <span>Processando...</span>
+                  </>
+                ) : paymentMethod === 'wallet' ? (
+                  'Pagar com Carteira Digital'
+                ) : (
+                  'Finalizar Pedido / Pagar'
+                )}
               </button>
               
               <div className="mt-4 flex items-center justify-center gap-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest">

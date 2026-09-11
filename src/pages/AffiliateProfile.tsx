@@ -185,31 +185,17 @@ export default function AffiliateProfile() {
     e.preventDefault();
     if (!user) return;
     
-    // Validação estrita de todos os itens exigidos (dados pessoais, seguro e bancários)
-    const missing: string[] = [];
+    // Validação dos campos essenciais para recebimento e identificação
+    const essentialMissing: string[] = [];
+    if (!formData.full_name?.trim()) essentialMissing.push('Nome Completo');
+    if (!formData.cpf?.trim()) essentialMissing.push('CPF');
+    if (!formData.pix_key?.trim()) essentialMissing.push('Chave PIX');
 
-    if (!formData.full_name?.trim()) missing.push('Nome Completo');
-    if (!formData.whatsapp?.trim()) missing.push('WhatsApp');
-    if (!formData.cpf?.trim()) missing.push('CPF');
-    if (!formData.birth_date?.trim()) missing.push('Data de Nascimento (Seguro)');
-    if (!formData.gender?.trim()) missing.push('Sexo/Gênero (Seguro)');
-    if (!formData.zip_code?.trim()) missing.push('CEP');
-    if (!formData.address?.trim()) missing.push('Endereço');
-    if (!formData.number?.trim()) missing.push('Número');
-    if (!formData.neighborhood?.trim()) missing.push('Bairro');
-    if (!formData.city?.trim()) missing.push('Cidade');
-    if (!formData.state?.trim()) missing.push('Estado (UF)');
-    if (!formData.bank_name?.trim()) missing.push('Banco');
-    if (!formData.pix_type?.trim()) missing.push('Tipo de PIX');
-    if (!formData.pix_key?.trim()) missing.push('Chave PIX');
-    if (!formData.bank_branch?.trim()) missing.push('Agência');
-    if (!formData.bank_account?.trim()) missing.push('Conta com dígito');
-
-    if (missing.length > 0) {
+    if (essentialMissing.length > 0) {
       toast.error(
-        `Cadastro incompleto! Para ativar o seguro coletivo e os repasses bancários, preencha: ${missing.slice(0, 3).join(', ')}${missing.length > 3 ? ` e mais ${missing.length - 3} campos` : ''}.`,
+        `Preencha os campos obrigatórios para repasses: ${essentialMissing.join(', ')}.`,
         { 
-          duration: 6000,
+          duration: 5000,
           style: {
             borderRadius: '16px',
             background: '#0f172a',
@@ -222,16 +208,72 @@ export default function AffiliateProfile() {
       return;
     }
 
+    // Identificar pendências para o seguro coletivo e cadastro completo
+    const missing: string[] = [];
+    if (!formData.whatsapp?.trim()) missing.push('WhatsApp');
+    if (!formData.birth_date?.trim()) missing.push('Data de Nascimento (Seguro)');
+    if (!formData.gender?.trim()) missing.push('Sexo/Gênero (Seguro)');
+    if (!formData.zip_code?.trim()) missing.push('CEP');
+    if (!formData.address?.trim()) missing.push('Endereço');
+    if (!formData.number?.trim()) missing.push('Número');
+    if (!formData.neighborhood?.trim()) missing.push('Bairro');
+    if (!formData.city?.trim()) missing.push('Cidade');
+    if (!formData.state?.trim()) missing.push('Estado (UF)');
+
     setLoading(true);
     setSuccess(false);
     
     try {
+      // Checagem Antifraude: verificar se a chave PIX ou conta bancária já pertence a outro CPF
+      if (formData.pix_key?.trim() || (formData.bank_branch?.trim() && formData.bank_account?.trim())) {
+        const conflict = await businessRules.checkReceivingAccountConflict({
+          userId: user.id,
+          cpf: formData.cpf,
+          cnpj: profile?.cnpj,
+          pixKey: formData.pix_key,
+          bankName: formData.bank_name,
+          bankBranch: formData.bank_branch,
+          bankAccount: formData.bank_account,
+          userName: formData.full_name
+        });
+
+        if (conflict.hasConflict && conflict.conflictingProfile) {
+          // Disparar alerta interno de fraude
+          await businessRules.registerFraudAlert({
+            attemptedUserId: user.id,
+            attemptedName: formData.full_name,
+            attemptedCpf: formData.cpf,
+            attemptedEmail: user.email,
+            existingProfile: conflict.conflictingProfile,
+            conflictType: conflict.conflictType!,
+            attemptedPixKey: formData.pix_key,
+            attemptedBankDetails: `${formData.bank_name} / Ag: ${formData.bank_branch} / CC: ${formData.bank_account}`
+          });
+
+          toast.error(
+            conflict.errorMessage || 'Esta conta de recebimento já está cadastrada para outro titular (CPF).',
+            { 
+              duration: 8000,
+              style: {
+                borderRadius: '16px',
+                background: '#dc2626',
+                color: '#fff',
+                fontWeight: 'bold',
+                fontSize: '12px'
+              }
+            }
+          );
+          setLoading(false);
+          return;
+        }
+      }
+
       await businessRules.updateProfile(user.id, {
         full_name: formData.full_name.trim(),
         whatsapp: formData.whatsapp.trim(),
         cpf: formData.cpf.trim(),
-        birth_date: formData.birth_date,
-        gender: formData.gender,
+        birth_date: formData.birth_date || null,
+        gender: formData.gender || null,
         zip_code: formData.zip_code.replace(/\D/g, ''),
         address: formData.address.trim(),
         number: formData.number.trim(),
@@ -246,7 +288,15 @@ export default function AffiliateProfile() {
       });
       await refreshProfile();
       setSuccess(true);
-      toast.success('Cadastro completo salvo com sucesso! Seguro e dados bancários validados.');
+      
+      if (missing.length > 0) {
+        toast.success(
+          `Chave PIX e dados salvos com sucesso! Lembre-se de preencher ${missing.slice(0, 2).join(', ')} para ativação do seguro coletivo.`,
+          { duration: 5000 }
+        );
+      } else {
+        toast.success('Cadastro completo salvo com sucesso! Seguro e dados bancários validados.');
+      }
       setTimeout(() => setSuccess(false), 4000);
     } catch (error) {
       console.error("Error updating profile:", error);

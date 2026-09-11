@@ -127,6 +127,41 @@ export default function AffiliateResellerFinancial() {
     });
   }, [data?.itemizedTransactions, searchQuery, statusFilter, cycleFilter]);
 
+  const totalsPending = useMemo(() => {
+    const pendingList = filteredItemized.filter((tx: any) => tx.status === 'PENDENTE' || tx.status === 'pending');
+    const totalBruto = pendingList.reduce((acc: number, tx: any) => acc + Number(tx.amount || 0), 0);
+    const totalMensal = pendingList
+      .filter((tx: any) => tx.category?.includes('MENSAL'))
+      .reduce((acc: number, tx: any) => acc + Number(tx.amount || 0), 0);
+    const totalAnual = pendingList
+      .filter((tx: any) => tx.category?.includes('ANUAL'))
+      .reduce((acc: number, tx: any) => acc + Number(tx.amount || 0), 0);
+
+    const uniqueOrders = new Map<string, number>();
+    pendingList.forEach((tx: any) => {
+      const key = tx.orderId && tx.orderId !== '---' ? String(tx.orderId) : `tx-${tx.id}`;
+      const amount = Number(tx.contractAmount || 0);
+      const existing = uniqueOrders.get(key) || 0;
+      if (amount > existing) {
+        uniqueOrders.set(key, amount);
+      } else if (!uniqueOrders.has(key)) {
+        uniqueOrders.set(key, amount);
+      }
+    });
+
+    const totalContratos = Array.from(uniqueOrders.values()).reduce((acc: number, v: number) => acc + v, 0);
+    const percentualRepasse = totalContratos > 0 ? (totalBruto / totalContratos) * 100 : 0;
+
+    return {
+      totalBruto,
+      totalMensal,
+      totalAnual,
+      totalContratos,
+      percentualRepasse,
+      count: pendingList.length
+    };
+  }, [filteredItemized]);
+
   const handleExportPDF = () => {
     if (!data) return;
     const doc = new jsPDF();
@@ -232,10 +267,13 @@ export default function AffiliateResellerFinancial() {
   const nextPayoutDate = isDecember 
     ? new Date(selectedYear, 11, 10) 
     : new Date(selectedYear, selectedMonth + 1, 10);
-  const nextPayoutFormatted = nextPayoutDate.toLocaleDateString('pt-BR');
+  const currentResellerBalance = data?.monthlyToReceive !== undefined ? data.monthlyToReceive : (data?.monthlyEarned ?? 0);
 
   return (
-    <AffiliateLayout title="Financeiro do Revendedor">
+    <AffiliateLayout 
+      title="Financeiro do Revendedor"
+      customBalance={currentResellerBalance}
+    >
       <div className="p-8 lg:p-12 space-y-10">
 
         {/* Top Header */}
@@ -343,7 +381,7 @@ export default function AffiliateResellerFinancial() {
               </div>
            </motion.div>
 
-           {/* Card 2: Cashback Valor Bruto Acumulado */}
+           {/* Card 2: Cashback Anual Valor Bruto Acumulado */}
            <motion.div 
              whileHover={{ y: -4 }}
              onClick={() => {
@@ -358,7 +396,7 @@ export default function AffiliateResellerFinancial() {
               
               <div className="relative z-10 flex justify-between items-start">
                  <div>
-                    <p className="text-[10px] font-black text-blue-200 uppercase tracking-widest">CASHBACK VALOR BRUTO ACUMULADO</p>
+                    <p className="text-[10px] font-black text-blue-200 uppercase tracking-widest">CASHBACK ANUAL VALOR BRUTO ACUMULADO</p>
                  </div>
                  <div className={`size-8 rounded-lg flex items-center justify-center border transition-colors ${
                    cycleFilter === 'anual' ? 'bg-white text-indigo-600 border-white' : 'bg-white/10 text-white border-white/10'
@@ -555,6 +593,41 @@ export default function AffiliateResellerFinancial() {
 
             return (
               <>
+                {/* Card de Resumo de Comissões e Repasse de Revenda */}
+                <div className="bg-slate-950 text-white p-6 rounded-3xl mb-6 border border-slate-800 shadow-2xl">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4 border-b border-slate-800 pb-3">
+                    <div className="flex items-center gap-2">
+                      <span className="size-2 rounded-full bg-purple-400 animate-pulse" />
+                      <span className="text-[10px] font-black uppercase tracking-widest text-slate-300">
+                        Resumo de Comissões e Repasse de Revenda ({MONTH_NAMES[selectedMonth]}/{selectedYear})
+                      </span>
+                    </div>
+                    <span className="text-[9px] font-mono text-slate-400 uppercase tracking-widest">
+                      Valores brutos sem descontos
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+                    <div className="space-y-1">
+                      <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Valor Total dos Contratos</p>
+                      <p className="text-xl font-black font-mono text-white tracking-tight">
+                        {totalsPending.totalContratos.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                      </p>
+                    </div>
+                    <div className="space-y-1">
+                      <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Percentual de Repasse</p>
+                      <p className="text-xl font-black font-mono text-purple-400 tracking-tight">
+                        {totalsPending.percentualRepasse > 0 ? `${totalsPending.percentualRepasse.toFixed(2)}%` : '---'}
+                      </p>
+                    </div>
+                    <div className="space-y-1">
+                      <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Valor Bruto da Comissão</p>
+                      <p className="text-xl font-black font-mono text-emerald-400 tracking-tight">
+                        {totalsPending.totalBruto.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
                 <div className="overflow-x-auto">
                   {viewMode === 'itemized' ? (
                     /* Tabela Detalhada com Nível REG e Categoria/Período */
@@ -563,11 +636,13 @@ export default function AffiliateResellerFinancial() {
                         <tr className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
                           <th className="px-5 py-2">ID DO PEDIDO</th>
                           <th className="px-5 py-2">AFILIADO / ORIGEM</th>
-                          <th className="px-5 py-2 text-center">NÍVEL</th>
-                          <th className="px-5 py-2 text-center">CATEGORIA / PERÍODO</th>
-                          <th className="px-5 py-2">DATA</th>
-                          <th className="px-5 py-2 text-right">VALOR</th>
-                          <th className="px-5 py-2 text-center">STATUS</th>
+                          <th className="px-3 py-2 text-center">NÍVEL</th>
+                          <th className="px-4 py-2 text-center">CATEGORIA / PERÍODO</th>
+                          <th className="px-4 py-2">DATA</th>
+                          <th className="px-5 py-2 text-right">VALOR DO CONTRATO</th>
+                          <th className="px-4 py-2 text-center">PERCENTUAL</th>
+                          <th className="px-5 py-2 text-right text-emerald-700">VALOR BRUTO COMISSÃO</th>
+                          <th className="px-4 py-2 text-center">STATUS</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -582,12 +657,12 @@ export default function AffiliateResellerFinancial() {
                             <td className="px-5 py-4 font-bold text-slate-700">
                               {tx.affiliateName}
                             </td>
-                            <td className="px-5 py-4 text-center">
+                            <td className="px-3 py-4 text-center">
                               <span className="px-2.5 py-1 bg-purple-100 text-purple-700 font-black rounded-lg text-[9px] tracking-wider uppercase border border-purple-200/60">
                                 REG
                               </span>
                             </td>
-                            <td className="px-5 py-4 text-center">
+                            <td className="px-4 py-4 text-center">
                               <span className={`px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-wider ${
                                 tx.category.includes('MENSAL')
                                   ? 'bg-amber-50 text-amber-600 border border-amber-100'
@@ -596,24 +671,50 @@ export default function AffiliateResellerFinancial() {
                                 {tx.category}
                               </span>
                             </td>
-                            <td className="px-5 py-4 text-slate-500 text-[11px]">
+                            <td className="px-4 py-4 text-slate-500 text-[11px]">
                               {new Date(tx.date).toLocaleDateString('pt-BR')}
                             </td>
-                            <td className="px-5 py-4 text-right font-mono font-black text-emerald-600">
-                              +R$ {tx.amount.toFixed(2).replace('.', ',')}
+                            <td className="px-5 py-4 text-right font-mono font-bold text-slate-600 text-xs">
+                              {Number(tx.contractAmount || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                             </td>
-                            <td className="px-5 py-4 text-center rounded-r-2xl">
+                            <td className="px-4 py-4 text-center font-mono font-bold text-indigo-600 text-xs">
+                              {Number(tx.percentage || 0).toFixed(2)}%
+                            </td>
+                            <td className="px-5 py-4 text-right font-mono font-black text-emerald-600">
+                              +R$ {Number(tx.amount || 0).toFixed(2).replace('.', ',')}
+                            </td>
+                            <td className="px-4 py-4 text-center rounded-r-2xl">
                               <span className={`inline-flex items-center gap-1 text-[9px] font-black px-2.5 py-1 rounded-full uppercase tracking-wider ${
-                                tx.status === 'PAGO'
+                                tx.status === 'PAGO' || tx.status === 'completed' || tx.status === 'pago'
                                   ? 'bg-emerald-100 text-emerald-800'
                                   : 'bg-amber-100 text-amber-800'
                               }`}>
-                                {tx.status}
+                                {tx.status === 'PAGO' || tx.status === 'completed' || tx.status === 'pago' ? 'Pago' : 'Pendente'}
                               </span>
                             </td>
                           </tr>
                         ))}
                       </tbody>
+                      <tfoot>
+                        <tr className="bg-slate-950 text-white font-black uppercase tracking-widest text-[10px]">
+                          <td colSpan={5} className="px-6 py-4 rounded-l-2xl">
+                            <div className="flex items-center gap-2">
+                              <span className="size-2 rounded-full bg-emerald-400" />
+                              <span>TOTAIS A RECEBER (PENDENTE)</span>
+                            </div>
+                          </td>
+                          <td className="px-5 py-4 text-right font-mono text-xs text-slate-200">
+                            {totalsPending.totalContratos.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                          </td>
+                          <td className="px-4 py-4 text-center font-mono text-xs text-indigo-300">
+                            {totalsPending.percentualRepasse > 0 ? `${totalsPending.percentualRepasse.toFixed(2)}%` : '---'}
+                          </td>
+                          <td className="px-5 py-4 text-right font-mono text-sm text-emerald-400 font-black">
+                            {totalsPending.totalBruto.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                          </td>
+                          <td className="px-4 py-4 rounded-r-2xl"></td>
+                        </tr>
+                      </tfoot>
                     </table>
                   ) : (
                     /* Tabela Consolidada por Pedido */
@@ -669,6 +770,29 @@ export default function AffiliateResellerFinancial() {
                           </tr>
                         ))}
                       </tbody>
+                      <tfoot>
+                        <tr className="bg-slate-950 text-white font-black uppercase tracking-widest text-[10px]">
+                          <td colSpan={3} className="px-6 py-4 rounded-l-2xl">
+                            <div className="flex items-center gap-2">
+                              <span className="size-2 rounded-full bg-emerald-400" />
+                              <span>TOTAIS A RECEBER (PENDENTE)</span>
+                            </div>
+                          </td>
+                          <td className="px-5 py-4 text-right font-mono text-xs text-slate-200">
+                            {totalsPending.totalContratos.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                          </td>
+                          <td className="px-5 py-4 text-right font-mono text-xs text-amber-300">
+                            {totalsPending.totalMensal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                          </td>
+                          <td className="px-5 py-4 text-right font-mono text-xs text-blue-300">
+                            {totalsPending.totalAnual.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                          </td>
+                          <td className="px-5 py-4 text-right font-mono text-sm text-emerald-400 font-black">
+                            {totalsPending.totalBruto.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                          </td>
+                          <td className="px-4 py-4 rounded-r-2xl"></td>
+                        </tr>
+                      </tfoot>
                     </table>
                   )}
                 </div>

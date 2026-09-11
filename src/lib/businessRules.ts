@@ -1337,6 +1337,162 @@ export const businessRules = {
     }
   },
 
+  /**
+   * Plano de Carreira: Calcula o progresso do afiliado rumo a Revendedor Regional
+   * Regra: 3 indicados diretos (G1) ativos com plano/seguro vigente promovem o afiliado a Revendedor Regional.
+   */
+  getCareerProgress: async (userId: string) => {
+    try {
+      if (!userId || userId === 'user123') {
+        return {
+          activeG1Count: 0,
+          totalG1Count: 0,
+          targetCount: 3,
+          isReseller: false,
+          remaining: 3,
+          percent: 0,
+          promoted: false
+        };
+      }
+
+      // 1. Obter perfil do usuário para checar papel atual
+      const { data: userProfile } = await supabase
+        .from('profiles')
+        .select('id, role, reseller_id')
+        .eq('id', userId)
+        .single();
+
+      const isReseller = userProfile?.role === 'regional_reseller';
+
+      // 2. Buscar indicados diretos (G1)
+      const { data: directReferrals, error: refError } = await supabase
+        .from('profiles')
+        .select('id, full_name, status, created_at')
+        .eq('referred_by', userId);
+
+      if (refError || !directReferrals || directReferrals.length === 0) {
+        return {
+          activeG1Count: 0,
+          totalG1Count: 0,
+          targetCount: 3,
+          isReseller,
+          remaining: isReseller ? 0 : 3,
+          percent: isReseller ? 100 : 0,
+          promoted: false
+        };
+      }
+
+      const referralIds = directReferrals
+        .filter(r => r.status !== 'blocked')
+        .map(r => r.id);
+
+      if (referralIds.length === 0) {
+        return {
+          activeG1Count: 0,
+          totalG1Count: directReferrals.length,
+          targetCount: 3,
+          isReseller,
+          remaining: isReseller ? 0 : 3,
+          percent: isReseller ? 100 : 0,
+          promoted: false
+        };
+      }
+
+      // 3. Buscar indicados G1 que estão ativos:
+      // A) Assinaturas ativas e vigentes na tabela subscriptions
+      const now = new Date();
+      const { data: activeSubs } = await supabase
+        .from('subscriptions')
+        .select('profile_id, status, end_date')
+        .in('profile_id', referralIds)
+        .eq('status', 'active');
+
+      // B) Pedidos pagos ou concluídos de licenciamento na tabela orders
+      const { data: paidOrders } = await supabase
+        .from('orders')
+        .select('customer_id, status, items, order_date, created_at')
+        .in('customer_id', referralIds)
+        .in('status', ['Pago', 'Pago, Aguardando Retirada', 'Concluído']);
+
+      const activeUserIds = new Set<string>();
+
+      // Adiciona indicados com assinatura ativa válida
+      (activeSubs || []).forEach(s => {
+        if (new Date(s.end_date) >= now) {
+          activeUserIds.add(s.profile_id);
+        }
+      });
+
+      // Adiciona indicados com pedido pago/concluído recente (vigente em até 365 dias)
+      (paidOrders || []).forEach(o => {
+        const orderDate = new Date(o.order_date || o.created_at);
+        const daysDiff = (now.getTime() - orderDate.getTime()) / (1000 * 60 * 60 * 24);
+        if (daysDiff <= 365) {
+          activeUserIds.add(o.customer_id);
+        }
+      });
+
+      // Adiciona indicados cujo status cadastral já está como 'active'
+      directReferrals.forEach(r => {
+        if (r.status === 'active') {
+          activeUserIds.add(r.id);
+        }
+      });
+
+      const activeG1Count = activeUserIds.size;
+      const targetCount = 3;
+      let promoted = false;
+
+      // 4. Promoção automática se atingiu 3 ou mais ativos e ainda for afiliado/cliente
+      if (activeG1Count >= targetCount && userProfile && (userProfile.role === 'affiliate' || userProfile.role === 'customer')) {
+        const { error: updateError } = await supabase
+          .from('profiles')
+          .update({
+            role: 'regional_reseller',
+            reseller_id: userProfile.reseller_id || userProfile.id,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', userId);
+
+        if (!updateError) {
+          promoted = true;
+          try {
+            if (typeof window !== 'undefined' && window.localStorage) {
+              window.localStorage.setItem(`celebrate_career_${userId}`, 'true');
+            }
+          } catch (e) {
+            console.error('Erro ao salvar flag de celebração:', e);
+          }
+        }
+      }
+
+      const currentIsReseller = isReseller || promoted;
+      const percent = currentIsReseller ? 100 : Math.min(100, Math.round((activeG1Count / targetCount) * 100));
+      const remaining = currentIsReseller ? 0 : Math.max(0, targetCount - activeG1Count);
+
+      return {
+        activeG1Count,
+        totalG1Count: directReferrals.length,
+        targetCount,
+        isReseller: currentIsReseller,
+        remaining,
+        percent,
+        promoted
+      };
+    } catch (error) {
+      console.error('Erro ao calcular progresso de carreira:', error);
+      return {
+        activeG1Count: 0,
+        totalG1Count: 0,
+        targetCount: 3,
+        isReseller: false,
+        remaining: 3,
+        percent: 0,
+        promoted: false
+      };
+    }
+  },
+
   getAffiliateNetwork: async (userId: string) => {
     try {
       if (!userId || userId === 'user123') return [];

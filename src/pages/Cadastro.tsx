@@ -122,9 +122,15 @@ export default function Cadastro() {
             // A) Se tem indicação de patrocinador MMN:
             if (refParam) {
                 setReferralCode(refParam);
-                setIsReferralLocked(true);
+                setIsReferralLocked(false);
                 localStorage.setItem('urba_referral', refParam);
                 fetchReferrerName(refParam, !revParam);
+            } else {
+                setReferralCode('');
+                setReferrerName(null);
+                setReferrerId(null);
+                setIsReferralLocked(false);
+                setIsSameAsReseller(false);
             }
 
             // B) Se tem indicação de revendedor regional:
@@ -132,8 +138,8 @@ export default function Cadastro() {
                 setResellerCode(revParam);
                 setIsResellerLocked(true);
                 localStorage.setItem('urba_reseller', revParam);
-                // Se NÃO tem outro patrocinador especificado, o próprio revendedor regional é também o patrocinador MMN!
-                fetchResellerName(revParam, !refParam);
+                // Nunca sobrescrever o patrocinador MMN automaticamente ao entrar pelo link de revendedor
+                fetchResellerName(revParam, false);
             }
         } else {
             // Acesso direto pelo site (sem link de indicação)
@@ -192,8 +198,8 @@ export default function Cadastro() {
                 setReferrerId(sponsor.id);
                 setIsSearching(false);
 
-                // Se autoFillReseller estiver ativo e o patrocinador tiver um revendedor regional vinculado:
-                if (autoFillReseller) {
+                // Se autoFillReseller estiver ativo e o patrocinador tiver um revendedor regional vinculado (e ainda não houver revendedor selecionado):
+                if (autoFillReseller && !resellerId) {
                     if (sponsor.role === 'regional_reseller') {
                         const rCode = sponsor.referral_code || sponsor.id;
                         setResellerCode(rCode);
@@ -265,15 +271,6 @@ export default function Cadastro() {
                 setResellerName(reseller.full_name);
                 setResellerId(reseller.id);
                 setIsSearchingReseller(false);
-
-                // Se autoFillSponsor estiver ativo (pessoa entrou por link de revendedor sem outro ref),
-                // o próprio revendedor regional já preenche e confirma o Patrocinador MMN!
-                if (autoFillSponsor) {
-                    setReferralCode(reseller.referral_code || codeOrId);
-                    setReferrerName(reseller.full_name);
-                    setReferrerId(reseller.id);
-                    setIsReferralLocked(true);
-                }
                 return;
             }
 
@@ -606,6 +603,7 @@ export default function Cadastro() {
                 password,
                 options: {
                     data: {
+                        email: email.trim().toLowerCase(),
                         person_type: personType,
                         full_name: finalDisplayName,
                         store_name: personType === 'PJ' ? companyName.trim() : undefined,
@@ -647,6 +645,7 @@ export default function Cadastro() {
             if (data?.user?.id) {
                 const profilePayload: any = {
                     full_name: finalDisplayName,
+                    email: email.trim().toLowerCase(),
                     whatsapp: whatsapp,
                     cpf: finalCpf,
                     role: 'affiliate',
@@ -1449,35 +1448,66 @@ export default function Cadastro() {
                                     <div className="flex flex-col gap-2">
                                         <div className="flex justify-between items-center px-1">
                                             <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">
-                                                {isIndicatedViaLink || referralCode ? 'Cód. Patrocinador MMN' : 'Cód. Patrocinador MMN (Opcional)'}
+                                                Cód. Patrocinador MMN (Opcional)
                                             </label>
                                             {isSameAsReseller && (
                                                 <span className="text-[9px] font-black text-amber-500 uppercase tracking-widest">
                                                     Mesmo do Revendedor
                                                 </span>
                                             )}
-                                            {isIndicatedViaLink && referralCode && (
+                                            {searchParams.get('ref') && referralCode && !isSameAsReseller && (
                                                 <span className="text-[9px] font-black text-emerald-500 uppercase tracking-widest">
                                                     Link de Indicação
                                                 </span>
                                             )}
                                         </div>
+
+                                        {/* Botão de 1 clique para usar o mesmo código do Revendedor */}
+                                        {resellerCode && (
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    if (isSameAsReseller) {
+                                                        setIsSameAsReseller(false);
+                                                        setReferralCode('');
+                                                        setReferrerName(null);
+                                                        setReferrerId(null);
+                                                    } else {
+                                                        setIsSameAsReseller(true);
+                                                        setReferralCode(resellerCode);
+                                                        setReferrerName(resellerName);
+                                                        setReferrerId(resellerId);
+                                                    }
+                                                }}
+                                                className={`flex items-center gap-2 px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all border text-left ${
+                                                    isSameAsReseller
+                                                        ? 'bg-amber-50 text-amber-800 border-amber-300 shadow-sm'
+                                                        : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
+                                                }`}
+                                            >
+                                                <span className={`size-3.5 rounded border flex items-center justify-center shrink-0 ${isSameAsReseller ? 'bg-amber-500 border-amber-500 text-white font-black text-[9px]' : 'border-slate-400 bg-white'}`}>
+                                                    {isSameAsReseller ? '✓' : ''}
+                                                </span>
+                                                <span>Sou indicado direto deste Revendedor Regional</span>
+                                            </button>
+                                        )}
+
                                         <div className="relative group">
                                             <TrendingUp className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300" size={18} />
                                             <input
                                                 type="text"
                                                 value={referralCode}
                                                 onChange={(e) => {
-                                                    if (isReferralLocked || isSameAsReseller) return;
                                                     const val = e.target.value;
                                                     setReferralCode(val);
+                                                    if (isSameAsReseller) setIsSameAsReseller(false);
                                                     fetchReferrerName(val, false);
                                                 }}
-                                                disabled={isReferralLocked || isSameAsReseller}
-                                                placeholder={isIndicatedViaLink ? "Código do Patrocinador" : "EX: A1B2C3 ou CPF (ou em branco)"}
-                                                className={`w-full pl-12 pr-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500/50 transition-all font-bold text-midnight placeholder:text-slate-300 uppercase ${(isReferralLocked || isSameAsReseller) ? 'opacity-70 cursor-not-allowed bg-slate-100/50' : ''}`}
+                                                placeholder="EX: A1B2C3 ou CPF (ou em branco)"
+                                                className="w-full pl-12 pr-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500/50 transition-all font-bold text-midnight placeholder:text-slate-300 uppercase"
                                             />
                                         </div>
+
                                         {referrerName ? (
                                             <motion.div
                                                 initial={{ opacity: 0, y: -10 }}
@@ -1492,14 +1522,24 @@ export default function Cadastro() {
                                                     <p className="text-xs font-black text-midnight uppercase truncate">{referrerName}</p>
                                                 </div>
                                             </motion.div>
-                                        ) : isSearching && (
+                                        ) : isSearching ? (
                                             <div className="mt-1 ml-1 flex items-center gap-2">
                                                 <div className="size-1.5 rounded-full bg-slate-200 animate-pulse" />
                                                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest italic">
                                                     Buscando patrocinador...
                                                 </p>
                                             </div>
-                                        )}
+                                        ) : !referralCode ? (
+                                            <div className="mt-1 p-3 bg-slate-50 border border-slate-200/80 rounded-2xl flex items-center gap-3">
+                                                <div className="size-8 rounded-xl bg-slate-200/80 text-slate-600 flex items-center justify-center shrink-0">
+                                                    <Building2 size={16} />
+                                                </div>
+                                                <div className="min-w-0">
+                                                    <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest leading-none mb-0.5">Sem Indicador Informado</p>
+                                                    <p className="text-xs font-bold text-slate-600 truncate">Vínculo direto com a empresa: Sic Comércio</p>
+                                                </div>
+                                            </div>
+                                        ) : null}
                                     </div>
 
                                     {/* Código do Revendedor Regional */}
@@ -1509,9 +1549,20 @@ export default function Cadastro() {
                                                 {isIndicatedViaLink || resellerCode ? 'Cód. Revendedor Regional' : 'Cód. Revendedor Regional (Opcional)'}
                                             </label>
                                             {isIndicatedViaLink && resellerCode && (
-                                                <span className="text-[9px] font-black text-purple-500 uppercase tracking-widest">
-                                                    Polo Vinculado
-                                                </span>
+                                                <div className="flex items-center gap-2">
+                                                    <span className="text-[9px] font-black text-purple-500 uppercase tracking-widest">
+                                                        Polo Vinculado
+                                                    </span>
+                                                    {isResellerLocked && (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setIsResellerLocked(false)}
+                                                            className="text-[9px] font-bold text-slate-400 hover:text-purple-600 underline"
+                                                        >
+                                                            Alterar
+                                                        </button>
+                                                    )}
+                                                </div>
                                             )}
                                         </div>
                                         <div className="relative group">

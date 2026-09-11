@@ -59,6 +59,12 @@ export default function Cadastro() {
     const [password, setPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
 
+    const maxBirthDate = (() => {
+        const d = new Date();
+        d.setFullYear(d.getFullYear() - 18);
+        return d.toISOString().split('T')[0];
+    })();
+
     // Form States (Pessoa Jurídica e Titular do Seguro)
     const [companyName, setCompanyName] = useState('');
     const [cnpj, setCnpj] = useState('');
@@ -460,6 +466,12 @@ export default function Cadastro() {
                 ? "Data de nascimento e sexo do titular do seguro são obrigatórios para a apólice MBM."
                 : "Data de nascimento e sexo são obrigatórios para a apólice de seguro."
             );
+            setLoading(false);
+            return;
+        }
+
+        if (!businessRules.isAtLeast18YearsOld(birthDate)) {
+            setError("É necessário ter pelo menos 18 anos completos para se cadastrar (exigência da seguradora MBM).");
             setLoading(false);
             return;
         }
@@ -995,16 +1007,22 @@ export default function Cadastro() {
                                                 </div>
                                             </div>
                                             <div className="flex flex-col gap-2">
-                                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Data de Nascimento (Titular)</label>
+                                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Data de Nascimento (Titular - Mín. 18 anos)</label>
                                                 <div className="relative group">
                                                     <input
                                                         required
                                                         type="date"
+                                                        max={maxBirthDate}
                                                         value={birthDate}
                                                         onChange={(e) => setBirthDate(e.target.value)}
                                                         className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500/50 transition-all font-bold text-midnight"
                                                     />
                                                 </div>
+                                                {birthDate && !businessRules.isAtLeast18YearsOld(birthDate) && (
+                                                    <span className="text-[10px] font-bold text-red-500 ml-1">
+                                                        A seguradora MBM exige ter 18 anos completos.
+                                                    </span>
+                                                )}
                                             </div>
                                             <div className="flex flex-col gap-2">
                                                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Sexo (Titular)</label>
@@ -1150,15 +1168,21 @@ export default function Cadastro() {
 
                                                 <div className="flex flex-col gap-1.5">
                                                     <label className="text-[10px] font-black text-slate-600 uppercase tracking-widest ml-1">
-                                                        Data de Nascimento do Titular *
+                                                        Data de Nascimento do Titular * (Mín. 18 anos)
                                                     </label>
                                                     <input
                                                         required
                                                         type="date"
+                                                        max={maxBirthDate}
                                                         value={birthDate}
                                                         onChange={(e) => setBirthDate(e.target.value)}
                                                         className="w-full px-5 py-3.5 bg-white border border-amber-200 rounded-2xl focus:outline-none focus:ring-4 focus:ring-amber-500/10 focus:border-amber-500/50 transition-all font-bold text-midnight text-sm shadow-sm"
                                                     />
+                                                    {birthDate && !businessRules.isAtLeast18YearsOld(birthDate) && (
+                                                        <span className="text-[10px] font-bold text-red-500 ml-1">
+                                                            A seguradora MBM exige ter 18 anos completos.
+                                                        </span>
+                                                    )}
                                                 </div>
 
                                                 <div className="flex flex-col gap-1.5">

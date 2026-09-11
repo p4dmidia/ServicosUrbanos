@@ -96,15 +96,25 @@ export default function Checkout() {
 
   useEffect(() => {
     if (profile) {
+      if (profile.birth_date) setBirthDate(profile.birth_date);
+      if (profile.gender) setGender(profile.gender);
+
       if (!profile.birth_date || !profile.gender) {
         setNeedsProfileUpdate(true);
-        if (profile.birth_date) setBirthDate(profile.birth_date);
-        if (profile.gender) setGender(profile.gender);
       } else {
         setNeedsProfileUpdate(false);
       }
     }
   }, [profile]);
+
+  const maxBirthDate = (() => {
+    const d = new Date();
+    d.setFullYear(d.getFullYear() - 18);
+    return d.toISOString().split('T')[0];
+  })();
+
+  const effectiveBirthDate = birthDate || profile?.birth_date;
+  const isUnderage = effectiveBirthDate ? !businessRules.isAtLeast18YearsOld(effectiveBirthDate) : false;
 
   const [availableLocations, setAvailableLocations] = useState<any[]>([]);
   const [selectedLocationId, setSelectedLocationId] = useState<string>('');
@@ -415,6 +425,12 @@ export default function Checkout() {
 
     if (needsProfileUpdate && (!birthDate || !gender)) {
       toast.error('Por favor, preencha sua data de nascimento e sexo.');
+      return;
+    }
+
+    const currentBirthDate = birthDate || profile.birth_date;
+    if (currentBirthDate && !businessRules.isAtLeast18YearsOld(currentBirthDate)) {
+      toast.error('Compra bloqueada: é necessário ter pelo menos 18 anos completos (exigência da seguradora MBM).');
       return;
     }
 
@@ -1252,6 +1268,19 @@ export default function Checkout() {
                 )}
               </div>
 
+              {/* Bloqueio de Compra por Idade Mínima */}
+              {isUnderage && (
+                <div className="bg-rose-50 border border-rose-200 rounded-2xl p-5 mb-4 space-y-2">
+                  <div className="flex items-center gap-2 text-rose-700 font-black text-xs uppercase tracking-wider">
+                    <AlertCircle size={16} className="text-rose-600 shrink-0" />
+                    <span>Compra Bloqueada (Menor de 18 anos)</span>
+                  </div>
+                  <p className="text-xs text-rose-800 leading-relaxed font-medium">
+                    A seguradora <strong>MBM</strong> só aceita titulares com <strong>18 anos completos</strong> para emissão da apólice de seguro obrigatória. Por esse motivo, compras e adesões no site estão restritas a maiores de idade.
+                  </p>
+                </div>
+              )}
+
               {/* Coleta de Dados Adicionais se o perfil estiver incompleto */}
               {needsProfileUpdate && (
                 <div className="bg-slate-50 border border-slate-100 rounded-2xl p-5 mb-4 space-y-4">
@@ -1259,14 +1288,22 @@ export default function Checkout() {
                     * Informações obrigatórias adicionais para a ativação do seu seguro de acidentes pessoais junto à MBM Seguradora:
                   </p>
                   <div className="flex flex-col gap-2">
-                    <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Data de Nascimento</label>
+                    <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">
+                      Data de Nascimento (Mínimo 18 anos)
+                    </label>
                     <input
                       required
                       type="date"
+                      max={maxBirthDate}
                       value={birthDate}
                       onChange={(e) => setBirthDate(e.target.value)}
                       className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-blue/20 font-bold text-xs text-midnight"
                     />
+                    {birthDate && !businessRules.isAtLeast18YearsOld(birthDate) && (
+                      <span className="text-[10px] font-bold text-rose-600 ml-1">
+                        A seguradora MBM exige idade mínima de 18 anos completos.
+                      </span>
+                    )}
                   </div>
                   <div className="flex flex-col gap-2">
                     <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Sexo</label>
@@ -1301,15 +1338,21 @@ export default function Checkout() {
 
               <button 
                 onClick={handleCheckout}
-                disabled={isProcessing || (!hasSubscription && (!shippingMethod || (shippingMethod === 'pickup' && !selectedLocationId))) || !acceptTerms || (needsProfileUpdate && (!birthDate || !gender))}
-                style={{ pointerEvents: isProcessing ? 'none' : 'auto' }}
-                className="w-full bg-primary-blue hover:bg-blue-600 text-white py-4 rounded-xl font-black text-sm uppercase tracking-widest transition-all shadow-lg shadow-primary-blue/30 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                disabled={isProcessing || isUnderage || (!hasSubscription && (!shippingMethod || (shippingMethod === 'pickup' && !selectedLocationId))) || !acceptTerms || (needsProfileUpdate && (!birthDate || !gender))}
+                style={{ pointerEvents: (isProcessing || isUnderage) ? 'none' : 'auto' }}
+                className={`w-full py-4 rounded-xl font-black text-sm uppercase tracking-widest transition-all shadow-lg flex items-center justify-center gap-2 ${
+                  isUnderage 
+                    ? 'bg-rose-600/90 text-white cursor-not-allowed shadow-rose-600/20' 
+                    : 'bg-primary-blue hover:bg-blue-600 text-white shadow-primary-blue/30 disabled:opacity-50 disabled:cursor-not-allowed'
+                }`}
               >
                 {isProcessing ? (
                   <>
                     <div className="size-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                     <span>Processando...</span>
                   </>
+                ) : isUnderage ? (
+                  'Compra Bloqueada (Menor de 18 anos)'
                 ) : paymentMethod === 'wallet' ? (
                   'Pagar com Carteira Digital'
                 ) : (

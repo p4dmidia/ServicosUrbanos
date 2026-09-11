@@ -258,6 +258,31 @@ export function calculateTaxDeductions(bruto: number, isPjUser: boolean = false)
 }
 
 export const businessRules = {
+  // Validação de Maioridade (Seguradora MBM exige 18 anos completos)
+  isAtLeast18YearsOld: (birthDate: string | Date | null | undefined): boolean => {
+    if (!birthDate) return false;
+    let birth: Date;
+    if (typeof birthDate === 'string') {
+      const clean = birthDate.split('T')[0].trim();
+      const parts = clean.split('-');
+      if (parts.length === 3) {
+        birth = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+      } else {
+        birth = new Date(birthDate);
+      }
+    } else {
+      birth = new Date(birthDate);
+    }
+    if (isNaN(birth.getTime())) return false;
+    const today = new Date();
+    let age = today.getFullYear() - birth.getFullYear();
+    const m = today.getMonth() - birth.getMonth();
+    if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) {
+      age--;
+    }
+    return age >= 18;
+  },
+
   // Usuário Atual
   getCurrentUser: async (): Promise<MerchantUser | null> => {
     const { data: { user } } = await supabase.auth.getUser();

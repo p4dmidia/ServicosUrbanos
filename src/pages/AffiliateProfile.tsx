@@ -51,6 +51,12 @@ export default function AffiliateProfile() {
     bank_account: ''
   });
 
+  const maxBirthDate = (() => {
+    const d = new Date();
+    d.setFullYear(d.getFullYear() - 18);
+    return d.toISOString().split('T')[0];
+  })();
+
   useEffect(() => {
     if (profile) {
       setFormData({
@@ -212,6 +218,10 @@ export default function AffiliateProfile() {
     const missing: string[] = [];
     if (!formData.whatsapp?.trim()) missing.push('WhatsApp');
     if (!formData.birth_date?.trim()) missing.push('Data de Nascimento (Seguro)');
+    if (formData.birth_date && !businessRules.isAtLeast18YearsOld(formData.birth_date)) {
+      toast.error('A seguradora MBM exige idade mínima de 18 anos completos. Por favor, insira uma data de nascimento válida.');
+      return;
+    }
     if (!formData.gender?.trim()) missing.push('Sexo/Gênero (Seguro)');
     if (!formData.zip_code?.trim()) missing.push('CEP');
     if (!formData.address?.trim()) missing.push('Endereço');
@@ -522,12 +532,18 @@ export default function AffiliateProfile() {
                   <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300" size={18} />
                   <input 
                     type="date" 
+                    max={maxBirthDate}
                     value={formData.birth_date}
                     onChange={(e) => setFormData({...formData, birth_date: e.target.value})}
                     className="w-full bg-white border border-slate-200 px-12 py-3.5 rounded-2xl font-bold text-midnight focus:outline-none focus:border-primary-blue focus:ring-4 focus:ring-primary-blue/5 text-sm"
                     required
                   />
                 </div>
+                {formData.birth_date && !businessRules.isAtLeast18YearsOld(formData.birth_date) && (
+                  <span className="text-[10px] font-bold text-rose-600 ml-1 block">
+                    A seguradora MBM exige idade mínima de 18 anos completos.
+                  </span>
+                )}
               </div>
 
               {/* Sexo / Gênero (Seguro) */}

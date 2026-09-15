@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   ShoppingBag, 
   Search, 
@@ -54,6 +54,9 @@ export default function AdminOrders() {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('Todos');
+  const [periodFilter, setPeriodFilter] = useState<'all' | 'today' | 'yesterday' | '7days' | '30days' | 'this_month' | 'last_month' | 'custom'>('all');
+  const [customStartDate, setCustomStartDate] = useState('');
+  const [customEndDate, setCustomEndDate] = useState('');
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
@@ -254,16 +257,152 @@ export default function AdminOrders() {
     }
   };
 
-  const filteredOrders = orders.filter(o => {
-    const matchesSearch = o.id.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                          o.customer_name.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesStatus = statusFilter === 'Todos' 
-      ? true 
-      : statusFilter === 'Pago'
-        ? (o.status === 'Pago' || o.status === 'Pago, Aguardando Retirada' || o.status === 'Concluído')
-        : o.status === statusFilter;
-    return matchesSearch && matchesStatus;
-  });
+  const getLocalDateString = (d: Date) => {
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
+  const getOrderLocalDate = (createdAt: string) => {
+    if (!createdAt) return '';
+    const d = new Date(createdAt);
+    if (isNaN(d.getTime())) return '';
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
+  const filteredOrders = useMemo(() => {
+    const now = new Date();
+    const todayStr = getLocalDateString(now);
+
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    const yesterdayStr = getLocalDateString(yesterday);
+
+    const d7 = new Date();
+    d7.setDate(d7.getDate() - 6);
+    const d7Str = getLocalDateString(d7);
+
+    const d30 = new Date();
+    d30.setDate(d30.getDate() - 29);
+    const d30Str = getLocalDateString(d30);
+
+    const firstDayThisMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const lastDayThisMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+    const firstDayThisMonthStr = getLocalDateString(firstDayThisMonth);
+    const lastDayThisMonthStr = getLocalDateString(lastDayThisMonth);
+
+    const firstDayLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const lastDayLastMonth = new Date(now.getFullYear(), now.getMonth(), 0);
+    const firstDayLastMonthStr = getLocalDateString(firstDayLastMonth);
+    const lastDayLastMonthStr = getLocalDateString(lastDayLastMonth);
+
+    return orders.filter(o => {
+      const matchesSearch = (o.id || '').toLowerCase().includes(searchTerm.toLowerCase()) || 
+                            (o.customer_name || '').toLowerCase().includes(searchTerm.toLowerCase());
+      
+      const matchesStatus = statusFilter === 'Todos' 
+        ? true 
+        : statusFilter === 'Pago'
+          ? (o.status === 'Pago' || o.status === 'Pago, Aguardando Retirada' || o.status === 'Concluído')
+          : o.status === statusFilter;
+
+      if (!matchesSearch || !matchesStatus) return false;
+
+      // Filtro de período
+      if (periodFilter === 'all') return true;
+
+      const orderDate = getOrderLocalDate(o.created_at);
+      if (!orderDate) return true;
+
+      switch (periodFilter) {
+        case 'today':
+          return orderDate === todayStr;
+        case 'yesterday':
+          return orderDate === yesterdayStr;
+        case '7days':
+          return orderDate >= d7Str && orderDate <= todayStr;
+        case '30days':
+          return orderDate >= d30Str && orderDate <= todayStr;
+        case 'this_month':
+          return orderDate >= firstDayThisMonthStr && orderDate <= lastDayThisMonthStr;
+        case 'last_month':
+          return orderDate >= firstDayLastMonthStr && orderDate <= lastDayLastMonthStr;
+        case 'custom':
+          if (customStartDate && orderDate < customStartDate) return false;
+          if (customEndDate && orderDate > customEndDate) return false;
+          return true;
+        default:
+          return true;
+      }
+    });
+  }, [orders, searchTerm, statusFilter, periodFilter, customStartDate, customEndDate]);
+
+  const periodMetrics = useMemo(() => {
+    let totalAmount = 0;
+    let paidAmount = 0;
+    let pendingAmount = 0;
+    let canceledAmount = 0;
+    let paidCount = 0;
+    let pendingCount = 0;
+    let canceledCount = 0;
+
+    filteredOrders.forEach(o => {
+      const amt = Number(o.amount) || 0;
+      totalAmount += amt;
+
+      const isPaid = o.status === 'Pago' || o.status === 'Pago, Aguardando Retirada' || o.status === 'Concluído';
+      const isPending = o.status === 'Aguardando Pagamento' || o.status === 'Pendente';
+      const isCanceled = o.status === 'Cancelado';
+
+      if (isPaid) {
+        paidAmount += amt;
+        paidCount++;
+      } else if (isPending) {
+        pendingAmount += amt;
+        pendingCount++;
+      } else if (isCanceled) {
+        canceledAmount += amt;
+        canceledCount++;
+      }
+    });
+
+    return {
+      totalAmount,
+      paidAmount,
+      pendingAmount,
+      canceledAmount,
+      totalCount: filteredOrders.length,
+      paidCount,
+      pendingCount,
+      canceledCount,
+      avgTicket: filteredOrders.length > 0 ? totalAmount / filteredOrders.length : 0
+    };
+  }, [filteredOrders]);
+
+  const getPeriodLabel = () => {
+    switch (periodFilter) {
+      case 'today': return 'Hoje';
+      case 'yesterday': return 'Ontem';
+      case '7days': return 'Últimos 7 dias';
+      case '30days': return 'Últimos 30 dias';
+      case 'this_month': return 'Este Mês';
+      case 'last_month': return 'Mês Anterior';
+      case 'custom': 
+        if (customStartDate && customEndDate) {
+          return `${customStartDate.split('-').reverse().join('/')} até ${customEndDate.split('-').reverse().join('/')}`;
+        } else if (customStartDate) {
+          return `A partir de ${customStartDate.split('-').reverse().join('/')}`;
+        } else if (customEndDate) {
+          return `Até ${customEndDate.split('-').reverse().join('/')}`;
+        }
+        return 'Personalizado';
+      default: return 'Geral (Todos)';
+    }
+  };
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -315,7 +454,7 @@ export default function AdminOrders() {
             </p>
           </div>
 
-          <div className="flex flex-wrap items-center gap-4">
+          <div className="flex flex-wrap items-center gap-3">
             <div className="relative">
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
               <input 
@@ -323,16 +462,17 @@ export default function AdminOrders() {
                 placeholder="Buscar por ID ou Cliente..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="bg-white/5 border border-white/10 rounded-2xl pl-12 pr-4 py-3 text-xs font-bold text-white focus:outline-none focus:border-indigo-500 transition-all w-64"
+                className="bg-white/5 border border-white/10 rounded-2xl pl-12 pr-4 py-3 text-xs font-bold text-white focus:outline-none focus:border-indigo-500 transition-all w-56 lg:w-64"
               />
             </div>
 
+            {/* Filtro de Status */}
             <div className="flex bg-white/5 border border-white/10 rounded-2xl p-1 gap-1">
               {['Todos', 'Pago', 'Pendente', 'Cancelado'].map((status) => (
                 <button
                   key={status}
                   onClick={() => setStatusFilter(status)}
-                  className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer ${
+                  className={`px-3.5 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer ${
                     statusFilter === status 
                       ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30' 
                       : 'text-slate-400 hover:text-white'
@@ -342,6 +482,140 @@ export default function AdminOrders() {
                 </button>
               ))}
             </div>
+
+            {/* Filtro Por Período */}
+            <div className="flex items-center bg-white/5 border border-white/10 rounded-2xl p-1 gap-1">
+              <div className="flex items-center gap-1.5 pl-3 pr-1 py-2 text-xs font-black uppercase tracking-wider text-slate-400">
+                <Calendar size={14} className="text-indigo-400 shrink-0" />
+                <span className="hidden sm:inline">Período:</span>
+              </div>
+              <select
+                value={periodFilter}
+                onChange={(e) => setPeriodFilter(e.target.value as any)}
+                className="bg-transparent text-white text-xs font-black uppercase tracking-wider px-3 py-2 rounded-xl focus:outline-none focus:bg-white/10 cursor-pointer border-none"
+              >
+                <option value="all" className="bg-[#0a0e17] text-white">Todo o Período</option>
+                <option value="today" className="bg-[#0a0e17] text-white">Hoje</option>
+                <option value="yesterday" className="bg-[#0a0e17] text-white">Ontem</option>
+                <option value="7days" className="bg-[#0a0e17] text-white">Últimos 7 dias</option>
+                <option value="30days" className="bg-[#0a0e17] text-white">Últimos 30 dias</option>
+                <option value="this_month" className="bg-[#0a0e17] text-white">Este Mês</option>
+                <option value="last_month" className="bg-[#0a0e17] text-white">Mês Anterior</option>
+                <option value="custom" className="bg-[#0a0e17] text-white">Personalizado...</option>
+              </select>
+            </div>
+
+            {/* Inputs de Data Personalizada quando 'custom' */}
+            {periodFilter === 'custom' && (
+              <div className="flex items-center gap-2 bg-white/5 border border-white/10 p-1.5 px-3 rounded-2xl flex-wrap">
+                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">De:</span>
+                <input
+                  type="date"
+                  value={customStartDate}
+                  onChange={(e) => setCustomStartDate(e.target.value)}
+                  className="bg-black/30 border border-white/10 rounded-xl px-2.5 py-1 text-xs text-white font-bold [color-scheme:dark] focus:outline-none focus:border-indigo-500"
+                />
+                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Até:</span>
+                <input
+                  type="date"
+                  value={customEndDate}
+                  onChange={(e) => setCustomEndDate(e.target.value)}
+                  className="bg-black/30 border border-white/10 rounded-xl px-2.5 py-1 text-xs text-white font-bold [color-scheme:dark] focus:outline-none focus:border-indigo-500"
+                />
+                {(customStartDate || customEndDate) && (
+                  <button
+                    onClick={() => {
+                      setCustomStartDate('');
+                      setCustomEndDate('');
+                    }}
+                    className="p-1 hover:bg-white/10 rounded-lg text-slate-400 hover:text-white transition-all text-xs cursor-pointer"
+                    title="Limpar datas"
+                  >
+                    <X size={14} />
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Barra de Resumo e Soma Total do Período */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {/* Card 1: Soma Total do Período */}
+          <div className="bg-gradient-to-br from-indigo-950/40 via-indigo-900/20 to-purple-950/30 border border-indigo-500/30 p-6 rounded-[2rem] relative overflow-hidden shadow-xl">
+            <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/10 rounded-full blur-2xl -mr-10 -mt-10 pointer-events-none" />
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-[10px] font-black uppercase tracking-widest text-indigo-300 flex items-center gap-1.5">
+                <DollarSign size={14} className="text-indigo-400" />
+                Soma Total ({getPeriodLabel()})
+              </span>
+              <span className="px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                {periodMetrics.totalCount} {periodMetrics.totalCount === 1 ? 'pedido' : 'pedidos'}
+              </span>
+            </div>
+            <div className="text-2xl lg:text-3xl font-black text-white font-mono tracking-tight">
+              R$ {periodMetrics.totalAmount.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </div>
+            <p className="text-[11px] text-slate-400 font-medium mt-1">
+              Volume bruto total dos pedidos no período
+            </p>
+          </div>
+
+          {/* Card 2: Total Pago / Confirmado */}
+          <div className="bg-gradient-to-br from-emerald-950/30 via-emerald-900/10 to-slate-900/40 border border-emerald-500/20 p-6 rounded-[2rem] relative overflow-hidden shadow-xl">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-[10px] font-black uppercase tracking-widest text-emerald-400 flex items-center gap-1.5">
+                <CheckCircle size={14} />
+                Total Pago (Confirmado)
+              </span>
+              <span className="px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                {periodMetrics.paidCount} pagos
+              </span>
+            </div>
+            <div className="text-2xl lg:text-3xl font-black text-emerald-400 font-mono tracking-tight">
+              R$ {periodMetrics.paidAmount.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </div>
+            <p className="text-[11px] text-slate-400 font-medium mt-1">
+              Receita efetivada em caixa no período
+            </p>
+          </div>
+
+          {/* Card 3: Total Aguardando / Pendente */}
+          <div className="bg-gradient-to-br from-amber-950/30 via-amber-900/10 to-slate-900/40 border border-amber-500/20 p-6 rounded-[2rem] relative overflow-hidden shadow-xl">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-[10px] font-black uppercase tracking-widest text-amber-400 flex items-center gap-1.5">
+                <Clock size={14} />
+                Aguardando Pagamento
+              </span>
+              <span className="px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                {periodMetrics.pendingCount} pendentes
+              </span>
+            </div>
+            <div className="text-2xl lg:text-3xl font-black text-amber-400 font-mono tracking-tight">
+              R$ {periodMetrics.pendingAmount.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </div>
+            <p className="text-[11px] text-slate-400 font-medium mt-1">
+              Faturas em aberto aguardando pagamento
+            </p>
+          </div>
+
+          {/* Card 4: Ticket Médio do Período */}
+          <div className="bg-gradient-to-br from-purple-950/30 via-purple-900/10 to-slate-900/40 border border-purple-500/20 p-6 rounded-[2rem] relative overflow-hidden shadow-xl">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-[10px] font-black uppercase tracking-widest text-purple-400 flex items-center gap-1.5">
+                <Target size={14} />
+                Ticket Médio
+              </span>
+              <span className="px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest bg-purple-500/20 text-purple-300 border border-purple-500/30">
+                Média
+              </span>
+            </div>
+            <div className="text-2xl lg:text-3xl font-black text-white font-mono tracking-tight">
+              R$ {periodMetrics.avgTicket.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </div>
+            <p className="text-[11px] text-slate-400 font-medium mt-1">
+              Média por pedido ({getPeriodLabel()})
+            </p>
           </div>
         </div>
 
@@ -438,6 +712,21 @@ export default function AdminOrders() {
                   </tr>
                 )}
               </tbody>
+              {filteredOrders.length > 0 && (
+                <tfoot>
+                  <tr className="border-t-2 border-white/10 bg-white/[0.02] text-xs font-black">
+                    <td colSpan={2} className="py-4 px-6 text-slate-400 uppercase tracking-widest text-[11px]">
+                      Soma Total do Período ({filteredOrders.length} {filteredOrders.length === 1 ? 'pedido' : 'pedidos'}):
+                    </td>
+                    <td className="py-4 px-4 font-mono text-emerald-400 text-sm font-black">
+                      R$ {periodMetrics.totalAmount.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </td>
+                    <td colSpan={4} className="py-4 px-4 text-slate-400 text-xs font-normal">
+                      Total Pago: <strong className="text-emerald-400 font-mono font-bold">R$ {periodMetrics.paidAmount.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong> • Pendente: <strong className="text-amber-400 font-mono font-bold">R$ {periodMetrics.pendingAmount.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
+                    </td>
+                  </tr>
+                </tfoot>
+              )}
             </table>
           </div>
         </div>

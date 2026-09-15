@@ -18,7 +18,10 @@ export default function AffiliateAdherenceTerm() {
   };
 
   const handleDownload = () => {
-    toast.success('Download do termo iniciado!');
+    toast.success('Abrindo janela para salvar o termo como PDF...');
+    setTimeout(() => {
+      window.print();
+    }, 300);
   };
 
   const getContent = () => {
@@ -225,7 +228,7 @@ export default function AffiliateAdherenceTerm() {
               </div>
 
               <div className="space-y-3 pt-6 border-t border-slate-100">
-                <h4 className="font-bold text-midnight font-sans text-sm uppercase">FORO</h4>
+                <h4 className="font-bold text-midnight font-sans text-sm uppercase">1.1.10. FORO</h4>
                 <p>
                   Fica eleito o foro da comarca do domicílio do segurado para dirimir quaisquer questões oriundas deste contrato.
                 </p>
@@ -873,7 +876,7 @@ export default function AffiliateAdherenceTerm() {
           subtitle: "PROCESSO SUSEP 10.004808/99-14 – SEGURO VIDA LIGHT R$ 5.000,00",
           body: (
             <div className="space-y-6 text-justify">
-              <div className="bg-slate-50 border border-slate-200 p-4 rounded-2xl text-xs font-bold text-slate-700 font-sans">
+              <div className="bg-slate-50 border border-slate-200 p-4 rounded-2xl text-xs font-bold text-slate-700 font-sans text-center">
                 Condições Contratuais – Vinculadas à Proposta nº 0458/2026 - Apólice 11.0982.58940.001
               </div>
 
@@ -931,7 +934,7 @@ export default function AffiliateAdherenceTerm() {
                     </p>
                   </li>
                   <li>
-                    <strong>• Anexo XI – Documentos Necessários para Recebimento da Indenização:</strong> FORO
+                    <strong>• Anexo XI – Documentos Necessários para Recebimento da Indenização</strong>
                   </li>
                   <li>
                     <strong>• Anexo XII – Regras de Cashback e Inadimplência</strong>
@@ -1018,19 +1021,7 @@ export default function AffiliateAdherenceTerm() {
             {currentContent.body}
           </div>
 
-          {/* Assinatura Visual */}
-          <div className="pt-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-6 border-t border-slate-100">
-            <div>
-              <p className="text-[10px] uppercase font-sans tracking-widest text-slate-400 font-bold mb-1">Assinatura do Contratado</p>
-              <p className="font-bold text-midnight">{profile?.full_name || 'Afiliado Cadastrado'}</p>
-              <p className="text-xs text-slate-400 font-sans mt-0.5">E-mail: {user?.email}</p>
-            </div>
-            <div className="text-right">
-              <p className="text-[10px] uppercase font-sans tracking-widest text-slate-400 font-bold mb-1">Pela Contratante</p>
-              <p className="font-bold text-midnight">SIC Comércio de Produtos Alimentícios e Serviços Ltda</p>
-              <p className="text-xs text-slate-400 font-sans mt-0.5">CNPJ: 54.795.377/0001-03</p>
-            </div>
-          </div>
+
 
         </div>
 

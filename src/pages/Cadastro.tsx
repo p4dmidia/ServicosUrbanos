@@ -111,41 +111,32 @@ export default function Cadastro() {
     const [bankAccount, setBankAccount] = useState('');
 
     useEffect(() => {
-        // 1. Ler parâmetros da URL (indicação ativa via link)
+        // 1. Ler parâmetros da URL (prioridade máxima) ou resgatar da sessão ativa
         const refParam = searchParams.get('ref') || searchParams.get('indicador');
-        const revParam = searchParams.get('rev') || searchParams.get('reseller') || searchParams.get('revendedor');
+        let activeRef = refParam;
 
-        // Se houver indicação explícita na URL atual
-        if (refParam || revParam) {
+        if (refParam) {
+            try {
+                sessionStorage.setItem('urba_referral', refParam);
+            } catch (e) {}
+        } else {
+            try {
+                activeRef = sessionStorage.getItem('urba_referral');
+            } catch (e) {}
+        }
+
+        if (activeRef && activeRef.trim().length >= 3) {
             setIsIndicatedViaLink(true);
-
-            // A) Se tem indicação de patrocinador MMN:
-            if (refParam) {
-                setReferralCode(refParam);
-                setIsReferralLocked(false);
-                localStorage.setItem('urba_referral', refParam);
-                fetchReferrerName(refParam, !revParam);
-            } else {
-                setReferralCode('');
-                setReferrerName(null);
-                setReferrerId(null);
-                setIsReferralLocked(false);
-                setIsSameAsReseller(false);
-            }
-
-            // B) Se tem indicação de revendedor regional:
-            if (revParam) {
-                setResellerCode(revParam);
-                setIsResellerLocked(true);
-                localStorage.setItem('urba_reseller', revParam);
-                // Nunca sobrescrever o patrocinador MMN automaticamente ao entrar pelo link de revendedor
-                fetchResellerName(revParam, false);
-            }
+            setReferralCode(activeRef.trim());
+            setIsReferralLocked(true);
+            fetchReferrerName(activeRef.trim());
         } else {
             // Acesso direto pelo site (sem link de indicação)
-            // Remove qualquer dado residual de testes ou links anteriores do navegador
-            localStorage.removeItem('urba_referral');
-            localStorage.removeItem('urba_reseller');
+            try {
+                sessionStorage.removeItem('urba_referral');
+                localStorage.removeItem('urba_referral');
+                localStorage.removeItem('urba_reseller');
+            } catch (e) {}
 
             setIsIndicatedViaLink(false);
             setReferralCode('');
@@ -160,7 +151,7 @@ export default function Cadastro() {
         }
     }, [searchParams]);
 
-    const fetchReferrerName = async (codeOrId: string, autoFillReseller: boolean = true) => {
+    const fetchReferrerName = async (codeOrId: string) => {
         if (!codeOrId || codeOrId.trim().length < 3) {
             setReferrerName(null);
             setReferrerId(null);
@@ -196,92 +187,57 @@ export default function Cadastro() {
             if (sponsor) {
                 setReferrerName(sponsor.full_name);
                 setReferrerId(sponsor.id);
-                setIsSearching(false);
+                setReferralCode(sponsor.referral_code || sponsor.id);
+                setIsReferralLocked(true);
+                setIsIndicatedViaLink(true);
 
-                // Se autoFillReseller estiver ativo e o patrocinador tiver um revendedor regional vinculado (e ainda não houver revendedor selecionado):
-                if (autoFillReseller && !resellerId) {
-                    if (sponsor.role === 'regional_reseller') {
-                        const rCode = sponsor.referral_code || sponsor.id;
-                        setResellerCode(rCode);
-                        setResellerName(sponsor.full_name);
-                        setResellerId(sponsor.id);
+                // Hierarquia blindada: define o revendedor regional direto do banco de dados (impossível fraudar via URL)
+                if (sponsor.role === 'regional_reseller') {
+                    setResellerCode(sponsor.referral_code || sponsor.id);
+                    setResellerName(sponsor.full_name);
+                    setResellerId(sponsor.id);
+                    setIsResellerLocked(true);
+                } else if (sponsor.reseller_id) {
+                    const { data: resData } = await supabase
+                        .from('profiles')
+                        .select('id, full_name, referral_code, role')
+                        .eq('id', sponsor.reseller_id)
+                        .maybeSingle();
+
+                    if (resData) {
+                        setResellerCode(resData.referral_code || resData.id);
+                        setResellerName(resData.full_name);
+                        setResellerId(resData.id);
                         setIsResellerLocked(true);
-                    } else if (sponsor.reseller_id) {
-                        const { data: resData } = await supabase
-                            .from('profiles')
-                            .select('id, full_name, referral_code, role')
-                            .eq('id', sponsor.reseller_id)
-                            .single();
-                        if (resData) {
-                            setResellerCode(resData.referral_code || resData.id);
-                            setResellerName(resData.full_name);
-                            setResellerId(resData.id);
-                            setIsResellerLocked(true);
-                        }
+                    } else {
+                        setResellerCode(SIC_COMERCIO_CODE);
+                        setResellerName(SIC_COMERCIO_NAME);
+                        setResellerId(SIC_COMERCIO_ID);
+                        setIsResellerLocked(true);
                     }
+                } else {
+                    setResellerCode(SIC_COMERCIO_CODE);
+                    setResellerName(SIC_COMERCIO_NAME);
+                    setResellerId(SIC_COMERCIO_ID);
+                    setIsResellerLocked(true);
                 }
                 return;
             }
 
+            // Código inexistente no banco
             setReferrerName(null);
             setReferrerId(null);
+            setIsIndicatedViaLink(false);
+            try {
+                sessionStorage.removeItem('urba_referral');
+            } catch (e) {}
+            toast.error("Link de indicação não localizado ou inválido.", { id: 'ref-not-found' });
         } catch (err) {
             console.error("Erro ao buscar indicador:", err);
             setReferrerName(null);
             setReferrerId(null);
         } finally {
             setIsSearching(false);
-        }
-    };
-
-    const fetchResellerName = async (codeOrId: string, autoFillSponsor: boolean = false) => {
-        if (!codeOrId || codeOrId.trim().length < 3) {
-            setResellerName(null);
-            setResellerId(null);
-            setIsSearchingReseller(false);
-            return;
-        }
-
-        setIsSearchingReseller(true);
-        try {
-            const cleanCode = codeOrId.trim().toUpperCase();
-            const cleanCpf = codeOrId.replace(/\D/g, '');
-
-            const { data: results } = await supabase
-                .from('profiles')
-                .select('id, full_name, referral_code, role')
-                .or(`referral_code.eq.${cleanCode},cpf.eq.${cleanCpf || 'none'}`)
-                .limit(1);
-
-            let reseller = results && results.length > 0 ? results[0] : null;
-
-            if (!reseller) {
-                const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-                if (uuidRegex.test(codeOrId.trim())) {
-                    const { data: byId } = await supabase
-                        .from('profiles')
-                        .select('id, full_name, referral_code, role')
-                        .eq('id', codeOrId.trim())
-                        .single();
-                    if (byId) reseller = byId;
-                }
-            }
-
-            if (reseller) {
-                setResellerName(reseller.full_name);
-                setResellerId(reseller.id);
-                setIsSearchingReseller(false);
-                return;
-            }
-
-            setResellerName(null);
-            setResellerId(null);
-        } catch (err) {
-            console.error("Erro ao buscar revendedor:", err);
-            setResellerName(null);
-            setResellerId(null);
-        } finally {
-            setIsSearchingReseller(false);
         }
     };
 
@@ -685,8 +641,11 @@ export default function Cadastro() {
                 }
             });
 
-            localStorage.removeItem('urba_referral');
-            localStorage.removeItem('urba_reseller');
+            try {
+                sessionStorage.removeItem('urba_referral');
+                localStorage.removeItem('urba_referral');
+                localStorage.removeItem('urba_reseller');
+            } catch (e) {}
 
             // Login automático e direcionamento para ativação do plano
             try {
@@ -841,18 +800,6 @@ export default function Cadastro() {
                         </div>
 
                         <form className="space-y-12 pb-20" onSubmit={handleSubmit}>
-                            {/* Informativo de Cadastro Único */}
-                            <div className="bg-emerald-500/5 border border-emerald-500/10 p-8 rounded-[2rem] flex items-center gap-6 relative overflow-hidden group">
-                                <div className="absolute top-0 right-0 size-32 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none group-hover:bg-emerald-500/20 transition-colors" />
-                                <div className="size-16 rounded-[1.25rem] bg-emerald-500 text-midnight flex items-center justify-center shrink-0 shadow-2xl shadow-emerald-500/30 transform transition-transform group-hover:scale-105 group-hover:rotate-3">
-                                    <LayoutGrid size={32} />
-                                </div>
-                                <div>
-                                    <p className="text-[11px] font-black text-emerald-600 uppercase tracking-[0.2em] mb-2">Multiconectado</p>
-                                    <p className="text-sm text-emerald-950 font-black leading-tight">Uma única conta para Moby, Food, Pay, Market e muito mais.</p>
-                                </div>
-                            </div>
-
                             {/* Seção 1: Tipo de Conta e Identificação */}
                             <div className="space-y-6">
                                 <div className="flex items-center justify-between gap-3 mb-2 underline-offset-8 flex-wrap">
@@ -1436,216 +1383,51 @@ export default function Cadastro() {
                                 </div>
                             </div>
 
-                            {/* Seção 5: Indicações e Liderança Regional */}
-                            <div className="pt-4 space-y-6">
-                                <div className="flex items-center gap-3 mb-2">
-                                    <div className="size-1.5 rounded-full bg-emerald-500" />
-                                    <h3 className="text-[11px] font-black uppercase tracking-widest text-midnight">05. Indicação e Liderança Regional</h3>
-                                </div>
-
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                    {/* Código de Indicação (MMN Sponsor) */}
-                                    <div className="flex flex-col gap-2">
-                                        <div className="flex justify-between items-center px-1">
-                                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">
-                                                Cód. Patrocinador MMN (Opcional)
-                                            </label>
-                                            {isSameAsReseller && (
-                                                <span className="text-[9px] font-black text-amber-500 uppercase tracking-widest">
-                                                    Mesmo do Revendedor
-                                                </span>
-                                            )}
-                                            {searchParams.get('ref') && referralCode && !isSameAsReseller && (
-                                                <span className="text-[9px] font-black text-emerald-500 uppercase tracking-widest">
-                                                    Link de Indicação
-                                                </span>
-                                            )}
-                                        </div>
-
-                                        {/* Botão de 1 clique para usar o mesmo código do Revendedor */}
-                                        {resellerCode && (
-                                            <button
-                                                type="button"
-                                                onClick={() => {
-                                                    if (isSameAsReseller) {
-                                                        setIsSameAsReseller(false);
-                                                        setReferralCode('');
-                                                        setReferrerName(null);
-                                                        setReferrerId(null);
-                                                    } else {
-                                                        setIsSameAsReseller(true);
-                                                        setReferralCode(resellerCode);
-                                                        setReferrerName(resellerName);
-                                                        setReferrerId(resellerId);
-                                                    }
-                                                }}
-                                                className={`flex items-center gap-2 px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all border text-left ${
-                                                    isSameAsReseller
-                                                        ? 'bg-amber-50 text-amber-800 border-amber-300 shadow-sm'
-                                                        : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
-                                                }`}
-                                            >
-                                                <span className={`size-3.5 rounded border flex items-center justify-center shrink-0 ${isSameAsReseller ? 'bg-amber-500 border-amber-500 text-white font-black text-[9px]' : 'border-slate-400 bg-white'}`}>
-                                                    {isSameAsReseller ? '✓' : ''}
-                                                </span>
-                                                <span>Sou indicado direto deste Revendedor Regional</span>
-                                            </button>
-                                        )}
-
-                                        <div className="relative group">
-                                            <TrendingUp className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300" size={18} />
-                                            <input
-                                                type="text"
-                                                value={referralCode}
-                                                onChange={(e) => {
-                                                    const val = e.target.value;
-                                                    setReferralCode(val);
-                                                    if (isSameAsReseller) setIsSameAsReseller(false);
-                                                    fetchReferrerName(val, false);
-                                                }}
-                                                placeholder="EX: A1B2C3 ou CPF (ou em branco)"
-                                                className="w-full pl-12 pr-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500/50 transition-all font-bold text-midnight placeholder:text-slate-300 uppercase"
-                                            />
-                                        </div>
-
-                                        {referrerName ? (
-                                            <motion.div
-                                                initial={{ opacity: 0, y: -10 }}
-                                                animate={{ opacity: 1, y: 0 }}
-                                                className="mt-1 p-3 bg-emerald-500/5 border border-emerald-500/10 rounded-2xl flex items-center gap-3 group"
-                                            >
-                                                <div className="size-8 rounded-xl bg-emerald-500 text-midnight flex items-center justify-center shadow-md shadow-emerald-500/20 shrink-0">
-                                                    <User size={16} />
-                                                </div>
-                                                <div className="min-w-0">
-                                                    <p className="text-[8px] font-black text-emerald-600 uppercase tracking-widest leading-none mb-0.5">Indicador Confirmado</p>
-                                                    <p className="text-xs font-black text-midnight uppercase truncate">{referrerName}</p>
-                                                </div>
-                                            </motion.div>
-                                        ) : isSearching ? (
-                                            <div className="mt-1 ml-1 flex items-center gap-2">
-                                                <div className="size-1.5 rounded-full bg-slate-200 animate-pulse" />
-                                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest italic">
-                                                    Buscando patrocinador...
-                                                </p>
-                                            </div>
-                                        ) : !referralCode ? (
-                                            <div className="mt-1 p-3 bg-slate-50 border border-slate-200/80 rounded-2xl flex items-center gap-3">
-                                                <div className="size-8 rounded-xl bg-slate-200/80 text-slate-600 flex items-center justify-center shrink-0">
-                                                    <Building2 size={16} />
-                                                </div>
-                                                <div className="min-w-0">
-                                                    <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest leading-none mb-0.5">Sem Indicador Informado</p>
-                                                    <p className="text-xs font-bold text-slate-600 truncate">Vínculo direto com a empresa: Sic Comércio</p>
-                                                </div>
-                                            </div>
-                                        ) : null}
+                            {/* Seção 5: Indicações e Liderança Regional (visível apenas quando há indicação ativa via link) */}
+                            {isIndicatedViaLink && referrerName && (
+                                <div className="pt-4 space-y-6">
+                                    <div className="flex items-center gap-3 mb-2">
+                                        <div className="size-1.5 rounded-full bg-emerald-500" />
+                                        <h3 className="text-[11px] font-black uppercase tracking-widest text-midnight">05. Indicação e Liderança Regional</h3>
                                     </div>
 
-                                    {/* Código do Revendedor Regional */}
-                                    <div className="flex flex-col gap-2">
-                                        <div className="flex justify-between items-center px-1">
-                                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">
-                                                {isIndicatedViaLink || resellerCode ? 'Cód. Revendedor Regional' : 'Cód. Revendedor Regional (Opcional)'}
-                                            </label>
-                                            {isIndicatedViaLink && resellerCode && (
-                                                <div className="flex items-center gap-2">
-                                                    <span className="text-[9px] font-black text-purple-500 uppercase tracking-widest">
-                                                        Polo Vinculado
-                                                    </span>
-                                                    {isResellerLocked && (
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => setIsResellerLocked(false)}
-                                                            className="text-[9px] font-bold text-slate-400 hover:text-purple-600 underline"
-                                                        >
-                                                            Alterar
-                                                        </button>
-                                                    )}
-                                                </div>
-                                            )}
-                                        </div>
-                                        <div className="relative group">
-                                            <Building2 className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300" size={18} />
-                                            <input
-                                                type="text"
-                                                value={resellerCode}
-                                                onChange={(e) => {
-                                                    if (isResellerLocked) return;
-                                                    const val = e.target.value;
-                                                    setResellerCode(val);
-                                                    fetchResellerName(val, false);
-                                                    if (isSameAsReseller) {
-                                                        setReferralCode(val);
-                                                        fetchReferrerName(val, false);
-                                                    }
-                                                }}
-                                                disabled={isResellerLocked}
-                                                placeholder={isIndicatedViaLink ? "Código do Revendedor" : "EX: REV123 ou CPF"}
-                                                className={`w-full pl-12 pr-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:outline-none focus:ring-4 focus:ring-purple-500/10 focus:border-purple-500/50 transition-all font-bold text-midnight placeholder:text-slate-300 uppercase ${isResellerLocked ? 'opacity-70 cursor-not-allowed bg-slate-100/50' : ''}`}
-                                            />
-                                        </div>
-                                        {resellerName ? (
-                                            <motion.div
-                                                initial={{ opacity: 0, y: -10 }}
-                                                animate={{ opacity: 1, y: 0 }}
-                                                className="mt-1 p-3 bg-purple-500/5 border border-purple-500/10 rounded-2xl flex items-center gap-3 group"
-                                            >
-                                                <div className="size-8 rounded-xl bg-purple-500 text-white flex items-center justify-center shadow-md shadow-purple-500/20 shrink-0">
-                                                    <Target size={16} />
-                                                </div>
-                                                <div className="min-w-0">
-                                                    <p className="text-[8px] font-black text-purple-600 uppercase tracking-widest leading-none mb-0.5">Revendedor Confirmado</p>
-                                                    <p className="text-xs font-black text-midnight uppercase truncate">{resellerName}</p>
-                                                </div>
-                                            </motion.div>
-                                        ) : isSearchingReseller && (
-                                            <div className="mt-1 ml-1 flex items-center gap-2">
-                                                <div className="size-1.5 rounded-full bg-slate-200 animate-pulse" />
-                                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest italic">
-                                                    Buscando revendedor...
-                                                </p>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                        {/* Card 1: Patrocinador Confirmado */}
+                                        <div className="p-4 bg-emerald-500/5 border border-emerald-500/15 rounded-2xl flex items-center gap-3.5 shadow-sm">
+                                            <div className="size-10 rounded-xl bg-emerald-500 text-midnight flex items-center justify-center shadow-md shadow-emerald-500/20 shrink-0">
+                                                <User size={18} />
                                             </div>
-                                        )}
-                                    </div>
-
-                                    {/* Opção exclusiva para quem entra através do site (sem link de indicação prévia) */}
-                                    {!isIndicatedViaLink && (
-                                        <div className="md:col-span-2">
-                                            <label className="flex items-start sm:items-center gap-3 p-4 bg-amber-500/5 border border-amber-500/20 rounded-2xl cursor-pointer hover:bg-amber-500/10 transition-all select-none group">
-                                                <input
-                                                    type="checkbox"
-                                                    checked={isSameAsReseller}
-                                                    onChange={(e) => {
-                                                        const checked = e.target.checked;
-                                                        setIsSameAsReseller(checked);
-                                                        if (checked) {
-                                                            if (resellerCode) {
-                                                                setReferralCode(resellerCode);
-                                                                fetchReferrerName(resellerCode, false);
-                                                            }
-                                                        } else {
-                                                            setReferralCode('');
-                                                            setReferrerName(null);
-                                                            setReferrerId(null);
-                                                        }
-                                                    }}
-                                                    className="mt-0.5 sm:mt-0 size-5 rounded-lg text-amber-500 focus:ring-amber-500 border-slate-300 accent-amber-500 cursor-pointer shrink-0"
-                                                />
-                                                <div className="flex flex-col">
-                                                    <span className="text-xs font-black text-midnight group-hover:text-amber-600 transition-colors">
-                                                        Fui indicado diretamente por este revendedor
-                                                    </span>
-                                                    <span className="text-[10px] text-slate-500 font-medium">
-                                                        Marque esta opção se você foi indicado diretamente pelo revendedor regional. O código dele será utilizado automaticamente como seu patrocinador MMN.
-                                                    </span>
+                                            <div className="min-w-0">
+                                                <div className="flex items-center gap-2 mb-0.5">
+                                                    <span className="text-[8px] font-black text-emerald-600 uppercase tracking-widest leading-none">Indicador Confirmado</span>
+                                                    <span className="text-[7px] bg-emerald-500/10 text-emerald-700 px-1.5 py-0.5 rounded font-black uppercase">Verificado</span>
                                                 </div>
-                                            </label>
+                                                <p className="text-sm font-black text-midnight uppercase truncate">{referrerName}</p>
+                                                {referralCode && (
+                                                    <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Cód: {referralCode}</p>
+                                                )}
+                                            </div>
                                         </div>
-                                    )}
-                                </div>
 
-                            </div>
+                                        {/* Card 2: Polo Regional Confirmado */}
+                                        <div className="p-4 bg-purple-500/5 border border-purple-500/15 rounded-2xl flex items-center gap-3.5 shadow-sm">
+                                            <div className="size-10 rounded-xl bg-purple-500 text-white flex items-center justify-center shadow-md shadow-purple-500/20 shrink-0">
+                                                <Target size={18} />
+                                            </div>
+                                            <div className="min-w-0">
+                                                <div className="flex items-center gap-2 mb-0.5">
+                                                    <span className="text-[8px] font-black text-purple-600 uppercase tracking-widest leading-none">Polo Regional Responsável</span>
+                                                    <span className="text-[7px] bg-purple-500/10 text-purple-700 px-1.5 py-0.5 rounded font-black uppercase">Oficial</span>
+                                                </div>
+                                                <p className="text-sm font-black text-midnight uppercase truncate">{resellerName || 'Polo Regional Oficial'}</p>
+                                                {resellerCode && (
+                                                    <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Cód: {resellerCode}</p>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
 
                             {/* Mensagem de Erro */}
                             <AnimatePresence>

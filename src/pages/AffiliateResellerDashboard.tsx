@@ -215,7 +215,7 @@ export default function AffiliateResellerDashboard() {
             <button
               onClick={() => {
                 const code = profile?.referral_code || user?.id;
-                const link = `${window.location.origin}/cadastro?rev=${code}`;
+                const link = `${window.location.origin}/cadastro?ref=${code}`;
                 navigator.clipboard.writeText(link);
                 toast.success('Link do Revendedor copiado!', {
                   style: {
@@ -235,7 +235,7 @@ export default function AffiliateResellerDashboard() {
             </button>
 
             <Link
-              to={`/cadastro?rev=${profile?.referral_code || user?.id}`}
+              to={`/cadastro?ref=${profile?.referral_code || user?.id}`}
               className="bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-slate-900 font-black px-8 py-4 rounded-2xl text-xs uppercase tracking-widest transition-all shadow-xl shadow-amber-500/20 flex items-center justify-center gap-3 cursor-pointer active:scale-95 shrink-0"
             >
               <UserPlus size={18} />
@@ -387,7 +387,7 @@ export default function AffiliateResellerDashboard() {
                   Clique no botão acima para cadastrar seu primeiro membro e começar a lucrar com vendas diretas.
                 </p>
                 <Link
-                  to={`/cadastro?rev=${profile?.referral_code || user?.id}`}
+                  to={`/cadastro?ref=${profile?.referral_code || user?.id}`}
                   className="bg-amber-500 text-slate-950 font-black px-6 py-3 rounded-xl text-xs uppercase tracking-widest hover:bg-amber-600 transition-all inline-block cursor-pointer"
                 >
                   Cadastrar Primeiro Membro

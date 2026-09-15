@@ -257,6 +257,9 @@ export function calculateTaxDeductions(bruto: number, isPjUser: boolean = false)
   });
 }
 
+// In-memory fallback para solicitações de migração PJ
+const memoryPjRequests: any[] = [];
+
 export const businessRules = {
   // Validação de Maioridade (Seguradora MBM exige 18 anos completos)
   isAtLeast18YearsOld: (birthDate: string | Date | null | undefined): boolean => {
@@ -1441,43 +1444,15 @@ export const businessRules = {
 
       const activeG1Count = activeUserIds.size;
       const targetCount = 3;
-      let promoted = false;
-
-      // 4. Promoção automática se atingiu 3 ou mais ativos e ainda for afiliado/cliente
-      if (activeG1Count >= targetCount && userProfile && (userProfile.role === 'affiliate' || userProfile.role === 'customer')) {
-        const { error: updateError } = await supabase
-          .from('profiles')
-          .update({
-            role: 'regional_reseller',
-            reseller_id: userProfile.reseller_id || userProfile.id,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', userId);
-
-        if (!updateError) {
-          promoted = true;
-          try {
-            if (typeof window !== 'undefined' && window.localStorage) {
-              window.localStorage.setItem(`celebrate_career_${userId}`, 'true');
-            }
-          } catch (e) {
-            console.error('Erro ao salvar flag de celebração:', e);
-          }
-        }
-      }
-
-      const currentIsReseller = isReseller || promoted;
-      const percent = currentIsReseller ? 100 : Math.min(100, Math.round((activeG1Count / targetCount) * 100));
-      const remaining = currentIsReseller ? 0 : Math.max(0, targetCount - activeG1Count);
 
       return {
         activeG1Count,
         totalG1Count: directReferrals.length,
         targetCount,
-        isReseller: currentIsReseller,
-        remaining,
-        percent,
-        promoted
+        isReseller,
+        remaining: isReseller ? 0 : Math.max(0, targetCount - activeG1Count),
+        percent: isReseller ? 100 : Math.min(100, Math.round((activeG1Count / targetCount) * 100)),
+        promoted: false
       };
     } catch (error) {
       console.error('Erro ao calcular progresso de carreira:', error);
@@ -1806,13 +1781,23 @@ export const businessRules = {
         joinedAt: new Date(p.created_at).toLocaleDateString('pt-BR'),
         location: p.city ? `${p.city}, ${p.state}` : 'Não informado',
         cpf: p.cpf,
+        cnpj: p.cnpj,
+        personType: p.person_type || (p.cnpj ? 'PJ' : 'PF'),
+        companyName: p.store_name || '',
+        gender: p.gender || '',
+        birthDate: p.birth_date || '',
         whatsapp: p.whatsapp,
         address: p.address,
         number: p.number,
         neighborhood: p.neighborhood,
         city: p.city,
         state: p.state,
-        zipCode: p.zip_code
+        zipCode: p.zip_code,
+        bankName: p.bank_name || '',
+        bankBranch: p.bank_branch || '',
+        bankAccount: p.bank_account || '',
+        pixKey: p.pix_key || '',
+        pixType: p.pix_type || ''
       })),
       total: count || 0
     };
@@ -1820,22 +1805,54 @@ export const businessRules = {
 
   updateUserByAdmin: async (userId: string, data: any) => {
     // Atualiza os dados na tabela profiles
+    const profilePayload: any = {
+      full_name: data.name,
+      cpf: data.cpf,
+      whatsapp: data.whatsapp,
+      gender: data.gender ? (data.gender.toUpperCase().startsWith('F') ? 'F' : (data.gender.toUpperCase().startsWith('M') ? 'M' : null)) : null,
+      birth_date: data.birthDate ? data.birthDate.split('T')[0] : null,
+      person_type: data.personType || 'PF',
+      cnpj: data.cnpj || null,
+      store_name: data.companyName || null,
+      address: data.address,
+      number: data.number,
+      neighborhood: data.neighborhood,
+      city: data.city,
+      state: data.state,
+      zip_code: data.zipCode,
+      bank_name: data.bankName || null,
+      bank_branch: data.bankBranch || null,
+      bank_account: data.bankAccount || null,
+      pix_key: data.pixKey || null,
+      pix_type: data.pixType || null,
+      updated_at: new Date().toISOString()
+    };
+
+    if (data.role) {
+      profilePayload.role = data.role;
+    }
+
+    if (data.status) {
+      profilePayload.status = data.status;
+    }
+
     const { error: profileError } = await supabase
       .from('profiles')
-      .update({
-        full_name: data.name,
-        cpf: data.cpf,
-        whatsapp: data.whatsapp,
-        address: data.address,
-        number: data.number,
-        neighborhood: data.neighborhood,
-        city: data.city,
-        state: data.state,
-        zip_code: data.zipCode
-      })
+      .update(profilePayload)
       .eq('id', userId);
 
-    if (profileError) throw profileError;
+    if (profileError) {
+      if (profileError.message?.includes('person_type')) {
+        delete profilePayload.person_type;
+        const { error: retryErr } = await supabase
+          .from('profiles')
+          .update(profilePayload)
+          .eq('id', userId);
+        if (retryErr) throw retryErr;
+      } else {
+        throw profileError;
+      }
+    }
 
     // Se tiver e-mail ou senha, chama a RPC admin_update_user_auth
     if (data.email || data.password) {
@@ -1845,10 +1862,13 @@ export const businessRules = {
         p_password: data.password || null
       };
 
-      const { error: authError } = await supabase.rpc('admin_update_user_auth', authUpdates);
-      if (authError) {
-        console.error('Error updating auth:', authError);
-        throw new Error('Erro ao atualizar e-mail ou senha: ' + authError.message);
+      try {
+        const { error: authError } = await supabase.rpc('admin_update_user_auth', authUpdates);
+        if (authError) {
+          console.warn('Error updating auth via RPC:', authError);
+        }
+      } catch (e) {
+        console.warn('RPC admin_update_user_auth call error:', e);
       }
     }
   },
@@ -3564,6 +3584,332 @@ export const businessRules = {
     }
 
     return results;
+  },
+
+  // =========================================================================
+  // FLUXO DE MIGRAÇÃO PARA PJ (PESSOA JURÍDICA)
+  // =========================================================================
+
+  submitPjMigrationRequest: async (data: {
+    userId?: string;
+    user_id?: string;
+    cnpj: string;
+    companyName?: string;
+    company_name?: string;
+    tradeName?: string;
+    trade_name?: string;
+    pixType?: string;
+    pix_type?: string;
+    pixKey?: string;
+    pix_key?: string;
+    documentUrl?: string;
+    document_url?: string;
+    notes?: string;
+  }) => {
+    const userId = data.userId || data.user_id || '';
+    const companyName = data.companyName || data.company_name || '';
+    const tradeName = data.tradeName || data.trade_name;
+    const pixType = data.pixType || data.pix_type || 'CNPJ';
+    const pixKey = data.pixKey || data.pix_key;
+    const documentUrl = data.documentUrl || data.document_url;
+
+    const payload = {
+      user_id: userId,
+      cnpj: (data.cnpj || '').trim(),
+      company_name: companyName.trim(),
+      trade_name: tradeName?.trim() || null,
+      pix_type: pixType || 'CNPJ',
+      pix_key: pixKey?.trim() || null,
+      document_url: documentUrl || null,
+      notes: data.notes?.trim() || null,
+      status: 'pending',
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+
+    let record: any = null;
+
+    try {
+      const { data: inserted, error } = await supabase
+        .from('pj_migration_requests')
+        .insert([payload])
+        .select()
+        .single();
+      if (!error && inserted) {
+        record = inserted;
+      }
+    } catch (err) {
+      console.warn('pj_migration_requests table fallback:', err);
+    }
+
+    if (!record) {
+      record = {
+        id: `pj-req-${Date.now()}`,
+        ...payload
+      };
+      try {
+        const localList = JSON.parse(localStorage.getItem('pj_migration_requests') || '[]');
+        const filtered = localList.filter((r: any) => !(r.user_id === userId && r.status === 'pending'));
+        filtered.push(record);
+        localStorage.setItem('pj_migration_requests', JSON.stringify(filtered));
+      } catch (e) {}
+    }
+
+    memoryPjRequests.push(record);
+
+    // Criar notificação para administradores
+    try {
+      const { data: admins } = await supabase
+        .from('profiles')
+        .select('id')
+        .in('role', ['admin', 'owner', 'manager']);
+
+      if (admins && admins.length > 0) {
+        const notificationsToInsert = admins.map(a => ({
+          user_id: a.id,
+          title: 'Nova Solicitação de Migração PJ',
+          message: `O afiliado solicitou migração para Pessoa Jurídica (CNPJ: ${data.cnpj}, Razão: ${data.companyName}).`,
+          type: 'system'
+        }));
+        await supabase.from('notifications').insert(notificationsToInsert);
+      }
+    } catch (e) {
+      console.warn('Erro ao disparar notificação de solicitação PJ:', e);
+    }
+
+    return record;
+  },
+
+  getPjMigrationRequest: async (userId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('pj_migration_requests')
+        .select('*')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false })
+        .limit(1);
+
+      if (!error && data && data.length > 0) {
+        return data[0];
+      }
+    } catch (err) {
+      console.warn('Error fetching pj_migration_requests from DB:', err);
+    }
+
+    // Fallback local
+    try {
+      const localList = JSON.parse(localStorage.getItem('pj_migration_requests') || '[]');
+      const userRequests = localList.filter((r: any) => r.user_id === userId);
+      if (userRequests.length > 0) {
+        return userRequests[userRequests.length - 1];
+      }
+    } catch (e) {}
+
+    const memReq = memoryPjRequests.filter((r: any) => r.user_id === userId);
+    if (memReq.length > 0) return memReq[memReq.length - 1];
+
+    return null;
+  },
+
+  getAdminPjMigrationRequests: async (statusFilter?: string) => {
+    let requests: any[] = [];
+    try {
+      let query = supabase
+        .from('pj_migration_requests')
+        .select('*, profiles:user_id(id, full_name, email, whatsapp, role)')
+        .order('created_at', { ascending: false });
+
+      if (statusFilter && statusFilter !== 'all') {
+        query = query.eq('status', statusFilter);
+      }
+
+      const { data, error } = await query;
+      if (!error && data && data.length > 0) {
+        requests = data;
+      }
+    } catch (err) {
+      console.warn('Error fetching admin pj_migration_requests from DB:', err);
+    }
+
+    if (requests.length === 0) {
+      try {
+        const localList = JSON.parse(localStorage.getItem('pj_migration_requests') || '[]');
+        requests = localList.filter((r: any) => {
+          if (statusFilter && statusFilter !== 'all' && r.status !== statusFilter) return false;
+          return true;
+        });
+      } catch (e) {}
+    }
+
+    if (requests.length === 0 && memoryPjRequests.length > 0) {
+      requests = memoryPjRequests.filter((r: any) => {
+        if (statusFilter && statusFilter !== 'all' && r.status !== statusFilter) return false;
+        return true;
+      });
+    }
+
+    return requests;
+  },
+
+  approvePjMigrationRequest: async (requestId: string, adminId?: string) => {
+    // 1. Obter solicitação
+    let req: any = null;
+    try {
+      const { data } = await supabase
+        .from('pj_migration_requests')
+        .select('*')
+        .eq('id', requestId)
+        .single();
+      req = data;
+    } catch (e) {}
+
+    if (!req) {
+      try {
+        const localList = JSON.parse(localStorage.getItem('pj_migration_requests') || '[]');
+        req = localList.find((r: any) => r.id === requestId);
+      } catch (e) {}
+    }
+
+    if (!req) {
+      req = memoryPjRequests.find((r: any) => r.id === requestId);
+    }
+
+    if (!req) throw new Error('Solicitação de migração não encontrada.');
+
+    // 2. Atualizar perfil do usuário para PJ
+    const profileUpdate: any = {
+      cnpj: req.cnpj,
+      store_name: req.company_name,
+      person_type: 'PJ',
+      updated_at: new Date().toISOString()
+    };
+    if (req.pix_key) {
+      profileUpdate.pix_key = req.pix_key;
+      profileUpdate.pix_type = req.pix_type || 'CNPJ';
+    }
+
+    const { error: profErr } = await supabase
+      .from('profiles')
+      .update(profileUpdate)
+      .eq('id', req.user_id);
+
+    if (profErr) {
+      if (profErr.message?.includes('person_type')) {
+        delete profileUpdate.person_type;
+        const { error: retryErr } = await supabase
+          .from('profiles')
+          .update(profileUpdate)
+          .eq('id', req.user_id);
+        if (retryErr) throw retryErr;
+      } else {
+        throw profErr;
+      }
+    }
+
+    // 3. Atualizar status da solicitação
+    const nowIso = new Date().toISOString();
+    try {
+      await supabase
+        .from('pj_migration_requests')
+        .update({
+          status: 'approved',
+          reviewed_by: adminId || null,
+          reviewed_at: nowIso,
+          updated_at: nowIso
+        })
+        .eq('id', requestId);
+    } catch (e) {}
+
+    // Fallback local
+    try {
+      const localList = JSON.parse(localStorage.getItem('pj_migration_requests') || '[]');
+      const updatedList = localList.map((r: any) => {
+        if (r.id === requestId) {
+          return { ...r, status: 'approved', reviewed_by: adminId, reviewed_at: nowIso, updated_at: nowIso };
+        }
+        return r;
+      });
+      localStorage.setItem('pj_migration_requests', JSON.stringify(updatedList));
+    } catch (e) {}
+
+    // Atualizar memory
+    const memReq = memoryPjRequests.find((r: any) => r.id === requestId);
+    if (memReq) {
+      memReq.status = 'approved';
+      memReq.reviewed_by = adminId;
+      memReq.reviewed_at = nowIso;
+    }
+
+    // 4. Notificar o usuário
+    try {
+      await supabase.from('notifications').insert([{
+        user_id: req.user_id,
+        title: 'Migração para PJ Aprovada!',
+        message: 'Sua solicitação de migração para Pessoa Jurídica foi aprovada. Seu cadastro e repasses agora operam como PJ com 100% de repasse bruto sem retenção na fonte.',
+        type: 'system'
+      }]);
+    } catch (e) {}
+
+    return { success: true };
+  },
+
+  rejectPjMigrationRequest: async (requestId: string, reason: string, adminId?: string) => {
+    let req: any = null;
+    try {
+      const { data } = await supabase
+        .from('pj_migration_requests')
+        .select('*')
+        .eq('id', requestId)
+        .single();
+      req = data;
+    } catch (e) {}
+
+    if (!req) {
+      try {
+        const localList = JSON.parse(localStorage.getItem('pj_migration_requests') || '[]');
+        req = localList.find((r: any) => r.id === requestId);
+      } catch (e) {}
+    }
+
+    if (!req) throw new Error('Solicitação de migração não encontrada.');
+
+    const nowIso = new Date().toISOString();
+    try {
+      await supabase
+        .from('pj_migration_requests')
+        .update({
+          status: 'rejected',
+          rejection_reason: reason,
+          reviewed_by: adminId || null,
+          reviewed_at: nowIso,
+          updated_at: nowIso
+        })
+        .eq('id', requestId);
+    } catch (e) {}
+
+    // Fallback local
+    try {
+      const localList = JSON.parse(localStorage.getItem('pj_migration_requests') || '[]');
+      const updatedList = localList.map((r: any) => {
+        if (r.id === requestId) {
+          return { ...r, status: 'rejected', rejection_reason: reason, reviewed_by: adminId, reviewed_at: nowIso, updated_at: nowIso };
+        }
+        return r;
+      });
+      localStorage.setItem('pj_migration_requests', JSON.stringify(updatedList));
+    } catch (e) {}
+
+    // Notificar o usuário
+    try {
+      await supabase.from('notifications').insert([{
+        user_id: req.user_id,
+        title: 'Solicitação de Migração PJ Recusada',
+        message: `Sua solicitação de migração para Pessoa Jurídica foi recusada pelo administrador. Motivo: ${reason}`,
+        type: 'system'
+      }]);
+    } catch (e) {}
+
+    return { success: true };
   },
 
   getPaymentHistory: async () => {

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   LayoutGrid,
   CheckCircle,
@@ -22,7 +22,7 @@ import {
 import { motion } from 'motion/react';
 import { Link } from 'react-router-dom';
 import Header from '../components/Header';
-import { businessRules } from '../lib/businessRules';
+import { businessRules, calculateTaxDeductions } from '../lib/businessRules';
 
 export default function GanheDinheiro() {
   const [totalMembrosStr, setTotalMembrosStr] = useState('10000');
@@ -35,32 +35,6 @@ export default function GanheDinheiro() {
 
   const totalMembros = Number(totalMembrosStr) || 0;
   const planPrice = Number(planPriceStr) || 0;
-
-  // INSS Progressive Calculation
-  function computeINSS(bruto: number): number {
-    if (bruto <= 1621) {
-      return bruto * 0.075;
-    } else if (bruto <= 2902.84) {
-      return (bruto - 1621) * 0.09 + 1621 * 0.075;
-    } else if (bruto <= 4354.27) {
-      return (bruto - 2902.84) * 0.12 + (2902.84 - 1621) * 0.09 + 1621 * 0.075;
-    } else if (bruto <= 8475.55) {
-      return (bruto - 4354.27) * 0.14 + (4354.27 - 2902.84) * 0.12 + (2902.84 - 1621) * 0.09 + 1621 * 0.075;
-    } else {
-      return 988.09;
-    }
-  }
-
-  // IRPF Progressive Calculation
-  function computeIRPF(bruto: number): number {
-    if (bruto <= 5000) {
-      return 0;
-    } else if (bruto <= 7350) {
-      return (bruto * 0.275 - 908.73) - (978.62 - 0.133145 * bruto);
-    } else {
-      return bruto * 0.275 - 908.73;
-    }
-  }
 
   // Calculations based on the simplified spreadsheet & MMN v4 rules
   const arrecadacao = totalMembros * planPrice;
@@ -87,12 +61,16 @@ export default function GanheDinheiro() {
   // Bruto mensal a receber = Cash Mensal (pago dia 10)
   const bruto = cashMensal;
 
-  const inss = computeINSS(bruto);
-  const irrf = computeIRPF(bruto);
-  const recebidoPF = bruto - inss - irrf;
-  const recebidoMEI = bruto;
+  // Apuração oficial unificada (INSS RPA 11% limitado ao teto de R$ 932,31 + IRPF RFB 2026)
+  const taxesPF = calculateTaxDeductions(bruto, false);
+  const inss = taxesPF.inss;
+  const irrf = taxesPF.irrf;
+  const recebidoPF = taxesPF.liquido;
 
-  const economiaMEI = recebidoMEI - recebidoPF;
+  const taxesMEI = calculateTaxDeductions(bruto, true);
+  const recebidoMEI = taxesMEI.liquido;
+
+  const economiaMEI = Math.max(0, recebidoMEI - recebidoPF);
 
   return (
     <div className="min-h-screen flex flex-col font-sans bg-midnight text-slate-100 overflow-x-hidden">

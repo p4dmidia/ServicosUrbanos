@@ -16,9 +16,14 @@ import {
   MapPin,
   AlertTriangle,
   ShieldCheck,
-  Sparkles
+  Sparkles,
+  Building2,
+  Clock,
+  X,
+  Send,
+  FileText
 } from 'lucide-react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import AffiliateLayout from '../components/AffiliateLayout';
 import { businessRules } from '../lib/businessRules';
 import { useAuth } from '../contexts/AuthContext';
@@ -30,6 +35,91 @@ export default function AffiliateProfile() {
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [success, setSuccess] = useState(false);
+
+  // Estados do Fluxo de Migração PJ
+  const [isPjModalOpen, setIsPjModalOpen] = useState(false);
+  const [pjRequest, setPjRequest] = useState<any>(null);
+  const [loadingPjRequest, setLoadingPjRequest] = useState(false);
+  const [submittingPj, setSubmittingPj] = useState(false);
+  const [pjForm, setPjForm] = useState({
+    cnpj: '',
+    companyName: '',
+    tradeName: '',
+    pixType: 'CNPJ',
+    pixKey: '',
+    documentUrl: '',
+    notes: ''
+  });
+
+  const isPJ = Boolean(profile?.person_type === 'PJ' || (profile?.cnpj && profile.cnpj.replace(/\D/g, '').length === 14));
+
+  const loadPjRequest = async () => {
+    if (!user) return;
+    try {
+      setLoadingPjRequest(true);
+      const req = await businessRules.getPjMigrationRequest(user.id);
+      setPjRequest(req);
+    } catch (e) {
+      console.error('Error loading pj request:', e);
+    } finally {
+      setLoadingPjRequest(false);
+    }
+  };
+
+  useEffect(() => {
+    if (user) {
+      loadPjRequest();
+    }
+  }, [user]);
+
+  const handleCnpjChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    let v = e.target.value.replace(/\D/g, '');
+    if (v.length > 14) v = v.slice(0, 14);
+    v = v.replace(/^(\d{2})(\d)/, '$1.$2');
+    v = v.replace(/^(\d{2})\.(\d{3})(\d)/, '$1.$2.$3');
+    v = v.replace(/\.(\d{3})(\d)/, '.$1/$2');
+    v = v.replace(/(\d{4})(\d)/, '$1-$2');
+    setPjForm(prev => ({
+      ...prev,
+      cnpj: v,
+      pixKey: prev.pixType === 'CNPJ' ? v : prev.pixKey
+    }));
+  };
+
+  const handleSubmitPjRequest = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user) return;
+    const cleanCnpj = pjForm.cnpj.replace(/\D/g, '');
+    if (cleanCnpj.length !== 14) {
+      toast.error('Informe um CNPJ válido com 14 dígitos.');
+      return;
+    }
+    if (!pjForm.companyName.trim()) {
+      toast.error('Informe a Razão Social da empresa.');
+      return;
+    }
+
+    setSubmittingPj(true);
+    try {
+      await businessRules.submitPjMigrationRequest({
+        userId: user.id,
+        cnpj: pjForm.cnpj,
+        companyName: pjForm.companyName,
+        tradeName: pjForm.tradeName,
+        pixType: pjForm.pixType,
+        pixKey: pjForm.pixKey,
+        documentUrl: pjForm.documentUrl,
+        notes: pjForm.notes
+      });
+      toast.success('Solicitação de migração para PJ enviada com sucesso! Aguarde a análise da equipe administrativa.');
+      setIsPjModalOpen(false);
+      await loadPjRequest();
+    } catch (error: any) {
+      toast.error(error.message || 'Erro ao enviar solicitação.');
+    } finally {
+      setSubmittingPj(false);
+    }
+  };
   
   // Form states completo com campos pessoais, seguro e bancários
   const [formData, setFormData] = useState({
@@ -424,6 +514,79 @@ export default function AffiliateProfile() {
                 É obrigatório preencher <strong>todos os itens</strong> abaixo (dados pessoais, seguro coletivo e dados bancários) para validar seu cadastro e liberar repasses.
               </p>
             </div>
+          </div>
+        )}
+
+        {/* Card / Banner de Migração para Pessoa Jurídica (PJ) */}
+        {isPJ ? (
+          <div className="bg-gradient-to-r from-purple-900/10 via-indigo-900/10 to-slate-900/5 border border-purple-500/20 p-6 md:p-8 rounded-[2.5rem] flex flex-col md:flex-row items-start md:items-center justify-between gap-6 shadow-sm">
+            <div className="flex items-center gap-5">
+              <div className="size-14 rounded-2xl bg-purple-600 text-white flex items-center justify-center font-black shadow-lg shadow-purple-600/30 shrink-0">
+                <Building2 size={28} />
+              </div>
+              <div>
+                <div className="flex items-center gap-3">
+                  <h3 className="text-xl font-black text-midnight tracking-tight uppercase italic">Perfil Pessoa Jurídica (PJ) Ativo</h3>
+                  <span className="px-3 py-1 bg-purple-600 text-white rounded-full text-[9px] font-black uppercase tracking-widest shadow-md shadow-purple-600/20">PJ Isento</span>
+                </div>
+                <p className="text-xs text-slate-600 font-bold mt-1">
+                  CNPJ: <span className="text-midnight font-black">{profile?.cnpj}</span> {profile?.store_name && <>• Razão Social: <span className="text-midnight font-black">{profile?.store_name}</span></>}
+                </p>
+                <p className="text-[11px] text-purple-700 font-semibold mt-1">
+                  ✓ Repasses integrais de 100% bruto sem retenção na fonte de INSS ou IRRF, mediante emissão mensal de Nota Fiscal.
+                </p>
+              </div>
+            </div>
+          </div>
+        ) : pjRequest?.status === 'pending' ? (
+          <div className="bg-gradient-to-r from-amber-500/10 via-orange-500/10 to-transparent border border-amber-500/30 p-6 md:p-8 rounded-[2.5rem] flex flex-col md:flex-row items-start md:items-center justify-between gap-6 shadow-sm">
+            <div className="flex items-start md:items-center gap-5">
+              <div className="size-14 rounded-2xl bg-amber-500 text-white flex items-center justify-center font-black shadow-lg shadow-amber-500/30 shrink-0">
+                <Clock size={28} />
+              </div>
+              <div>
+                <div className="flex items-center gap-3">
+                  <h3 className="text-lg font-black text-amber-900 tracking-tight uppercase italic">Solicitação de Migração para PJ em Análise</h3>
+                  <span className="px-3 py-1 bg-amber-500 text-white rounded-full text-[9px] font-black uppercase tracking-widest animate-pulse">Aguardando Admin</span>
+                </div>
+                <p className="text-xs text-amber-900 font-bold mt-1">
+                  Empresa: <span className="text-midnight font-black">{pjRequest.company_name}</span> • CNPJ: <span className="text-midnight font-black">{pjRequest.cnpj}</span>
+                </p>
+                <p className="text-xs text-amber-800 mt-1 font-medium">
+                  Sua solicitação foi enviada em {new Date(pjRequest.created_at).toLocaleDateString('pt-BR')} e está sob análise da administração. Assim que for aprovada, seus repasses passarão a operar como PJ.
+                </p>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="bg-gradient-to-r from-purple-600/5 via-indigo-600/10 to-primary-blue/5 border border-purple-500/20 p-6 md:p-8 rounded-[2.5rem] flex flex-col md:flex-row items-start md:items-center justify-between gap-6 shadow-sm">
+            <div className="flex items-start md:items-center gap-5">
+              <div className="size-14 rounded-2xl bg-gradient-to-br from-purple-600 to-indigo-600 text-white flex items-center justify-center font-black shadow-lg shadow-purple-600/30 shrink-0">
+                <Building2 size={28} />
+              </div>
+              <div>
+                <div className="flex items-center gap-3">
+                  <h3 className="text-lg font-black text-midnight tracking-tight uppercase italic">Receber Comissões como Pessoa Jurídica (PJ)</h3>
+                  <span className="px-3 py-1 bg-purple-100 text-purple-700 border border-purple-200 rounded-full text-[9px] font-black uppercase tracking-widest">Vantagem Tributária</span>
+                </div>
+                <p className="text-xs text-slate-500 max-w-2xl mt-1 font-medium">
+                  Receba <strong>100% do valor bruto</strong> de suas comissões, com isenção total de retenções na fonte de INSS (11%) e IRRF (até 27,5%), mediante emissão de Nota Fiscal.
+                </p>
+                {pjRequest?.status === 'rejected' && (
+                  <p className="text-xs text-red-600 font-bold mt-1.5 bg-red-50 p-2 rounded-xl border border-red-200">
+                    ⚠️ Solicitação anterior recusada: {pjRequest.rejection_reason || 'Dados inconsistentes'}. Você pode enviar uma nova solicitação corrigida.
+                  </p>
+                )}
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setIsPjModalOpen(true)}
+              className="shrink-0 px-6 py-4 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white rounded-2xl text-xs font-black uppercase tracking-widest shadow-xl shadow-purple-600/20 transition-all flex items-center gap-2 hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
+            >
+              <Building2 size={16} />
+              Solicitar Migração para PJ
+            </button>
           </div>
         )}
 
@@ -858,6 +1021,178 @@ export default function AffiliateProfile() {
           </div>
 
         </form>
+
+        {/* Modal de Solicitação de Migração para PJ */}
+        <AnimatePresence>
+          {isPjModalOpen && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+              <motion.div 
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                onClick={() => setIsPjModalOpen(false)}
+                className="fixed inset-0 bg-black/60 backdrop-blur-sm"
+              />
+              <motion.div 
+                initial={{ opacity: 0, scale: 0.95, y: 20 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: 20 }}
+                className="relative w-full max-w-lg bg-white rounded-[2.5rem] border border-slate-100 shadow-2xl p-8 md:p-10 z-10 overflow-y-auto max-h-[90vh]"
+              >
+                <div className="flex items-center justify-between pb-6 border-b border-slate-100">
+                  <div className="flex items-center gap-3">
+                    <div className="size-12 rounded-2xl bg-purple-50 text-purple-600 flex items-center justify-center">
+                      <Building2 size={24} />
+                    </div>
+                    <div>
+                      <h3 className="text-xl font-black text-midnight tracking-tight uppercase italic">Migração para PJ</h3>
+                      <p className="text-xs text-slate-400 font-bold">Solicite o recebimento de comissões como empresa</p>
+                    </div>
+                  </div>
+                  <button 
+                    onClick={() => setIsPjModalOpen(false)}
+                    className="size-10 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center transition-all cursor-pointer"
+                  >
+                    <X size={18} />
+                  </button>
+                </div>
+
+                <form onSubmit={handleSubmitPjRequest} className="mt-6 space-y-5">
+                  {/* CNPJ */}
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
+                      CNPJ da Empresa *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="00.000.000/0000-00"
+                      value={pjForm.cnpj}
+                      onChange={handleCnpjChange}
+                      className="w-full bg-slate-50 border border-slate-200 px-4 py-3.5 rounded-2xl font-bold text-midnight focus:outline-none focus:border-purple-600 focus:bg-white text-sm"
+                    />
+                  </div>
+
+                  {/* Razão Social */}
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
+                      Razão Social (Nome Empresarial) *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="Ex: Minha Empresa Intermediações Ltda"
+                      value={pjForm.companyName}
+                      onChange={(e) => setPjForm({...pjForm, companyName: e.target.value})}
+                      className="w-full bg-slate-50 border border-slate-200 px-4 py-3.5 rounded-2xl font-bold text-midnight focus:outline-none focus:border-purple-600 focus:bg-white text-sm"
+                    />
+                  </div>
+
+                  {/* Nome Fantasia */}
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
+                      Nome Fantasia (Opcional)
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="Nome comercial ou de divulgação"
+                      value={pjForm.tradeName}
+                      onChange={(e) => setPjForm({...pjForm, tradeName: e.target.value})}
+                      className="w-full bg-slate-50 border border-slate-200 px-4 py-3.5 rounded-2xl font-bold text-midnight focus:outline-none focus:border-purple-600 focus:bg-white text-sm"
+                    />
+                  </div>
+
+                  {/* Tipo de Chave PIX e Chave */}
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
+                        Tipo Chave PIX
+                      </label>
+                      <select
+                        value={pjForm.pixType}
+                        onChange={(e) => setPjForm({...pjForm, pixType: e.target.value})}
+                        className="w-full bg-slate-50 border border-slate-200 px-3 py-3.5 rounded-2xl font-bold text-midnight focus:outline-none focus:border-purple-600 text-xs"
+                      >
+                        <option value="CNPJ">CNPJ</option>
+                        <option value="EMAIL">E-mail</option>
+                        <option value="TELEFONE">Telefone</option>
+                        <option value="ALEATORIA">Aleatória</option>
+                      </select>
+                    </div>
+                    <div className="space-y-1.5 sm:col-span-2">
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
+                        Chave PIX da Empresa
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="Chave para recebimento PJ"
+                        value={pjForm.pixKey}
+                        onChange={(e) => setPjForm({...pjForm, pixKey: e.target.value})}
+                        className="w-full bg-slate-50 border border-slate-200 px-4 py-3.5 rounded-2xl font-bold text-midnight focus:outline-none focus:border-purple-600 focus:bg-white text-sm"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Link do Comprovante / Cartão CNPJ */}
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
+                      Link do Cartão CNPJ ou Contrato Social (Opcional)
+                    </label>
+                    <input
+                      type="url"
+                      placeholder="https://link-do-documento.pdf"
+                      value={pjForm.documentUrl}
+                      onChange={(e) => setPjForm({...pjForm, documentUrl: e.target.value})}
+                      className="w-full bg-slate-50 border border-slate-200 px-4 py-3.5 rounded-2xl font-bold text-midnight focus:outline-none focus:border-purple-600 focus:bg-white text-sm"
+                    />
+                  </div>
+
+                  {/* Observações */}
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
+                      Observações para o Administrador (Opcional)
+                    </label>
+                    <textarea
+                      rows={2}
+                      placeholder="Mensagem adicional ou esclarecimentos..."
+                      value={pjForm.notes}
+                      onChange={(e) => setPjForm({...pjForm, notes: e.target.value})}
+                      className="w-full bg-slate-50 border border-slate-200 p-3 rounded-2xl font-medium text-midnight focus:outline-none focus:border-purple-600 focus:bg-white text-xs resize-none"
+                    />
+                  </div>
+
+                  {/* Aviso Regulatório */}
+                  <div className="p-4 bg-purple-50/70 border border-purple-200/60 rounded-2xl text-[11px] text-purple-900 leading-relaxed font-medium">
+                    ⚖️ <strong>Regra de Conformidade:</strong> A conta bancária e chave PIX devem pertencer à titularidade do mesmo CNPJ. A apólice de Seguro MBM continuará vinculada ao titular pessoa física responsável cadastrado.
+                  </div>
+
+                  {/* Botões */}
+                  <div className="flex items-center gap-3 pt-4">
+                    <button
+                      type="button"
+                      onClick={() => setIsPjModalOpen(false)}
+                      className="flex-1 py-4 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-2xl text-xs font-black uppercase tracking-widest transition-all cursor-pointer"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={submittingPj}
+                      className="flex-1 py-4 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white rounded-2xl text-xs font-black uppercase tracking-widest shadow-xl shadow-purple-600/20 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                    >
+                      {submittingPj ? <Loader2 className="animate-spin" size={16} /> : (
+                        <>
+                          <Send size={16} />
+                          Enviar Solicitação
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </form>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
 
       </div>
     </AffiliateLayout>

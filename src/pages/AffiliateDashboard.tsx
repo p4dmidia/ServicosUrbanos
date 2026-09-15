@@ -12,11 +12,7 @@ import {
   ExternalLink,
   Target,
   ShoppingBag,
-  Building2,
-  Award,
-  Sparkles,
-  ShieldCheck,
-  X
+  Building2
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { Link, useNavigate } from 'react-router-dom';
@@ -33,16 +29,6 @@ export default function AffiliateDashboard() {
   const [stats, setStats] = useState<any>(null);
   const [activity, setActivity] = useState<any[]>([]);
   const [links, setLinks] = useState<any[]>([]);
-  const [careerProgress, setCareerProgress] = useState<{
-    activeG1Count: number;
-    totalG1Count: number;
-    targetCount: number;
-    isReseller: boolean;
-    remaining: number;
-    percent: number;
-    promoted: boolean;
-  } | null>(null);
-  const [showCelebration, setShowCelebration] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 8;
 
@@ -52,29 +38,13 @@ export default function AffiliateDashboard() {
       
       try {
         setLoading(true);
-        const [statsData, activityData, careerData] = await Promise.all([
+        const [statsData, activityData] = await Promise.all([
           businessRules.getAffiliateStats(user.id),
-          businessRules.getEcosystemActivity(user.id),
-          businessRules.getCareerProgress(user.id)
+          businessRules.getEcosystemActivity(user.id)
         ]);
         
         setStats(statsData);
         setActivity(activityData);
-        setCareerProgress(careerData);
-
-        // Verifica se há celebração pendente de visualização
-        const hasCelebrationFlag = localStorage.getItem(`celebrate_career_${user.id}`) === 'true';
-        const isDismissed = localStorage.getItem(`celebrate_career_dismissed_${user.id}`) === 'true';
-        if ((careerData?.promoted || hasCelebrationFlag) && !isDismissed) {
-          setShowCelebration(true);
-        }
-
-        if (careerData?.promoted) {
-          await refreshProfile();
-          toast.success('🎉 Parabéns! Você atingiu 3 indicados ativos e foi promovido a Revendedor Regional!', {
-            duration: 6000
-          });
-        }
         
         if (statsData && !statsData.isEligible) {
           navigate('/afiliado/renovacoes');
@@ -83,7 +53,6 @@ export default function AffiliateDashboard() {
         }
 
         // Use referral_code from profile context if available, fallback to user.id
-        // This avoids making a failing query if the migration hasn't been run yet
         const referralCode = profile?.referral_code || user.id;
         setLinks(businessRules.getAffiliateLinks(referralCode));
       } catch (error) {
@@ -97,13 +66,6 @@ export default function AffiliateDashboard() {
 
     loadDashboardData();
   }, [user, profile]);
-
-  const handleDismissCelebration = () => {
-    if (user) {
-      localStorage.setItem(`celebrate_career_dismissed_${user.id}`, 'true');
-      setShowCelebration(false);
-    }
-  };
 
   const copyToClipboard = (text: string, label: string = 'Link') => {
     navigator.clipboard.writeText(text);
@@ -264,109 +226,6 @@ export default function AffiliateDashboard() {
             </h3>
           </motion.div>
         </div>
-
-        {/* Career Plan: Banner de Celebração (para quem acabou de conquistar o nível pela meta) */}
-        {showCelebration && (
-          <motion.div
-            initial={{ opacity: 0, y: 15 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="p-8 rounded-[2.5rem] border border-amber-300 bg-gradient-to-br from-amber-500/15 via-amber-500/5 to-white relative overflow-hidden transition-all shadow-md"
-          >
-            <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6 relative z-10">
-              <div className="space-y-2 max-w-2xl">
-                <div className="flex items-center gap-2">
-                  <div className="p-2 rounded-xl text-xs font-black uppercase tracking-widest flex items-center gap-1.5 bg-amber-100 text-amber-800">
-                    <Award size={14} className="text-amber-600" />
-                    Plano de Carreira: Revendedor Regional
-                  </div>
-                  <span className="inline-flex items-center gap-1 bg-emerald-100 text-emerald-800 text-[10px] font-black px-2.5 py-0.5 rounded-full uppercase tracking-wider">
-                    <ShieldCheck size={12} /> Meta Conquistada!
-                  </span>
-                </div>
-
-                <h3 className="text-xl font-black text-midnight tracking-tight">
-                  Parabéns! Você alcançou o nível de Revendedor Regional 🚀
-                </h3>
-
-                <p className="text-xs text-slate-600 font-medium leading-relaxed">
-                  Você atingiu a meta de 3 indicados diretos ativos no seu primeiro nível (G1). Seu acesso exclusivo ao Painel de Revendedor e aos repasses de comissão de até 7% (5% mensal + 2% anual) já está disponível!
-                </p>
-              </div>
-
-              <div className="flex flex-col sm:flex-row items-center gap-3 w-full lg:w-auto shrink-0">
-                <Link
-                  to="/afiliado/revendedor"
-                  className="w-full sm:w-auto inline-flex items-center justify-center gap-2 bg-amber-500 hover:bg-amber-600 text-white font-black py-3 px-6 rounded-2xl text-xs uppercase tracking-wider transition-all shadow-lg shadow-amber-500/20 active:scale-95"
-                >
-                  Acessar Painel do Revendedor <ArrowUpRight size={16} />
-                </Link>
-                <button
-                  onClick={handleDismissCelebration}
-                  className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold py-3 px-4 rounded-2xl text-xs uppercase tracking-wider transition-all"
-                  title="Dispensar aviso"
-                >
-                  <X size={14} /> Dispensar
-                </button>
-              </div>
-            </div>
-          </motion.div>
-        )}
-
-        {/* Career Plan: Banner de Meta Rumo a Revendedor (apenas para quem ainda é Afiliado) */}
-        {!showCelebration && profile?.role === 'affiliate' && careerProgress && (
-          <motion.div
-            initial={{ opacity: 0, y: 15 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="p-8 rounded-[2.5rem] border bg-gradient-to-br from-primary-blue/5 via-indigo-50/50 to-white border-slate-200 hover:border-primary-blue/40 relative overflow-hidden transition-all shadow-sm"
-          >
-            <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6 relative z-10">
-              <div className="space-y-2 max-w-2xl">
-                <div className="flex items-center gap-2">
-                  <div className="p-2 rounded-xl text-xs font-black uppercase tracking-widest flex items-center gap-1.5 bg-primary-blue/10 text-primary-blue">
-                    <Sparkles size={14} className="text-primary-blue" />
-                    Plano de Carreira: Rumo a Revendedor Regional
-                  </div>
-                </div>
-
-                <h3 className="text-xl font-black text-midnight tracking-tight">
-                  Indique 3 pessoas ativas no seu G1 para se tornar Revendedor
-                </h3>
-
-                <p className="text-xs text-slate-600 font-medium leading-relaxed">
-                  Ao atingir 3 indicados diretos com plano ativo no nível G1, você é promovido automaticamente a Revendedor Regional, desbloqueando repasses exclusivos de Revendedor sobre toda a rede.
-                </p>
-              </div>
-
-              {/* Progress & Action */}
-              <div className="w-full lg:w-80 bg-white p-5 rounded-2xl border border-slate-100 shadow-sm space-y-3 shrink-0">
-                <div className="flex justify-between items-center text-xs font-black">
-                  <span className="text-slate-500 uppercase tracking-wider text-[10px]">Meta de Indicados Ativos (G1)</span>
-                  <span className="px-2 py-0.5 rounded-lg text-xs bg-slate-100 text-midnight font-black">
-                    {careerProgress.activeG1Count} / {careerProgress.targetCount}
-                  </span>
-                </div>
-
-                {/* Progress Bar */}
-                <div className="w-full h-3 bg-slate-100 rounded-full overflow-hidden p-0.5">
-                  <div 
-                    className="h-full rounded-full transition-all duration-700 bg-gradient-to-r from-primary-blue to-indigo-600"
-                    style={{ width: `${careerProgress.percent}%` }}
-                  />
-                </div>
-
-                <div className="flex items-center justify-between text-[11px] pt-1">
-                  <span className="text-slate-500 font-bold">
-                    {careerProgress.remaining > 0 ? (
-                      <>Faltam apenas <span className="text-primary-blue font-black">{careerProgress.remaining}</span> indicado(s) ativo(s)!</>
-                    ) : (
-                      <span className="text-emerald-600 font-black">Meta de 3 ativos concluída!</span>
-                    )}
-                  </span>
-                </div>
-              </div>
-            </div>
-          </motion.div>
-        )}
 
         {/* Action & Links Section */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">

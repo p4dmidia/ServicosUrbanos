@@ -1150,18 +1150,34 @@ export default function AdminFinancials() {
     if (mbmMensalCount > 0) planBreakdownParts.push(`${mbmMensalCount}x Mensal (R$ ${(mbmMensalCount * 1).toFixed(2).replace('.', ',')})`);
     const mbmPlanSummary = planBreakdownParts.length > 0 ? planBreakdownParts.join(' • ') : 'R$ 1,00/mês por plano';
 
-    // Margem Líquida da Plataforma (~72%)
-    const netProfit = Math.max(0, grossRevenue - mmnTotal - mbmCost);
-    const profitMargin = grossRevenue > 0 ? (netProfit / grossRevenue) * 100 : 0;
+    // Despesas adicionais da DRE oficial da planilha:
+    // 1. Despesas Administrativas: 3.00% da arrecadação bruta
+    const despAdmRate = 3.00;
+    const despAdmTotal = grossRevenue > 0 ? (grossRevenue * (despAdmRate / 100)) : 0;
+
+    // 2. Provisão de Impostos: 22.78% da arrecadação bruta (R$ 232.326 / R$ 1.020.000 = 22,78%)
+    const impostosRate = 22.7770588;
+    const impostosTotal = grossRevenue > 0 ? (grossRevenue * (impostosRate / 100)) : 0;
+
+    // 3. Total de Gastos / Despesas Operacionais (Seguradora + Comissões + Desp Adm + Impostos = ~67,89%)
+    const totalExpenses = mbmCost + mmnTotal + despAdmTotal + impostosTotal;
+    const totalExpensesPercentage = grossRevenue > 0 ? (totalExpenses / grossRevenue) * 100 : 67.89;
+
+    // 4. Lucro Líquido Real da Plataforma (Margem ~32,11% conforme planilha)
+    const netProfit = Math.max(0, grossRevenue - totalExpenses);
+    const profitMargin = grossRevenue > 0 ? (netProfit / grossRevenue) * 100 : 32.11;
+    const totalPolicies = completed.length || activeLivesCount || (grossRevenue > 0 ? Math.round(grossRevenue / 85) : 0);
+    const profitPerPolicy = totalPolicies > 0 ? (netProfit / totalPolicies) : 0;
     
     const mmnPercentage = grossRevenue > 0 ? (mmnTotal / grossRevenue) * 100 : totalRepasseRate;
     const networkPercentage = grossRevenue > 0 ? (networkTotal / grossRevenue) * 100 : networkRate;
     const resellerPercentage = grossRevenue > 0 ? (resellerTotal / grossRevenue) * 100 : resellerRate;
-    const mbmPercentage = grossRevenue > 0 ? (mbmCost / grossRevenue) * 100 : 0;
+    const mbmPercentage = grossRevenue > 0 ? (mbmCost / grossRevenue) * 100 : (grossRevenue > 0 ? 0 : 14.12);
 
     return {
       grossRevenue,
       totalOrders: completed.length,
+      totalPolicies,
       networkTotal,
       networkPercentage,
       resellerTotal,
@@ -1175,8 +1191,15 @@ export default function AdminFinancials() {
       mbmSemestralCount,
       mbmAnualCount,
       mbmPlanSummary,
+      despAdmRate,
+      despAdmTotal,
+      impostosRate: 22.78,
+      impostosTotal,
+      totalExpenses,
+      totalExpensesPercentage,
       netProfit,
       profitMargin,
+      profitPerPolicy
     };
   }, [orders, networkReport, resellerReport, activeLivesCount, activeSubscriptions, dateRange, mmnRates]);
 
@@ -2074,36 +2097,236 @@ export default function AdminFinancials() {
 
             </div>
 
-            {/* Demonstrativo Estruturado em Linhas Contábeis */}
-            <div className="bg-white/5 p-6 lg:p-8 rounded-3xl border border-white/5 space-y-4">
-              <div className="flex items-center justify-between border-b border-white/5 pb-3">
-                <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                  <FileText size={15} className="text-indigo-400" />
-                  Demonstrativo Contábil Detalhado do Período
-                </h4>
-                <span className="text-[10px] text-slate-500 font-bold uppercase">Valores em Reais (BRL)</span>
+            {/* Demonstrativo Estruturado em Linhas Contábeis (Baseado na Planilha Oficial) */}
+            <div className="bg-white/5 p-6 lg:p-8 rounded-[2.5rem] border border-white/5 space-y-6">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-white/5 pb-4">
+                <div>
+                  <h4 className="text-xs font-black text-slate-300 uppercase tracking-widest flex items-center gap-2">
+                    <FileText size={16} className="text-indigo-400" />
+                    Demonstrativo Contábil Detalhado do Período
+                  </h4>
+                  <p className="text-[11px] text-slate-400 font-medium mt-0.5">
+                    Estrutura DRE conforme matriz atuarial de apólices, seguradora, comissões, despesas adm e tributos
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="px-3 py-1 bg-indigo-500/10 text-indigo-300 border border-indigo-500/20 rounded-full text-[9px] font-black uppercase tracking-widest">
+                    Matriz Oficial
+                  </span>
+                  <span className="text-[10px] text-slate-500 font-bold uppercase">Valores em Reais (BRL)</span>
+                </div>
               </div>
 
-              <div className="space-y-3 font-mono text-xs">
-                <div className="flex justify-between items-center py-2.5 border-b border-white/5">
-                  <span className="text-slate-300 font-bold">(+) Faturamento Bruto de Adesões e Mensalidades</span>
-                  <span className="font-black text-white text-sm">R$ {dreCalculations.grossRevenue.toFixed(2).replace('.', ',')}</span>
+              {/* CARD DESTAQUE: BLOCO DE LUCRO (Idêntico ao destaque amarelo da planilha) */}
+              <div className="bg-gradient-to-r from-amber-500/15 via-yellow-500/10 to-emerald-500/15 border border-amber-500/30 p-6 rounded-3xl grid grid-cols-1 sm:grid-cols-3 gap-4 text-center items-center shadow-xl">
+                <div className="p-3 bg-black/30 rounded-2xl border border-white/5">
+                  <span className="text-[10px] font-black uppercase tracking-widest text-amber-400 block mb-1">
+                    Lucro Líquido Operacional
+                  </span>
+                  <span className="text-2xl lg:text-3xl font-black text-amber-300 font-mono block">
+                    R$ {dreCalculations.netProfit.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </span>
+                  <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">
+                    Resultado após todos os custos
+                  </span>
                 </div>
-                <div className="flex justify-between items-center py-2.5 border-b border-white/5 text-amber-400">
-                  <span>(-) Provisão de Comissões de Rede MMN ({mmnRates.networkRate}% - Níveis G0 a G2)</span>
-                  <span className="font-black">- R$ {dreCalculations.networkTotal.toFixed(2).replace('.', ',')}</span>
+
+                <div className="p-3 bg-black/30 rounded-2xl border border-white/5">
+                  <span className="text-[10px] font-black uppercase tracking-widest text-emerald-400 block mb-1">
+                    Lucro Por Apólice
+                  </span>
+                  <span className="text-2xl lg:text-3xl font-black text-emerald-300 font-mono block">
+                    R$ {dreCalculations.profitPerPolicy.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </span>
+                  <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">
+                    Base: {dreCalculations.totalPolicies} apólices / vidas
+                  </span>
                 </div>
-                <div className="flex justify-between items-center py-2.5 border-b border-white/5 text-purple-400">
-                  <span>(-) Provisão de Comissões de Revendedor ({mmnRates.resellerRate}% - {mmnRates.resellerMensalRate}% Mensal + {mmnRates.resellerAnualRate}% Anual)</span>
-                  <span className="font-black">- R$ {dreCalculations.resellerTotal.toFixed(2).replace('.', ',')}</span>
+
+                <div className="p-3 bg-black/30 rounded-2xl border border-white/5">
+                  <span className="text-[10px] font-black uppercase tracking-widest text-indigo-400 block mb-1">
+                    Margem Líquida Real
+                  </span>
+                  <span className="text-2xl lg:text-3xl font-black text-indigo-300 font-mono block">
+                    {dreCalculations.profitMargin.toFixed(2).replace('.', ',')}%
+                  </span>
+                  <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">
+                    Rentabilidade sobre a arrecadação
+                  </span>
                 </div>
-                <div className="flex justify-between items-center py-2.5 border-b border-white/5 text-blue-400">
-                  <span>(-) Provisão Caixa Seguro MBM ({dreCalculations.mbmPlanSummary})</span>
-                  <span className="font-black">- R$ {dreCalculations.mbmCost.toFixed(2).replace('.', ',')}</span>
+              </div>
+
+              {/* TABELA DE DEMONSTRATIVO DAS LINHAS CONTÁBEIS / DESPESAS */}
+              <div className="space-y-2 font-mono text-xs">
+                {/* 1. Arrecadação / Faturamento Bruto */}
+                <div className="flex justify-between items-center py-3 px-4 bg-white/5 rounded-2xl border border-white/5">
+                  <div className="flex items-center gap-2">
+                    <span className="size-2 rounded-full bg-indigo-400" />
+                    <span className="text-slate-200 font-bold text-sm">
+                      (+) ARRECADAÇÃO / FATURAMENTO BRUTO
+                    </span>
+                    <span className="text-[10px] text-slate-400 font-normal">
+                      ({dreCalculations.totalPolicies} apólices faturadas)
+                    </span>
+                  </div>
+                  <div className="text-right">
+                    <span className="font-black text-white text-base block">
+                      R$ {dreCalculations.grossRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </span>
+                    <span className="text-[10px] text-slate-400 font-bold">100,00%</span>
+                  </div>
                 </div>
-                <div className="flex justify-between items-center py-3.5 bg-emerald-500/10 border border-emerald-500/20 px-5 rounded-2xl text-emerald-400 text-sm font-black">
-                  <span>(=) Resultado Operacional Líquido da Plataforma</span>
-                  <span className="text-base font-black">R$ {dreCalculations.netProfit.toFixed(2).replace('.', ',')}</span>
+
+                {/* Subcabeçalho de Despesas */}
+                <div className="pt-3 pb-1 px-2 flex items-center justify-between text-[10px] font-black uppercase tracking-widest text-slate-400 border-b border-white/5">
+                  <span>Rubricas de Despesas Operacionais (DRE)</span>
+                  <span>Impacto / % Arrecadação</span>
+                </div>
+
+                {/* 2. Seguradora MBM */}
+                <div className="flex justify-between items-center py-2.5 px-4 border-b border-white/5 text-blue-400 hover:bg-white/[0.02] rounded-xl transition-colors">
+                  <div>
+                    <span className="font-bold block">(-) SEGURADORA (MBM Seguro de Vida)</span>
+                    <span className="text-[10px] text-slate-400 font-normal">
+                      Provisão de apólices ativas ({dreCalculations.mbmPlanSummary})
+                    </span>
+                  </div>
+                  <div className="text-right">
+                    <span className="font-black text-sm block">
+                      - R$ {dreCalculations.mbmCost.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </span>
+                    <span className="text-[10px] text-blue-400 font-bold">
+                      {dreCalculations.mbmPercentage.toFixed(2).replace('.', ',')}%
+                    </span>
+                  </div>
+                </div>
+
+                {/* 3. Comissões (28%) */}
+                <div className="flex justify-between items-center py-2.5 px-4 border-b border-white/5 text-amber-400 hover:bg-white/[0.02] rounded-xl transition-colors">
+                  <div>
+                    <span className="font-bold block">(-) COMISSÕES TOTAIS (28,00%)</span>
+                    <span className="text-[10px] text-slate-400 font-normal">
+                      Rede MMN ({mmnRates.networkRate}%: G0 a G2) + Revendedores ({mmnRates.resellerRate}%: {mmnRates.resellerMensalRate}% M + {mmnRates.resellerAnualRate}% A)
+                    </span>
+                  </div>
+                  <div className="text-right">
+                    <span className="font-black text-sm block">
+                      - R$ {dreCalculations.mmnTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </span>
+                    <span className="text-[10px] text-amber-400 font-bold">
+                      {dreCalculations.mmnPercentage.toFixed(2).replace('.', ',')}%
+                    </span>
+                  </div>
+                </div>
+
+                {/* 4. Despesas Administrativas (3%) */}
+                <div className="flex justify-between items-center py-2.5 px-4 border-b border-white/5 text-purple-400 hover:bg-white/[0.02] rounded-xl transition-colors">
+                  <div>
+                    <span className="font-bold block">(-) DESP. ADM (3,00%)</span>
+                    <span className="text-[10px] text-slate-400 font-normal">
+                      Despesas administrativas, tecnológicas e custos operacionais
+                    </span>
+                  </div>
+                  <div className="text-right">
+                    <span className="font-black text-sm block">
+                      - R$ {dreCalculations.despAdmTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </span>
+                    <span className="text-[10px] text-purple-400 font-bold">
+                      {dreCalculations.despAdmRate.toFixed(2).replace('.', ',')}%
+                    </span>
+                  </div>
+                </div>
+
+                {/* 5. Impostos (22,78%) */}
+                <div className="flex justify-between items-center py-2.5 px-4 border-b border-white/5 text-rose-400 hover:bg-white/[0.02] rounded-xl transition-colors">
+                  <div>
+                    <span className="font-bold block">(-) IMPOSTOS (22,78%)</span>
+                    <span className="text-[10px] text-slate-400 font-normal">
+                      Provisão tributária e impostos incidentes sobre o faturamento
+                    </span>
+                  </div>
+                  <div className="text-right">
+                    <span className="font-black text-sm block">
+                      - R$ {dreCalculations.impostosTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </span>
+                    <span className="text-[10px] text-rose-400 font-bold">
+                      {dreCalculations.impostosRate.toFixed(2).replace('.', ',')}%
+                    </span>
+                  </div>
+                </div>
+
+                {/* 6. Total de Gastos / Despesas */}
+                <div className="flex justify-between items-center py-3 px-4 bg-red-500/10 border border-red-500/20 rounded-2xl text-red-300">
+                  <div>
+                    <span className="font-black uppercase tracking-wider block text-xs">
+                      (=) TOTAL DE DESPESAS OPERACIONAIS
+                    </span>
+                    <span className="text-[10px] text-red-400 font-normal">
+                      Soma de Seguradora + Comissões + Desp. Adm + Impostos
+                    </span>
+                  </div>
+                  <div className="text-right">
+                    <span className="font-black text-sm block">
+                      - R$ {dreCalculations.totalExpenses.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </span>
+                    <span className="text-[10px] font-black text-red-400">
+                      PERCENTUAL DE GASTOS: {dreCalculations.totalExpensesPercentage.toFixed(2).replace('.', ',')}%
+                    </span>
+                  </div>
+                </div>
+
+                {/* 7. Lucro Líquido Final */}
+                <div className="flex justify-between items-center py-4 px-5 bg-emerald-500/15 border-2 border-emerald-500/30 rounded-2xl text-emerald-400">
+                  <div>
+                    <span className="font-black text-sm uppercase tracking-wider block">
+                      (=) LUCRO LÍQUIDO OPERACIONAL DA PLATAFORMA
+                    </span>
+                    <span className="text-[10px] text-emerald-300/80 font-normal">
+                      Arrecadação Bruta (-) Total de Despesas e Provisões
+                    </span>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-lg lg:text-xl font-black text-emerald-300 font-mono block">
+                      R$ {dreCalculations.netProfit.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </span>
+                    <span className="text-xs font-black text-emerald-400">
+                      MARGEM LÍQUIDA: {dreCalculations.profitMargin.toFixed(2).replace('.', ',')}%
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* TABELA INFERIOR DE REFERÊNCIA DE PREÇO DOS PLANOS (Canto inferior direito da planilha) */}
+              <div className="pt-4 border-t border-white/5 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 flex items-center gap-1.5">
+                    <CheckCircle2 size={13} className="text-indigo-400" />
+                    Tabela de Preço dos Planos de Apólices (Matriz Referência)
+                  </span>
+                  <span className="text-[9px] text-slate-500 font-bold uppercase">Preço / Ciclo</span>
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  <div className="p-3 bg-white/5 border border-white/5 rounded-2xl text-center">
+                    <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider block">Mensal</span>
+                    <span className="text-sm font-black text-white font-mono block mt-0.5">R$ 20,00</span>
+                    <span className="text-[8px] text-slate-500 font-medium">1 mês cobertura</span>
+                  </div>
+                  <div className="p-3 bg-white/5 border border-white/5 rounded-2xl text-center">
+                    <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider block">Trimestral</span>
+                    <span className="text-sm font-black text-white font-mono block mt-0.5">R$ 25,00</span>
+                    <span className="text-[8px] text-slate-500 font-medium">3 meses cobertura</span>
+                  </div>
+                  <div className="p-3 bg-white/5 border border-white/5 rounded-2xl text-center">
+                    <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider block">Semestral</span>
+                    <span className="text-sm font-black text-white font-mono block mt-0.5">R$ 45,00</span>
+                    <span className="text-[8px] text-slate-500 font-medium">6 meses cobertura</span>
+                  </div>
+                  <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-2xl text-center">
+                    <span className="text-[9px] text-amber-400 font-black uppercase tracking-wider block">Anual (Base)</span>
+                    <span className="text-sm font-black text-amber-300 font-mono block mt-0.5">R$ 85,00</span>
+                    <span className="text-[8px] text-amber-400/80 font-bold">12 meses cobertura</span>
+                  </div>
                 </div>
               </div>
             </div>

@@ -20,20 +20,11 @@ import { useAuth } from '../contexts/AuthContext';
 import { motion } from 'framer-motion';
 
 export default function AffiliateLuckyNumber() {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
 
-  // Gerar um número da sorte pseudo-randômico consistente a partir do ID do usuário (6 dígitos)
-  const getLuckyNumber = (userId: string) => {
-    if (!userId) return '000.000';
-    let hash = 0;
-    for (let i = 0; i < userId.length; i++) {
-      hash = userId.charCodeAt(i) + ((hash << 5) - hash);
-    }
-    const num = Math.abs(hash % 999999).toString().padStart(6, '0');
-    return `${num.slice(0, 3)}.${num.slice(3, 6)}`;
-  };
-
-  const luckyNumber = getLuckyNumber(user?.id || '');
+  // O número da sorte oficial é definido e emitido diretamente pela MBM Seguradora.
+  // Enquanto a seguradora processa a numeração oficial da apólice, exibe status de aguardando.
+  const luckyNumber = (profile as any)?.lucky_number || null;
 
   // Próximo sorteio: realizado nos 4 últimos domingos de cada mês.
   // Em meses que tiverem 5 domingos, desconsidera o primeiro domingo.
@@ -157,18 +148,33 @@ export default function AffiliateLuckyNumber() {
             {/* Linha Divisória de Cupom em MD+ */}
             <div className="hidden md:block h-32 border-l-2 border-dashed border-white/20 mx-4"></div>
 
-            {/* Direita: O Número da Sorte Gigante */}
-            <div className="flex flex-col items-center justify-center bg-white/5 border border-white/10 rounded-3xl p-8 min-w-[240px] text-center">
-              <span className="text-[9px] font-black text-indigo-300 uppercase tracking-widest leading-none mb-3">Seu Número Exclusivo</span>
-              <motion.div 
-                initial={{ scale: 0.95 }}
-                animate={{ scale: 1 }}
-                transition={{ repeat: Infinity, repeatType: "reverse", duration: 1.5 }}
-                className="text-4xl lg:text-5xl font-black tracking-widest text-transparent bg-clip-text bg-gradient-to-r from-amber-400 via-yellow-300 to-amber-200 font-mono"
-              >
-                {luckyNumber}
-              </motion.div>
-              <p className="text-[9px] text-slate-400 mt-3 font-bold uppercase tracking-wider">Número gerado pela MBM SEGURADORA S/A</p>
+            {/* Direita: O Número da Sorte ou Status */}
+            <div className="flex flex-col items-center justify-center bg-white/5 border border-white/10 rounded-3xl p-6 sm:p-8 min-w-[260px] max-w-sm text-center">
+              <span className="text-[9px] font-black text-indigo-300 uppercase tracking-widest leading-none mb-3">
+                {luckyNumber ? 'Seu Número Exclusivo' : 'Status do Bilhete'}
+              </span>
+              {luckyNumber ? (
+                <motion.div 
+                  initial={{ scale: 0.95 }}
+                  animate={{ scale: 1 }}
+                  transition={{ repeat: Infinity, repeatType: "reverse", duration: 1.5 }}
+                  className="text-4xl lg:text-5xl font-black tracking-widest text-transparent bg-clip-text bg-gradient-to-r from-amber-400 via-yellow-300 to-amber-200 font-mono"
+                >
+                  {luckyNumber}
+                </motion.div>
+              ) : (
+                <div className="space-y-1.5 py-1">
+                  <span className="text-sm sm:text-base font-black text-amber-300 uppercase tracking-tight block leading-snug">
+                    Aguardando número da sorte pela seguradora
+                  </span>
+                  <span className="text-[10px] text-slate-400 block font-medium">
+                    A MBM Seguradora processa e atribui o número após a integração da apólice
+                  </span>
+                </div>
+              )}
+              <p className="text-[9px] text-slate-400 mt-3 font-bold uppercase tracking-wider">
+                {luckyNumber ? 'Número gerado pela MBM SEGURADORA S/A' : 'Emissão oficial pela MBM SEGURADORA S/A'}
+              </p>
             </div>
 
           </div>

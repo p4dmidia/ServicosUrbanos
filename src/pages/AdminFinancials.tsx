@@ -33,7 +33,7 @@ import {
 import { motion } from 'motion/react';
 import AdminLayout from '../components/AdminLayout';
 import { supabase } from '../lib/supabase';
-import { businessRules } from '../lib/businessRules';
+import { businessRules, calculateTaxDeductions } from '../lib/businessRules';
 import { useAuth } from '../contexts/AuthContext';
 import { toast } from 'react-hot-toast';
 import { Link } from 'react-router-dom';
@@ -85,6 +85,7 @@ export default function AdminFinancials() {
   const [mbmPolicyNumber, setMbmPolicyNumber] = useState(() => localStorage.getItem('mbm_policy_number') || '');
   const [mbmSubGroup, setMbmSubGroup] = useState(() => localStorage.getItem('mbm_sub_group') || '1');
   const [activeSubscriptions, setActiveSubscriptions] = useState<any[]>([]);
+  const [plans, setPlans] = useState<any[]>([]);
   const [mmnRates, setMmnRates] = useState({
     networkRate: 21,
     resellerMensalRate: 5,
@@ -93,6 +94,20 @@ export default function AdminFinancials() {
     totalRepasseRate: 28
   });
 
+  const getPlanFinancialOrder = (item: any): number => {
+    const p = ((item?.plan_type || item?.name || '') + '').toLowerCase();
+    if (p.includes('mensal') || p.includes('30')) return 1;
+    if (p.includes('trimestral') || p.includes('90')) return 2;
+    if (p.includes('semestral') || p.includes('180')) return 3;
+    if (p.includes('anual') || p.includes('ano') || p.includes('365')) return 4;
+    return 99;
+  };
+
+  const sortedPlans = useMemo(() => {
+    if (!plans || plans.length === 0) return [];
+    return [...plans].sort((a, b) => getPlanFinancialOrder(a) - getPlanFinancialOrder(b));
+  }, [plans]);
+
   useEffect(() => {
     loadFiscalData();
   }, [dateRange.start, dateRange.end]);
@@ -100,7 +115,7 @@ export default function AdminFinancials() {
   async function loadAdminData(silent = false) {
     try {
       if (!silent) setLoading(true);
-      const [ordersData, networkData, resellerData, subsData, mmnConfigRes, mmnLevelsRes] = await Promise.all([
+      const [ordersData, networkData, resellerData, subsData, mmnConfigRes, mmnLevelsRes, plansRes] = await Promise.all([
         businessRules.getAllOrders(),
         businessRules.getAffiliateCashbackReport(dateRange.start, `${dateRange.end}T23:59:59`, 'network'),
         businessRules.getAffiliateCashbackReport(dateRange.start, `${dateRange.end}T23:59:59`, 'reseller'),
@@ -109,12 +124,18 @@ export default function AdminFinancials() {
           .select('id, profile_id, plan_type, amount, status, start_date, end_date')
           .eq('status', 'active'),
         supabase.from('mmn_config').select('*').single(),
-        supabase.from('mmn_levels').select('*')
+        supabase.from('mmn_levels').select('*'),
+        supabase
+          .from('products')
+          .select('*')
+          .eq('is_subscription', true)
+          .order('price', { ascending: true })
       ]);
 
       setOrders(ordersData || []);
       setNetworkReport(networkData || []);
       setResellerReport(resellerData || []);
+      setPlans(plansRes?.data || []);
 
       const rawSubs = subsData?.data || [];
       const filteredSubs = rawSubs.filter(s => {
@@ -577,28 +598,11 @@ export default function AdminFinancials() {
         const bruto = rec.bruto;
         const isPJ = isCnpj(rec.cpf);
         
-        let inss = 0;
-        if (!isPJ) {
-          // Regra INSS PF: 11% fixo limitado a R$ 932,31
-          inss = Math.min(bruto * 0.11, 932.31);
-        }
-
-        const baseIrrf = Math.max(0, bruto - inss);
-        let irrf = 0;
-        if (!isPJ && baseIrrf > 2428.80) {
-          if (baseIrrf <= 2826.65) {
-            irrf = (baseIrrf * 0.075) - 182.16;
-          } else if (baseIrrf <= 3751.05) {
-            irrf = (baseIrrf * 0.15) - 394.16;
-          } else if (baseIrrf <= 4664.68) {
-            irrf = (baseIrrf * 0.225) - 675.49;
-          } else {
-            irrf = (baseIrrf * 0.275) - 908.73;
-          }
-        }
-
-        const patronal = isPJ ? 0 : bruto * 0.20;
-        const liquido = bruto - inss - irrf;
+        const tax = calculateTaxDeductions(bruto, isPJ);
+        const inss = tax.inss;
+        const irrf = tax.irrf;
+        const patronal = tax.patronal;
+        const liquido = tax.liquido;
         const invoice = invoiceMap.get(rec.profile_id);
 
         return {
@@ -1166,7 +1170,10 @@ export default function AdminFinancials() {
     // 4. Lucro Líquido Real da Plataforma (Margem ~32,11% conforme planilha)
     const netProfit = Math.max(0, grossRevenue - totalExpenses);
     const profitMargin = grossRevenue > 0 ? (netProfit / grossRevenue) * 100 : 32.11;
-    const totalPolicies = completed.length || activeLivesCount || (grossRevenue > 0 ? Math.round(grossRevenue / 85) : 0);
+    const annualPlanPrice = Number(
+      plans.find(p => (p.plan_type || '').toLowerCase().includes('anual') || (p.name || '').toLowerCase().includes('anual'))?.price || 99
+    );
+    const totalPolicies = completed.length || activeLivesCount || (grossRevenue > 0 ? Math.round(grossRevenue / annualPlanPrice) : 0);
     const profitPerPolicy = totalPolicies > 0 ? (netProfit / totalPolicies) : 0;
     
     const mmnPercentage = grossRevenue > 0 ? (mmnTotal / grossRevenue) * 100 : totalRepasseRate;
@@ -1201,7 +1208,7 @@ export default function AdminFinancials() {
       profitMargin,
       profitPerPolicy
     };
-  }, [orders, networkReport, resellerReport, activeLivesCount, activeSubscriptions, dateRange, mmnRates]);
+  }, [orders, networkReport, resellerReport, activeLivesCount, activeSubscriptions, dateRange, mmnRates, plans]);
 
   if (authLoading || loading) {
     return (
@@ -2307,26 +2314,66 @@ export default function AdminFinancials() {
                 </div>
 
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                  <div className="p-3 bg-white/5 border border-white/5 rounded-2xl text-center">
-                    <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider block">Mensal</span>
-                    <span className="text-sm font-black text-white font-mono block mt-0.5">R$ 20,00</span>
-                    <span className="text-[8px] text-slate-500 font-medium">1 mês cobertura</span>
-                  </div>
-                  <div className="p-3 bg-white/5 border border-white/5 rounded-2xl text-center">
-                    <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider block">Trimestral</span>
-                    <span className="text-sm font-black text-white font-mono block mt-0.5">R$ 25,00</span>
-                    <span className="text-[8px] text-slate-500 font-medium">3 meses cobertura</span>
-                  </div>
-                  <div className="p-3 bg-white/5 border border-white/5 rounded-2xl text-center">
-                    <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider block">Semestral</span>
-                    <span className="text-sm font-black text-white font-mono block mt-0.5">R$ 45,00</span>
-                    <span className="text-[8px] text-slate-500 font-medium">6 meses cobertura</span>
-                  </div>
-                  <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-2xl text-center">
-                    <span className="text-[9px] text-amber-400 font-black uppercase tracking-wider block">Anual (Base)</span>
-                    <span className="text-sm font-black text-amber-300 font-mono block mt-0.5">R$ 85,00</span>
-                    <span className="text-[8px] text-amber-400/80 font-bold">12 meses cobertura</span>
-                  </div>
+                  {sortedPlans.length > 0 ? (
+                    sortedPlans.map((planItem) => {
+                      const isAnual = (planItem.plan_type || planItem.name || '').toLowerCase().includes('anual');
+                      const duration = planItem.duration_days ? Math.round(planItem.duration_days / 30) : 1;
+                      const coverageText = duration === 1 ? '1 mês cobertura' : `${duration} meses cobertura`;
+                      const cleanName = (planItem.name || planItem.plan_type || '')
+                        .replace(/^Plano\s+/i, '')
+                        .trim();
+
+                      return (
+                        <div 
+                          key={planItem.id}
+                          className={`p-3 rounded-2xl text-center transition-all ${
+                            isAnual 
+                              ? 'bg-amber-500/10 border border-amber-500/20' 
+                              : 'bg-white/5 border border-white/5'
+                          }`}
+                        >
+                          <span className={`text-[9px] uppercase tracking-wider block ${
+                            isAnual ? 'text-amber-400 font-black' : 'text-slate-400 font-bold'
+                          }`}>
+                            {cleanName} {isAnual ? '(Base)' : ''}
+                          </span>
+                          <span className={`text-sm font-black font-mono block mt-0.5 ${
+                            isAnual ? 'text-amber-300' : 'text-white'
+                          }`}>
+                            R$ {Number(planItem.price || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </span>
+                          <span className={`text-[8px] font-medium ${
+                            isAnual ? 'text-amber-400/80 font-bold' : 'text-slate-500'
+                          }`}>
+                            {coverageText}
+                          </span>
+                        </div>
+                      );
+                    })
+                  ) : (
+                    <>
+                      <div className="p-3 bg-white/5 border border-white/5 rounded-2xl text-center">
+                        <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider block">Mensal</span>
+                        <span className="text-sm font-black text-white font-mono block mt-0.5">R$ 20,00</span>
+                        <span className="text-[8px] text-slate-500 font-medium">1 mês cobertura</span>
+                      </div>
+                      <div className="p-3 bg-white/5 border border-white/5 rounded-2xl text-center">
+                        <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider block">Trimestral</span>
+                        <span className="text-sm font-black text-white font-mono block mt-0.5">R$ 25,00</span>
+                        <span className="text-[8px] text-slate-500 font-medium">3 meses cobertura</span>
+                      </div>
+                      <div className="p-3 bg-white/5 border border-white/5 rounded-2xl text-center">
+                        <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider block">Semestral</span>
+                        <span className="text-sm font-black text-white font-mono block mt-0.5">R$ 45,00</span>
+                        <span className="text-[8px] text-slate-500 font-medium">6 meses cobertura</span>
+                      </div>
+                      <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-2xl text-center">
+                        <span className="text-[9px] text-amber-400 font-black uppercase tracking-wider block">Anual (Base)</span>
+                        <span className="text-sm font-black text-amber-300 font-mono block mt-0.5">R$ 99,00</span>
+                        <span className="text-[8px] text-amber-400/80 font-bold">12 meses cobertura</span>
+                      </div>
+                    </>
+                  )}
                 </div>
               </div>
             </div>

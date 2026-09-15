@@ -284,8 +284,10 @@ export default function GanheDinheiro() {
                             <span className="text-red-400 font-semibold">- R$ {inss.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                           </div>
                           <div className="flex justify-between text-slate-500">
-                            <span>Desconto IRRF</span>
-                            <span className="text-red-400 font-semibold">- R$ {irrf.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                            <span>Desconto IRRF (Lei 15.270)</span>
+                            <span className={irrf > 0 ? "text-red-400 font-semibold" : "text-emerald-400 font-semibold"}>
+                              {irrf > 0 ? `- R$ ${irrf.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : 'R$ 0,00 (Isento)'}
+                            </span>
                           </div>
                         </div>
                       </div>

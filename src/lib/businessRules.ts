@@ -174,30 +174,48 @@ export function calculateCumulativeTaxDeductions({
   // 1. Total bruto acumulado do mês com este pagamento
   const totalMonthBruto = alreadyPaidBrutoInMonth + safeBruto;
 
-  // 2. INSS: 11% sobre a soma do mês, limitado ao teto previdenciário de R$ 932,31
+  // 2. INSS: 11% sobre a soma do mês, limitado ao teto previdenciário de R$ 932,31 (Teto R$ 8.475,55)
   const inssTetoMax = 932.31;
   const totalMonthInss = Math.min(totalMonthBruto * 0.11, inssTetoMax);
   const inssRemainingToTeto = Math.max(0, inssTetoMax - alreadyRetainedInssInMonth);
   const inssToRetain = Math.min(safeBruto * 0.11, Math.max(0, totalMonthInss - alreadyRetainedInssInMonth), inssRemainingToTeto);
 
-  // 3. IRPF (IRRF): apurado sobre a soma do mês após dedução do INSS total do mês
+  // 3. Dedução aplicada (a maior entre o desconto simplificado mensal de R$ 607,20 e o INSS legal)
+  // Conforme parâmetros oficiais da Receita Federal 2026 / Lei 15.270
+  const descontoSimplificado = 607.20;
   const combinedMonthInss = alreadyRetainedInssInMonth + inssToRetain;
-  const baseIrrfMonth = Math.max(0, totalMonthBruto - combinedMonthInss);
+  const deducaoAplicada = Math.max(combinedMonthInss, descontoSimplificado);
+  const baseIrrfMonth = Math.max(0, totalMonthBruto - deducaoAplicada);
 
-  // Tabela Progressiva Mensal Oficial IRPF (Conforme Tabela 2026 da Receita Federal)
-  let totalMonthIrrf = 0;
+  // Tabela Progressiva Mensal Oficial IRPF 2026
+  let impostoTabela = 0;
   if (baseIrrfMonth > 2428.80) {
     if (baseIrrfMonth <= 2826.65) {
-      totalMonthIrrf = (baseIrrfMonth * 0.075) - 182.16;
+      impostoTabela = (baseIrrfMonth * 0.075) - 182.16;
     } else if (baseIrrfMonth <= 3751.05) {
-      totalMonthIrrf = (baseIrrfMonth * 0.15) - 394.16;
+      impostoTabela = (baseIrrfMonth * 0.15) - 394.16;
     } else if (baseIrrfMonth <= 4664.68) {
-      totalMonthIrrf = (baseIrrfMonth * 0.225) - 675.49;
+      impostoTabela = (baseIrrfMonth * 0.225) - 675.49;
     } else {
-      totalMonthIrrf = (baseIrrfMonth * 0.275) - 908.73;
+      impostoTabela = (baseIrrfMonth * 0.275) - 908.73;
     }
   }
-  totalMonthIrrf = Math.max(0, totalMonthIrrf);
+  impostoTabela = Math.max(0, impostoTabela);
+
+  // Redutor Oficial (Lei 15.270):
+  // - Isenção total para renda bruta mensal de até R$ 5.000,00 (Redutor = Imposto apurado)
+  // - Redução gradual entre R$ 5.000,01 e R$ 7.350,00: Parcela Fixa R$ 978,62 - (0,133145 * Bruto)
+  // - Acima de R$ 7.350,00: sem redutor (0)
+  let redutor = 0;
+  if (totalMonthBruto <= 5000.00) {
+    redutor = impostoTabela;
+  } else if (totalMonthBruto <= 7350.00) {
+    redutor = Math.max(0, 978.62 - (0.133145 * totalMonthBruto));
+  } else {
+    redutor = 0;
+  }
+
+  const totalMonthIrrf = Math.max(0, impostoTabela - redutor);
 
   // IRRF a descontar neste pagamento: o que falta para atingir o IRRF total do mês
   const irrfToRetain = Math.max(0, totalMonthIrrf - alreadyRetainedIrrfInMonth);

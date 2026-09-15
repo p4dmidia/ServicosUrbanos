@@ -21,7 +21,7 @@ import {
 import { Link } from 'react-router-dom';
 import { motion } from 'motion/react';
 import AffiliateLayout from '../components/AffiliateLayout';
-import { businessRules } from '../lib/businessRules';
+import { businessRules, calculateTaxDeductions } from '../lib/businessRules';
 import { useAuth } from '../contexts/AuthContext';
 import { toast } from 'react-hot-toast';
 import jsPDF from 'jspdf';
@@ -76,49 +76,17 @@ export default function AffiliateWallet() {
     return false;
   }, [profile]);
 
-  // Cálculo individual de impostos (INSS, IRRF e Líquido)
+  // Cálculo individual de impostos (INSS, IRRF e Líquido - Regra Oficial 2026)
   const calculateItemTaxes = (brutoAmount: number) => {
     const bruto = Math.max(0, Number(brutoAmount) || 0);
-    if (isUserPJ) {
-      return {
-        bruto,
-        inss: 0,
-        baseIrrf: bruto,
-        irrf: 0,
-        liquido: bruto,
-        isPJ: true
-      };
-    }
-
-    // Regra INSS Pessoa Física: 11% limitado ao teto previdenciário de R$ 932,31
-    const inss = Math.min(bruto * 0.11, 932.31);
-    const baseIrrf = Math.max(0, bruto - inss);
-
-    // Tabela Progressiva Mensal IRPF Receita Federal (2026)
-    let irrf = 0;
-    if (baseIrrf > 2428.80) {
-      if (baseIrrf <= 2826.65) {
-        irrf = (baseIrrf * 0.075) - 182.16;
-      } else if (baseIrrf <= 3751.05) {
-        irrf = (baseIrrf * 0.15) - 394.16;
-      } else if (baseIrrf <= 4664.68) {
-        irrf = (baseIrrf * 0.225) - 675.49;
-      } else {
-        irrf = (baseIrrf * 0.275) - 908.73;
-      }
-    }
-
-    const safeIrrf = Math.max(0, parseFloat(irrf.toFixed(2)));
-    const safeInss = parseFloat(inss.toFixed(2));
-    const liquido = Math.max(0, parseFloat((bruto - safeInss - safeIrrf).toFixed(2)));
-
+    const tax = calculateTaxDeductions(bruto, isUserPJ);
     return {
-      bruto,
-      inss: safeInss,
-      baseIrrf,
-      irrf: safeIrrf,
-      liquido,
-      isPJ: false
+      bruto: tax.bruto,
+      inss: tax.inss,
+      baseIrrf: tax.irrfBase,
+      irrf: tax.irrf,
+      liquido: tax.liquido,
+      isPJ: tax.isPJ
     };
   };
 

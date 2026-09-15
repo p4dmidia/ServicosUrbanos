@@ -71,7 +71,7 @@ export default function AffiliateRenewals() {
       setStats(statsData);
 
       const rawPlans = plansRes.data && plansRes.data.length > 0 ? plansRes.data : [
-        { id: 'sub-anual', name: 'Plano Anual', price: 85, duration_days: 365, plan_type: 'anual', image: '🏆' },
+        { id: 'sub-anual', name: 'Plano Anual', price: 99, duration_days: 365, plan_type: 'anual', image: '🏆' },
         { id: 'sub-semestral', name: 'Plano Semestral', price: 45, duration_days: 180, plan_type: 'semestral', image: '💼' },
         { id: 'sub-trimestral', name: 'Plano Trimestral', price: 25, duration_days: 90, plan_type: 'trimestral', image: '🌟' },
         { id: 'sub-mensal', name: 'Plano Mensal', price: 20, duration_days: 30, plan_type: 'mensal', image: '📅' }

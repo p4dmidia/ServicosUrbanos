@@ -449,8 +449,8 @@ export default function Home() {
                     </div>
 
                     <div className="pt-4 border-t border-white/5 flex items-center justify-between text-[9px] text-slate-500 font-bold uppercase tracking-widest z-10">
-                      <span>Sem Agendamento</span>
-                      <span>Disponibilidade 24/7</span>
+                      <span>Clínico Geral 24/7</span>
+                      <span>Especialistas c/ Hora Marcada</span>
                     </div>
                   </div>
                 </motion.div>
@@ -463,7 +463,7 @@ export default function Home() {
                   transition={{ duration: 0.6 }}
                   className="flex flex-col gap-6 text-left order-1 lg:order-2"
                 >
-                  <span className="text-accent font-black uppercase text-sm tracking-widest">03. Telemedicina 24/7</span>
+                  <span className="text-accent font-black uppercase text-sm tracking-widest">03. Telemedicina</span>
                   <h2 className="text-3xl md:text-5xl font-extrabold text-white leading-tight">
                     “Saúde acessível, sempre ao seu lado.”
                   </h2>
@@ -476,7 +476,15 @@ export default function Home() {
                         <CheckCircle2 size={14} />
                       </div>
                       <span className="text-slate-300 font-medium text-base">
-                        Consultas online disponíveis 24 horas por dia, 7 dias por semana.
+                        Pronto atendimento com clínico geral 24 horas por dia, 7 dias por semana (sem agendamento).
+                      </span>
+                    </li>
+                    <li className="flex items-start gap-3">
+                      <div className="size-6 rounded-full bg-accent/10 border border-accent/20 flex items-center justify-center shrink-0 mt-0.5 text-accent">
+                        <CheckCircle2 size={14} />
+                      </div>
+                      <span className="text-slate-300 font-medium text-base">
+                        Consultas com médicos especialistas com hora marcada.
                       </span>
                     </li>
                     <li className="flex items-start gap-3">

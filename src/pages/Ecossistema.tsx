@@ -169,7 +169,7 @@ export default function Ecossistema() {
                 </div>
               </motion.div>
 
-              {/* Card 3: Telemedicina 24/7 */}
+              {/* Card 3: Telemedicina */}
               <motion.div
                 whileHover={{ y: -6 }}
                 className="bg-slate-900/50 border border-white/10 rounded-[2rem] p-8 shadow-2xl flex flex-col justify-between h-full group"
@@ -178,14 +178,14 @@ export default function Ecossistema() {
                   <div className="size-12 rounded-2xl bg-accent/10 border border-accent/20 flex items-center justify-center text-accent mb-6">
                     <Activity size={24} />
                   </div>
-                  <h3 className="text-xl font-bold text-white mb-3">3. Telemedicina 24/7</h3>
+                  <h3 className="text-xl font-bold text-white mb-3">3. Telemedicina</h3>
                   <p className="text-slate-400 text-sm leading-relaxed font-medium">
-                    Consultas online com clínicos gerais e especialistas a qualquer hora do dia ou da noite, 7 dias por semana. Um canal médico direto por videochamada, com pagamento simplificado e sem burocracias.
+                    Atendimento com clínico geral 24 horas por dia, 7 dias por semana (sem agendamento), e consultas com especialistas médicos com hora marcada. Um canal médico direto por videochamada e sem burocracias.
                   </p>
                 </div>
                 <div className="pt-6 border-t border-white/5 mt-6 text-xs text-slate-500 font-bold uppercase flex justify-between">
-                  <span>Saúde Online</span>
-                  <span className="text-accent">Sem Agendamento</span>
+                  <span>Clínico Geral 24/7</span>
+                  <span className="text-accent">Especialistas c/ Hora Marcada</span>
                 </div>
               </motion.div>
 

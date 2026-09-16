@@ -196,47 +196,84 @@ export default function AdminFinancials() {
       const lastDayOfMonth = new Date(targetYear, targetMonth, 0, 23, 59, 59).toISOString();
 
       const targetMonthStr = `${year}-${monthStr}`;
-      const { data: activeSubs, error: subsError } = await supabase
-        .from('subscriptions')
-        .select(`
-          profile_id,
-          plan_type,
-          amount,
-          start_date,
-          end_date,
-          status,
-          profiles (
-            full_name,
-            cpf,
-            cnpj,
-            birth_date,
-            gender,
-            description,
-            store_name,
-            status,
-            person_type
-          )
-        `)
-        .eq('status', 'active');
 
-      if (subsError) throw subsError;
+      // 1. Buscar assinaturas cadastradas no banco
+      const [{ data: activeSubs }, { data: paidOrders }, { data: profilesData }] = await Promise.all([
+        supabase
+          .from('subscriptions')
+          .select('profile_id, plan_type, amount, start_date, end_date, status')
+          .eq('status', 'active'),
+        supabase
+          .from('orders')
+          .select('id, customer_id, amount, status, created_at, order_date, items')
+          .in('status', ['Pago', 'Concluído', 'Pago, Aguardando Retirada']),
+        supabase
+          .from('profiles')
+          .select('id, full_name, cpf, cnpj, birth_date, gender, description, store_name, status, person_type')
+      ]);
 
-      // Filtro rigoroso conforme regras da seguradora MBM:
+      const profileMap = new Map((profilesData || []).map(p => [p.id, p]));
+
+      // 2. Consolidar segurados de assinaturas e de pedidos pagos de licenciamento/assinatura
+      const candidateMembers: any[] = [];
+      const seenProfiles = new Set<string>();
+
+      (activeSubs || []).forEach(s => {
+        const p = profileMap.get(s.profile_id);
+        if (p && !seenProfiles.has(s.profile_id)) {
+          seenProfiles.add(s.profile_id);
+          candidateMembers.push({
+            profileId: s.profile_id,
+            planType: s.plan_type,
+            amount: s.amount,
+            startDate: s.start_date,
+            endDate: s.end_date,
+            profiles: p
+          });
+        }
+      });
+
+      (paidOrders || []).forEach(o => {
+        const items = Array.isArray(o.items) ? o.items : [];
+        items.forEach(item => {
+          if (item.is_subscription) {
+            const oDate = o.order_date || o.created_at;
+            if (o.customer_id && !seenProfiles.has(o.customer_id)) {
+              seenProfiles.add(o.customer_id);
+              const p = profileMap.get(o.customer_id);
+              if (p) {
+                candidateMembers.push({
+                  profileId: o.customer_id,
+                  planType: item.plan_type || 'anual',
+                  amount: item.price || o.amount,
+                  startDate: oDate,
+                  endDate: null,
+                  profiles: p
+                });
+              }
+            }
+          }
+        });
+      });
+
+      // 3. Filtro rigoroso conforme regras oficiais da seguradora MBM:
       // 1. Pessoa Jurídica NÃO entra (apenas pessoas físicas com CPF válido);
       // 2. Usuário não cadastrado NÃO entra (exige nome preenchido e CPF de 11 dígitos);
-      // 3. Inativos NÃO entram (exige status 'active' no perfil e assinatura vigente);
+      // 3. Inativos/Bloqueados NÃO entram (se tiver pedido/assinatura paga e não estiver bloqueado, entra);
       // 4. Ciclo Operacional MBM: vigência válida desde o mês de início até o mês do último repasse contratado.
-      const validActiveSubs = (activeSubs || []).filter((sub: any) => {
+      const validActiveSubs = candidateMembers.filter((sub: any) => {
         const p = sub.profiles || {};
 
         // Regra 4: Ciclo MBM (Mês de início ao último repasse do ciclo)
-        const cycle = calculateSubscriptionRepasseCycle(sub.start_date, sub.plan_type, sub.end_date);
+        const cycle = calculateSubscriptionRepasseCycle(sub.startDate, sub.planType, sub.endDate);
         if (targetMonthStr < cycle.startMonthStr || targetMonthStr > cycle.lastRepasseMonthStr) {
           return false;
         }
 
-        // Regra 3: Inativos (perfil precisa estar ativo)
-        if (p.status && p.status !== 'active') return false;
+        // Regra 3: Status bloqueado/inativo explícito
+        if (p.status === 'blocked' || p.status === 'inactive' || p.status === 'bloqueado') {
+          return false;
+        }
 
         // Regra 2: Usuário não cadastrado
         const name = (p.full_name || '').trim();

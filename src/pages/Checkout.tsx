@@ -29,7 +29,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import toast from 'react-hot-toast';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
-import { businessRules } from '../lib/businessRules';
+import { businessRules, calculateSubscriptionRepasseCycle } from '../lib/businessRules';
 import { QRCodeCanvas } from 'qrcode.react';
 import { Copy, Check } from 'lucide-react';
 
@@ -491,32 +491,21 @@ export default function Checkout() {
         setNeedsProfileUpdate(false);
       }
 
-      // Bloqueia compra/recompra de plano se o usuário já possuir assinatura ativa antes da abertura da janela de renovação (1 mês antes do vencimento)
+      // Bloqueia compra/recompra de plano se o usuário já possuir assinatura ativa antes da abertura do mês de cobrança da renovação
       if (hasSubscription && authUser) {
         const { data: activeSub } = await supabase
           .from('subscriptions')
           .select('*')
           .eq('profile_id', authUser.id)
           .eq('status', 'active')
-          .gt('end_date', new Date().toISOString())
           .order('end_date', { ascending: false })
           .limit(1)
           .maybeSingle();
 
         if (activeSub) {
-          const endDate = new Date(activeSub.end_date);
-          endDate.setHours(23, 59, 59, 999);
-          const openDate = new Date(endDate.getTime());
-          const targetMonth = openDate.getMonth() - 1;
-          openDate.setMonth(targetMonth);
-          if (openDate.getMonth() === (targetMonth + 12) % 12 + 1) {
-            openDate.setDate(0);
-          }
-          openDate.setHours(0, 0, 0, 0);
-
-          const today = new Date();
-          if (today < openDate) {
-            toast.error(`Você já possui um plano ativo até ${endDate.toLocaleDateString('pt-BR')}. A renovação ou troca de plano estará disponível a partir de ${openDate.toLocaleDateString('pt-BR')} (1 mês antes do vencimento).`);
+          const cycle = calculateSubscriptionRepasseCycle(activeSub.start_date, activeSub.plan_type, activeSub.end_date);
+          if (!cycle.isWindowOpen && !cycle.isExpired) {
+            toast.error(`Você já possui um plano ativo até ${cycle.cycleEndDate.toLocaleDateString('pt-BR')}. A renovação ou troca de plano estará disponível a partir do mês de cobrança (${cycle.renewalBillingDisplay} - mês anterior ao último repasse).`);
             return;
           }
         }

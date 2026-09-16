@@ -153,8 +153,8 @@ export default function AdminWithdrawals() {
         mensalRevendedorBruto: statement.brutoMensalRevendedor,
         anualMmnBruto: statement.brutoAnualMmn,
         anualRevendedorBruto: statement.brutoAnualRevendedor,
-        mensalBruto: statement.brutoMensalMmn,
-        anualBruto: statement.brutoAnualMmn,
+        mensalBruto: (statement.brutoMensalMmn || 0) + (statement.brutoMensalRevendedor || 0),
+        anualBruto: (statement.brutoAnualMmn || 0) + (statement.brutoAnualRevendedor || 0),
         annualPeriodLabel: statement.annualPeriodLabel,
         isAnnualPaymentCycle: statement.isDecemberAnnualPayout,
         totalBruto: statement.totalBruto,
@@ -1470,7 +1470,9 @@ export default function AdminWithdrawals() {
                         Informativo Oficial de Pagamento
                       </span>
                       <h2 className="text-xl md:text-2xl font-black text-white uppercase tracking-tight mt-2">
-                        REPASSE MENSAL DE REDE MMN - AFILIADO
+                        {(statementData.mensalRevendedorBruto || 0) > 0 
+                          ? 'REPASSE MENSAL CONSOLIDADO - REVENDEDOR REGIONAL & MMN' 
+                          : 'REPASSE MENSAL DE REDE MMN - AFILIADO'}
                       </h2>
                       <p className="text-xs text-slate-400 font-bold uppercase tracking-wider mt-0.5">
                         {statementData.periodLabel} • DATA DO PAGAMENTO: {statementData.paymentDateLabel}
@@ -1506,7 +1508,9 @@ export default function AdminWithdrawals() {
                         <h4 className="text-xl font-black font-mono text-white">
                           R$ {(statementData.mensalBruto || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                         </h4>
-                        <span className="text-[9px] text-slate-400 font-medium uppercase">Rede MMN (G0 ao G2)</span>
+                        <span className="text-[9px] text-slate-400 font-medium uppercase">
+                          {(statementData.mensalRevendedorBruto || 0) > 0 ? 'Rede MMN + Revendedor' : 'Rede MMN (G0 ao G2)'}
+                        </span>
                       </div>
                     </div>
 

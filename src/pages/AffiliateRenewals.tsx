@@ -3,7 +3,7 @@ import { RefreshCw, CheckCircle2, AlertTriangle, Calendar, CreditCard, ChevronRi
 import AffiliateLayout from '../components/AffiliateLayout';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
-import { businessRules } from '../lib/businessRules';
+import { businessRules, calculateSubscriptionRepasseCycle } from '../lib/businessRules';
 import { toast } from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 
@@ -118,40 +118,30 @@ export default function AffiliateRenewals() {
     loadData();
   }, [user]);
 
-  const getRenewalWindow = (endDateString?: string) => {
-    if (!endDateString) return null;
-    const endDate = new Date(endDateString);
-    endDate.setHours(23, 59, 59, 999);
-
-    const openDate = new Date(endDate.getTime());
-    const targetMonth = openDate.getMonth() - 1;
-    openDate.setMonth(targetMonth);
-    // Trata overflow de meses com dias diferentes (ex: 31 de março voltando para 28 de fevereiro)
-    if (openDate.getMonth() === (targetMonth + 12) % 12 + 1) {
-      openDate.setDate(0);
-    }
-    openDate.setHours(0, 0, 0, 0);
-
-    const today = new Date();
-    const isWindowOpen = today >= openDate;
-    const isExpired = today.getTime() > endDate.getTime();
-
+  const getRenewalWindow = (sub?: any) => {
+    if (!sub) return null;
+    const cycle = calculateSubscriptionRepasseCycle(sub.start_date, sub.plan_type, sub.end_date);
     return {
-      endDate,
-      openDate,
-      isWindowOpen,
-      isExpired
+      cycle,
+      endDate: cycle.cycleEndDate,
+      openDate: cycle.renewalBillingDate,
+      isWindowOpen: cycle.isWindowOpen,
+      isExpired: cycle.isExpired,
+      renewalBillingDisplay: cycle.renewalBillingDisplay,
+      lastRepasseDisplay: cycle.lastRepasseDisplay,
+      firstRepasseDisplay: cycle.firstRepasseDisplay,
+      startDisplay: cycle.startDisplay
     };
   };
 
   const handlePay = async (plan: any) => {
     if (!user) return;
     
-    // Bloqueia compra de plano se possuir assinatura ativa antes da abertura da janela de renovação (1 mês antes do vencimento)
+    // Bloqueia compra de plano se possuir assinatura ativa antes da abertura da janela de renovação (mês anterior ao último repasse)
     if (subscription && stats?.isEligible) {
-      const rWindow = getRenewalWindow(subscription.end_date);
+      const rWindow = getRenewalWindow(subscription);
       if (rWindow && !rWindow.isWindowOpen) {
-        toast.error(`Você já possui um plano ativo até ${rWindow.endDate.toLocaleDateString('pt-BR')}. A renovação ou troca de plano estará disponível a partir de ${rWindow.openDate.toLocaleDateString('pt-BR')} (1 mês antes do vencimento).`);
+        toast.error(`Você já possui um plano ativo até ${rWindow.endDate.toLocaleDateString('pt-BR')}. A renovação ou troca de plano estará disponível a partir do mês de cobrança (${rWindow.renewalBillingDisplay} - 1º repasse + ciclo).`);
         return;
       }
     }
@@ -186,7 +176,7 @@ export default function AffiliateRenewals() {
             </div>
             Minhas Renovações
           </h1>
-          <p className="text-slate-500 font-medium mt-1">Gerencie a assinatura do seu licenciamento MMN e histórico de faturas.</p>
+          <p className="text-slate-500 font-medium mt-1">Gerencie a assinatura do seu licenciamento MMN e calendário operacional de repasses/renovação.</p>
         </div>
 
         {loading ? (
@@ -205,13 +195,22 @@ export default function AffiliateRenewals() {
                   </div>
                   <div>
                     <h3 className="text-base font-black text-emerald-950 uppercase italic tracking-tight">Sua conta está ativa</h3>
-                    <p className="text-xs text-emerald-800 font-bold uppercase tracking-wider mt-1">
-                      Você está elegível para receber cashbacks da rede até {subscription ? new Date(subscription.end_date).toLocaleDateString('pt-BR') : '---'}.
-                    </p>
+                    {subscription ? (() => {
+                      const rWindow = getRenewalWindow(subscription);
+                      return (
+                        <p className="text-xs text-emerald-800 font-bold uppercase tracking-wider mt-1">
+                          Início: {rWindow?.startDisplay} • 1º Repasse: {rWindow?.firstRepasseDisplay} • Último Repasse: {rWindow?.lastRepasseDisplay}
+                        </p>
+                      );
+                    })() : (
+                      <p className="text-xs text-emerald-800 font-bold uppercase tracking-wider mt-1">
+                        Você está elegível para receber cashbacks da rede.
+                      </p>
+                    )}
                   </div>
                 </div>
                 {subscription && (() => {
-                  const rWindow = getRenewalWindow(subscription.end_date);
+                  const rWindow = getRenewalWindow(subscription);
                   return (
                     <div className="bg-white/90 border border-emerald-200 px-6 py-3.5 rounded-2xl text-right self-stretch md:self-auto flex flex-col justify-center shadow-sm">
                       {rWindow?.isWindowOpen ? (
@@ -221,13 +220,16 @@ export default function AffiliateRenewals() {
                             <span className="text-[9px] font-black text-emerald-600 uppercase tracking-widest leading-none">Renovação</span>
                           </div>
                           <span className="text-sm font-black text-emerald-600 uppercase tracking-tight">Liberada</span>
-                          <span className="text-[9px] font-bold text-slate-400 mt-1">Renovar em {new Date(subscription.end_date).toLocaleDateString('pt-BR')}</span>
+                          <span className="text-[9px] font-bold text-slate-400 mt-1">Mês de Cobrança: {rWindow.renewalBillingDisplay}</span>
                         </>
                       ) : (
                         <>
-                          <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest block leading-none mb-1">Próxima Renovação</span>
-                          <span className="text-sm font-black text-midnight font-mono">
-                            A PARTIR DE {rWindow?.openDate ? rWindow.openDate.toLocaleDateString('pt-BR') : new Date(subscription.end_date).toLocaleDateString('pt-BR')}
+                          <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest block leading-none mb-1">Cobrança da Renovação</span>
+                          <span className="text-sm font-black text-midnight font-mono uppercase">
+                            {rWindow?.renewalBillingDisplay || '---'}
+                          </span>
+                          <span className="text-[9px] font-bold text-slate-400 mt-0.5">
+                            (Mês anterior ao último repasse)
                           </span>
                         </>
                       )}
@@ -244,7 +246,7 @@ export default function AffiliateRenewals() {
                   <div>
                     <h3 className="text-base font-black text-amber-950 uppercase italic tracking-tight">Renovação Pendente (Conta Inativa)</h3>
                     <p className="text-xs text-amber-800 font-bold uppercase tracking-wider mt-1">
-                      Faça o pagamento de uma das licenças abaixo para ativar seu link e cashbacks de indicados.
+                      Faça o pagamento de uma das licenças abaixo para ativar seu link e garantir seus repasses e sorteios.
                     </p>
                   </div>
                 </div>
@@ -257,9 +259,9 @@ export default function AffiliateRenewals() {
               
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                 {(() => {
-                  const rWindow = getRenewalWindow(subscription?.end_date);
+                  const rWindow = getRenewalWindow(subscription);
                   const isWindowOpen = !rWindow || rWindow.isWindowOpen || !stats?.isEligible;
-                  // Bloqueia compra apenas se a conta for elegível e faltar mais de 1 mês para o vencimento
+                  // Bloqueia compra apenas se a conta for elegível e ainda não estiver no mês de cobrança da renovação
                   const isButtonDisabled = Boolean(stats?.isEligible && !isWindowOpen);
 
                   return orderedPlans.map((planItem) => {

@@ -275,10 +275,152 @@ export function calculateTaxDeductions(bruto: number, isPjUser: boolean = false)
   });
 }
 
+export interface SubscriptionCycleInfo {
+  startDate: Date;
+  startYear: number;
+  startMonth: number; // 0-indexed (0 = Jan, 8 = Set)
+  startMonthStr: string; // "YYYY-MM"
+  startDisplay: string; // "setembro de 2027"
+  repasseCount: number; // 3, 6, 12, 1
+  firstRepasseDate: Date; // 10 do mês subsequente
+  firstRepasseMonthStr: string; // "YYYY-MM"
+  firstRepasseDisplay: string; // "outubro de 2027"
+  lastRepasseDate: Date; // 10 do último mês de repasse
+  lastRepasseMonthStr: string; // "YYYY-MM"
+  lastRepasseDisplay: string; // "dezembro de 2027"
+  renewalBillingDate: Date; // 1º dia do mês imediatamente anterior ao último repasse
+  renewalBillingMonthStr: string; // "YYYY-MM"
+  renewalBillingDisplay: string; // "novembro de 2027"
+  cycleEndDate: Date; // último milissegundo do mês do último repasse
+  repasseMonthsList: string[]; // ['2027-10', '2027-11', '2027-12']
+  isWindowOpen: boolean; // se data atual >= renewalBillingDate
+  isExpired: boolean; // se data atual > cycleEndDate
+  isRepasseMonth: (yearMonthStr: string) => boolean;
+}
+
+const MONTH_NAMES_FULL_PT = [
+  'janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho',
+  'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'
+];
+
+/**
+ * Motor de Cálculo Universal de Ciclo de Repasse e Renovação MBM:
+ * 1. Identifica o mês de início do cliente.
+ * 2. O primeiro repasse ocorre sempre no mês seguinte ao início (M + 1).
+ * 3. O último repasse ocorre conforme o plano:
+ *    - Trimestral: 1º repasse + 2 meses (total 3 repasses)
+ *    - Semestral: 1º repasse + 5 meses (total 6 repasses)
+ *    - Anual: 1º repasse + 11 meses (total 12 repasses)
+ * 4. A renovação deve ser cobrada no mês imediatamente anterior ao último repasse.
+ */
+export function calculateSubscriptionRepasseCycle(
+  startDateInput: Date | string | null | undefined,
+  planTypeInput: string | null | undefined,
+  endDateInput?: Date | string | null | undefined
+): SubscriptionCycleInfo {
+  let startDate: Date;
+  if (startDateInput) {
+    if (typeof startDateInput === 'string' && startDateInput.length === 7 && startDateInput.includes('-')) {
+      const [y, m] = startDateInput.split('-');
+      startDate = new Date(Number(y), Number(m) - 1, 1, 0, 0, 0);
+    } else {
+      startDate = new Date(startDateInput);
+    }
+    if (isNaN(startDate.getTime())) startDate = new Date();
+  } else if (endDateInput) {
+    const end = new Date(endDateInput);
+    startDate = !isNaN(end.getTime()) ? new Date(end.getTime() - 90 * 24 * 60 * 60 * 1000) : new Date();
+  } else {
+    startDate = new Date();
+  }
+
+  const startYear = startDate.getFullYear();
+  const startMonth = startDate.getMonth(); // 0..11
+  const startMonthStr = `${startYear}-${String(startMonth + 1).padStart(2, '0')}`;
+  const startDisplay = `${MONTH_NAMES_FULL_PT[startMonth]} de ${startYear}`;
+
+  const normalizedPlan = (planTypeInput || '').toLowerCase();
+  let repasseCount = 12;
+  if (normalizedPlan.includes('trimestral') || normalizedPlan.includes('3')) {
+    repasseCount = 3;
+  } else if (normalizedPlan.includes('semestral') || normalizedPlan.includes('6')) {
+    repasseCount = 6;
+  } else if (normalizedPlan.includes('mensal') || normalizedPlan.includes('1')) {
+    repasseCount = 1;
+  } else {
+    repasseCount = 12;
+  }
+
+  // 1. Primeiro Repasse: mês seguinte ao início (M + 1)
+  const firstRepasseMonthIndex = startMonth + 1;
+  const firstRepasseYear = startYear + Math.floor(firstRepasseMonthIndex / 12);
+  const firstRepasseMonth = (firstRepasseMonthIndex % 12 + 12) % 12;
+  const firstRepasseDate = new Date(firstRepasseYear, firstRepasseMonth, 10, 0, 0, 0);
+  const firstRepasseMonthStr = `${firstRepasseYear}-${String(firstRepasseMonth + 1).padStart(2, '0')}`;
+  const firstRepasseDisplay = `${MONTH_NAMES_FULL_PT[firstRepasseMonth]} de ${firstRepasseYear}`;
+
+  // 2. Último Repasse: conforme ciclo (Trimestral +2, Semestral +5, Anual +11)
+  const lastRepasseMonthIndex = firstRepasseMonthIndex + (repasseCount - 1);
+  const lastRepasseYear = startYear + Math.floor(lastRepasseMonthIndex / 12);
+  const lastRepasseMonth = (lastRepasseMonthIndex % 12 + 12) % 12;
+  const lastRepasseDate = new Date(lastRepasseYear, lastRepasseMonth, 10, 0, 0, 0);
+  const lastRepasseMonthStr = `${lastRepasseYear}-${String(lastRepasseMonth + 1).padStart(2, '0')}`;
+  const lastRepasseDisplay = `${MONTH_NAMES_FULL_PT[lastRepasseMonth]} de ${lastRepasseYear}`;
+
+  // 3. Mês de Cobrança da Renovação: mês imediatamente anterior ao último repasse
+  const renewalBillingMonthIndex = lastRepasseMonthIndex - 1;
+  const renewalYear = startYear + Math.floor(renewalBillingMonthIndex / 12);
+  const renewalMonth = (renewalBillingMonthIndex % 12 + 12) % 12;
+  const renewalBillingDate = new Date(renewalYear, renewalMonth, 1, 0, 0, 0, 0);
+  const renewalBillingMonthStr = `${renewalYear}-${String(renewalMonth + 1).padStart(2, '0')}`;
+  const renewalBillingDisplay = `${MONTH_NAMES_FULL_PT[renewalMonth]} de ${renewalYear}`;
+
+  // 4. Fim do Ciclo de Vigência da Apólice (último milissegundo do mês do último repasse)
+  const daysInLastMonth = new Date(lastRepasseYear, lastRepasseMonth + 1, 0).getDate();
+  const cycleEndDate = new Date(lastRepasseYear, lastRepasseMonth, daysInLastMonth, 23, 59, 59, 999);
+
+  // 5. Lista de competências mensais em que ocorrem repasses
+  const repasseMonthsList: string[] = [];
+  for (let i = 0; i < repasseCount; i++) {
+    const mIdx = firstRepasseMonthIndex + i;
+    const y = startYear + Math.floor(mIdx / 12);
+    const m = (mIdx % 12 + 12) % 12;
+    repasseMonthsList.push(`${y}-${String(m + 1).padStart(2, '0')}`);
+  }
+
+  const today = new Date();
+  const isWindowOpen = today >= renewalBillingDate;
+  const isExpired = today.getTime() > cycleEndDate.getTime();
+
+  return {
+    startDate,
+    startYear,
+    startMonth,
+    startMonthStr,
+    startDisplay,
+    repasseCount,
+    firstRepasseDate,
+    firstRepasseMonthStr,
+    firstRepasseDisplay,
+    lastRepasseDate,
+    lastRepasseMonthStr,
+    lastRepasseDisplay,
+    renewalBillingDate,
+    renewalBillingMonthStr,
+    renewalBillingDisplay,
+    cycleEndDate,
+    repasseMonthsList,
+    isWindowOpen,
+    isExpired,
+    isRepasseMonth: (yearMonthStr: string) => repasseMonthsList.includes(yearMonthStr)
+  };
+}
+
 // In-memory fallback para solicitações de migração PJ
 const memoryPjRequests: any[] = [];
 
 export const businessRules = {
+  calculateSubscriptionRepasseCycle,
   // Validação de Maioridade (Seguradora MBM exige 18 anos completos)
   isAtLeast18YearsOld: (birthDate: string | Date | null | undefined): boolean => {
     if (!birthDate) return false;
@@ -3255,18 +3397,33 @@ export const businessRules = {
     const invoices = await businessRules.getAffiliateInvoices(undefined, currentRefMonth);
     const invoiceMap = new Map(invoices.map((inv: any) => [inv.profile_id, inv]));
 
-    // 3. Processar saldos e status de adimplência por usuário
-    // Avalia todos os perfis; a filtragem por categoria é feita na natureza das comissões (userTransactions)
-    const payableList = (profiles || []).map(profile => {
-      // Filtra transações do usuário conforme a categoria solicitada
-      const userTransactions = (transactions || []).filter(t => {
+    // Helper para verificar se o usuário atua como Revendedor Regional
+    const isUserReseller = (profile: any) => {
+      if (profile.role === 'regional_reseller') return true;
+      return (transactions || []).some(t => {
         if (t.profile_id !== profile.id) return false;
         const desc = t.description || '';
-        const isResellerTx = desc.includes('Revendedor') || desc.includes('Regional') || desc.includes('(REG)');
-        if (filterCategory === 'network') return !isResellerTx;
-        if (filterCategory === 'reseller') return isResellerTx;
-        return true;
+        return desc.includes('Revendedor') || desc.includes('Regional') || desc.includes('(REG)');
       });
+    };
+
+    // 3. Processar saldos e status de adimplência por usuário
+    // Regra: Todo afiliado que também for revendedor regional deve aparecer EXCLUSIVAMENTE
+    // dentro da aba "Revendedores Regionais" com TODAS as suas comissões unificadas (MMN + Revenda),
+    // eliminando duplicidades e evitando qualquer confusão na hora de pagar.
+    // Na aba "Afiliados (Rede MMN)" aparecem apenas os afiliados que NÃO são revendedores.
+    const payableList = (profiles || [])
+      .filter(profile => {
+        const isReseller = isUserReseller(profile);
+        if (filterCategory === 'network' && isReseller) return false;
+        if (filterCategory === 'reseller' && !isReseller) return false;
+        return true;
+      })
+      .map(profile => {
+        // Considera todas as transações do usuário.
+        // Para quem está na aba de Revendedores Regionais (ou 'all'), consolida MMN + Revendedor.
+        // Para quem está na aba de Afiliados (que agora são exclusivamente não-revendedores), todas são MMN.
+        const userTransactions = (transactions || []).filter(t => t.profile_id === profile.id);
       
       const userSubs = (subsData || []).filter(s => s.profile_id === profile.id);
       const userOrders = (ordersData || []).filter(o => o.customer_id === profile.id);
@@ -3312,6 +3469,10 @@ export const businessRules = {
           if (oNum && !orderNumbers.includes(oNum)) orderNumbers.push(oNum);
         }
       });
+
+      if (isUserReseller(profile) && !levels.includes('REG')) {
+        levels.unshift('REG');
+      }
 
       const monthlyBonus = userTransactions
         .filter(t => t.type === 'commission' && t.description?.includes('Mensal') && (t.status === 'completed' || t.status === 'pago' || t.status === 'pending'))
@@ -3457,7 +3618,7 @@ export const businessRules = {
         role: profile.role,
         isEligible,
         statusLabel: isEligible ? 'Adimplente / Ativo' : 'Inadimplente',
-        level: levels.join(', ') || (filterCategory === 'reseller' ? 'REG' : (profile.role === 'regional_reseller' ? 'REG' : 'G0')),
+        level: levels.join(', ') || (isUserReseller(profile) ? 'REG' : 'G0'),
         levels,
         orderNumber: orderNumbers.join(', #'),
         orderNumbers,

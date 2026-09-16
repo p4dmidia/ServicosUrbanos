@@ -19,7 +19,7 @@ import autoTable from 'jspdf-autotable';
 import { motion, AnimatePresence } from 'motion/react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
-import { businessRules } from '../lib/businessRules';
+import { businessRules, calculateSubscriptionRepasseCycle } from '../lib/businessRules';
 import AffiliateLayout from '../components/AffiliateLayout';
 import { toast } from 'react-hot-toast';
 
@@ -286,29 +286,38 @@ export default function AffiliateOrders() {
           </div>
 
           {/* Informações da Assinatura / Renovação do Plano */}
-          {subscription ? (
-            <div className="bg-slate-50 border border-slate-200 rounded-2xl p-6 mb-8 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-              <div className="flex items-center gap-4">
-                <div className={`p-3 rounded-xl ${subscription.status === 'active' ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600'}`}>
-                  <CheckCircle2 size={20} />
+          {subscription ? (() => {
+            const cycle = calculateSubscriptionRepasseCycle(subscription.start_date, subscription.plan_type, subscription.end_date);
+            return (
+              <div className="bg-slate-50 border border-slate-200 rounded-2xl p-6 mb-8 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                <div className="flex items-center gap-4">
+                  <div className={`p-3 rounded-xl ${subscription.status === 'active' ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600'}`}>
+                    <CheckCircle2 size={20} />
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Plano Ativo</p>
+                    <h4 className="text-sm font-black text-midnight uppercase tracking-tight">
+                      Plano {subscription.plan_type}
+                    </h4>
+                    <p className="text-[11px] text-slate-500 font-medium mt-0.5">
+                      Início: {cycle.startDisplay} • 1º Repasse: {cycle.firstRepasseDisplay} • Último: {cycle.lastRepasseDisplay}
+                    </p>
+                  </div>
                 </div>
-                <div>
-                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Plano Ativo</p>
-                  <h4 className="text-sm font-black text-midnight uppercase tracking-tight">
-                    Plano {subscription.plan_type}
-                  </h4>
+                <div className="bg-primary-blue/5 border border-primary-blue/10 px-6 py-3 rounded-xl shrink-0 text-right">
+                  <span className="text-[10px] font-black text-primary-blue uppercase tracking-widest block leading-none mb-1">
+                    Cobrança da Renovação
+                  </span>
+                  <span className="text-sm font-black text-midnight uppercase">
+                    {cycle.renewalBillingDisplay}
+                  </span>
+                  <span className="text-[9px] font-bold text-slate-400 block mt-0.5">
+                    (Mês anterior ao último repasse)
+                  </span>
                 </div>
               </div>
-              <div className="bg-primary-blue/5 border border-primary-blue/10 px-6 py-3 rounded-xl shrink-0">
-                <span className="text-[10px] font-black text-primary-blue uppercase tracking-widest block leading-none mb-1">
-                  Data de Renovação (Vencimento)
-                </span>
-                <span className="text-sm font-black text-midnight">
-                  {new Date(subscription.end_date).toLocaleDateString('pt-BR')}
-                </span>
-              </div>
-            </div>
-          ) : (
+            );
+          })() : (
             <div className="bg-amber-50 border border-amber-200 rounded-2xl p-6 mb-8 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
               <div className="flex items-center gap-4">
                 <div className="p-3 rounded-xl bg-amber-100 text-amber-800">

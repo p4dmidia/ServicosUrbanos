@@ -33,7 +33,7 @@ import {
 import { motion } from 'motion/react';
 import AdminLayout from '../components/AdminLayout';
 import { supabase } from '../lib/supabase';
-import { businessRules, calculateTaxDeductions } from '../lib/businessRules';
+import { businessRules, calculateTaxDeductions, calculateSubscriptionRepasseCycle } from '../lib/businessRules';
 import { useAuth } from '../contexts/AuthContext';
 import { toast } from 'react-hot-toast';
 import { Link } from 'react-router-dom';
@@ -82,7 +82,10 @@ export default function AdminFinancials() {
   });
   const [networkReport, setNetworkReport] = useState<any[]>([]);
   const [resellerReport, setResellerReport] = useState<any[]>([]);
-  const [mbmPolicyNumber, setMbmPolicyNumber] = useState(() => localStorage.getItem('mbm_policy_number') || '');
+  const [mbmPolicyNumber, setMbmPolicyNumber] = useState(() => {
+    const saved = localStorage.getItem('mbm_policy_number');
+    return (saved && saved.trim()) ? saved : '58940';
+  });
   const [mbmSubGroup, setMbmSubGroup] = useState(() => localStorage.getItem('mbm_sub_group') || '1');
   const [activeSubscriptions, setActiveSubscriptions] = useState<any[]>([]);
   const [plans, setPlans] = useState<any[]>([]);
@@ -144,7 +147,7 @@ export default function AdminFinancials() {
         const end = s.end_date.substring(0, 10);
         return start <= dateRange.end && end >= dateRange.start;
       });
-      const finalSubs = filteredSubs.length > 0 ? filteredSubs : rawSubs;
+      const finalSubs = filteredSubs;
       setActiveSubscriptions(finalSubs);
       setActiveLivesCount(finalSubs.length);
 
@@ -192,12 +195,16 @@ export default function AdminFinancials() {
       const firstDayOfMonth = new Date(targetYear, targetMonth - 1, 1).toISOString();
       const lastDayOfMonth = new Date(targetYear, targetMonth, 0, 23, 59, 59).toISOString();
 
+      const targetMonthStr = `${year}-${monthStr}`;
       const { data: activeSubs, error: subsError } = await supabase
         .from('subscriptions')
         .select(`
           profile_id,
           plan_type,
           amount,
+          start_date,
+          end_date,
+          status,
           profiles (
             full_name,
             cpf,
@@ -205,18 +212,54 @@ export default function AdminFinancials() {
             birth_date,
             gender,
             description,
-            store_name
+            store_name,
+            status,
+            person_type
           )
         `)
-        .eq('status', 'active')
-        .lte('start_date', lastDayOfMonth)
-        .gte('end_date', firstDayOfMonth);
+        .eq('status', 'active');
 
       if (subsError) throw subsError;
 
-      if (!activeSubs || activeSubs.length === 0) {
+      // Filtro rigoroso conforme regras da seguradora MBM:
+      // 1. Pessoa Jurídica NÃO entra (apenas pessoas físicas com CPF válido);
+      // 2. Usuário não cadastrado NÃO entra (exige nome preenchido e CPF de 11 dígitos);
+      // 3. Inativos NÃO entram (exige status 'active' no perfil e assinatura vigente);
+      // 4. Ciclo Operacional MBM: vigência válida desde o mês de início até o mês do último repasse contratado.
+      const validActiveSubs = (activeSubs || []).filter((sub: any) => {
+        const p = sub.profiles || {};
+
+        // Regra 4: Ciclo MBM (Mês de início ao último repasse do ciclo)
+        const cycle = calculateSubscriptionRepasseCycle(sub.start_date, sub.plan_type, sub.end_date);
+        if (targetMonthStr < cycle.startMonthStr || targetMonthStr > cycle.lastRepasseMonthStr) {
+          return false;
+        }
+
+        // Regra 3: Inativos (perfil precisa estar ativo)
+        if (p.status && p.status !== 'active') return false;
+
+        // Regra 2: Usuário não cadastrado
+        const name = (p.full_name || '').trim();
+        if (!name || name.toUpperCase().includes('NÃO CADASTRADO') || name.toUpperCase().includes('NAO CADASTRADO')) {
+          return false;
+        }
+
+        const cleanCpfDigits = (p.cpf || '').replace(/\D/g, '');
+        if (cleanCpfDigits.length !== 11) {
+          return false;
+        }
+
+        // Regra 1: Pessoa Jurídica (CNPJ ou person_type PJ)
+        if (p.cnpj && p.cnpj.replace(/\D/g, '').length > 0) return false;
+        if (isCnpj(p.cpf || '')) return false;
+        if (p.person_type === 'PJ') return false;
+
+        return true;
+      });
+
+      if (!validActiveSubs || validActiveSubs.length === 0) {
         toast.dismiss(toastId);
-        toast.error(`Nenhum segurado ativo encontrado para a competência ${referenceDate}.`);
+        toast.error(`Nenhum segurado ativo e elegível encontrado para a competência ${referenceDate}.`);
         return;
       }
 
@@ -323,7 +366,7 @@ export default function AdminFinancials() {
       cB5.alignment = { horizontal: 'right', vertical: 'middle' };
 
       const cC5 = wsBase.getCell('C5');
-      cC5.value = mbmPolicyNumber.trim();
+      cC5.value = (mbmPolicyNumber || '').trim() || '58940';
       cC5.font = { name: 'Calibri', size: 18 };
       cC5.alignment = { horizontal: 'center', vertical: 'middle' };
       cC5.border = thinBorder;
@@ -386,7 +429,7 @@ export default function AdminFinancials() {
 
       // Linhas de Dados (Linha 11 em diante)
       let currentRow = 11;
-      activeSubs.forEach((sub: any) => {
+      validActiveSubs.forEach((sub: any) => {
         const p = sub.profiles || {};
         wsBase.getRow(currentRow).height = 18;
 
@@ -527,7 +570,7 @@ export default function AdminFinancials() {
       window.URL.revokeObjectURL(url);
 
       toast.dismiss(toastId);
-      toast.success(`Planilha oficial MBM gerada com sucesso! (${activeSubs.length} vidas ativas exportadas)`);
+      toast.success(`Planilha oficial MBM gerada com sucesso! (${validActiveSubs.length} vidas ativas exportadas)`);
     } catch (err: any) {
       console.error('Erro ao exportar planilha MBM:', err);
       toast.error(err.message || 'Erro ao gerar planilha oficial do seguro MBM.');
@@ -1101,7 +1144,50 @@ export default function AdminFinancials() {
     let mbmAnualCount = 0;
     let mbmCost = 0;
 
-    if (activeSubscriptions.length > 0) {
+    // Sincronização direta com as apólices do período demonstrado:
+    // Prioridade 1: Se há pedidos concluídos/faturados no período, o custo e a contagem MBM
+    // são calculados diretamente a partir dos pedidos faturados (mantendo 100% de coerência entre receita e despesas).
+    if (completed.length > 0) {
+      completed.forEach((o: any) => {
+        const items = Array.isArray(o.items) ? o.items : [];
+        let identified = false;
+
+        items.forEach((it: any) => {
+          const plan = (it.plan_type || it.name || it.title || '').toLowerCase();
+          const qty = Number(it.quantity || 1);
+          if (plan.includes('anual') || plan.includes('ano') || plan.includes('12')) {
+            mbmAnualCount += qty;
+            mbmCost += 12.00 * qty;
+            identified = true;
+          } else if (plan.includes('semestral') || plan.includes('6')) {
+            mbmSemestralCount += qty;
+            mbmCost += 6.00 * qty;
+            identified = true;
+          } else if (plan.includes('trimestral') || plan.includes('3')) {
+            mbmTrimestralCount += qty;
+            mbmCost += 3.00 * qty;
+            identified = true;
+          } else if (plan.includes('mensal') || it.is_subscription) {
+            mbmMensalCount += qty;
+            mbmCost += 1.00 * qty;
+            identified = true;
+          }
+        });
+
+        // Caso o pedido não tenha itens detalhados no payload, infere pelo valor pago
+        if (!identified) {
+          const amt = Number(o.amount || 0);
+          if (amt >= 50) {
+            mbmAnualCount++;
+            mbmCost += 12.00;
+          } else {
+            mbmMensalCount++;
+            mbmCost += 1.00;
+          }
+        }
+      });
+    } else if (activeSubscriptions.length > 0) {
+      // Prioridade 2: Se não houver pedidos no período, mas houver assinaturas ativas na competência
       activeSubscriptions.forEach((sub: any) => {
         const plan = (sub.plan_type || '').toLowerCase();
         if (plan.includes('anual') || plan.includes('ano') || plan.includes('12')) {
@@ -1119,32 +1205,11 @@ export default function AdminFinancials() {
           mbmCost += 1.00;
         }
       });
-    } else {
-      // Se a lista de assinaturas estiver vazia, inspeciona os pedidos concluídos do período
-      completed.forEach((o: any) => {
-        const items = o.items || [];
-        items.forEach((it: any) => {
-          const plan = (it.plan_type || it.name || it.title || '').toLowerCase();
-          if (plan.includes('anual') || plan.includes('ano') || plan.includes('12')) {
-            mbmAnualCount++;
-            mbmCost += 12.00;
-          } else if (plan.includes('semestral') || plan.includes('6')) {
-            mbmSemestralCount++;
-            mbmCost += 6.00;
-          } else if (plan.includes('trimestral') || plan.includes('3')) {
-            mbmTrimestralCount++;
-            mbmCost += 3.00;
-          } else if (plan.includes('mensal') || it.is_subscription) {
-            mbmMensalCount++;
-            mbmCost += 1.00;
-          }
-        });
-      });
+    }
 
-      if (mbmCost === 0 && activeLivesCount > 0) {
-        mbmCost = activeLivesCount * 1.00;
-        mbmMensalCount = activeLivesCount;
-      }
+    if (mbmCost === 0 && activeLivesCount > 0 && completed.length === 0) {
+      mbmCost = activeLivesCount * 1.00;
+      mbmMensalCount = activeLivesCount;
     }
 
     const planBreakdownParts: string[] = [];
@@ -1173,7 +1238,7 @@ export default function AdminFinancials() {
     const annualPlanPrice = Number(
       plans.find(p => (p.plan_type || '').toLowerCase().includes('anual') || (p.name || '').toLowerCase().includes('anual'))?.price || 99
     );
-    const totalPolicies = completed.length || activeLivesCount || (grossRevenue > 0 ? Math.round(grossRevenue / annualPlanPrice) : 0);
+    const totalPolicies = (mbmAnualCount + mbmSemestralCount + mbmTrimestralCount + mbmMensalCount) || completed.length || activeLivesCount || (grossRevenue > 0 ? Math.round(grossRevenue / annualPlanPrice) : 0);
     const profitPerPolicy = totalPolicies > 0 ? (netProfit / totalPolicies) : 0;
     
     const mmnPercentage = grossRevenue > 0 ? (mmnTotal / grossRevenue) * 100 : totalRepasseRate;
@@ -1703,7 +1768,7 @@ export default function AdminFinancials() {
                     <ShieldCheck size={16} className="text-indigo-400" />
                     <input 
                       type="text" 
-                      placeholder="Ex: 01.084.000"
+                      placeholder="58940"
                       value={mbmPolicyNumber}
                       onChange={(e) => {
                         setMbmPolicyNumber(e.target.value);

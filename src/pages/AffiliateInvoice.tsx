@@ -11,6 +11,8 @@ import {
   Building2, 
   ShieldCheck,
   ChevronRight,
+  ChevronLeft,
+  Calendar,
   HelpCircle,
   Link as LinkIcon,
   Check,
@@ -62,6 +64,36 @@ export default function AffiliateInvoice() {
   const [allUserRpas, setAllUserRpas] = useState<RPAReceipt[]>([]);
   const [isRPAModalOpen, setIsRPAModalOpen] = useState(false);
 
+  // Navegação e Filtro por Mês da Competência do RPA
+  const defaultClosedDate = useMemo(() => {
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  }, []);
+
+  const [currentDate, setCurrentDate] = useState(defaultClosedDate);
+
+  const selectedYear = currentDate.getFullYear();
+  const selectedMonth = currentDate.getMonth() + 1; // 1-12
+  const refMonthStr = `${selectedYear}-${String(selectedMonth).padStart(2, '0')}`;
+  const defaultRefMonthStr = `${defaultClosedDate.getFullYear()}-${String(defaultClosedDate.getMonth() + 1).padStart(2, '0')}`;
+  const isDefaultCompetence = refMonthStr === defaultRefMonthStr;
+
+  const monthLabel = useMemo(() => {
+    return currentDate.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+  }, [currentDate]);
+
+  const handlePrevMonth = () => {
+    setCurrentDate(prev => new Date(prev.getFullYear(), prev.getMonth() - 1, 1));
+  };
+
+  const handleNextMonth = () => {
+    setCurrentDate(prev => new Date(prev.getFullYear(), prev.getMonth() + 1, 1));
+  };
+
+  const handleResetToCurrent = () => {
+    setCurrentDate(defaultClosedDate);
+  };
+
   const companyData = {
     razaoSocial: 'SERVIÇOS URBANOS INTERMEDIAÇÃO DE NEGÓCIOS LTDA',
     cnpj: '58.490.123/0001-45',
@@ -91,10 +123,11 @@ export default function AffiliateInvoice() {
     return getFiscalPortalForCity(selectedCity, selectedState);
   }, [selectedCity, selectedState]);
 
-  const loadData = async () => {
+  const loadData = async (targetMonthStr?: string) => {
     if (!user) return;
     try {
       setLoading(true);
+      const activeRefMonth = targetMonthStr || refMonthStr;
       const isPJUser = Boolean(profile?.cnpj && profile.cnpj.replace(/\D/g, '').length > 11);
 
       if (isPJUser) {
@@ -111,11 +144,12 @@ export default function AffiliateInvoice() {
           }
         }
       } else {
-        // Pessoa Física: Carrega Recibo RPA
+        // Pessoa Física: Carrega Recibo RPA para o mês selecionado
         const [currentRpa, rpasList] = await Promise.all([
-          businessRules.generateMonthlyRPAReceipt(user.id),
+          businessRules.generateMonthlyRPAReceipt(user.id, activeRefMonth),
           businessRules.getAffiliateRPAReceipts(user.id)
         ]);
+
         setRpaReceipt(currentRpa);
         setAllUserRpas(rpasList || []);
       }
@@ -128,8 +162,8 @@ export default function AffiliateInvoice() {
   };
 
   useEffect(() => {
-    loadData();
-  }, [user, profile]);
+    loadData(refMonthStr);
+  }, [user, profile, refMonthStr]);
 
   const handleCopy = (text: string, fieldName: string) => {
     navigator.clipboard.writeText(text);
@@ -265,6 +299,69 @@ export default function AffiliateInvoice() {
             </div>
           </div>
 
+          {/* Barra de Filtro de Mês / Competência do RPA */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 rounded-3xl border border-slate-200/80 shadow-sm">
+            <div className="flex items-center gap-3.5">
+              <div className="size-11 rounded-2xl bg-emerald-50 border border-emerald-100 flex items-center justify-center text-emerald-600 shadow-sm shrink-0">
+                <Calendar size={22} />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h4 className="text-xs font-black text-midnight uppercase tracking-wider">
+                    Competência do RPA
+                  </h4>
+                  {isDefaultCompetence && (
+                    <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 rounded-md text-[10px] font-bold uppercase tracking-wider">
+                      Mês a Receber
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Navegue entre os meses com as setas para filtrar os valores e pedidos correspondentes
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2.5 self-stretch sm:self-auto justify-between sm:justify-end">
+              {!isDefaultCompetence && (
+                <button
+                  onClick={handleResetToCurrent}
+                  className="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 text-[11px] font-bold transition-all cursor-pointer flex items-center gap-1"
+                  title="Voltar para a competência padrão a receber"
+                >
+                  <RefreshCw size={12} />
+                  Mês Atual
+                </button>
+              )}
+
+              {/* Controles de Navegação com Setas Esquerda/Direita */}
+              <div className="flex items-center gap-1.5 bg-slate-50 p-1.5 rounded-2xl border border-slate-200">
+                <button
+                  onClick={handlePrevMonth}
+                  className="p-2.5 rounded-xl hover:bg-white text-slate-600 hover:text-midnight transition-all cursor-pointer shadow-sm hover:shadow active:scale-95"
+                  title="Mês Anterior"
+                >
+                  <ChevronLeft size={18} />
+                </button>
+                <div className="px-4 text-center min-w-[160px]">
+                  <span className="text-xs font-black text-midnight uppercase tracking-wider block capitalize">
+                    {monthLabel}
+                  </span>
+                  <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">
+                    {isDefaultCompetence ? 'Competência Aberta' : 'Filtro por Mês'}
+                  </span>
+                </div>
+                <button
+                  onClick={handleNextMonth}
+                  className="p-2.5 rounded-xl hover:bg-white text-slate-600 hover:text-midnight transition-all cursor-pointer shadow-sm hover:shadow active:scale-95"
+                  title="Próximo Mês"
+                >
+                  <ChevronRight size={18} />
+                </button>
+              </div>
+            </div>
+          </div>
+
           {/* Grid Principal do RPA Atual */}
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
             {/* Card de Rendimentos da Competência Fechada */}
@@ -272,10 +369,10 @@ export default function AffiliateInvoice() {
               <div>
                 <div className="flex justify-between items-start mb-6">
                   <span className="text-[10px] font-black uppercase tracking-widest text-emerald-700 bg-emerald-50 px-3.5 py-1 rounded-full border border-emerald-200">
-                    Competência: {rpaReceipt?.month_label || 'Mês Anterior'}
+                    Competência: {rpaReceipt?.month_label || monthLabel}
                   </span>
                   <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 font-mono">
-                    {rpaReceipt?.rpa_number || 'RPA-PENDENTE'}
+                    {rpaReceipt?.rpa_number || `RPA-${refMonthStr.replace('-', '')}`}
                   </span>
                 </div>
 
@@ -287,7 +384,7 @@ export default function AffiliateInvoice() {
                 </h2>
 
                 <p className="text-xs text-slate-500 font-medium mb-6 leading-relaxed">
-                  Este valor será depositado diretamente na sua chave PIX no <strong>dia 10</strong>. O documento oficial de RPA foi preenchido automaticamente pelo sistema no 1º dia útil.
+                  Este valor será depositado diretamente na sua chave PIX no <strong>dia {rpaReceipt?.financial.payment_forecast_date ? rpaReceipt.financial.payment_forecast_date.split('/')[0] : '10'}</strong>. O documento oficial de RPA foi preenchido automaticamente pelo sistema.
                 </p>
 
                 {/* Discriminação */}
@@ -401,7 +498,7 @@ export default function AffiliateInvoice() {
                     Discriminação dos Pedidos Vinculados ao RPA
                   </h3>
                   <p className="text-xs text-slate-500 mt-0.5">
-                    Detalhamento de cada pedido e comissão contabilizada para compor o valor total deste recibo
+                    Detalhamento de cada pedido e comissão contabilizada para compor o valor total deste recibo ({rpaReceipt?.month_label || monthLabel})
                   </p>
                 </div>
               </div>

@@ -3778,6 +3778,204 @@ export const businessRules = {
   // FLUXO EXCLUSIVO DE RECIBO DE RPA (PESSOA FÍSICA)
   // =========================================================================
 
+  getOrdersBreakdownForAffiliate: async (userId: string, targetRefMonth?: string) => {
+    try {
+      // 1. Tentar obter via transactions registradas para o usuário
+      const { data: userTxs } = await supabase
+        .from('transactions')
+        .select('*')
+        .eq('profile_id', userId)
+        .order('created_at', { ascending: false });
+
+      let historyComms = (userTxs || []).filter((h: any) => h.type === 'commission' && Number(h.amount) > 0);
+
+      if (targetRefMonth && historyComms.length > 0) {
+        const [yStr, mStr] = targetRefMonth.split('-');
+        const monthPrefix = `${mStr}/${yStr}`;
+        const yyyyMm = `${yStr}-${mStr}`;
+        historyComms = historyComms.filter((h: any) => {
+          const d = h.created_at ? new Date(h.created_at).toLocaleDateString('pt-BR') : '';
+          const raw = h.created_at || '';
+          return raw.startsWith(yyyyMm) || d.includes(monthPrefix);
+        });
+      }
+
+      if (historyComms.length > 0) {
+        return historyComms.map((item: any, idx: number) => {
+          const desc = (item.description || '').toLowerCase();
+          let originLabel = 'Comissão de Rede MMN';
+          if (desc.includes('revendedor') || desc.includes('regional')) {
+            originLabel = 'Venda Direta / Polo Regional';
+          } else if (desc.includes('g0') || desc.includes('próprio') || desc.includes('titular')) {
+            originLabel = 'Cashback Mensal (G0 Titular)';
+          } else if (desc.includes('g1')) {
+            originLabel = 'Comissão de Rede MMN (Nível G1)';
+          } else if (desc.includes('g2')) {
+            originLabel = 'Comissão de Rede MMN (Nível G2)';
+          } else if (desc.includes('anual')) {
+            originLabel = 'Cashback Anual';
+          }
+
+          let rawOrderId = item.order_id ? String(item.order_id) : '';
+          if (!rawOrderId) {
+            const match = (item.description || '').match(/#([a-zA-Z0-9-]+)/);
+            if (match) rawOrderId = match[1];
+          }
+          if (!rawOrderId) rawOrderId = String(item.id || idx + 1001);
+
+          const orderNumber = rawOrderId.startsWith('#') ? rawOrderId : (rawOrderId.length > 10 ? `#${rawOrderId.substring(0, 8)}` : `#${rawOrderId}`);
+          const pctMatch = (item.description || '').match(/(\d+(\.\d+)?)%/);
+          const rateStr = pctMatch ? `${pctMatch[1]}%` : '---';
+
+          return {
+            id: item.id || `item-${idx}`,
+            orderId: rawOrderId,
+            orderNumber: orderNumber,
+            date: item.created_at ? new Date(item.created_at).toLocaleDateString('pt-BR') : new Date().toLocaleDateString('pt-BR'),
+            origin: originLabel,
+            amount: Number(item.metadata?.order_amount || item.amount || 0),
+            rate: rateStr,
+            commissionAmount: Number(item.amount || 0),
+            status: item.status || 'Apurado'
+          };
+        });
+      }
+
+      // 2. Se transactions estiver vazio, busca diretamente na tabela orders da rede e polo do afiliado
+      const [{ data: allOrders }, { data: allProfiles }] = await Promise.all([
+        supabase.from('orders').select('*').in('status', ['Pago', 'Concluído', 'Pago, Aguardando Retirada', 'Aguardando Pagamento']),
+        supabase.from('profiles').select('id, full_name, referred_by, role, reseller_id')
+      ]);
+
+      const userProfile = (allProfiles || []).find(p => p.id === userId);
+      const isReseller = userProfile?.role === 'regional_reseller' || userProfile?.role === 'reseller' || !!userProfile?.reseller_id;
+      
+      const directReferrals = (allProfiles || []).filter(p => p.referred_by === userId).map(p => p.id);
+      const secondReferrals = (allProfiles || []).filter(p => directReferrals.includes(p.referred_by || '')).map(p => p.id);
+
+      const breakdown: any[] = [];
+      const now = new Date();
+      const prevMonthDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      const defaultClosedMonth = `${prevMonthDate.getFullYear()}-${String(prevMonthDate.getMonth() + 1).padStart(2, '0')}`;
+
+      (allOrders || []).forEach((o: any) => {
+        const isOwn = o.customer_id === userId;
+        const isG1 = directReferrals.includes(o.customer_id);
+        const isG2 = secondReferrals.includes(o.customer_id);
+        const amt = Number(o.amount || 0);
+        if (amt <= 0) return;
+
+        // Se foi especificado um mês alvo, valida estritamente a data do pedido
+        if (targetRefMonth) {
+          const [y, m] = targetRefMonth.split('-');
+          const monthPrefix = `${m}/${y}`;
+          const yyyyMm = `${y}-${m}`;
+          const rawDate = o.order_date || o.created_at || '';
+          const orderDateBR = new Date(rawDate).toLocaleDateString('pt-BR');
+          const isSameMonth = rawDate.startsWith(yyyyMm) || orderDateBR.includes(monthPrefix);
+
+          if (!isSameMonth) {
+            // Se for o mês fechado padrão (ex 2026-08) e não houver pedidos cadastrados em 2026-08, permite fallback
+            const hasMonthOrders = (allOrders || []).some((ord: any) => {
+              const od = ord.order_date || ord.created_at || '';
+              return od.startsWith(yyyyMm);
+            });
+            if (targetRefMonth === defaultClosedMonth && !hasMonthOrders) {
+              // Permite exibição na competência a receber padrão
+            } else {
+              return;
+            }
+          }
+        }
+
+        const orderNum = `#${o.id}`;
+        const orderDate = new Date(o.order_date || o.created_at).toLocaleDateString('pt-BR');
+
+        if (isOwn) {
+          breakdown.push({
+            id: `ord-${o.id}-g0`,
+            orderId: String(o.id),
+            orderNumber: orderNum,
+            date: orderDate,
+            origin: 'Cashback Mensal (G0 Titular)',
+            amount: amt,
+            rate: '5%',
+            commissionAmount: parseFloat((amt * 0.05).toFixed(2)),
+            status: o.status || 'Concluído'
+          });
+
+          if (isReseller) {
+            breakdown.push({
+              id: `ord-${o.id}-reseller-m`,
+              orderId: String(o.id),
+              orderNumber: orderNum,
+              date: orderDate,
+              origin: 'Venda Direta / Polo Regional (10%)',
+              amount: amt,
+              rate: '10%',
+              commissionAmount: parseFloat((amt * 0.10).toFixed(2)),
+              status: o.status || 'Concluído'
+            });
+            breakdown.push({
+              id: `ord-${o.id}-reseller-a`,
+              orderId: String(o.id),
+              orderNumber: orderNum,
+              date: orderDate,
+              origin: 'Provisão Anual Polo Regional (2%)',
+              amount: amt,
+              rate: '2%',
+              commissionAmount: parseFloat((amt * 0.02).toFixed(2)),
+              status: o.status || 'Concluído'
+            });
+          }
+        } else if (isG1) {
+          breakdown.push({
+            id: `ord-${o.id}-g1`,
+            orderId: String(o.id),
+            orderNumber: orderNum,
+            date: orderDate,
+            origin: `Comissão Rede MMN (Nível G1 - ${o.customer_name || 'Afiliado'})`,
+            amount: amt,
+            rate: '7%',
+            commissionAmount: parseFloat((amt * 0.07).toFixed(2)),
+            status: o.status || 'Concluído'
+          });
+
+          if (isReseller) {
+            breakdown.push({
+              id: `ord-${o.id}-polo`,
+              orderId: String(o.id),
+              orderNumber: orderNum,
+              date: orderDate,
+              origin: `Venda Polo Regional (10% - ${o.customer_name || 'Afiliado'})`,
+              amount: amt,
+              rate: '10%',
+              commissionAmount: parseFloat((amt * 0.10).toFixed(2)),
+              status: o.status || 'Concluído'
+            });
+          }
+        } else if (isG2) {
+          breakdown.push({
+            id: `ord-${o.id}-g2`,
+            orderId: String(o.id),
+            orderNumber: orderNum,
+            date: orderDate,
+            origin: `Comissão Rede MMN (Nível G2 - ${o.customer_name || 'Afiliado'})`,
+            amount: amt,
+            rate: '7%',
+            commissionAmount: parseFloat((amt * 0.07).toFixed(2)),
+            status: o.status || 'Concluído'
+          });
+        }
+      });
+
+      return breakdown;
+    } catch (err) {
+      console.error('Erro ao buscar breakdown de pedidos:', err);
+      return [];
+    }
+  },
+
   getAffiliateRPAReceipts: async (userId?: string, referenceMonth?: string): Promise<RPAReceipt[]> => {
     let allRpas: RPAReceipt[] = [];
     try {
@@ -3812,7 +4010,7 @@ export const businessRules = {
 
       if (isPJ) return null;
 
-      // 2. Determina a competência fechada do mês anterior
+      // 2. Determina a competência fechada
       const now = new Date();
       let targetRefMonth = refMonth;
       if (!targetRefMonth) {
@@ -3826,65 +4024,11 @@ export const businessRules = {
       const year = parseInt(yearStr, 10);
       const month = parseInt(monthStr, 10);
 
-      // 3. Verifica se já existe um RPA gerado para este mês
-      const existingRpas = await (businessRules as any).getAffiliateRPAReceipts(userId, targetRefMonth);
-      if (existingRpas.length > 0) {
-        const existing = existingRpas[0];
-        if (!existing.ordersBreakdown || existing.ordersBreakdown.length === 0) {
-          try {
-            const history = await (businessRules as any).getAffiliateFinancialHistory(userId);
-            const historyComms = (history || []).filter(h => h.originalType === 'commission' && Number(h.amount) > 0);
-            if (historyComms.length > 0) {
-              existing.ordersBreakdown = historyComms.map((item, idx) => {
-                let originLabel = 'Comissão de Rede MMN';
-                if (item.isReseller) {
-                  originLabel = 'Venda Direta / Polo Regional';
-                } else if (item.level === '0') {
-                  originLabel = 'Cashback Mensal (G0 Titular)';
-                } else if (item.level !== '---') {
-                  originLabel = `Comissão de Rede MMN (Nível G${item.level})`;
-                } else if (item.cashbackType === 'anual') {
-                  originLabel = 'Cashback Anual';
-                }
+      // 3. Obter detalhamento completo e resiliente de pedidos vinculados ao RPA
+      const ordersBreakdown = await (businessRules as any).getOrdersBreakdownForAffiliate(userId, targetRefMonth);
+      const ordersList = ordersBreakdown.map((o: any) => o.orderNumber);
 
-                const rawOrderId = item.orderId && item.orderId !== '---' ? item.orderId : (item.id || String(idx + 1001));
-                const orderNumber = rawOrderId.startsWith('#') ? rawOrderId : `#${rawOrderId.substring(0, 8)}`;
-                const rateStr = item.percentage > 0 
-                  ? `${item.percentage.toFixed(1).replace('.0', '')}%`
-                  : (item.level === '0' ? '5%' : '---');
-
-                return {
-                  id: item.id || `item-${idx}`,
-                  orderId: item.orderId,
-                  orderNumber: orderNumber,
-                  date: item.date || new Date().toLocaleDateString('pt-BR'),
-                  origin: originLabel,
-                  amount: Number(item.contractAmount > 0 ? item.contractAmount : item.amount),
-                  rate: rateStr,
-                  commissionAmount: Number(item.amount || 0),
-                  status: item.status || 'Pago'
-                };
-              });
-              existing.ordersList = existing.ordersBreakdown.map(o => o.orderNumber);
-
-              // Atualiza no localStorage
-              const allRpas = JSON.parse(localStorage.getItem('all_rpa_receipts') || '[]');
-              const idx = allRpas.findIndex((r: any) => r.id === existing.id || (r.profile_id === userId && r.reference_month === targetRefMonth));
-              if (idx >= 0) {
-                allRpas[idx] = existing;
-              } else {
-                allRpas.push(existing);
-              }
-              localStorage.setItem('all_rpa_receipts', JSON.stringify(allRpas));
-            }
-          } catch (e) {
-            console.warn('Erro ao atualizar breakdown do RPA existente:', e);
-          }
-        }
-        return existing;
-      }
-
-      // 4. Apura os rendimentos do mês fechado
+      // 4. Apura os rendimentos do mês selecionado
       const startDate = new Date(year, month - 1, 1, 0, 0, 0, 0);
       const endDate = new Date(year, month, 0, 23, 59, 59, 999);
 
@@ -3921,80 +4065,42 @@ export const businessRules = {
 
       let brutoTotal = redeAmount + revendedorAmount + cashbackMensal + cashbackAnual;
 
-      // Se não houver transações gravadas no mês fechado, verifica saldo pendente do usuário
-      if (brutoTotal <= 0) {
-        const { data: allTxs } = await supabase
-          .from('transactions')
-          .select('*')
-          .eq('profile_id', userId);
+      // Se não houver transações gravadas no mês fechado, verifica pelo breakdown discriminado de pedidos
+      if (brutoTotal <= 0 && ordersBreakdown.length > 0) {
+        let oRede = 0;
+        let oRevendedor = 0;
+        let oCashback = 0;
+        let oAnual = 0;
 
-        const allComms = (allTxs || []).filter(t => t.type === 'commission');
-        const allWithdrawals = (allTxs || []).filter(t => t.type === 'withdrawal' && (t.status === 'completed' || t.status === 'pago'));
-        
-        const commTotal = allComms.reduce((a, b) => a + Number(b.amount || 0), 0);
-        const withTotal = allWithdrawals.reduce((a, b) => a + Math.abs(Number(b.amount || 0)), 0);
-        const pending = Math.max(0, commTotal - withTotal);
-        
-        if (pending > 0) {
-          brutoTotal = pending;
-          cashbackMensal = pending;
-        }
+        ordersBreakdown.forEach((o: any) => {
+          const amt = Number(o.commissionAmount || 0);
+          const orig = (o.origin || '').toLowerCase();
+          if (orig.includes('anual')) {
+            oAnual += amt;
+          } else if (orig.includes('polo') || orig.includes('revendedor') || orig.includes('direta')) {
+            oRevendedor += amt;
+          } else if (orig.includes('g0') || orig.includes('titular')) {
+            oCashback += amt;
+          } else {
+            oRede += amt;
+          }
+        });
+
+        redeAmount = parseFloat(oRede.toFixed(2));
+        revendedorAmount = parseFloat(oRevendedor.toFixed(2));
+        cashbackMensal = parseFloat(oCashback.toFixed(2));
+        cashbackAnual = parseFloat(oAnual.toFixed(2));
+        brutoTotal = parseFloat((redeAmount + revendedorAmount + cashbackMensal + cashbackAnual).toFixed(2));
       }
 
-      // 5. Obter detalhamento de pedidos via histórico financeiro para compor o breakdown do RPA
-      let historyCommissions: any[] = [];
-      try {
-        const history = await (businessRules as any).getAffiliateFinancialHistory(userId);
-        historyCommissions = (history || []).filter(h => h.originalType === 'commission' && Number(h.amount) > 0);
-      } catch (e) {
-        console.warn('Erro ao obter histórico para RPA:', e);
-      }
-
-      let selectedHistory = historyCommissions;
-      const monthPrefix = `${String(month).padStart(2, '0')}/${year}`;
-      const matchingMonth = historyCommissions.filter(h => h.date && h.date.includes(monthPrefix));
-      if (matchingMonth.length > 0) {
-        selectedHistory = matchingMonth;
-      }
-
-      const ordersBreakdown = selectedHistory.map((item, idx) => {
-        let originLabel = 'Comissão de Rede MMN';
-        if (item.isReseller) {
-          originLabel = 'Venda Direta / Polo Regional';
-        } else if (item.level === '0') {
-          originLabel = 'Cashback Mensal (G0 Titular)';
-        } else if (item.level !== '---') {
-          originLabel = `Comissão de Rede MMN (Nível G${item.level})`;
-        } else if (item.cashbackType === 'anual') {
-          originLabel = 'Cashback Anual';
-        }
-
-        const rawOrderId = item.orderId && item.orderId !== '---' ? item.orderId : (item.id || String(idx + 1001));
-        const orderNumber = rawOrderId.startsWith('#') ? rawOrderId : `#${rawOrderId.substring(0, 8)}`;
-        const rateStr = item.percentage > 0 
-          ? `${item.percentage.toFixed(1).replace('.0', '')}%`
-          : (item.level === '0' ? '5%' : '---');
-
-        return {
-          id: item.id || `item-${idx}`,
-          orderId: item.orderId,
-          orderNumber: orderNumber,
-          date: item.date || new Date().toLocaleDateString('pt-BR'),
-          origin: originLabel,
-          amount: Number(item.contractAmount > 0 ? item.contractAmount : item.amount),
-          rate: rateStr,
-          commissionAmount: Number(item.amount || 0),
-          status: item.status || 'Pago'
-        };
-      });
-
-      const ordersList = ordersBreakdown.map(o => o.orderNumber);
-
-      // Se ainda assim o total for zero, podemos registrar para exibição ou não bloquear
       const monthLabel = new Date(year, month - 1, 1).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
       const nextMonth = month === 12 ? 1 : month + 1;
       const nextYear = month === 12 ? year + 1 : year;
       const forecastDate = `10/${String(nextMonth).padStart(2, '0')}/${nextYear}`;
+
+      // Verifica status existente no histórico de RPAs
+      const existingRpas = await (businessRules as any).getAffiliateRPAReceipts(userId, targetRefMonth);
+      const existingStatus = existingRpas.length > 0 ? existingRpas[0].status : (brutoTotal > 0 ? 'pendente_previsao' : 'sem_movimentacao');
 
       const rpaRecord: RPAReceipt = {
         id: `rpa-${targetRefMonth}-${userId.slice(0, 8)}`,
@@ -4003,9 +4109,9 @@ export const businessRules = {
         reference_month: targetRefMonth,
         month_label: monthLabel.charAt(0).toUpperCase() + monthLabel.slice(1),
         created_at: new Date().toISOString(),
-        status: 'pendente_previsao',
-        previsao_accepted_at: null,
-        quitacao_accepted_at: null,
+        status: existingStatus,
+        previsao_accepted_at: existingRpas[0]?.previsao_accepted_at || null,
+        quitacao_accepted_at: existingRpas[0]?.quitacao_accepted_at || null,
         beneficiary: {
           name: profile.full_name || 'Afiliado Autônomo',
           cpf: profile.cpf || 'Não informado',
@@ -4041,7 +4147,7 @@ export const businessRules = {
         ordersBreakdown: ordersBreakdown
       };
 
-      // Salva no storage local
+      // Salva no storage local se houver movimentação ou status atualizado
       const allRpas = JSON.parse(localStorage.getItem('all_rpa_receipts') || '[]');
       const filtered = allRpas.filter((r: any) => !(r.profile_id === userId && r.reference_month === targetRefMonth));
       filtered.push(rpaRecord);

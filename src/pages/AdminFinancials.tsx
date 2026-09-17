@@ -112,9 +112,11 @@ export default function AdminFinancials() {
     return [...plans].sort((a, b) => getPlanFinancialOrder(a) - getPlanFinancialOrder(b));
   }, [plans]);
 
+  const [fiscalFilterType, setFiscalFilterType] = useState<'all' | 'period'>('all');
+
   useEffect(() => {
     loadFiscalData();
-  }, [dateRange.start, dateRange.end]);
+  }, [dateRange.start, dateRange.end, fiscalFilterType]);
 
   async function loadAdminData(silent = false) {
     try {
@@ -626,83 +628,305 @@ export default function AdminFinancials() {
     return clean.length === 14;
   };
 
-  // Carregar dados de apuração fiscal e retenção do mês
+  // Carregar dados de apuração fiscal e retenção
   const loadFiscalData = async () => {
     setLoadingFiscal(true);
     try {
       const { data: profilesData } = await supabase
         .from('profiles')
-        .select('id, full_name, cpf, cnpj');
+        .select('id, full_name, cpf, cnpj, role, description, pix_key');
 
       const profileMap = new Map((profilesData || []).map(p => [p.id, p]));
 
-      const targetRefMonth = dateRange.start.substring(0, 7);
-      const invoices = await businessRules.getAffiliateInvoices(undefined, targetRefMonth);
-      const invoiceMap = new Map((invoices || []).map((inv: any) => [inv.profile_id, inv]));
+      const targetRefMonth = dateRange.start.substring(0, 7); // "YYYY-MM"
+      const [yearStr, monthStr] = targetRefMonth.split('-');
+      const yNum = parseInt(yearStr, 10);
+      const mNum = parseInt(monthStr, 10);
 
-      const { data: withdrawalsData } = await supabase
+      // 1. Busca todos os Recibos de RPA emitidos e quitados
+      let allSavedRpas: any[] = [];
+      try {
+        allSavedRpas = JSON.parse(localStorage.getItem('all_rpa_receipts') || '[]');
+      } catch (e) {}
+      const rpaReceipts = await businessRules.getAffiliateRPAReceipts();
+      
+      const allRpasList = [...allSavedRpas, ...(rpaReceipts || [])];
+
+      // 2. Busca Arquivos de Pagamentos Mensais Efetivados / Quitados de todos os meses
+      let archivedMonths: string[] = [];
+      try {
+        archivedMonths = JSON.parse(localStorage.getItem('monthly_payout_archived_months') || '[]');
+      } catch (e) {}
+      if (!archivedMonths.includes(targetRefMonth)) {
+        archivedMonths.push(targetRefMonth);
+      }
+      
+      const monthlyArchivesList: any[] = [];
+      for (const m of archivedMonths) {
+        const arch = await businessRules.getMonthlyPayoutArchives(m);
+        if (arch && arch.length > 0) {
+          monthlyArchivesList.push(...arch.map((a: any) => ({ ...a, archive_month: m })));
+        }
+      }
+
+      // 3. Busca Notas Fiscais anexadas (PJ)
+      const invoices = await businessRules.getAffiliateInvoices();
+
+      // 4. Busca Transações de saque / repasse
+      let withdrawalsQuery = supabase
         .from('transactions')
         .select('*')
-        .eq('type', 'withdrawal')
-        .gte('created_at', `${dateRange.start}T00:00:00`)
-        .lte('created_at', `${dateRange.end}T23:59:59`);
+        .in('type', ['withdrawal', 'payout']);
+      
+      if (fiscalFilterType === 'period') {
+        withdrawalsQuery = withdrawalsQuery
+          .gte('created_at', `${dateRange.start}T00:00:00`)
+          .lte('created_at', `${dateRange.end}T23:59:59`);
+      }
+      const { data: withdrawalsData } = await withdrawalsQuery;
 
       const grouped: Record<string, any> = {};
 
-      (withdrawalsData || []).forEach(w => {
-        const pid = w.profile_id;
-        const prof = profileMap.get(pid);
-        const doc = prof?.cpf || prof?.cnpj || 'Sem Documento';
-        const name = prof?.full_name || 'Afiliado';
+      // A. Adiciona Recibos de RPA (Pessoa Física: Quitado, com Ciência ou Previsto)
+      allRpasList.forEach((rpa: any) => {
+        const pid = rpa.profile_id || rpa.affiliate?.id;
+        if (!pid) return;
 
-        if (!grouped[pid]) {
-          grouped[pid] = {
+        const refMonth = rpa.reference_month || (rpa.created_at ? rpa.created_at.substring(0, 7) : targetRefMonth);
+        const [rY, rM] = (refMonth || '').split('-');
+        const compFormatted = rY && rM ? `${rM}/${rY}` : (refMonth || 'N/A');
+
+        // Se o filtro for por período estrito, verifica se bate a competência ou data de aceite
+        if (fiscalFilterType === 'period') {
+          const qMonth = rpa.quitacao_accepted_at ? rpa.quitacao_accepted_at.substring(0, 7) : '';
+          const cMonth = rpa.created_at ? rpa.created_at.substring(0, 7) : '';
+          const matches = refMonth === targetRefMonth || qMonth === targetRefMonth || cMonth === targetRefMonth || rpa.id?.includes(targetRefMonth);
+          if (!matches) return;
+        }
+
+        const key = rpa.id || `${pid}_${refMonth}`;
+        const prof = profileMap.get(pid);
+        const name = rpa.affiliate?.name || prof?.full_name || 'Afiliado Autônomo';
+        const doc = rpa.affiliate?.cpf || prof?.cpf || prof?.cnpj || 'Sem Documento';
+        const isPJ = isCnpj(doc);
+        const bruto = Number(rpa.financial?.bruto_total || 0);
+
+        if (bruto > 0) {
+          const inss = Number(rpa.financial?.inss_retido || 0);
+          const irrf = Number(rpa.financial?.irrf_retido || 0);
+          const liquido = Number(rpa.financial?.liquido_total || bruto);
+
+          grouped[key] = {
+            id: key,
             profile_id: pid,
+            competencia: compFormatted,
             name,
             cpf: doc,
-            bruto: 0
+            is_pj: isPJ,
+            bruto,
+            inss,
+            irrf,
+            patronal: 0,
+            total_inss_guia: 0,
+            liquido,
+            invoice_number: rpa.rpa_number || `RPA Nº ${refMonth ? refMonth.replace('-', '') : ''}`,
+            invoice_link: rpa.receipt_url || null,
+            status: rpa.status || 'quitado',
+            has_invoice: !!rpa.receipt_url,
+            is_rpa: true,
+            rpa_data: rpa
           };
         }
-        grouped[pid].bruto += Math.abs(Number(w.amount || 0));
       });
 
-      // Inclui também notas fiscais anexadas no período
+      // B. Adiciona Arquivos de Pagamento Mensal Quitado
+      monthlyArchivesList.forEach((arch: any) => {
+        const pid = arch.userId;
+        if (!pid) return;
+
+        const refMonth = arch.archive_month || targetRefMonth;
+        const [rY, rM] = (refMonth || '').split('-');
+        const compFormatted = rY && rM ? `${rM}/${rY}` : refMonth;
+
+        if (fiscalFilterType === 'period' && refMonth !== targetRefMonth) {
+          return;
+        }
+
+        const key = arch.id || `${pid}_${refMonth}`;
+        const prof = profileMap.get(pid);
+        const name = arch.userName || prof?.full_name || 'Afiliado';
+        const doc = arch.userCpf || prof?.cpf || prof?.cnpj || 'Sem Documento';
+        const isPJ = arch.isPJ || isCnpj(doc);
+        const bruto = Number(arch.totalBruto || 0);
+
+        if (bruto > 0 && !grouped[key]) {
+          grouped[key] = {
+            id: key,
+            profile_id: pid,
+            competencia: compFormatted,
+            name,
+            cpf: doc,
+            is_pj: isPJ,
+            bruto,
+            inss: Number(arch.inss || 0),
+            irrf: Number(arch.irrf || 0),
+            patronal: 0,
+            total_inss_guia: 0,
+            liquido: Number(arch.liquido || bruto),
+            invoice_number: arch.rpaNumber || arch.invoiceNumber || `RPA Nº ${refMonth.replace('-', '')}`,
+            invoice_link: arch.receiptUrl || null,
+            status: 'quitado',
+            has_invoice: !!arch.receiptUrl,
+            is_rpa: !isPJ
+          };
+        }
+      });
+
+      // C. Adiciona Transações de Saque / Payout
+      (withdrawalsData || []).forEach((w: any) => {
+        const pid = w.profile_id;
+        if (!pid) return;
+        const prof = profileMap.get(pid);
+        const doc = prof?.cpf || prof?.cnpj || 'Sem Documento';
+        const isPJ = isCnpj(doc);
+        const name = prof?.full_name || 'Afiliado';
+        const amt = Math.abs(Number(w.amount || 0));
+        const wDate = (w.created_at || '').substring(0, 7);
+        const [wY, wM] = (wDate || '').split('-');
+        const compFormatted = wY && wM ? `${wM}/${wY}` : (wDate || 'N/A');
+        const key = `tx_${w.id}`;
+
+        if (!grouped[key] && amt > 0) {
+          const tax = calculateTaxDeductions(amt, isPJ);
+          grouped[key] = {
+            id: key,
+            profile_id: pid,
+            competencia: compFormatted,
+            name,
+            cpf: doc,
+            is_pj: isPJ,
+            bruto: amt,
+            inss: tax.inss,
+            irrf: tax.irrf,
+            patronal: tax.patronal,
+            total_inss_guia: tax.inss + tax.patronal,
+            liquido: tax.liquido,
+            invoice_number: null,
+            invoice_link: null,
+            status: w.status,
+            has_invoice: false,
+            is_rpa: !isPJ
+          };
+        }
+      });
+
+      // D. Adiciona Notas Fiscais anexadas (PJ)
       (invoices || []).forEach((inv: any) => {
         const pid = inv.profile_id;
+        if (!pid) return;
+        const refMonth = inv.reference_month || (inv.created_at ? inv.created_at.substring(0, 7) : targetRefMonth);
+        const [rY, rM] = (refMonth || '').split('-');
+        const compFormatted = rY && rM ? `${rM}/${rY}` : refMonth;
+
+        if (fiscalFilterType === 'period' && refMonth !== targetRefMonth) {
+          return;
+        }
+
+        const key = inv.id || `${pid}_${refMonth}`;
         const prof = profileMap.get(pid);
-        if (!grouped[pid]) {
-          grouped[pid] = {
+        const name = prof?.full_name || inv.payee_name || 'Afiliado PJ';
+        const doc = prof?.cnpj || prof?.cpf || 'Sem Documento';
+        const isPJ = true;
+        const bruto = Number(inv.amount_gross || 0);
+
+        if (!grouped[key] && bruto > 0) {
+          grouped[key] = {
+            id: key,
             profile_id: pid,
-            name: prof?.full_name || inv.payee_name || 'Afiliado',
-            cpf: prof?.cpf || prof?.cnpj || 'Sem Documento',
-            bruto: Number(inv.amount_gross || 0)
+            competencia: compFormatted,
+            name,
+            cpf: doc,
+            is_pj: isPJ,
+            bruto,
+            inss: 0,
+            irrf: 0,
+            patronal: 0,
+            total_inss_guia: 0,
+            liquido: bruto,
+            invoice_number: inv.invoice_number ? `#${inv.invoice_number}` : 'NF Anexada',
+            invoice_link: inv.file_url || inv.invoice_link || null,
+            status: 'aprovada',
+            has_invoice: true,
+            is_rpa: false
           };
+        } else if (grouped[key]) {
+          grouped[key].invoice_number = inv.invoice_number ? `#${inv.invoice_number}` : grouped[key].invoice_number;
+          grouped[key].invoice_link = inv.file_url || inv.invoice_link || grouped[key].invoice_link;
+          grouped[key].has_invoice = true;
         }
       });
 
+      // E. Consolida todos os afiliados com demonstrativos apurados na competência
+      const { data: monthComms } = await supabase
+        .from('transactions')
+        .select('profile_id, amount, created_at')
+        .eq('type', 'commission');
+
+      const commUserIds = Array.from(new Set((monthComms || []).map(c => c.profile_id).filter(Boolean)));
+      for (const uid of commUserIds) {
+        const key = `${uid}_${targetRefMonth}`;
+        if (!grouped[key]) {
+          try {
+            const stmt = await businessRules.getConsolidatedFinancialStatement(uid, yNum, mNum);
+            if (stmt && stmt.totalBruto > 0) {
+              const compFormatted = `${String(mNum).padStart(2, '0')}/${yNum}`;
+              grouped[key] = {
+                id: key,
+                profile_id: uid,
+                competencia: compFormatted,
+                name: stmt.beneficiaryName,
+                cpf: stmt.cpfCnpj,
+                is_pj: stmt.isPJ,
+                bruto: stmt.totalBruto,
+                inss: stmt.inss,
+                irrf: stmt.irrf,
+                patronal: 0,
+                total_inss_guia: 0,
+                liquido: stmt.liquido,
+                invoice_number: stmt.rpaNumber,
+                invoice_link: stmt.receiptUrl || null,
+                status: stmt.isPaid ? 'quitado' : 'pendente',
+                has_invoice: !!stmt.receiptUrl,
+                is_rpa: !stmt.isPJ
+              };
+            }
+          } catch (e) {
+            console.error('Erro ao consolidar apuração do usuário:', uid, e);
+          }
+        }
+      }
+
       const records = Object.values(grouped).map((rec: any) => {
-        const bruto = rec.bruto;
-        const isPJ = isCnpj(rec.cpf);
-        
+        const bruto = Number(rec.bruto || 0);
+        const isPJ = rec.is_pj ?? isCnpj(rec.cpf);
         const tax = calculateTaxDeductions(bruto, isPJ);
-        const inss = tax.inss;
-        const irrf = tax.irrf;
-        const patronal = tax.patronal;
-        const liquido = tax.liquido;
-        const invoice = invoiceMap.get(rec.profile_id);
+        const inss = rec.inss !== undefined ? rec.inss : tax.inss;
+        const irrf = rec.irrf !== undefined ? rec.irrf : tax.irrf;
+        const patronal = rec.patronal !== undefined ? rec.patronal : tax.patronal;
+        const liquido = rec.liquido !== undefined ? rec.liquido : tax.liquido;
 
         return {
           ...rec,
           is_pj: isPJ,
-          inss: parseFloat(inss.toFixed(2)),
-          irrf: parseFloat(irrf.toFixed(2)),
-          patronal: parseFloat(patronal.toFixed(2)),
-          total_inss_guia: parseFloat((inss + patronal).toFixed(2)),
-          liquido: parseFloat(liquido.toFixed(2)),
-          invoice_number: invoice?.invoice_number || null,
-          invoice_link: invoice?.invoice_link || null,
-          invoice_file_url: invoice?.file_url || null,
-          has_invoice: !!invoice
+          inss: parseFloat(Number(inss || 0).toFixed(2)),
+          irrf: parseFloat(Number(irrf || 0).toFixed(2)),
+          patronal: parseFloat(Number(patronal || 0).toFixed(2)),
+          total_inss_guia: parseFloat(Number(inss + patronal || 0).toFixed(2)),
+          liquido: parseFloat(Number(liquido || 0).toFixed(2)),
+          invoice_number: rec.invoice_number || null,
+          invoice_link: rec.invoice_link || null,
+          invoice_file_url: rec.invoice_link || null,
+          has_invoice: !!rec.has_invoice || !!rec.invoice_link
         };
       });
 
@@ -1164,10 +1388,12 @@ export default function AdminFinancials() {
 
     const grossRevenue = completed.reduce((sum, o) => sum + Number(o.amount || 0), 0);
     
-    // Provisão de bônus e repasses contratuais congelados por venda efetivada:
-    // Alterações futuras de comissões não afetam o faturamento e repasses de vendas já concluídas.
+    // Provisão de bônus e repasses contratuais (MMN 21% + Revendedor 12% = 33,00% Total):
     let networkTotal = 0;
     let resellerTotal = 0;
+
+    const netRateFrac = (mmnRates?.networkRate || 21) / 100;
+    const resRateFrac = (mmnRates?.resellerRate || 12) / 100;
 
     if (completed.length > 0) {
       completed.forEach((o: any) => {
@@ -1184,20 +1410,10 @@ export default function AdminFinancials() {
             }
           });
         } else {
-          // 2. Se não houver transações na tabela transactions, usa o cashback_amount congelado gravado no pedido no ato do fechamento
-          const orderCashback = Number(o.cashback_amount ?? 0);
-          if (orderCashback > 0) {
-            // cashback_amount gravado no pedido é a taxa da venda (ex: 7% = 5% Mensal + 2% Anual)
-            // A rede MMN completa (G0 a G2 = 3 níveis) = 3 x cashback_amount (21%)
-            // O revendedor regional = 1 x cashback_amount (7%)
-            resellerTotal += orderCashback;
-            networkTotal += orderCashback * 3;
-          } else {
-            // Fallback histórico para pedidos legados
-            const amt = Number(o.amount || 0);
-            resellerTotal += amt * 0.07;
-            networkTotal += amt * 0.21;
-          }
+          // 2. Aplica as alíquotas oficiais ativas da plataforma (Rede MMN 21% + Revendedor Regional 12% = 33% Total)
+          const amt = Number(o.amount || 0);
+          networkTotal += amt * netRateFrac;
+          resellerTotal += amt * resRateFrac;
         }
       });
     }
@@ -1675,14 +1891,39 @@ export default function AdminFinancials() {
 
             {/* Tabela Única Consolidada: Prestadores, Tributos e Ações */}
             <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <h4 className="text-xs font-black uppercase tracking-widest text-slate-300 flex items-center gap-2">
-                  <span className="size-1.5 rounded-full bg-emerald-400" />
-                  Apuração Consolidada por Beneficiário
-                </h4>
-                <span className="text-[10px] text-slate-500 font-bold">
-                  {fiscalRecords.length} registro(s) encontrado(s)
-                </span>
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                <div>
+                  <h4 className="text-xs font-black uppercase tracking-widest text-slate-300 flex items-center gap-2">
+                    <span className="size-1.5 rounded-full bg-emerald-400" />
+                    Apuração Consolidada por Beneficiário
+                  </h4>
+                  <span className="text-[10px] text-slate-500 font-bold">
+                    {fiscalRecords.length} registro(s) encontrado(s)
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-1.5 bg-white/5 p-1 rounded-xl border border-white/10">
+                  <button
+                    onClick={() => setFiscalFilterType('all')}
+                    className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer ${
+                      fiscalFilterType === 'all'
+                        ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
+                        : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    Todas as Competências
+                  </button>
+                  <button
+                    onClick={() => setFiscalFilterType('period')}
+                    className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer ${
+                      fiscalFilterType === 'period'
+                        ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
+                        : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    Competência Selecionada ({dateRange.start.substring(0, 7)})
+                  </button>
+                </div>
               </div>
 
               <div className="overflow-x-auto rounded-2xl border border-white/5">
@@ -1690,6 +1931,7 @@ export default function AdminFinancials() {
                   <thead>
                     <tr className="bg-white/[0.02] border-b border-white/5 text-[10px] font-black uppercase tracking-widest text-slate-400">
                       <th className="py-4 px-3">Nº Doc</th>
+                      <th className="py-4 px-3 text-center">Competência</th>
                       <th className="py-4 px-3">Beneficiário / Prestador</th>
                       <th className="py-4 px-3">Tipo</th>
                       <th className="py-4 px-3">CPF / CNPJ</th>
@@ -1705,13 +1947,13 @@ export default function AdminFinancials() {
                   <tbody className="divide-y divide-white/5">
                     {loadingFiscal ? (
                       <tr>
-                        <td colSpan={11} className="py-12 text-center text-xs text-slate-400 font-bold uppercase tracking-wider">
+                        <td colSpan={12} className="py-12 text-center text-xs text-slate-400 font-bold uppercase tracking-wider">
                           Carregando apuração fiscal e contábil...
                         </td>
                       </tr>
                     ) : fiscalRecords.length === 0 ? (
                       <tr>
-                        <td colSpan={11} className="py-12 text-center text-xs text-slate-500 font-bold uppercase tracking-wider">
+                        <td colSpan={12} className="py-12 text-center text-xs text-slate-500 font-bold uppercase tracking-wider">
                           Nenhum registro fiscal encontrado para esta competência.
                         </td>
                       </tr>
@@ -1719,9 +1961,18 @@ export default function AdminFinancials() {
                       fiscalRecords.map((rec, i) => (
                         <tr key={i} className="hover:bg-white/5 transition-colors">
                           <td className="py-4 px-3 text-xs font-mono font-bold text-slate-300 whitespace-nowrap">
-                            {rec.invoice_number ? `#${rec.invoice_number}` : (
+                            {rec.invoice_number ? (
+                              <span className="px-2 py-0.5 rounded bg-white/5 border border-white/10 font-mono text-[11px] text-amber-300">
+                                {rec.invoice_number.startsWith('#') || rec.invoice_number.startsWith('RPA') ? rec.invoice_number : `#${rec.invoice_number}`}
+                              </span>
+                            ) : (
                               <span className="text-amber-400 font-bold text-[10px] bg-amber-500/10 px-2 py-0.5 rounded">Aguardando</span>
                             )}
+                          </td>
+                          <td className="py-4 px-3 text-center whitespace-nowrap">
+                            <span className="px-2 py-0.5 rounded bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 font-mono text-[10px] font-bold">
+                              {rec.competencia || '09/2026'}
+                            </span>
                           </td>
                           <td className="py-4 px-3 text-xs font-bold text-white uppercase whitespace-nowrap">
                             {rec.name}
@@ -1729,11 +1980,11 @@ export default function AdminFinancials() {
                           <td className="py-4 px-3 whitespace-nowrap">
                             {rec.is_pj ? (
                               <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded bg-purple-500/10 text-purple-300 border border-purple-500/20">
-                                PJ
+                                PJ (NF)
                               </span>
                             ) : (
                               <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded bg-amber-500/10 text-amber-300 border border-amber-500/20">
-                                PF
+                                PF (RPA)
                               </span>
                             )}
                           </td>
@@ -1763,8 +2014,12 @@ export default function AdminFinancials() {
                                 rel="noreferrer"
                                 className="text-[10px] font-black text-indigo-400 hover:text-indigo-300 underline uppercase inline-flex items-center gap-1"
                               >
-                                Ver NF
+                                {rec.is_pj ? 'Ver NF' : 'Ver Comprovante'}
                               </a>
+                            ) : rec.is_rpa || rec.invoice_number?.includes('RPA') ? (
+                              <span className="text-[10px] text-emerald-400 font-bold bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
+                                {rec.status === 'quitado' ? 'RPA Quitado' : 'RPA Gerado'}
+                              </span>
                             ) : (
                               <span className="text-[10px] text-slate-600 font-bold">Sem anexo</span>
                             )}
@@ -2346,7 +2601,9 @@ export default function AdminFinancials() {
                 {/* 3. Comissões (28%) */}
                 <div className="flex justify-between items-center py-2.5 px-4 border-b border-white/5 text-amber-400 hover:bg-white/[0.02] rounded-xl transition-colors">
                   <div>
-                    <span className="font-bold block">(-) COMISSÕES TOTAIS (28,00%)</span>
+                    <span className="font-bold block">
+                      (-) COMISSÕES TOTAIS ({(mmnRates.totalRepasseRate || 33).toFixed(2).replace('.', ',')}%)
+                    </span>
                     <span className="text-[10px] text-slate-400 font-normal">
                       Rede MMN ({mmnRates.networkRate}%: G0 a G2) + Revendedores ({mmnRates.resellerRate}%: {mmnRates.resellerMensalRate}% M + {mmnRates.resellerAnualRate}% A)
                     </span>

@@ -910,9 +910,7 @@ export default function AffiliateFinancialSummary() {
                     <span className="font-mono font-black text-midnight text-sm block mt-1">
                       {statement.ordersList?.length || 0} pedido(s)
                     </span>
-                    <span className="text-[10px] text-slate-500 font-bold truncate block">
-                      {(statement.ordersList || []).join(', ') || 'Nenhum'}
-                    </span>
+                    <span className="text-[10px] text-slate-500 font-bold">Apurados no período</span>
                   </div>
                   <div className="p-4 bg-emerald-50 rounded-2xl border border-emerald-200">
                     <span className="text-[10px] text-emerald-700 uppercase font-bold block">Líquido Previsto</span>

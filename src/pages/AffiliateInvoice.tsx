@@ -20,7 +20,9 @@ import {
   AlertTriangle,
   Loader2,
   RefreshCw,
-  Search
+  Search,
+  Receipt,
+  PackageCheck
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import AffiliateLayout from '../components/AffiliateLayout';
@@ -384,6 +386,114 @@ export default function AffiliateInvoice() {
                   </div>
                 </div>
               </div>
+            </div>
+          </div>
+
+          {/* Card Detalhado: Discriminação dos Pedidos Vinculados ao RPA */}
+          <div className="bg-white rounded-[2.5rem] border border-slate-200/80 shadow-sm overflow-hidden p-6 sm:p-8">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-slate-100">
+              <div className="flex items-center gap-3">
+                <div className="size-11 rounded-2xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 shadow-sm">
+                  <Receipt size={22} />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-midnight uppercase tracking-tight">
+                    Discriminação dos Pedidos Vinculados ao RPA
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Detalhamento de cada pedido e comissão contabilizada para compor o valor total deste recibo
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2.5">
+                <span className="text-xs font-bold text-slate-500 bg-slate-100 px-3 py-1 rounded-full border border-slate-200">
+                  {rpaReceipt?.ordersBreakdown?.length || 0} {(rpaReceipt?.ordersBreakdown?.length || 0) === 1 ? 'pedido apurado' : 'pedidos apurados'}
+                </span>
+                <span className="px-3.5 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full text-xs font-mono font-bold">
+                  Total a Receber: R$ {(rpaReceipt?.financial.liquido_total || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                </span>
+              </div>
+            </div>
+
+            {/* Tabela de Pedidos */}
+            <div className="mt-6 overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="border-b border-slate-100 text-[10px] font-black uppercase tracking-wider text-slate-400">
+                    <th className="py-3 px-4">Nº do Pedido</th>
+                    <th className="py-3 px-4">Data</th>
+                    <th className="py-3 px-4">Origem / Regra</th>
+                    <th className="py-3 px-4 text-right">Valor do Pedido</th>
+                    <th className="py-3 px-4 text-center">Alíquota (%)</th>
+                    <th className="py-3 px-4 text-right">Valor Creditado</th>
+                    <th className="py-3 px-4 text-center">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 text-xs">
+                  {rpaReceipt?.ordersBreakdown && rpaReceipt.ordersBreakdown.length > 0 ? (
+                    rpaReceipt.ordersBreakdown.map((order, idx) => (
+                      <tr key={order.id || idx} className="hover:bg-slate-50/80 transition-colors">
+                        <td className="py-3.5 px-4 font-mono font-bold text-midnight">
+                          <span className="bg-slate-100 px-2.5 py-1 rounded-lg border border-slate-200 text-slate-700">
+                            {order.orderNumber}
+                          </span>
+                        </td>
+                        <td className="py-3.5 px-4 text-slate-500 font-medium">
+                          {order.date}
+                        </td>
+                        <td className="py-3.5 px-4">
+                          <span className="inline-flex items-center gap-1.5 font-bold text-slate-700">
+                            {order.origin}
+                          </span>
+                        </td>
+                        <td className="py-3.5 px-4 text-right font-mono font-bold text-slate-600">
+                          R$ {order.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                        </td>
+                        <td className="py-3.5 px-4 text-center font-mono font-black text-indigo-600">
+                          <span className="bg-indigo-50 px-2 py-0.5 rounded-md border border-indigo-100">
+                            {order.rate}
+                          </span>
+                        </td>
+                        <td className="py-3.5 px-4 text-right font-mono font-black text-emerald-600">
+                          R$ {order.commissionAmount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                        </td>
+                        <td className="py-3.5 px-4 text-center">
+                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-emerald-100 text-emerald-800">
+                            <CheckCircle2 size={11} />
+                            {order.status || 'Apurado'}
+                          </span>
+                        </td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan={7} className="py-8 text-center text-slate-400">
+                        Nenhum pedido individual detalhado nesta competência.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+                <tfoot>
+                  <tr className="border-t-2 border-slate-200 font-black text-midnight bg-slate-50/50">
+                    <td colSpan={3} className="py-4 px-4 uppercase text-[11px] tracking-wider text-slate-500">
+                      Totalizador dos Pedidos do Recibo
+                    </td>
+                    <td className="py-4 px-4 text-right font-mono text-slate-700">
+                      R$ {(rpaReceipt?.ordersBreakdown?.reduce((acc, curr) => acc + (curr.amount || 0), 0) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                    </td>
+                    <td className="py-4 px-4 text-center text-slate-400 font-mono text-xs">
+                      —
+                    </td>
+                    <td className="py-4 px-4 text-right font-mono text-emerald-600 text-sm">
+                      R$ {(rpaReceipt?.financial.liquido_total || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                    </td>
+                    <td className="py-4 px-4 text-center text-[10px] uppercase font-bold text-emerald-700">
+                      100% Repasse
+                    </td>
+                  </tr>
+                </tfoot>
+              </table>
             </div>
           </div>
 

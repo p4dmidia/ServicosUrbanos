@@ -14,7 +14,8 @@ import {
   X,
   Loader2,
   Calendar,
-  Sparkles
+  Sparkles,
+  Receipt
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import jsPDF from 'jspdf';
@@ -181,7 +182,48 @@ export default function RPAReceiptModal({
         y += it.isHighlight ? 8 : 6.5;
       });
 
-      y += 4;
+      y += 3;
+
+      // 3.1 DETALHAMENTO DOS PEDIDOS VINCULADOS
+      if (rpa.ordersBreakdown && rpa.ordersBreakdown.length > 0) {
+        doc.setFillColor(241, 245, 249);
+        doc.rect(14, y, 182, 5.5, 'FD');
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(7.5);
+        doc.setTextColor(15, 23, 42);
+        doc.text('3.1 DETALHAMENTO DOS PEDIDOS CONTABILIZADOS', 16, y + 4);
+        y += 7.5;
+
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(6);
+        doc.text('PEDIDO', 16, y);
+        doc.text('DATA', 44, y);
+        doc.text('ORIGEM / REGRA', 68, y);
+        doc.text('VALOR BASE', 125, y);
+        doc.text('ALÍQUOTA', 155, y);
+        doc.text('VALOR (R$)', 194, y, { align: 'right' });
+        y += 2.5;
+
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(6);
+        rpa.ordersBreakdown.slice(0, 8).forEach(ord => {
+          doc.text(ord.orderNumber, 16, y);
+          doc.text(ord.date, 44, y);
+          const origText = ord.origin.length > 30 ? ord.origin.substring(0, 30) + '...' : ord.origin;
+          doc.text(origText, 68, y);
+          doc.text(`R$ ${ord.amount.toFixed(2)}`, 125, y);
+          doc.text(ord.rate, 155, y);
+          doc.text(`R$ ${ord.commissionAmount.toFixed(2)}`, 194, y, { align: 'right' });
+          y += 3.5;
+        });
+
+        if (rpa.ordersBreakdown.length > 8) {
+          doc.setFont('helvetica', 'italic');
+          doc.text(`... e mais ${rpa.ordersBreakdown.length - 8} pedido(s) contabilizado(s)`, 16, y);
+          y += 3.5;
+        }
+        y += 2;
+      }
 
       // 4. DECLARAÇÃO DE RESPONSABILIDADE FISCAL E PREVIDENCIÁRIA
       doc.setFillColor(241, 245, 249);
@@ -430,6 +472,60 @@ export default function RPAReceiptModal({
               </div>
             </div>
           </div>
+
+          {/* Tabela de Detalhamento dos Pedidos Vinculados */}
+          {rpa.ordersBreakdown && rpa.ordersBreakdown.length > 0 && (
+            <div className="bg-white/5 rounded-2xl border border-white/5 overflow-hidden">
+              <div className="px-5 py-3.5 bg-white/5 border-b border-white/5 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Receipt size={15} className="text-emerald-400" />
+                  <span className="font-black text-[10px] uppercase tracking-wider text-slate-300">
+                    Detalhamento dos Pedidos Vinculados ({rpa.ordersBreakdown.length})
+                  </span>
+                </div>
+                <span className="text-[10px] font-mono font-bold text-emerald-400">
+                  Total: R$ {rpa.financial.liquido_total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                </span>
+              </div>
+
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse text-xs">
+                  <thead>
+                    <tr className="border-b border-white/5 text-[10px] font-black uppercase tracking-wider text-slate-400 bg-white/[0.02]">
+                      <th className="py-2.5 px-4">Pedido</th>
+                      <th className="py-2.5 px-4">Data</th>
+                      <th className="py-2.5 px-4">Origem</th>
+                      <th className="py-2.5 px-4 text-right">Valor Base</th>
+                      <th className="py-2.5 px-4 text-center">Taxa</th>
+                      <th className="py-2.5 px-4 text-right">Líquido</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-white/5">
+                    {rpa.ordersBreakdown.map((item, i) => (
+                      <tr key={item.id || i} className="hover:bg-white/[0.02]">
+                        <td className="py-2.5 px-4 font-mono font-bold text-slate-200">
+                          <span className="bg-white/5 px-2 py-0.5 rounded border border-white/10">
+                            {item.orderNumber}
+                          </span>
+                        </td>
+                        <td className="py-2.5 px-4 text-slate-400">{item.date}</td>
+                        <td className="py-2.5 px-4 text-slate-300 font-medium">{item.origin}</td>
+                        <td className="py-2.5 px-4 text-right font-mono text-slate-400">
+                          R$ {item.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                        </td>
+                        <td className="py-2.5 px-4 text-center font-mono font-bold text-indigo-400">
+                          {item.rate}
+                        </td>
+                        <td className="py-2.5 px-4 text-right font-mono font-bold text-emerald-400">
+                          R$ {item.commissionAmount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
 
           {/* Cláusula Legal de Intermediação */}
           <div className="bg-white/5 p-4 rounded-2xl border border-white/5 flex gap-3 items-start">

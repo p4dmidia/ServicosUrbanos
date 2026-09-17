@@ -92,10 +92,10 @@ export default function AdminFinancials() {
   const [plans, setPlans] = useState<any[]>([]);
   const [mmnRates, setMmnRates] = useState({
     networkRate: 21,
-    resellerMensalRate: 5,
+    resellerMensalRate: 10,
     resellerAnualRate: 2,
-    resellerRate: 7,
-    totalRepasseRate: 28
+    resellerRate: 12,
+    totalRepasseRate: 33
   });
 
   const getPlanFinancialOrder = (item: any): number => {
@@ -166,7 +166,7 @@ export default function AdminFinancials() {
         ? mmnLvls.reduce((acc: number, cur: any) => acc + Number(cur.value || 0), 0)
         : 21;
       
-      const rMensal = Number(mmnCfg?.commission_regional_mensal ?? 5);
+      const rMensal = Number(mmnCfg?.commission_regional_mensal ?? 10);
       const rAnual = Number(mmnCfg?.commission_regional_anual ?? 2);
       const rTotal = rMensal + rAnual;
 
@@ -1388,36 +1388,12 @@ export default function AdminFinancials() {
 
     const grossRevenue = completed.reduce((sum, o) => sum + Number(o.amount || 0), 0);
     
-    // Provisão de bônus e repasses contratuais (MMN 21% + Revendedor 12% = 33,00% Total):
-    let networkTotal = 0;
-    let resellerTotal = 0;
-
+    // Provisão de bônus e repasses contratuais (MMN 21% + Revendedor 12% = 33,00% Total conforme configurado):
     const netRateFrac = (mmnRates?.networkRate || 21) / 100;
     const resRateFrac = (mmnRates?.resellerRate || 12) / 100;
 
-    if (completed.length > 0) {
-      completed.forEach((o: any) => {
-        // 1. Prioridade: Se houver transações de comissão salvas no momento da venda
-        const orderTxs = (allCommissions || []).filter((t: any) => String(t.order_id) === String(o.id));
-        if (orderTxs.length > 0) {
-          orderTxs.forEach((t: any) => {
-            const desc = (t.description || '').toLowerCase();
-            const isReseller = desc.includes('revendedor') || desc.includes('regional');
-            if (isReseller) {
-              resellerTotal += Math.abs(Number(t.amount || 0));
-            } else {
-              networkTotal += Math.abs(Number(t.amount || 0));
-            }
-          });
-        } else {
-          // 2. Aplica as alíquotas oficiais ativas da plataforma (Rede MMN 21% + Revendedor Regional 12% = 33% Total)
-          const amt = Number(o.amount || 0);
-          networkTotal += amt * netRateFrac;
-          resellerTotal += amt * resRateFrac;
-        }
-      });
-    }
-
+    const networkTotal = grossRevenue * netRateFrac;
+    const resellerTotal = grossRevenue * resRateFrac;
     const mmnTotal = networkTotal + resellerTotal;
 
     // Custo Seguro MBM: Provisão em caixa conforme o ciclo contratado pelo segurado

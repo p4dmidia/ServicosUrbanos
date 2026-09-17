@@ -85,15 +85,14 @@ export default function AdminReports() {
     return totalGMV;
   }, [totalGMV]);
 
-  // Comissões Provisionadas (MMN 21% + Revendedor 12% = 33% ou soma real das transações)
+  // Comissões Provisionadas (MMN 21% + Revendedor 12% = 33% conforme mmn_config/mmn_levels)
   const totalCommissionsProvisioned = useMemo(() => {
-    if (reportData?.payoutMMN?.value && reportData.payoutMMN.value > 0) {
+    if (reportData?.payoutMMN?.value !== undefined) {
       return reportData.payoutMMN.value;
     }
-    return completedOrders.reduce((sum, o) => {
-      return sum + (Number(o.amount || 0) * 0.33);
-    }, 0);
-  }, [completedOrders, reportData]);
+    const repasseRate = (reportData?.totalRepasseRate || 33) / 100;
+    return totalGMV * repasseRate;
+  }, [totalGMV, reportData]);
 
   // Expansão da Rede
   const networkMembersCount = useMemo(() => {

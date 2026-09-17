@@ -2136,12 +2136,15 @@ export const businessRules = {
       .order('order_date', { ascending: false });
 
     if (error) throw error;
-    return data.map(o => ({
+    return (data || []).map(o => ({
+      ...o,
       id: o.id,
       customerName: o.customer_name || o.customerName,
       customerInitial: o.customer_initial || o.customerInitial,
       date: o.order_date || o.date || o.created_at,
-      amount: Number(o.total_amount || o.amount || 0),
+      order_date: o.order_date || o.date || o.created_at,
+      created_at: o.created_at || o.order_date,
+      amount: Number(o.amount || o.total_amount || 0),
       status: o.status,
       branchId: o.branch_id || o.branchId,
       userId: o.user_id || o.userId,
@@ -2505,9 +2508,9 @@ export const businessRules = {
       (o.status === 'Pago' || o.status === 'Concluído' || o.status === 'Pago, Aguardando Retirada')
     );
 
-    const getOrderDateStr = (o: any) => (o.order_date || o.created_at || '').substring(0, 10);
-    const startDateStr = startDate.toISOString().substring(0, 10);
-    const endDateStr = endDate.toISOString().substring(0, 10);
+    const getOrderDateStr = (o: any) => (o.order_date || o.created_at || o.date || '').substring(0, 10);
+    const startDateStr = customStartDate ? customStartDate : startDate.toISOString().substring(0, 10);
+    const endDateStr = customEndDate ? customEndDate : endDate.toISOString().substring(0, 10);
     const prevStartDateStr = previousStartDate.toISOString().substring(0, 10);
 
     const currentRevenue = completedAll.filter(o => {
@@ -3516,8 +3519,7 @@ export const businessRules = {
       const isInvoiceAmountMatching = hasInvoice && (
         Math.abs(invoiceGross - monthlyPending) < 0.05
       );
-      // PJ requer envio e validação da Nota Fiscal; PF utiliza o Recibo RPA gerado pelo sistema
-      const canPayMonthly = isEligible && (isPJ ? hasInvoice : true);
+      const canPayMonthly = isEligible;
 
       // 2. Apuração dos impostos do Mensal (Dia 10) e Provisão Anual
       // A) Semanal (zerado)
@@ -5842,14 +5844,15 @@ export const businessRules = {
   archiveMonthlyPayout: async (data: {
     refMonth: string;
     userId: string;
-    userName: string;
-    pixKey: string;
-    totalBruto: number;
-    inss: number;
-    irrf: number;
-    liquido: number;
+    userName?: string;
+    pixKey?: string;
+    totalBruto?: number;
+    inss?: number;
+    irrf?: number;
+    liquido?: number;
     receiptUrl?: string;
     paidAt?: string;
+    [key: string]: any;
   }) => {
     try {
       const storageKey = `monthly_payout_archives_${data.refMonth}`;
@@ -6004,10 +6007,11 @@ export const businessRules = {
 
     // 3. Cashback Anual AFILIADO (MMN)
     let brutoAnualMmn = 0;
+    let annualMmnComms: any[] = [];
     const annualStartDate = new Date(nextYear - 1, 11, 1, 0, 0, 0, 0); // 01/12/(ano-1)
     const annualEndDate = new Date(nextYear, 10, 30, 23, 59, 59, 999); // 30/11/ano
     if (isDecemberAnnualPayout) {
-      const annualMmnComms = (userTxs || []).filter(t => {
+      annualMmnComms = (userTxs || []).filter(t => {
         if (t.type !== 'commission') return false;
         const desc = (t.description || '').toLowerCase();
         const isReseller = desc.includes('revendedor') || desc.includes('regional') || desc.includes('revenda') || desc.includes('(reg)') || t.metadata?.is_reseller;
@@ -6020,8 +6024,9 @@ export const businessRules = {
 
     // 4. Cashback Anual REVENDEDOR
     let brutoAnualRevendedor = 0;
+    let annualResellerComms: any[] = [];
     if (isDecemberAnnualPayout) {
-      const annualResellerComms = (userTxs || []).filter(t => {
+      annualResellerComms = (userTxs || []).filter(t => {
         if (t.type !== 'commission') return false;
         const desc = (t.description || '').toLowerCase();
         const isReseller = desc.includes('revendedor') || desc.includes('regional') || desc.includes('revenda') || desc.includes('(reg)') || t.metadata?.is_reseller;
@@ -6056,6 +6061,97 @@ export const businessRules = {
 
     const isPaid = !!archivedRecord || (payoutTx && payoutTx.status === 'completed');
 
+    // Formatação do Número do RPA Oficial
+    const rpaSuffix = (profile?.cpf ? profile.cpf.replace(/\D/g, '').slice(-4) : userId.slice(0, 4)).toUpperCase();
+    const rpaNumber = `RPA Nº ${selYear}${String(month).padStart(2, '0')}-${rpaSuffix}`;
+
+    // Agrupa todas as comissões apuradas nesta competência
+    const allPeriodComms = [
+      ...monthMmnCommissions.map(t => ({ ...t, categoryType: 'MMN_MENSAL' })),
+      ...monthResellerCommissions.map(t => ({ ...t, categoryType: 'RESELLER_MENSAL' })),
+      ...annualMmnComms.map(t => ({ ...t, categoryType: 'MMN_ANUAL' })),
+      ...annualResellerComms.map(t => ({ ...t, categoryType: 'RESELLER_ANUAL' }))
+    ];
+
+    // Busca dados complementares dos pedidos
+    const orderIdCandidates: string[] = [];
+    allPeriodComms.forEach(t => {
+      if (t.order_id) orderIdCandidates.push(String(t.order_id));
+      const desc = t.description || '';
+      const match = desc.match(/#([a-zA-Z0-9-]+)/);
+      if (match) orderIdCandidates.push(match[1]);
+    });
+
+    const uniqueOrderIds = Array.from(new Set(orderIdCandidates.filter(Boolean)));
+    const ordersMap = new Map<string, any>();
+
+    if (uniqueOrderIds.length > 0) {
+      try {
+        const { data: ordersData } = await supabase
+          .from('orders')
+          .select('id, amount, customer_name, customer_id, created_at, status')
+          .in('id', uniqueOrderIds);
+        (ordersData || []).forEach(o => ordersMap.set(String(o.id), o));
+      } catch (e) {
+        console.error('Erro ao buscar pedidos para o demonstrativo consolidado:', e);
+      }
+    }
+
+    const ordersBreakdown = allPeriodComms.map(t => {
+      let rawOrderId = t.order_id ? String(t.order_id) : '';
+      if (!rawOrderId) {
+        const match = (t.description || '').match(/#([a-zA-Z0-9-]+)/);
+        if (match) rawOrderId = match[1];
+      }
+
+      const order = rawOrderId ? ordersMap.get(rawOrderId) : null;
+      let orderNumber = rawOrderId 
+        ? (rawOrderId.length > 12 ? `#${rawOrderId.substring(0, 8)}` : (rawOrderId.startsWith('#') ? rawOrderId : `#${rawOrderId}`))
+        : `Ped. #${t.id ? t.id.substring(0, 6) : '---'}`;
+
+      const desc = t.description || '';
+      let origin = 'Rede MMN';
+      if (t.categoryType?.includes('RESELLER') || desc.toLowerCase().includes('revendedor') || desc.toLowerCase().includes('regional')) {
+        origin = 'Revenda Regional';
+      } else if (desc.includes('G0') || desc.includes('Nível 0') || desc.includes('Próprio') || (order && order.customer_id === userId)) {
+        origin = 'MMN G0 (Próprio)';
+      } else if (desc.includes('G1') || desc.includes('Nível 1') || desc.includes('1º')) {
+        origin = 'MMN G1 (1º Nível)';
+      } else if (desc.includes('G2') || desc.includes('Nível 2') || desc.includes('2º')) {
+        origin = 'MMN G2 (2º Nível)';
+      } else if (t.metadata?.level !== undefined) {
+        origin = `MMN G${t.metadata.level}`;
+      }
+
+      const orderAmount = Number(order?.amount || t.metadata?.order_amount || 0);
+      const commissionAmount = Number(t.amount || 0);
+      let commissionRate = 0;
+      if (orderAmount > 0) {
+        commissionRate = Number(((commissionAmount / orderAmount) * 100).toFixed(1));
+      } else if (t.metadata?.rate) {
+        commissionRate = Number(t.metadata.rate);
+      } else {
+        const pctMatch = desc.match(/(\d+(\.\d+)?)%/);
+        if (pctMatch) commissionRate = parseFloat(pctMatch[1]);
+      }
+
+      return {
+        id: t.id,
+        orderId: rawOrderId || t.id,
+        orderNumber: orderNumber,
+        date: new Date(t.created_at).toLocaleDateString('pt-BR'),
+        customerName: order?.customer_name || t.metadata?.customer_name || 'Assinante / Cliente',
+        origin: origin,
+        type: t.categoryType?.includes('ANUAL') ? 'Cashback Anual' : 'Cashback Mensal',
+        orderAmount: orderAmount,
+        commissionRate: commissionRate,
+        commissionAmount: commissionAmount,
+        description: desc
+      };
+    });
+
+    const ordersList = Array.from(new Set(ordersBreakdown.map(o => o.orderNumber)));
+
     return {
       userId,
       beneficiaryName: profile?.full_name || 'Afiliado / Revendedor',
@@ -6063,6 +6159,10 @@ export const businessRules = {
       bankDetails: profile?.bank_name ? `${profile.bank_name} / Ag: ${profile.bank_branch} / CC: ${profile.bank_account}` : 'Chave PIX',
       cpfCnpj: profile?.cpf || profile?.cnpj || '',
       isPJ,
+      rpaNumber,
+      ordersList,
+      ordersBreakdown,
+      ordersCount: ordersBreakdown.length,
       periodoStr,
       previsaoPagamentoStr,
       limiteNotaFiscalStr,
@@ -6089,10 +6189,12 @@ export const businessRules = {
       'Beneficiario',
       'CPF/CNPJ',
       'Tipo',
+      'Numero RPA',
       'Chave PIX',
       'Dados Bancarios',
       'Periodo',
       'Previsao Pagamento',
+      'Pedidos Vinculados',
       'Cashback Mensal MMN (G0 ao G2)',
       'Cashback Mensal Revendedor',
       'Cashback Anual Afiliado',
@@ -6108,10 +6210,12 @@ export const businessRules = {
       `"${r.beneficiaryName || r.affiliateName || r.userName || ''}"`,
       `"${r.cpfCnpj || r.cpf || ''}"`,
       r.isPJ ? 'PJ' : 'PF',
+      `"${r.rpaNumber || ''}"`,
       `"${r.pixKey || ''}"`,
       `"${r.bankDetails || ''}"`,
       `"${r.periodoStr || refMonthStr}"`,
       `"${r.previsaoPagamentoStr || ''}"`,
+      `"${(r.ordersList || []).join(', ')}"`,
       (r.brutoMensalMmn || 0).toFixed(2).replace('.', ','),
       (r.brutoMensalRevendedor || 0).toFixed(2).replace('.', ','),
       (r.brutoAnualMmn || 0).toFixed(2).replace('.', ','),

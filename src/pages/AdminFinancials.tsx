@@ -1312,9 +1312,9 @@ export default function AdminFinancials() {
     const totalPolicies = (mbmAnualCount + mbmSemestralCount + mbmTrimestralCount + mbmMensalCount) || completed.length || activeLivesCount || (grossRevenue > 0 ? Math.round(grossRevenue / annualPlanPrice) : 0);
     const profitPerPolicy = totalPolicies > 0 ? (netProfit / totalPolicies) : 0;
     
-    const mmnPercentage = grossRevenue > 0 ? (mmnTotal / grossRevenue) * 100 : totalRepasseRate;
-    const networkPercentage = grossRevenue > 0 ? (networkTotal / grossRevenue) * 100 : networkRate;
-    const resellerPercentage = grossRevenue > 0 ? (resellerTotal / grossRevenue) * 100 : resellerRate;
+    const mmnPercentage = grossRevenue > 0 ? (mmnTotal / grossRevenue) * 100 : (mmnRates?.totalRepasseRate || 28.00);
+    const networkPercentage = grossRevenue > 0 ? (networkTotal / grossRevenue) * 100 : (mmnRates?.networkRate || 21.00);
+    const resellerPercentage = grossRevenue > 0 ? (resellerTotal / grossRevenue) * 100 : (mmnRates?.resellerRate || 7.00);
     const mbmPercentage = grossRevenue > 0 ? (mbmCost / grossRevenue) * 100 : (grossRevenue > 0 ? 0 : 14.12);
 
     return {

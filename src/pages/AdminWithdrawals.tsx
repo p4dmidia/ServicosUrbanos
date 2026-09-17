@@ -280,11 +280,6 @@ export default function AdminWithdrawals() {
       return;
     }
 
-    if (payoutType === 'mensal' && !userItem.canPayMonthly) {
-      toast.error('Pagamento mensal bloqueado: usuário PJ não enviou a Nota Fiscal para conferência.');
-      return;
-    }
-
     if (payoutType === 'anual' && !isDecemberAnnualWindow) {
       toast.error('Pagamento Anual bloqueado: liberado exclusivamente no dia 10 de Dezembro!');
       return;
@@ -941,8 +936,8 @@ export default function AdminWithdrawals() {
                               )}
                             </div>
                           ) : (
-                            <span className="inline-flex items-center gap-1 text-[9px] font-black px-2.5 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20">
-                              <AlertTriangle size={11} /> Aguardando Envio de NF
+                            <span className="inline-flex items-center gap-1 text-[9px] font-black px-2.5 py-0.5 rounded-full bg-slate-500/10 text-slate-400 border border-slate-500/20">
+                              <ShieldCheck size={11} /> Intermediação de Negócios (PJ)
                             </span>
                           )
                         ) : (
@@ -990,16 +985,11 @@ export default function AdminWithdrawals() {
                           </span>
                         )}
                         <button
-                          disabled={!w.isEligible || (w.monthlyLiquid || 0) <= 0 || !w.canPayMonthly}
+                          disabled={!w.isEligible || (w.monthlyLiquid || 0) <= 0}
                           onClick={() => handleOpenPaymentModal(w, 'mensal')}
-                          title={!w.canPayMonthly ? 'Bloqueado: Requer envio prévio da Nota Fiscal' : 'Pagar via PIX'}
-                          className={`mt-2 w-full py-1.5 px-3 rounded-xl text-[9px] font-black uppercase tracking-wider transition-all cursor-pointer ${
-                            !w.canPayMonthly 
-                              ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30 opacity-70 cursor-not-allowed' 
-                              : 'bg-emerald-600 hover:bg-emerald-500 text-white disabled:opacity-30 disabled:pointer-events-none'
-                          }`}
+                          className="mt-2 w-full py-1.5 px-3 rounded-xl text-[9px] font-black uppercase tracking-wider transition-all cursor-pointer bg-emerald-600 hover:bg-emerald-500 text-white disabled:opacity-30 disabled:pointer-events-none shadow-sm"
                         >
-                          {!w.hasInvoice ? 'Aguardando NF' : 'Pagar Mensal'}
+                          Pagar Mensal
                         </button>
                       </div>
 
@@ -1574,11 +1564,11 @@ export default function AdminWithdrawals() {
 
                   </div>
 
-                  {/* Alerta de Nota Fiscal */}
+                  {/* Banner Total a Receber */}
                   <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-4 text-amber-300 flex items-center justify-between text-xs sm:text-sm font-black uppercase tracking-wide">
                     <div className="flex items-center gap-2">
                       <AlertTriangle size={18} className="text-amber-400 shrink-0" />
-                      <span>EMITIR NOTA FISCAL NO TOTAL BRUTO ATÉ 05/{statementData.refMonth ? statementData.refMonth.split('-')[1] : '00'}/{statementData.refMonth ? statementData.refMonth.split('-')[0] : '0000'}</span>
+                      <span>TOTAL A RECEBER ATÉ 05/{statementData.refMonth ? statementData.refMonth.split('-')[1] : '00'}/{statementData.refMonth ? statementData.refMonth.split('-')[0] : '0000'}</span>
                     </div>
                     <span className="font-mono text-white">
                       R$ {(statementData.totalBruto || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
@@ -1753,12 +1743,12 @@ export default function AdminWithdrawals() {
                     </div>
                   </div>
 
-                  {/* Alerta de Nota Fiscal (Amarelo) */}
+                  {/* Banner Total a Receber */}
                   <div className="bg-amber-100 border border-amber-300/80 rounded-2xl p-4 text-amber-950 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
                     <div className="flex items-center gap-2.5">
                       <AlertCircle size={20} className="text-amber-700 shrink-0" />
                       <span className="text-xs sm:text-sm font-black uppercase tracking-wide">
-                        EMITIR NOTA FISCAL NO TOTAL BRUTO ATÉ {consolidatedData.limiteNotaFiscalStr}
+                        TOTAL A RECEBER ATÉ {consolidatedData.limiteNotaFiscalStr}
                       </span>
                     </div>
                     <span className="font-mono font-black text-sm sm:text-base text-amber-900 shrink-0">

@@ -68,7 +68,7 @@ export default function AdminReports() {
       const isPaid = o.status !== 'Cancelado' && 
         (o.status === 'Pago' || o.status === 'Concluído' || o.status === 'Pago, Aguardando Retirada');
       if (!isPaid) return false;
-      const orderDate = (o.order_date || o.created_at || '').substring(0, 10);
+      const orderDate = (o.order_date || o.created_at || o.date || '').substring(0, 10);
       if (startDate && orderDate < startDate) return false;
       if (endDate && orderDate > endDate) return false;
       return true;
@@ -198,7 +198,7 @@ export default function AdminReports() {
         labels.push(`${d.getDate()}/${d.getMonth() + 1}`);
 
         const dayTotal = completedOrders
-          .filter(o => (o.order_date || o.created_at || '').substring(0, 10) === dStr)
+          .filter(o => (o.order_date || o.created_at || o.date || '').substring(0, 10) === dStr)
           .reduce((sum, o) => sum + Number(o.amount || 0), 0);
 
         values.push(dayTotal);
@@ -214,7 +214,7 @@ export default function AdminReports() {
         labels.push(monthsNames[cur.getMonth()]);
 
         const monthTotal = completedOrders
-          .filter(o => (o.order_date || o.created_at || '').substring(0, 7) === monthPrefix)
+          .filter(o => (o.order_date || o.created_at || o.date || '').substring(0, 7) === monthPrefix)
           .reduce((sum, o) => sum + Number(o.amount || 0), 0);
 
         values.push(monthTotal);

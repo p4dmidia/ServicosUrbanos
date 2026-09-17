@@ -127,7 +127,7 @@ export default function AffiliateNetLiquido() {
         statement.totalBruto.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
       ],
       [
-        `EMITIR NOTA FISCAL NO TOTAL BRUTO ATÉ ${statement.limiteNotaFiscalStr}`,
+        `TOTAL A RECEBER ATÉ ${statement.limiteNotaFiscalStr}`,
         statement.totalBruto.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
       ],
       [
@@ -447,12 +447,12 @@ export default function AffiliateNetLiquido() {
                 </div>
               </div>
 
-              {/* Alerta de Nota Fiscal */}
+              {/* Banner Total a Receber */}
               <div className="bg-amber-100 border border-amber-300/80 rounded-2xl p-4 text-amber-950 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
                 <div className="flex items-center gap-2.5">
                   <AlertCircle size={20} className="text-amber-700 shrink-0" />
                   <span className="text-xs sm:text-sm font-black uppercase tracking-wide">
-                    EMITIR NOTA FISCAL NO TOTAL BRUTO ATÉ {statement.limiteNotaFiscalStr}
+                    TOTAL A RECEBER ATÉ {statement.limiteNotaFiscalStr}
                   </span>
                 </div>
                 <span className="font-mono font-black text-sm sm:text-base text-amber-900 shrink-0">

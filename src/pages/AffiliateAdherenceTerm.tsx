@@ -870,6 +870,173 @@ export default function AffiliateAdherenceTerm() {
             </div>
           )
         };
+      case 'anexo-13':
+        return {
+          title: "ANEXO XIII – TERMO DE INTERMEDIAÇÃO E USO DE PLATAFORMA DIGITAL",
+          subtitle: "Serviço Urbanos Tecnologia Ltda – CNPJ 54.795.377/0001-03",
+          body: (
+            <div className="space-y-6 text-justify">
+              <div className="bg-slate-50 border border-slate-200 p-4 rounded-2xl text-xs font-bold text-slate-700 font-sans text-center">
+                TERMO DE INTERMEDIAÇÃO E USO DE PLATAFORMA DIGITAL
+              </div>
+
+              <p>
+                Pelo presente instrumento, de um lado <strong>Serviço Urbanos Tecnologia Ltda</strong>, pessoa jurídica de direito privado, inscrita no CNPJ 54.795.377/0001-03, doravante denominada <strong>PLATAFORMA</strong> ou <strong>INTERMEDIADORA</strong>, e de outro lado o <strong>USUÁRIO</strong>, pessoa física ou jurídica cadastrada na plataforma, doravante denominado <strong>VENDEDOR</strong>, têm entre si justo e contratado o seguinte:
+              </p>
+
+              <div className="space-y-3">
+                <h4 className="font-bold text-midnight font-sans text-sm uppercase border-b border-slate-100 pb-2">1. OBJETO</h4>
+                <p>
+                  <strong>1.1.</strong> O presente contrato tem por objeto a disponibilização, pela PLATAFORMA, de ambiente digital destinado à intermediação, agenciamento, promoção e facilitação de vendas de produtos, serviços, planos de benefícios, planos de saúde, seguros e demais soluções comerciais oferecidas por empresas parceiras.
+                </p>
+                <p>
+                  <strong>1.2.</strong> A PLATAFORMA atua exclusivamente como intermediadora, não sendo fabricante, fornecedora, operadora, corretora ou prestadora direta dos produtos e serviços ofertados pelos parceiros.
+                </p>
+              </div>
+
+              <div className="space-y-3">
+                <h4 className="font-bold text-midnight font-sans text-sm uppercase border-b border-slate-100 pb-2">2. NATUREZA DA RELAÇÃO</h4>
+                <p>
+                  <strong>2.1.</strong> A relação entre PLATAFORMA e VENDEDOR é comercial, não trabalhista, não societária, não exclusiva e não subordinada.
+                </p>
+                <p>
+                  <strong>2.2.</strong> O VENDEDOR declara atuar de forma autônoma, sem qualquer vínculo empregatício com a PLATAFORMA.
+                </p>
+                <p>
+                  <strong>2.3.</strong> Não há salário, jornada, metas obrigatórias, controle de horário ou qualquer elemento caracterizador de relação de emprego.
+                </p>
+              </div>
+
+              <div className="space-y-3">
+                <h4 className="font-bold text-midnight font-sans text-sm uppercase border-b border-slate-100 pb-2">3. REMUNERAÇÃO E COMISSÕES</h4>
+                <p>
+                  <strong>3.1.</strong> O VENDEDOR será remunerado exclusivamente por comissões sobre vendas concluídas e confirmadas pelas empresas parceiras.
+                </p>
+                <p>
+                  <strong>3.2.</strong> O percentual, regras e critérios de comissionamento serão exibidos no painel da PLATAFORMA.
+                </p>
+                <p>
+                  <strong>3.3.</strong> Vendas canceladas, estornadas ou não confirmadas não geram comissão.
+                </p>
+              </div>
+
+              <div className="space-y-3">
+                <h4 className="font-bold text-midnight font-sans text-sm uppercase border-b border-slate-100 pb-2">4. PAGAMENTOS</h4>
+                <p>
+                  <strong>4.1.</strong> A PLATAFORMA realizará pagamentos ao VENDEDOR em ciclos operacionais, podendo ser:
+                </p>
+                <ul className="list-disc pl-5 space-y-2 text-slate-700">
+                  <li>
+                    <strong>Mensal:</strong> Fechamento no período de 01 a 30 de cada mês, será depositado todo dia 10 de cada mês.
+                  </li>
+                  <li>
+                    <strong>Anual:</strong> Fechamento entre 01/12 a 30/11 de cada ano, todo dia 10 de dezembro de cada ano.
+                  </li>
+                </ul>
+                <p>
+                  <strong>4.2.</strong> O pagamento será realizado via PIX, transferência bancária ou outro meio disponibilizado pela PLATAFORMA.
+                </p>
+                <p>
+                  <strong>4.3.</strong> Quando aplicável, a PLATAFORMA poderá efetuar retenção de IRRF, conforme legislação vigente.
+                </p>
+              </div>
+
+              <div className="space-y-3">
+                <h4 className="font-bold text-midnight font-sans text-sm uppercase border-b border-slate-100 pb-2">5. OBRIGAÇÕES DO VENDEDOR</h4>
+                <ul className="list-disc pl-5 space-y-1.5 text-slate-700">
+                  <li><strong>5.1.</strong> Atuar de forma autônoma, independente e sem subordinação.</li>
+                  <li><strong>5.2.</strong> Manter seus dados cadastrais atualizados.</li>
+                  <li>
+                    <strong>5.3.</strong> Declarar e recolher seus tributos pessoais, incluindo:
+                    <ul className="list-circle pl-5 mt-1 space-y-1">
+                      <li>INSS (contribuinte individual);</li>
+                      <li>IRPF, quando aplicável;</li>
+                      <li>DAS, quando MEI.</li>
+                    </ul>
+                  </li>
+                  <li><strong>5.4.</strong> Emitir nota fiscal quando for MEI ou pessoa jurídica.</li>
+                  <li><strong>5.5.</strong> Utilizar a PLATAFORMA de forma ética e conforme as regras internas.</li>
+                </ul>
+              </div>
+
+              <div className="space-y-3">
+                <h4 className="font-bold text-midnight font-sans text-sm uppercase border-b border-slate-100 pb-2">6. OBRIGAÇÕES DA PLATAFORMA</h4>
+                <ul className="list-disc pl-5 space-y-1.5 text-slate-700">
+                  <li><strong>6.1.</strong> Disponibilizar ambiente digital para registro de vendas, comissões e pagamentos.</li>
+                  <li><strong>6.2.</strong> Efetuar pagamentos conforme ciclos operacionais.</li>
+                  <li><strong>6.3.</strong> Fornecer extratos, relatórios e documentos necessários ao VENDEDOR.</li>
+                  <li><strong>6.4.</strong> Não interferir na autonomia do VENDEDOR.</li>
+                  <li><strong>6.5.</strong> Manter a plataforma funcional, salvo períodos de manutenção.</li>
+                </ul>
+              </div>
+
+              <div className="space-y-3">
+                <h4 className="font-bold text-midnight font-sans text-sm uppercase border-b border-slate-100 pb-2">7. AUSÊNCIA DE VÍNCULO EMPREGATÍCIO</h4>
+                <p>
+                  <strong>7.1.</strong> As partes reconhecem que este contrato não gera vínculo empregatício, não havendo:
+                </p>
+                <ul className="list-disc pl-5 space-y-1 text-slate-700">
+                  <li>salário;</li>
+                  <li>jornada;</li>
+                  <li>subordinação;</li>
+                  <li>exclusividade;</li>
+                  <li>habitualidade obrigatória;</li>
+                  <li>dependência econômica;</li>
+                  <li>ou qualquer elemento previsto na CLT.</li>
+                </ul>
+                <p>
+                  <strong>7.2.</strong> O VENDEDOR é livre para atuar em outras plataformas, empresas ou atividades.
+                </p>
+              </div>
+
+              <div className="space-y-3">
+                <h4 className="font-bold text-midnight font-sans text-sm uppercase border-b border-slate-100 pb-2">8. CANCELAMENTOS E RESPONSABILIDADES</h4>
+                <p>
+                  <strong>8.1.</strong> A PLATAFORMA não se responsabiliza por decisões das empresas parceiras quanto a:
+                </p>
+                <ul className="list-disc pl-5 space-y-1 text-slate-700">
+                  <li>aprovação de vendas;</li>
+                  <li>cancelamentos;</li>
+                  <li>estornos;</li>
+                  <li>inadimplência do cliente final.</li>
+                </ul>
+                <p>
+                  <strong>8.2.</strong> A PLATAFORMA não garante resultados, ganhos mínimos ou volume de vendas.
+                </p>
+              </div>
+
+              <div className="space-y-3">
+                <h4 className="font-bold text-midnight font-sans text-sm uppercase border-b border-slate-100 pb-2">9. VIGÊNCIA E RESCISÃO</h4>
+                <p>
+                  <strong>9.1.</strong> O presente contrato possui vigência por prazo indeterminado.
+                </p>
+                <p>
+                  <strong>9.2.</strong> Pode ser rescindido por qualquer das partes, a qualquer momento, sem ônus, mediante aviso prévio eletrônico.
+                </p>
+              </div>
+
+              <div className="space-y-3">
+                <h4 className="font-bold text-midnight font-sans text-sm uppercase border-b border-slate-100 pb-2">10. ACEITE DIGITAL</h4>
+                <p>
+                  <strong>10.1.</strong> O aceite digital realizado pelo VENDEDOR no momento do cadastro possui validade jurídica plena, substituindo assinatura física, conforme legislação brasileira.
+                </p>
+              </div>
+
+              <div className="space-y-3 pt-6 border-t border-slate-100">
+                <h4 className="font-bold text-midnight font-sans text-sm uppercase">11. FORO</h4>
+                <p>
+                  <strong>11.1.</strong> Fica eleito o foro da comarca de Salvador – BA, local da sede da PLATAFORMA, para dirimir quaisquer controvérsias oriundas deste contrato.
+                </p>
+              </div>
+
+              <div className="pt-6 border-t border-slate-100 text-xs text-slate-500 space-y-1">
+                <p className="font-bold text-slate-700">Serviço Urbanos Tecnologia Ltda</p>
+                <p>CNPJ: 54.795.377/0001-03</p>
+                <p className="text-emerald-600 font-semibold italic">Aceito digitalmente pelo VENDEDOR no momento do cadastro.</p>
+              </div>
+            </div>
+          )
+        };
       default:
         return {
           title: "TERMO DE ADESÃO – SEGURO DE ACIDENTES PESSOAIS",
@@ -934,10 +1101,13 @@ export default function AffiliateAdherenceTerm() {
                     </p>
                   </li>
                   <li>
-                    <strong>• Anexo XI – Documentos Necessários para Recebimento da Indenização</strong>
+                    <strong>• Anexo XI – Documentos Necessários para Recebimento da Indenização: FORO</strong>
                   </li>
                   <li>
                     <strong>• Anexo XII – Regras de Cashback e Inadimplência</strong>
+                  </li>
+                  <li>
+                    <strong>• Anexo XIII – Termo de Intermediação de uso de Plataforma Digital</strong>
                   </li>
                 </ul>
               </div>

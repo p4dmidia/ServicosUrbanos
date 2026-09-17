@@ -1545,7 +1545,7 @@ export default function Cadastro() {
                                     </div>
                                     <div>
                                         <h3 className="text-lg font-black text-midnight uppercase italic tracking-tight">
-                                            Resumo dos Anexos I a XII – Seguro Vida Light R$ 5.000,00
+                                            Resumo dos Anexos I a XIII – Seguro Vida Light R$ 5.000,00
                                         </h3>
                                         <p className="text-[9px] text-slate-400 font-black uppercase tracking-widest">
                                             Termo de Aceite Digital Simplificado
@@ -1642,6 +1642,12 @@ export default function Cadastro() {
                                         <div className="size-2 rounded-full bg-emerald-500 mt-2 shrink-0" />
                                         <span>
                                             <strong className="text-midnight font-bold">Anexo XII – Regras de Cashback e Inadimplência</strong>
+                                        </span>
+                                    </li>
+                                    <li className="flex gap-3 items-start">
+                                        <div className="size-2 rounded-full bg-emerald-500 mt-2 shrink-0" />
+                                        <span>
+                                            <strong className="text-midnight font-bold">Anexo XIII – Termo de Intermediação e uso de Plataforma Digital</strong>
                                         </span>
                                     </li>
                                 </ul>

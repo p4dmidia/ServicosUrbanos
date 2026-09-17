@@ -181,6 +181,7 @@ export default function AffiliateLayout({ children, title, customBalance, custom
               { path: '/afiliado/termo-adesao/anexo-10', label: 'Anexo X - Qtde Sorteios' },
               { path: '/afiliado/termo-adesao/anexo-11', label: 'Anexo XI - Docs Indenização' },
               { path: '/afiliado/termo-adesao/anexo-12', label: 'Anexo XII - Cashback/Inadimplência' },
+              { path: '/afiliado/termo-adesao/anexo-13', label: 'Anexo XIII - Intermediação Digital' },
             ];
 
             return (

@@ -281,7 +281,7 @@ export default function AdminWithdrawals() {
     }
 
     if (payoutType === 'mensal' && !userItem.canPayMonthly) {
-      toast.error('Pagamento mensal bloqueado: usuário não enviou a Nota Fiscal para conferência.');
+      toast.error('Pagamento mensal bloqueado: usuário PJ não enviou a Nota Fiscal para conferência.');
       return;
     }
 
@@ -531,7 +531,7 @@ export default function AdminWithdrawals() {
     csvContent.push('');
 
     if (viewTab === 'history') {
-      csvContent.push('Data;Beneficiario;CPF/CNPJ;Tipo;Categoria;Ciclo;Rendimento Bruto;INSS Retido (11%);Imposto de Renda Retido;Valor Liquido;Chave PIX;Status;Comprovante');
+      csvContent.push('Data;Beneficiario;CPF/CNPJ;Tipo;Categoria;Ciclo;Rendimento Bruto;INSS Retido (0%);Imposto de Renda Retido;Valor Liquido;Chave PIX;Status;Comprovante');
       filteredHistory.forEach(h => {
         csvContent.push([
           new Date(h.date).toLocaleDateString('pt-BR'),
@@ -887,7 +887,7 @@ export default function AdminWithdrawals() {
                         <span className={`px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-wider ${
                           w.isPJ ? 'bg-blue-500/10 text-blue-400' : 'bg-amber-500/10 text-amber-400'
                         }`}>
-                          {w.isPJ ? 'PJ (Isento)' : 'PF (INSS 11%)'}
+                          {w.isPJ ? 'PJ (Nota Fiscal)' : 'PF (Recibo RPA - 0%)'}
                         </span>
                         <span className={`px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-wider ${
                           w.isEligible ? 'bg-emerald-500/10 text-emerald-400' : 'bg-rose-500/10 text-rose-400'
@@ -912,36 +912,42 @@ export default function AdminWithdrawals() {
                         <span>Banco: <strong className="text-slate-300">{w.bankDetails}</strong></span>
                       </div>
 
-                      {/* Status da Nota Fiscal */}
+                      {/* Status do Comprovante Fiscal: NF (PJ) vs RPA (PF) */}
                       <div className="pt-2 flex flex-wrap items-center gap-3">
                         <span className="text-[10px] font-black text-slate-500 uppercase tracking-wider">
-                          Nota Fiscal do Mês:
+                          {w.isPJ ? 'Nota Fiscal (PJ):' : 'Comprovação Fiscal (PF):'}
                         </span>
-                        {w.hasInvoice ? (
-                          <div className="flex flex-wrap items-center gap-2">
-                            <span className={`inline-flex items-center gap-1 text-[9px] font-black px-2.5 py-0.5 rounded-full border ${
-                              w.isInvoiceAmountMatching
-                                ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
-                                : 'bg-amber-500/20 text-amber-300 border-amber-500/30'
-                            }`}>
-                              <CheckCircle2 size={11} /> 
-                              {w.isInvoiceAmountMatching ? 'NF Conferida' : 'NF Registrada'} ({w.invoiceNumber ? `#${w.invoiceNumber}` : 'Registrada'}
-                              {w.invoiceAmount ? ` - R$ ${w.invoiceAmount.toFixed(2).replace('.', ',')}` : ''})
+                        {w.isPJ ? (
+                          w.hasInvoice ? (
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className={`inline-flex items-center gap-1 text-[9px] font-black px-2.5 py-0.5 rounded-full border ${
+                                w.isInvoiceAmountMatching
+                                  ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
+                                  : 'bg-amber-500/20 text-amber-300 border-amber-500/30'
+                              }`}>
+                                <CheckCircle2 size={11} /> 
+                                {w.isInvoiceAmountMatching ? 'NF Conferida' : 'NF Registrada'} ({w.invoiceNumber ? `#${w.invoiceNumber}` : 'Registrada'}
+                                {w.invoiceAmount ? ` - R$ ${w.invoiceAmount.toFixed(2).replace('.', ',')}` : ''})
+                              </span>
+                              {(w.invoiceLink || w.invoiceFileUrl) && (
+                                <a 
+                                  href={w.invoiceLink || w.invoiceFileUrl} 
+                                  target="_blank" 
+                                  rel="noreferrer" 
+                                  className="inline-flex items-center gap-1 text-[10px] font-black text-indigo-400 hover:text-indigo-300 underline uppercase tracking-wider cursor-pointer"
+                                >
+                                  <Eye size={12} /> Abrir Nota Fiscal
+                                </a>
+                              )}
+                            </div>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 text-[9px] font-black px-2.5 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                              <AlertTriangle size={11} /> Aguardando Envio de NF
                             </span>
-                            {(w.invoiceLink || w.invoiceFileUrl) && (
-                              <a 
-                                href={w.invoiceLink || w.invoiceFileUrl} 
-                                target="_blank" 
-                                rel="noreferrer" 
-                                className="inline-flex items-center gap-1 text-[10px] font-black text-indigo-400 hover:text-indigo-300 underline uppercase tracking-wider cursor-pointer"
-                              >
-                                <Eye size={12} /> Abrir Nota Fiscal
-                              </a>
-                            )}
-                          </div>
+                          )
                         ) : (
-                          <span className="inline-flex items-center gap-1 text-[9px] font-black px-2.5 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20">
-                            <AlertTriangle size={11} /> Aguardando Envio de NF
+                          <span className="inline-flex items-center gap-1 text-[9px] font-black px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                            <ShieldCheck size={11} /> Recibo RPA Automático (Intermediação - 0% INSS)
                           </span>
                         )}
                       </div>
@@ -1109,9 +1115,9 @@ export default function AdminWithdrawals() {
                   <Receipt size={26} />
                 </div>
                 <div>
-                  <p className="text-[10px] font-black text-amber-400 uppercase tracking-widest mb-1">INSS Retido (11%)</p>
+                  <p className="text-[10px] font-black text-amber-400 uppercase tracking-widest mb-1">INSS Retido (0%)</p>
                   <h3 className="text-2xl font-black text-amber-400 font-mono tracking-tight">
-                    - R$ {totalHistoryInss.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                    R$ {totalHistoryInss.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                   </h3>
                 </div>
               </div>
@@ -1180,8 +1186,8 @@ export default function AdminWithdrawals() {
                         <th className="py-4 px-3">Categoria</th>
                         <th className="py-4 px-3">Ciclo</th>
                         <th className="py-4 px-3 text-right">Rendimento Bruto</th>
-                        <th className="py-4 px-3 text-right">INSS (11%)</th>
-                        <th className="py-4 px-3 text-right">Imposto de Renda Retido</th>
+                        <th className="py-4 px-3 text-right">INSS (0%)</th>
+                        <th className="py-4 px-3 text-right">Imposto Retido</th>
                         <th className="py-4 px-3 text-right">Valor Líquido</th>
                         <th className="py-4 px-3">Chave PIX</th>
                         <th className="py-4 px-3 text-center">Comprovante</th>
@@ -1361,7 +1367,7 @@ export default function AdminWithdrawals() {
                         <th className="py-4 px-3">Beneficiário</th>
                         <th className="py-4 px-3 text-center">Tipo</th>
                         <th className="py-4 px-3 text-right">Rendimento Bruto</th>
-                        <th className="py-4 px-3 text-right">INSS (11%)</th>
+                        <th className="py-4 px-3 text-right">INSS (0%)</th>
                         <th className="py-4 px-3 text-right">IRRF Retido</th>
                         <th className="py-4 px-3 text-right">Valor Líquido</th>
                         <th className="py-4 px-3">Chave PIX</th>
@@ -1622,11 +1628,11 @@ export default function AdminWithdrawals() {
 
                     <div className="flex items-center justify-between p-3 rounded-xl bg-white/5">
                       <div>
-                        <span className="text-slate-300 font-bold uppercase block">INSS (Teto de R$ 8.475,55 * 11% = R$ 932,31)</span>
-                        <span className="text-[9px] text-slate-500">{statementData.user?.isPJ ? 'Isento (PJ)' : 'Teto INSS aplicado'}</span>
+                        <span className="text-slate-300 font-bold uppercase block">INSS (0% - Intermediação de Negócios)</span>
+                        <span className="text-[9px] text-slate-500">{statementData.user?.isPJ ? 'Isento (PJ)' : '0% retenção na fonte'}</span>
                       </div>
-                      <span className={`font-mono font-black ${statementData.user?.isPJ ? 'text-slate-400' : 'text-rose-400'}`}>
-                        {(statementData.inss || 0) > 0 ? `- R$ ${(statementData.inss || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : 'R$ 0,00'}
+                      <span className="font-mono font-black text-emerald-400">
+                        R$ 0,00 (0%)
                       </span>
                     </div>
 
@@ -1836,16 +1842,14 @@ export default function AdminWithdrawals() {
                     <div className="flex items-center justify-between p-3.5 rounded-xl bg-slate-50 border border-slate-100">
                       <div>
                         <span className="font-bold text-slate-800 uppercase block">
-                          INSS (TETO DE R$ 8.475,55 * 11% = R$ 932,31)
+                          INSS (0% - Intermediação de Negócios)
                         </span>
                         <span className="text-[10px] text-slate-400">
-                          {consolidatedData.isPJ ? 'Pessoa Jurídica isenta de retenção previdenciária' : 'Retenção obrigatória Pessoa Física (INSS)'}
+                          {consolidatedData.isPJ ? 'Pessoa Jurídica isenta de retenção' : '0% de retenção na fonte. Recolhimento previdenciário individual'}
                         </span>
                       </div>
-                      <span className={`font-mono font-black ${consolidatedData.isPJ ? 'text-slate-500' : 'text-red-600'}`}>
-                        {consolidatedData.isPJ 
-                          ? 'Isento (PJ)' 
-                          : Number(consolidatedData.inss || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                      <span className="font-mono font-black text-emerald-600">
+                        R$ 0,00 (0%)
                       </span>
                     </div>
 

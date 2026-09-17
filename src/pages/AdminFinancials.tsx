@@ -88,6 +88,7 @@ export default function AdminFinancials() {
   });
   const [mbmSubGroup, setMbmSubGroup] = useState(() => localStorage.getItem('mbm_sub_group') || '1');
   const [activeSubscriptions, setActiveSubscriptions] = useState<any[]>([]);
+  const [allCommissions, setAllCommissions] = useState<any[]>([]);
   const [plans, setPlans] = useState<any[]>([]);
   const [mmnRates, setMmnRates] = useState({
     networkRate: 21,
@@ -118,7 +119,7 @@ export default function AdminFinancials() {
   async function loadAdminData(silent = false) {
     try {
       if (!silent) setLoading(true);
-      const [ordersData, networkData, resellerData, subsData, mmnConfigRes, mmnLevelsRes, plansRes] = await Promise.all([
+      const [ordersData, networkData, resellerData, subsData, mmnConfigRes, mmnLevelsRes, plansRes, commissionsRes] = await Promise.all([
         businessRules.getAllOrders(),
         businessRules.getAffiliateCashbackReport(dateRange.start, `${dateRange.end}T23:59:59`, 'network'),
         businessRules.getAffiliateCashbackReport(dateRange.start, `${dateRange.end}T23:59:59`, 'reseller'),
@@ -132,13 +133,18 @@ export default function AdminFinancials() {
           .from('products')
           .select('*')
           .eq('is_subscription', true)
-          .order('price', { ascending: true })
+          .order('price', { ascending: true }),
+        supabase
+          .from('transactions')
+          .select('*')
+          .eq('type', 'commission')
       ]);
 
       setOrders(ordersData || []);
       setNetworkReport(networkData || []);
       setResellerReport(resellerData || []);
       setPlans(plansRes?.data || []);
+      setAllCommissions(commissionsRes?.data || []);
 
       const rawSubs = subsData?.data || [];
       const filteredSubs = rawSubs.filter(s => {
@@ -716,16 +722,16 @@ export default function AdminFinancials() {
 
       worksheet.columns = [
         { header: 'Competência', key: 'competencia', width: 15 },
-        { header: 'Nº Nota Fiscal', key: 'invoice_number', width: 18 },
+        { header: 'Nº Nota / RPA', key: 'invoice_number', width: 18 },
         { header: 'Nome do Prestador / Afiliado', key: 'name', width: 35 },
         { header: 'CPF / CNPJ', key: 'cpf', width: 20 },
         { header: 'Tipo', key: 'tipo', width: 14 },
-        { header: 'Valor Bruto da Nota (R$)', key: 'bruto', width: 25 },
-        { header: 'INSS Retido (11%) (R$)', key: 'inss', width: 22 },
-        { header: 'INSS Patronal (20%) (R$)', key: 'patronal', width: 22 },
+        { header: 'Valor Bruto (R$)', key: 'bruto', width: 25 },
+        { header: 'INSS Retido (0% Intermediação) (R$)', key: 'inss', width: 25 },
+        { header: 'INSS Patronal (0%) (R$)', key: 'patronal', width: 22 },
         { header: 'Imposto de Renda Retido (IRRF) (R$)', key: 'irrf', width: 25 },
         { header: 'Valor Líquido Pago (R$)', key: 'liquido', width: 22 },
-        { header: 'Link / Comprovante da NF', key: 'link', width: 45 }
+        { header: 'Link / Comprovante (NF/RPA)', key: 'link', width: 45 }
       ];
 
       fiscalRecords.forEach(rec => {
@@ -1052,7 +1058,7 @@ export default function AdminFinancials() {
 
         const itemsQ3 = [
           { num: '01', desc: 'Total dos rendimentos (inclusive comissões e bonificações)', val: rec.bruto },
-          { num: '02', desc: 'Contribuição previdenciária oficial (INSS retido 11%)', val: rec.inss },
+          { num: '02', desc: 'Contribuição previdenciária oficial (0% - Intermediação de Negócios / Isenção na Fonte)', val: rec.inss },
           { num: '03', desc: 'Contribuição a entidades de previdência complementar', val: 0 },
           { num: '04', desc: 'Pensão alimentícia', val: 0 },
           { num: '05', desc: 'Imposto sobre a renda retido na fonte (IRRF)', val: rec.irrf }
@@ -1158,17 +1164,45 @@ export default function AdminFinancials() {
 
     const grossRevenue = completed.reduce((sum, o) => sum + Number(o.amount || 0), 0);
     
-    // Provisão de bônus e repasses contratuais:
-    // Rede MMN Afiliados (G0 a G2 = 21% da receita bruta)
-    // Revendedores Regionais (5% Mensal + 2% Anual = 7% da receita bruta)
-    // Total de Repasse a Afiliados e Revendedores = 28%
-    const networkRate = mmnRates.networkRate || 21;
-    const resellerRate = mmnRates.resellerRate || 7;
-    const totalRepasseRate = mmnRates.totalRepasseRate || 28;
+    // Provisão de bônus e repasses contratuais congelados por venda efetivada:
+    // Alterações futuras de comissões não afetam o faturamento e repasses de vendas já concluídas.
+    let networkTotal = 0;
+    let resellerTotal = 0;
 
-    const networkTotal = grossRevenue > 0 ? (grossRevenue * (networkRate / 100)) : 0;
-    const resellerTotal = grossRevenue > 0 ? (grossRevenue * (resellerRate / 100)) : 0;
-    const mmnTotal = networkTotal + resellerTotal; // 28% Total de repasse
+    if (completed.length > 0) {
+      completed.forEach((o: any) => {
+        // 1. Prioridade: Se houver transações de comissão salvas no momento da venda
+        const orderTxs = (allCommissions || []).filter((t: any) => String(t.order_id) === String(o.id));
+        if (orderTxs.length > 0) {
+          orderTxs.forEach((t: any) => {
+            const desc = (t.description || '').toLowerCase();
+            const isReseller = desc.includes('revendedor') || desc.includes('regional');
+            if (isReseller) {
+              resellerTotal += Math.abs(Number(t.amount || 0));
+            } else {
+              networkTotal += Math.abs(Number(t.amount || 0));
+            }
+          });
+        } else {
+          // 2. Se não houver transações na tabela transactions, usa o cashback_amount congelado gravado no pedido no ato do fechamento
+          const orderCashback = Number(o.cashback_amount ?? 0);
+          if (orderCashback > 0) {
+            // cashback_amount gravado no pedido é a taxa da venda (ex: 7% = 5% Mensal + 2% Anual)
+            // A rede MMN completa (G0 a G2 = 3 níveis) = 3 x cashback_amount (21%)
+            // O revendedor regional = 1 x cashback_amount (7%)
+            resellerTotal += orderCashback;
+            networkTotal += orderCashback * 3;
+          } else {
+            // Fallback histórico para pedidos legados
+            const amt = Number(o.amount || 0);
+            resellerTotal += amt * 0.07;
+            networkTotal += amt * 0.21;
+          }
+        }
+      });
+    }
+
+    const mmnTotal = networkTotal + resellerTotal;
 
     // Custo Seguro MBM: Provisão em caixa conforme o ciclo contratado pelo segurado
     // - Mensal: R$ 1,00 (1 mês de cobertura MBM)
@@ -1310,7 +1344,7 @@ export default function AdminFinancials() {
       profitMargin,
       profitPerPolicy
     };
-  }, [orders, networkReport, resellerReport, activeLivesCount, activeSubscriptions, dateRange, mmnRates, plans]);
+  }, [orders, allCommissions, networkReport, resellerReport, activeLivesCount, activeSubscriptions, dateRange, mmnRates, plans]);
 
   if (authLoading || loading) {
     return (
@@ -1448,7 +1482,7 @@ export default function AdminFinancials() {
                   </h3>
                 </div>
                 <p className="text-xs text-slate-400 font-medium mt-1">
-                  Apuração contábil consolidada: retenções na fonte (INSS 11% e IRRF DARF 0588), encargos patronais (20%), Cédula C (DIRF) e notas fiscais.
+                  Apuração contábil consolidada: intermediação de negócios (isenção de retenção na fonte de INSS 0% e IRRF), Cédula C (DIRF) e comprovantes (RPA/NF).
                 </p>
               </div>
 
@@ -1477,21 +1511,20 @@ export default function AdminFinancials() {
                 </div>
                 <div>
                   <h4 className="text-sm font-black text-white uppercase tracking-tight">
-                    Regra Fiscal Integrada: Retenções Federais (INSS + IRRF) & Encargos Patronais
+                    Regra Fiscal de Intermediação de Negócios: Isenção de Retenção na Fonte (INSS 0% & IRRF 0%)
                   </h4>
                   <p className="text-xs text-slate-300 mt-1 leading-relaxed">
-                    Nas notas fiscais avulsas e comissões de autônomos (PF), a prefeitura não recolhe tributos federais. 
-                    A Serviços Urbanos efetua a retenção de <strong className="text-amber-300">11% de INSS</strong> e apura o <strong className="text-indigo-300">INSS Patronal (20%)</strong>, além de reter o <strong className="text-emerald-400">IRRF (DARF 0588)</strong> calculado após a dedução do INSS (<code className="text-white bg-white/10 px-1 py-0.5 rounded text-[11px]">Base IRRF = Bruto - INSS</code>).
+                    A Serviços Urbanos opera como <strong>plataforma de intermediação de negócios</strong>. Não há retenção obrigatória de 11% de INSS nem recolhimento patronal de 20% pela plataforma. O afiliado autônomo (PF) recebe 100% de seus rendimentos e emite Recibo RPA digital, sendo pessoalmente responsável pelo seu próprio recolhimento previdenciário como segurado contribuinte individual.
                   </p>
                   <div className="flex flex-wrap items-center gap-2 mt-2.5">
                     <span className="text-[10px] font-black text-amber-400 bg-amber-500/10 px-3 py-1 rounded-xl border border-amber-500/20 uppercase tracking-wide">
                       📅 Apuração: 01 a 30 de cada mês
                     </span>
                     <span className="text-[10px] font-black text-indigo-300 bg-indigo-500/10 px-3 py-1 rounded-xl border border-indigo-500/20 uppercase tracking-wide">
-                      📋 Envio à Contabilidade: Até dia 05
+                      📋 Recibo RPA: Gerado no 1º dia útil
                     </span>
                     <span className="text-[10px] font-black text-emerald-400 bg-emerald-500/10 px-3 py-1 rounded-xl border border-emerald-500/20 uppercase tracking-wide">
-                      🏛️ DARF 0588: Vencimento dia 20
+                      🏛️ Pagamento PIX: Dia 10 de cada mês
                     </span>
                   </div>
                 </div>
@@ -1501,7 +1534,7 @@ export default function AdminFinancials() {
             {/* Cards Consolidados do Mês (Grade Executiva Unificada) */}
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-4">
               <div className="bg-white/5 border border-white/5 p-5 rounded-2xl">
-                <p className="text-[9px] text-slate-400 font-black uppercase tracking-widest mb-1">Notas / Prestadores</p>
+                <p className="text-[9px] text-slate-400 font-black uppercase tracking-widest mb-1">Notas / RPA</p>
                 <p className="text-xl font-black text-white italic font-mono">
                   {fiscalTotals.totalRecords}
                 </p>
@@ -1517,35 +1550,35 @@ export default function AdminFinancials() {
               </div>
 
               <div className="bg-white/5 border border-white/5 p-5 rounded-2xl">
-                <p className="text-[9px] text-amber-400 font-black uppercase tracking-widest mb-1">INSS Retido (11%)</p>
+                <p className="text-[9px] text-amber-400 font-black uppercase tracking-widest mb-1">INSS Retido (0%)</p>
                 <p className="text-xl font-black text-amber-400 italic font-mono">
-                  - R$ {fiscalTotals.totalInss.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                  R$ {fiscalTotals.totalInss.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                 </p>
-                <p className="text-[8px] text-amber-400/60 mt-0.5 font-bold">Desconto prestador PF</p>
+                <p className="text-[8px] text-amber-400/60 mt-0.5 font-bold">Intermediação (Isento)</p>
               </div>
 
               <div className="bg-white/5 border border-white/5 p-5 rounded-2xl">
-                <p className="text-[9px] text-rose-400 font-black uppercase tracking-widest mb-1">IRRF Retido (DARF)</p>
+                <p className="text-[9px] text-rose-400 font-black uppercase tracking-widest mb-1">IRRF Retido</p>
                 <p className="text-xl font-black text-rose-400 italic font-mono">
-                  - R$ {fiscalTotals.totalIrrf.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                  R$ {fiscalTotals.totalIrrf.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                 </p>
-                <p className="text-[8px] text-rose-400/60 mt-0.5 font-bold">Código 0588</p>
+                <p className="text-[8px] text-rose-400/60 mt-0.5 font-bold">Isenção / Intermediação</p>
               </div>
 
               <div className="bg-white/5 border border-white/5 p-5 rounded-2xl">
-                <p className="text-[9px] text-indigo-400 font-black uppercase tracking-widest mb-1">Patronal (20%)</p>
+                <p className="text-[9px] text-indigo-400 font-black uppercase tracking-widest mb-1">Patronal (0%)</p>
                 <p className="text-xl font-black text-indigo-400 italic font-mono">
-                  + R$ {fiscalTotals.totalPatronal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                  R$ {fiscalTotals.totalPatronal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                 </p>
-                <p className="text-[8px] text-indigo-400/60 mt-0.5 font-bold">Custo empresa</p>
+                <p className="text-[8px] text-indigo-400/60 mt-0.5 font-bold">Intermediação</p>
               </div>
 
               <div className="bg-gradient-to-br from-indigo-900/60 to-purple-900/40 border border-indigo-500/30 p-5 rounded-2xl shadow-lg">
-                <p className="text-[9px] text-indigo-300 font-black uppercase tracking-widest mb-1">Guia INSS (31%)</p>
+                <p className="text-[9px] text-indigo-300 font-black uppercase tracking-widest mb-1">Total Encargos</p>
                 <p className="text-xl font-black text-indigo-200 italic font-mono">
                   R$ {fiscalTotals.totalInssGuia.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                 </p>
-                <p className="text-[8px] text-indigo-300/60 mt-0.5 font-bold">11% retido + 20% patronal</p>
+                <p className="text-[8px] text-indigo-300/60 mt-0.5 font-bold">0% retenção na fonte</p>
               </div>
 
               <div className="bg-gradient-to-br from-emerald-950/60 to-teal-900/40 border border-emerald-500/30 p-5 rounded-2xl shadow-lg">
@@ -1553,7 +1586,7 @@ export default function AdminFinancials() {
                 <p className="text-xl font-black text-emerald-400 italic font-mono">
                   R$ {fiscalTotals.totalLiquido.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                 </p>
-                <p className="text-[8px] text-emerald-300/60 mt-0.5 font-bold">Total transferido</p>
+                <p className="text-[8px] text-emerald-300/60 mt-0.5 font-bold">100% Repasse Líquido</p>
               </div>
             </div>
 
@@ -1656,16 +1689,16 @@ export default function AdminFinancials() {
                 <table className="w-full text-left border-collapse">
                   <thead>
                     <tr className="bg-white/[0.02] border-b border-white/5 text-[10px] font-black uppercase tracking-widest text-slate-400">
-                      <th className="py-4 px-3">Nº NF</th>
+                      <th className="py-4 px-3">Nº Doc</th>
                       <th className="py-4 px-3">Beneficiário / Prestador</th>
                       <th className="py-4 px-3">Tipo</th>
                       <th className="py-4 px-3">CPF / CNPJ</th>
                       <th className="py-4 px-3 text-right">Rendimento Bruto</th>
-                      <th className="py-4 px-3 text-right">INSS (11%)</th>
-                      <th className="py-4 px-3 text-right">Patronal (20%)</th>
-                      <th className="py-4 px-3 text-right">Imposto de Renda Retido</th>
+                      <th className="py-4 px-3 text-right">INSS (0%)</th>
+                      <th className="py-4 px-3 text-right">Patronal (0%)</th>
+                      <th className="py-4 px-3 text-right">Imposto Retido</th>
                       <th className="py-4 px-3 text-right">Valor Líquido</th>
-                      <th className="py-4 px-3 text-center">Nota Fiscal</th>
+                      <th className="py-4 px-3 text-center">NF / RPA</th>
                       <th className="py-4 px-3 text-center">Cédula C (DIRF)</th>
                     </tr>
                   </thead>

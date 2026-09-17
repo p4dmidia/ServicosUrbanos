@@ -201,8 +201,8 @@ export default function AffiliateResellerFinancial() {
     doc.setTextColor(217, 119, 6); // Amber
     doc.text(`REPASSE MENSAL BRUTO A RECEBER: R$ ${data.tax.bruto.toFixed(2).replace('.', ',')}`, 120, 66);
     if (!data.isPJ) {
-      doc.setTextColor(225, 29, 72); // Rose
-      doc.text(`Dedução INSS (11% PF): -R$ ${data.tax.inss.toFixed(2).replace('.', ',')}`, 120, 72);
+      doc.setTextColor(16, 185, 129); // Emerald
+      doc.text(`Dedução INSS (0% Intermediação): R$ 0,00`, 120, 72);
     }
     doc.setTextColor(16, 185, 129); // Emerald
     doc.setFontSize(11);

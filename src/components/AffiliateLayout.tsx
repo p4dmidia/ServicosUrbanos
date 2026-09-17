@@ -112,6 +112,9 @@ export default function AffiliateLayout({ children, title, customBalance, custom
     }
   };
 
+  const isPJ = Boolean(profile?.cnpj && profile.cnpj.replace(/\D/g, '').length > 11) || 
+               Boolean((profile as any)?.description?.includes('[PJ]'));
+
   const menuItems = [
     { path: '/afiliado/dashboard', icon: LayoutGrid, label: 'Dashboard' },
     ...(profile?.role === 'regional_reseller' ? [
@@ -123,7 +126,7 @@ export default function AffiliateLayout({ children, title, customBalance, custom
       { path: '/afiliado/financeiro-revendedor', icon: CircleDollarSign, label: 'Financeiro do Revendedor' }
     ] : []),
     { path: '/afiliado/financeiro-resumo', icon: BarChart3, label: 'Financeiro Resumo' },
-    { path: '/afiliado/nota-fiscal', icon: Receipt, label: 'Nota Fiscal' },
+    { path: '/afiliado/nota-fiscal', icon: Receipt, label: isPJ ? 'Nota Fiscal (PJ)' : 'Recibo RPA (PF)' },
     { path: '/afiliado/pedidos', icon: ShoppingBag, label: 'Meus Pedidos' },
     { path: '/afiliado/renovacoes', icon: RefreshCw, label: 'Minhas Renovações' },
     { path: '/afiliado/ecossistema', icon: Globe, label: 'Ecossistema' },

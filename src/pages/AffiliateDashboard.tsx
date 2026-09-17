@@ -12,12 +12,16 @@ import {
   ExternalLink,
   Target,
   ShoppingBag,
-  Building2
+  Building2,
+  FileText,
+  Lock,
+  Sparkles
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { Link, useNavigate } from 'react-router-dom';
 import AffiliateLayout from '../components/AffiliateLayout';
-import { businessRules } from '../lib/businessRules';
+import RPAReceiptModal from '../components/RPAReceiptModal';
+import { businessRules, RPAReceipt } from '../lib/businessRules';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import { toast } from 'react-hot-toast';
@@ -30,40 +34,52 @@ export default function AffiliateDashboard() {
   const [activity, setActivity] = useState<any[]>([]);
   const [links, setLinks] = useState<any[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
+  const [rpaLock, setRpaLock] = useState<{
+    isLocked: boolean;
+    pendingRpa: RPAReceipt | null;
+    isPrevisaoPending: boolean;
+  }>({ isLocked: false, pendingRpa: null, isPrevisaoPending: false });
+  const [isRPAModalOpen, setIsRPAModalOpen] = useState(false);
   const itemsPerPage = 8;
 
-  useEffect(() => {
-    async function loadDashboardData() {
-      if (!user) return;
+  async function loadDashboardData() {
+    if (!user) return;
+    
+    try {
+      setLoading(true);
+      const [statsData, activityData, rpaStatus] = await Promise.all([
+        businessRules.getAffiliateStats(user.id),
+        businessRules.getEcosystemActivity(user.id),
+        businessRules.checkAffiliateRPALockStatus(user.id)
+      ]);
       
-      try {
-        setLoading(true);
-        const [statsData, activityData] = await Promise.all([
-          businessRules.getAffiliateStats(user.id),
-          businessRules.getEcosystemActivity(user.id)
-        ]);
-        
-        setStats(statsData);
-        setActivity(activityData);
-        
-        if (statsData && !statsData.isEligible) {
-          navigate('/afiliado/renovacoes');
-          toast.error("Assinatura pendente. Regularize seu plano para ter acesso total.", { id: 'pending-sub-alert' });
-          return;
-        }
+      setStats(statsData);
+      setActivity(activityData);
+      setRpaLock(rpaStatus);
 
-        // Use referral_code from profile context if available, fallback to user.id
-        const referralCode = profile?.referral_code || user.id;
-        setLinks(businessRules.getAffiliateLinks(referralCode));
-      } catch (error) {
-        console.error("Error loading dashboard:", error);
-        // Fallback even on error to show links
-        setLinks(businessRules.getAffiliateLinks(user.id));
-      } finally {
-        setLoading(false);
+      if (rpaStatus.isLocked) {
+        setIsRPAModalOpen(true);
       }
-    }
+      
+      if (statsData && !statsData.isEligible) {
+        navigate('/afiliado/renovacoes');
+        toast.error("Assinatura pendente. Regularize seu plano para ter acesso total.", { id: 'pending-sub-alert' });
+        return;
+      }
 
+      // Use referral_code from profile context if available, fallback to user.id
+      const referralCode = profile?.referral_code || user.id;
+      setLinks(businessRules.getAffiliateLinks(referralCode));
+    } catch (error) {
+      console.error("Error loading dashboard:", error);
+      // Fallback even on error to show links
+      setLinks(businessRules.getAffiliateLinks(user.id));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
     loadDashboardData();
   }, [user, profile]);
 
@@ -110,6 +126,51 @@ export default function AffiliateDashboard() {
             Planos de Licenciamento
           </Link>
         </div>
+
+        {/* Banner de Aviso de Previsão de Pagamento RPA (Dias 1 a 9) */}
+        {rpaLock.isPrevisaoPending && rpaLock.pendingRpa && !rpaLock.isLocked && (
+          <div className="bg-gradient-to-r from-indigo-900/90 via-purple-900/90 to-indigo-950/90 border border-indigo-500/30 p-6 rounded-[2rem] flex flex-col md:flex-row items-start md:items-center justify-between gap-6 shadow-xl text-white">
+            <div className="flex items-center gap-4">
+              <div className="size-12 bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 rounded-2xl flex items-center justify-center shrink-0 font-black text-lg">
+                <FileText size={22} />
+              </div>
+              <div>
+                <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 rounded-full text-[8px] font-black uppercase tracking-widest mb-1">
+                  Fechamento Contábil {rpaLock.pendingRpa.month_label}
+                </div>
+                <h4 className="text-base font-black text-white uppercase tracking-tight">
+                  Recibo de RPA Gerado: R$ {rpaLock.pendingRpa.financial.liquido_total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                </h4>
+                <p className="text-xs text-indigo-200/80 font-medium">
+                  Seus repasses do mês passado estão fechados. Depósito programado para o <strong>dia 10 via PIX</strong>.
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={() => setIsRPAModalOpen(true)}
+              className="bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-400 hover:to-purple-500 text-white font-black px-6 py-3 rounded-xl text-xs uppercase tracking-widest transition-all shadow-md shadow-indigo-600/30 whitespace-nowrap active:scale-95 shrink-0 flex items-center gap-2 cursor-pointer"
+            >
+              <Sparkles size={16} />
+              Visualizar & Confirmar Ciência
+            </button>
+          </div>
+        )}
+
+        {/* Modal Oficial de Recibo RPA (Ciência ou Bloqueio de Quitação) */}
+        {rpaLock.pendingRpa && (
+          <RPAReceiptModal
+            isOpen={isRPAModalOpen || rpaLock.isLocked}
+            mode={rpaLock.isLocked ? 'quitacao' : 'previsao'}
+            rpa={rpaLock.pendingRpa}
+            onClose={() => {
+              if (!rpaLock.isLocked) setIsRPAModalOpen(false);
+            }}
+            onSuccess={() => {
+              loadDashboardData();
+              setIsRPAModalOpen(false);
+            }}
+          />
+        )}
 
         {/* Delinquency Alert Banner */}
         {!stats.isEligible && (

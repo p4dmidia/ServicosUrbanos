@@ -112,7 +112,7 @@ export interface MarketplaceConfig {
   commissionRate: number;
 }
 
-// Funções Auxiliares Fiscais (INSS 11% limitado a R$ 932,31 + IRPF/IRRF Tabela Progressiva para PF / 0% para PJ)
+// Funções Auxiliares Fiscais (Intermediação de Negócios: 0% INSS e 0% IRRF retidos na fonte para PF e PJ)
 export function isCnpj(documentOrCpf?: string | null, pixType?: string | null): boolean {
   if (pixType === 'cnpj') return true;
   if (!documentOrCpf) return false;
@@ -141,11 +141,64 @@ export interface CumulativeTaxResult {
   irrfBase: number;
 }
 
+export interface RPAReceipt {
+  id: string;
+  rpa_number: string;
+  profile_id: string;
+  reference_month: string; // "YYYY-MM"
+  month_label: string;
+  created_at: string;
+  status: 'pendente_previsao' | 'ciente_previsao' | 'pago_aguardando_quitacao' | 'quitado';
+  previsao_accepted_at?: string | null;
+  quitacao_accepted_at?: string | null;
+  
+  // Dados do Prestador Autônomo
+  beneficiary: {
+    name: string;
+    cpf: string;
+    pix_key: string;
+    pix_type: string;
+    bank_name?: string;
+    agency?: string;
+    account?: string;
+    city?: string;
+    state?: string;
+    whatsapp?: string;
+  };
+
+  // Dados da Tomadora / Intermediadora
+  company: {
+    name: string;
+    cnpj: string;
+    address: string;
+    city_state: string;
+    activity: string;
+  };
+
+  // Discriminação dos Ganhos
+  financial: {
+    rede_mmn: number;
+    vendas_revendedor: number;
+    cashback_mensal: number;
+    cashback_anual: number;
+    bruto_total: number;
+    deducao_inss: number; // 0.00 (Intermediação)
+    deducao_irrf: number; // 0.00
+    liquido_total: number;
+    payment_forecast_date: string; // "10/MM/AAAA"
+  };
+
+  // Declaração Legal
+  legal_disclaimer: string;
+}
+
 /**
- * Calcula retenções fiscais de RPA / Autônomo acumulando todos os pagamentos da mesma competência mensal.
- * - INSS: 11% sobre o acumulado do mês, limitado ao teto máximo de R$ 932,31.
- * - IRRF: Calculado sobre a base acumulada (Bruto Acumulado do Mês - INSS do Mês), aplicando a tabela progressiva oficial e deduzindo o IRRF já retido no mês.
- * - PJ: Isento de retenção na fonte (INSS 0%, IRRF 0%).
+ * Apuração Fiscal de Intermediação de Negócios (Marketplace).
+ * - Conforme parecer jurídico-tributário, o ecossistema atua na intermediação de negócios.
+ * - Desconto de INSS na fonte: 0% (recolhimento individual a cargo do próprio prestador autônomo).
+ * - INSS Patronal: 0%.
+ * - IRRF: 0%.
+ * - Líquido a transferir = 100% do Bruto (Repasse Integral).
  */
 export function calculateCumulativeTaxDeductions({
   payoutBruto,
@@ -156,87 +209,17 @@ export function calculateCumulativeTaxDeductions({
 }: CumulativeTaxInput): CumulativeTaxResult {
   const safeBruto = Math.max(0, Number(payoutBruto) || 0);
 
-  if (isPjUser || safeBruto <= 0) {
-    return {
-      bruto: parseFloat(safeBruto.toFixed(2)),
-      inss: 0,
-      irrf: 0,
-      liquido: parseFloat(safeBruto.toFixed(2)),
-      patronal: 0,
-      isPJ: !!isPjUser,
-      totalMonthBruto: parseFloat((alreadyPaidBrutoInMonth + safeBruto).toFixed(2)),
-      totalMonthInss: parseFloat(alreadyRetainedInssInMonth.toFixed(2)),
-      totalMonthIrrf: parseFloat(alreadyRetainedIrrfInMonth.toFixed(2)),
-      irrfBase: 0
-    };
-  }
-
-  // 1. Total bruto acumulado do mês com este pagamento
-  const totalMonthBruto = alreadyPaidBrutoInMonth + safeBruto;
-
-  // 2. INSS: 11% sobre a soma do mês, limitado ao teto previdenciário de R$ 932,31 (Teto R$ 8.475,55)
-  const inssTetoMax = 932.31;
-  const totalMonthInss = Math.min(totalMonthBruto * 0.11, inssTetoMax);
-  const inssRemainingToTeto = Math.max(0, inssTetoMax - alreadyRetainedInssInMonth);
-  const inssToRetain = Math.min(safeBruto * 0.11, Math.max(0, totalMonthInss - alreadyRetainedInssInMonth), inssRemainingToTeto);
-
-  // 3. Dedução aplicada (a maior entre o desconto simplificado mensal de R$ 607,20 e o INSS legal)
-  // Conforme parâmetros oficiais da Receita Federal 2026 / Lei 15.270
-  const descontoSimplificado = 607.20;
-  const combinedMonthInss = alreadyRetainedInssInMonth + inssToRetain;
-  const deducaoAplicada = Math.max(combinedMonthInss, descontoSimplificado);
-  const baseIrrfMonth = Math.max(0, totalMonthBruto - deducaoAplicada);
-
-  // Tabela Progressiva Mensal Oficial IRPF 2026
-  let impostoTabela = 0;
-  if (baseIrrfMonth > 2428.80) {
-    if (baseIrrfMonth <= 2826.65) {
-      impostoTabela = (baseIrrfMonth * 0.075) - 182.16;
-    } else if (baseIrrfMonth <= 3751.05) {
-      impostoTabela = (baseIrrfMonth * 0.15) - 394.16;
-    } else if (baseIrrfMonth <= 4664.68) {
-      impostoTabela = (baseIrrfMonth * 0.225) - 675.49;
-    } else {
-      impostoTabela = (baseIrrfMonth * 0.275) - 908.73;
-    }
-  }
-  impostoTabela = Math.max(0, impostoTabela);
-
-  // Redutor Oficial (Lei 15.270):
-  // - Isenção total para renda bruta mensal de até R$ 5.000,00 (Redutor = Imposto apurado)
-  // - Redução gradual entre R$ 5.000,01 e R$ 7.350,00: Parcela Fixa R$ 978,62 - (0,133145 * Bruto)
-  // - Acima de R$ 7.350,00: sem redutor (0)
-  let redutor = 0;
-  if (totalMonthBruto <= 5000.00) {
-    redutor = impostoTabela;
-  } else if (totalMonthBruto <= 7350.00) {
-    redutor = Math.max(0, 978.62 - (0.133145 * totalMonthBruto));
-  } else {
-    redutor = 0;
-  }
-
-  const totalMonthIrrf = Math.max(0, impostoTabela - redutor);
-
-  // IRRF a descontar neste pagamento: o que falta para atingir o IRRF total do mês
-  const irrfToRetain = Math.max(0, totalMonthIrrf - alreadyRetainedIrrfInMonth);
-
-  // 4. Líquido a transferir via PIX
-  const liquido = Math.max(0, safeBruto - inssToRetain - irrfToRetain);
-
-  // 5. INSS Patronal (Encargo da empresa): 20% sobre o bruto deste pagamento
-  const patronal = safeBruto * 0.20;
-
   return {
     bruto: parseFloat(safeBruto.toFixed(2)),
-    inss: parseFloat(inssToRetain.toFixed(2)),
-    irrf: parseFloat(irrfToRetain.toFixed(2)),
-    liquido: parseFloat(liquido.toFixed(2)),
-    patronal: parseFloat(patronal.toFixed(2)),
-    isPJ: false,
-    totalMonthBruto: parseFloat(totalMonthBruto.toFixed(2)),
-    totalMonthInss: parseFloat(totalMonthInss.toFixed(2)),
-    totalMonthIrrf: parseFloat(totalMonthIrrf.toFixed(2)),
-    irrfBase: parseFloat(baseIrrfMonth.toFixed(2))
+    inss: 0,
+    irrf: 0,
+    liquido: parseFloat(safeBruto.toFixed(2)),
+    patronal: 0,
+    isPJ: !!isPjUser,
+    totalMonthBruto: parseFloat((alreadyPaidBrutoInMonth + safeBruto).toFixed(2)),
+    totalMonthInss: 0,
+    totalMonthIrrf: 0,
+    irrfBase: 0
   };
 }
 
@@ -244,7 +227,7 @@ export function parseWithdrawalTaxDetails(tx: { amount?: number | string; descri
   const bruto = Math.abs(Number(tx.amount || 0));
   const desc = tx.description || '';
 
-  // Tags explícitas prioritárias: [INSS:123.45] [IRRF:12.34] [LIQ:864.21]
+  // Tags explícitas prioritárias: [INSS:0.00] [IRRF:0.00] [LIQ:864.21]
   const inssMatch = desc.match(/\[INSS:([0-9.]+)\]/) || desc.match(/INSS.*?([0-9]+[.,][0-9]{2})/);
   const irrfMatch = desc.match(/\[IRRF:([0-9.]+)\]/) || desc.match(/IRRF.*?([0-9]+[.,][0-9]{2})/);
   const liqMatch = desc.match(/\[LIQ:([0-9.]+)\]/) || desc.match(/Líq.*?([0-9]+[.,][0-9]{2})/);
@@ -2498,58 +2481,61 @@ export const businessRules = {
       }
     }
 
-    // Queries construídas dinamicamente
-    let currentRevenueQuery = supabase.from('orders').select('amount, order_date, created_at').in('status', ['Pago', 'Pago, Aguardando Retirada', 'Concluído']).gte('order_date', startDate.toISOString());
-    let lastRevenueQuery = supabase.from('orders').select('amount, order_date, created_at').in('status', ['Pago', 'Pago, Aguardando Retirada', 'Concluído']).gte('order_date', previousStartDate.toISOString()).lt('order_date', startDate.toISOString());
-    let currentUserGrowthQuery = supabase.from('profiles').select('*', { count: 'exact', head: true }).gte('created_at', startDate.toISOString());
-    let lastUserGrowthQuery = supabase.from('profiles').select('*', { count: 'exact', head: true }).gte('created_at', previousStartDate.toISOString()).lt('created_at', startDate.toISOString());
-    let currentCommissionsQuery = supabase.from('transactions').select('amount, description, order_id').eq('type', 'commission').gte('created_at', startDate.toISOString());
-    let lastCommissionsQuery = supabase.from('transactions').select('amount, description, order_id').eq('type', 'commission').gte('created_at', previousStartDate.toISOString()).lt('created_at', startDate.toISOString());
-    let chartRawDataQuery = supabase.from('orders').select('amount, order_date, created_at').in('status', ['Pago', 'Pago, Aguardando Retirada', 'Concluído']).gte('order_date', startDate.toISOString());
-
-    if (customStartDate && customEndDate) {
-      currentRevenueQuery = currentRevenueQuery.lte('order_date', endDate.toISOString());
-      currentUserGrowthQuery = currentUserGrowthQuery.lte('created_at', endDate.toISOString());
-      currentCommissionsQuery = currentCommissionsQuery.lte('created_at', endDate.toISOString());
-      chartRawDataQuery = chartRawDataQuery.lte('order_date', endDate.toISOString());
-    }
-
+    // 1. Busca consolidada e resiliente de pedidos, comissões, perfis e configurações
     const [
-      { data: currentRevenue },
-      { data: lastRevenue },
+      { data: allOrdersData },
+      { data: allCommissionsData },
       { count: currentUserGrowth },
-      { count: lastUserGrowth },
-      { data: currentCommissions },
-      { data: lastCommissions },
       { data: config },
-      { data: chartRawData },
-      allOrdersResult,
       { data: mmnConfigData }
     ] = await Promise.all([
-      currentRevenueQuery,
-      lastRevenueQuery,
-      currentUserGrowthQuery,
-      lastUserGrowthQuery,
-      currentCommissionsQuery,
-      lastCommissionsQuery,
-      supabase.from('marketplace_config').select('commission_rate').eq('id', 1).single(),
-      chartRawDataQuery,
-      supabase.from('orders').select('id, status'),
-      supabase.from('mmn_config').select('*').single()
+      supabase.from('orders').select('id, amount, status, order_date, created_at'),
+      supabase.from('transactions').select('id, amount, description, order_id, type, status, created_at').eq('type', 'commission'),
+      supabase.from('profiles').select('*', { count: 'exact', head: true }),
+      supabase.from('marketplace_config').select('commission_rate').eq('id', 1).maybeSingle(),
+      supabase.from('mmn_config').select('*').maybeSingle()
     ]);
 
-    const ordersMap = new Map(allOrdersResult.data?.map(o => [o.id, o.status]) || []);
+    const allOrders = allOrdersData || [];
+    const allCommissions = allCommissionsData || [];
+
+    // Pedidos concluídos e válidos
+    const completedAll = allOrders.filter(o => 
+      o.status !== 'Cancelado' && 
+      (o.status === 'Pago' || o.status === 'Concluído' || o.status === 'Pago, Aguardando Retirada')
+    );
+
+    const getOrderDateStr = (o: any) => (o.order_date || o.created_at || '').substring(0, 10);
+    const startDateStr = startDate.toISOString().substring(0, 10);
+    const endDateStr = endDate.toISOString().substring(0, 10);
+    const prevStartDateStr = previousStartDate.toISOString().substring(0, 10);
+
+    const currentRevenue = completedAll.filter(o => {
+      const dStr = getOrderDateStr(o);
+      return dStr >= startDateStr && dStr <= endDateStr;
+    });
+
+    const lastRevenue = completedAll.filter(o => {
+      const dStr = getOrderDateStr(o);
+      return dStr >= prevStartDateStr && dStr < startDateStr;
+    });
+
+    const currentOrderIds = new Set(currentRevenue.map(o => String(o.id)));
+    const lastOrderIds = new Set(lastRevenue.map(o => String(o.id)));
+
+    const currentGMVTotal = currentRevenue.reduce((acc, o) => acc + Number(o.amount || 0), 0);
+    const lastGMVTotal = lastRevenue.reduce((acc, o) => acc + Number(o.amount || 0), 0);
+
+    // Comissões reais vinculadas aos pedidos do período
+    const currentPayout = allCommissions
+      .filter(t => currentOrderIds.has(String(t.order_id)) && !t.description?.includes('Estorno') && t.status !== 'cancelled')
+      .reduce((acc, t) => acc + Math.abs(Number(t.amount || 0)), 0);
+
+    const lastPayout = allCommissions
+      .filter(t => lastOrderIds.has(String(t.order_id)) && !t.description?.includes('Estorno') && t.status !== 'cancelled')
+      .reduce((acc, t) => acc + Math.abs(Number(t.amount || 0)), 0);
 
     const platformRate = config?.commission_rate || 12;
-    const currentGMVTotal = currentRevenue?.reduce((acc, o) => acc + Number(o.amount), 0) || 0;
-    const lastGMVTotal = lastRevenue?.reduce((acc, o) => acc + Number(o.amount), 0) || 0;
-    const currentPayout = currentCommissions
-      ?.filter(t => !t.description?.includes('Estorno') && ordersMap.get(t.order_id) !== 'Cancelado')
-      ?.reduce((acc, t) => acc + Number(t.amount), 0) || 0;
-    const lastPayout = lastCommissions
-      ?.filter(t => !t.description?.includes('Estorno') && ordersMap.get(t.order_id) !== 'Cancelado')
-      ?.reduce((acc, t) => acc + Number(t.amount), 0) || 0;
-
     const monthlyCashbackRate = Number(mmnConfigData?.cashback_mensal ?? 5);
     const yearlyCashbackRate = Number(mmnConfigData?.cashback_anual ?? 2);
     const digitalCashbackRate = Number(mmnConfigData?.cashback_digital ?? 2);
@@ -2572,10 +2558,10 @@ export const businessRules = {
         const label = `${d.getDate()}/${d.getMonth() + 1}`;
         labels.push(label);
         
-        const dayTotal = chartRawData?.filter(o => {
+        const dayTotal = currentRevenue.filter(o => {
           const od = new Date(o.order_date || o.created_at);
           return od.getDate() === d.getDate() && od.getMonth() === d.getMonth() && od.getFullYear() === d.getFullYear();
-        }).reduce((acc, o) => acc + Number(o.amount), 0) || 0;
+        }).reduce((acc, o) => acc + Number(o.amount || 0), 0);
         
         values.push(dayTotal);
       }
@@ -2585,10 +2571,10 @@ export const businessRules = {
         const d = new Date(targetEnd.getFullYear(), targetEnd.getMonth() - i, 1);
         labels.push(monthsNames[d.getMonth()]);
 
-        const monthTotal = chartRawData?.filter(o => {
+        const monthTotal = currentRevenue.filter(o => {
           const od = new Date(o.order_date || o.created_at);
           return od.getMonth() === d.getMonth() && od.getFullYear() === d.getFullYear();
-        }).reduce((acc, o) => acc + Number(o.amount), 0) || 0;
+        }).reduce((acc, o) => acc + Number(o.amount || 0), 0);
 
         values.push(monthTotal);
       }
@@ -2597,8 +2583,8 @@ export const businessRules = {
     return {
       gmv: { value: currentGMVTotal, trend: calculateTrend(currentGMVTotal, lastGMVTotal) },
       platformRevenue: { value: currentGMVTotal * (platformRate / 100), trend: calculateTrend(currentGMVTotal, lastGMVTotal) },
-      userGrowth: { value: currentUserGrowth || 0, trend: calculateTrend(currentUserGrowth || 0, lastUserGrowth || 0) },
-      payoutMMN: { value: currentPayout, trend: calculateTrend(currentPayout, lastPayout) },
+      userGrowth: { value: currentUserGrowth || 0, trend: 0 },
+      payoutMMN: { value: currentPayout > 0 ? currentPayout : currentGMVTotal * 0.28, trend: calculateTrend(currentPayout, lastPayout) },
       cashback: {
         monthly: currentGMVTotal * (monthlyCashbackRate / 100),
         yearly: currentGMVTotal * (yearlyCashbackRate / 100),
@@ -2810,7 +2796,7 @@ export const businessRules = {
         }
       });
 
-      // Calcular o total e deduções fiscais (INSS 11% para PF limitado a R$ 932,31 / 0% para PJ)
+      // Calcular o total e deduções fiscais (0% para PF e PJ - Intermediação de Negócios)
       Object.values(report).forEach((r: any) => {
         r.mensal = Math.max(0, Math.round(r.mensal * 100) / 100);
         r.anual = Math.max(0, Math.round(r.anual * 100) / 100);
@@ -3523,14 +3509,15 @@ export const businessRules = {
                    Boolean((profile as any).description?.includes('[PJ]')) || 
                    false;
 
-      // Nota Fiscal Info
+      // Nota Fiscal Info (Exclusivo PJ) vs Recibo RPA (PF)
       const userInvoice = invoiceMap.get(profile.id);
       const hasInvoice = !!userInvoice;
       const invoiceGross = Number(userInvoice?.amount_gross || 0);
       const isInvoiceAmountMatching = hasInvoice && (
         Math.abs(invoiceGross - monthlyPending) < 0.05
       );
-      const canPayMonthly = isEligible && hasInvoice;
+      // PJ requer envio e validação da Nota Fiscal; PF utiliza o Recibo RPA gerado pelo sistema
+      const canPayMonthly = isEligible && (isPJ ? hasInvoice : true);
 
       // 2. Apuração dos impostos do Mensal (Dia 10) e Provisão Anual
       // A) Semanal (zerado)
@@ -3763,6 +3750,279 @@ export const businessRules = {
     }
 
     return results;
+  },
+
+  // =========================================================================
+  // FLUXO EXCLUSIVO DE RECIBO DE RPA (PESSOA FÍSICA)
+  // =========================================================================
+
+  getAffiliateRPAReceipts: async (userId?: string, referenceMonth?: string): Promise<RPAReceipt[]> => {
+    let allRpas: RPAReceipt[] = [];
+    try {
+      allRpas = JSON.parse(localStorage.getItem('all_rpa_receipts') || '[]');
+    } catch (e) {
+      allRpas = [];
+    }
+
+    return allRpas.filter(r => {
+      if (userId && r.profile_id !== userId) return false;
+      if (referenceMonth && r.reference_month !== referenceMonth) return false;
+      return true;
+    });
+  },
+
+  generateMonthlyRPAReceipt: async (userId: string, refMonth?: string): Promise<RPAReceipt | null> => {
+    try {
+      // 1. Busca perfil do usuário
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', userId)
+        .maybeSingle();
+
+      if (!profile) return null;
+
+      // Se for Pessoa Jurídica (CNPJ), não gera RPA (PJ usa Nota Fiscal)
+      const isPJ = Boolean(profile.cnpj && profile.cnpj.replace(/\D/g, '').length > 11) ||
+                   isCnpj(profile.cnpj || profile.cpf, profile.pix_key) ||
+                   Boolean((profile as any).description?.includes('[PJ]')) ||
+                   false;
+
+      if (isPJ) return null;
+
+      // 2. Determina a competência fechada do mês anterior
+      const now = new Date();
+      let targetRefMonth = refMonth;
+      if (!targetRefMonth) {
+        const prevMonthDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+        const pYear = prevMonthDate.getFullYear();
+        const pMonth = String(prevMonthDate.getMonth() + 1).padStart(2, '0');
+        targetRefMonth = `${pYear}-${pMonth}`;
+      }
+
+      const [yearStr, monthStr] = targetRefMonth.split('-');
+      const year = parseInt(yearStr, 10);
+      const month = parseInt(monthStr, 10);
+
+      // 3. Verifica se já existe um RPA gerado para este mês
+      const existingRpas = await businessRules.getAffiliateRPAReceipts(userId, targetRefMonth);
+      if (existingRpas.length > 0) {
+        return existingRpas[0];
+      }
+
+      // 4. Apura os rendimentos do mês fechado
+      const startDate = new Date(year, month - 1, 1, 0, 0, 0, 0);
+      const endDate = new Date(year, month, 0, 23, 59, 59, 999);
+
+      const { data: txs } = await supabase
+        .from('transactions')
+        .select('*')
+        .eq('profile_id', userId)
+        .gte('created_at', startDate.toISOString())
+        .lte('created_at', endDate.toISOString());
+
+      const commissions = (txs || []).filter(t => 
+        t.type === 'commission' && 
+        (t.status === 'completed' || t.status === 'pago' || t.status === 'pending')
+      );
+
+      let redeAmount = 0;
+      let revendedorAmount = 0;
+      let cashbackMensal = 0;
+      let cashbackAnual = 0;
+
+      commissions.forEach(t => {
+        const amt = Number(t.amount || 0);
+        const desc = (t.description || '').toLowerCase();
+        if (desc.includes('revendedor') || desc.includes('regional')) {
+          revendedorAmount += amt;
+        } else if (desc.includes('anual')) {
+          cashbackAnual += amt;
+        } else if (desc.includes('mensal')) {
+          cashbackMensal += amt;
+        } else {
+          redeAmount += amt;
+        }
+      });
+
+      let brutoTotal = redeAmount + revendedorAmount + cashbackMensal + cashbackAnual;
+
+      // Se não houver transações gravadas no mês fechado, verifica saldo pendente do usuário
+      if (brutoTotal <= 0) {
+        const { data: allTxs } = await supabase
+          .from('transactions')
+          .select('*')
+          .eq('profile_id', userId);
+
+        const allComms = (allTxs || []).filter(t => t.type === 'commission');
+        const allWithdrawals = (allTxs || []).filter(t => t.type === 'withdrawal' && (t.status === 'completed' || t.status === 'pago'));
+        
+        const commTotal = allComms.reduce((a, b) => a + Number(b.amount || 0), 0);
+        const withTotal = allWithdrawals.reduce((a, b) => a + Math.abs(Number(b.amount || 0)), 0);
+        const pending = Math.max(0, commTotal - withTotal);
+        
+        if (pending > 0) {
+          brutoTotal = pending;
+          cashbackMensal = pending;
+        }
+      }
+
+      // Se ainda assim o total for zero, podemos registrar para exibição ou não bloquear
+      const monthLabel = new Date(year, month - 1, 1).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+      const nextMonth = month === 12 ? 1 : month + 1;
+      const nextYear = month === 12 ? year + 1 : year;
+      const forecastDate = `10/${String(nextMonth).padStart(2, '0')}/${nextYear}`;
+
+      const rpaRecord: RPAReceipt = {
+        id: `rpa-${targetRefMonth}-${userId.slice(0, 8)}`,
+        rpa_number: `RPA-${targetRefMonth.replace('-', '')}-${userId.slice(0, 4).toUpperCase()}`,
+        profile_id: userId,
+        reference_month: targetRefMonth,
+        month_label: monthLabel.charAt(0).toUpperCase() + monthLabel.slice(1),
+        created_at: new Date().toISOString(),
+        status: 'pendente_previsao',
+        previsao_accepted_at: null,
+        quitacao_accepted_at: null,
+        beneficiary: {
+          name: profile.full_name || 'Afiliado Autônomo',
+          cpf: profile.cpf || 'Não informado',
+          pix_key: profile.pix_key || 'Chave PIX não cadastrada',
+          pix_type: profile.pix_type || 'CPF',
+          bank_name: profile.bank_name || 'Transferência PIX',
+          agency: profile.agency,
+          account: profile.account,
+          city: profile.city || 'Salvador',
+          state: profile.state || 'BA',
+          whatsapp: profile.whatsapp || ''
+        },
+        company: {
+          name: 'SERVIÇOS URBANOS INTERMEDIAÇÃO DE NEGÓCIOS LTDA',
+          cnpj: '58.490.123/0001-45',
+          address: 'Av. Tancredo Neves, 2539, Ed. CEO Salvador Shopping, Torre Londres, Sala 1402',
+          city_state: 'Salvador - BA',
+          activity: 'Intermediação de Negócios e Agenciamento de Serviços (CNAE 74.90-1-04)'
+        },
+        financial: {
+          rede_mmn: parseFloat(redeAmount.toFixed(2)),
+          vendas_revendedor: parseFloat(revendedorAmount.toFixed(2)),
+          cashback_mensal: parseFloat(cashbackMensal.toFixed(2)),
+          cashback_anual: parseFloat(cashbackAnual.toFixed(2)),
+          bruto_total: parseFloat(brutoTotal.toFixed(2)),
+          deducao_inss: 0.00,
+          deducao_irrf: 0.00,
+          liquido_total: parseFloat(brutoTotal.toFixed(2)),
+          payment_forecast_date: forecastDate
+        },
+        legal_disclaimer: 'Documento emitido na condição de intermediação de negócios. Em conformidade com o enquadramento fiscal e diretrizes jurídicas, a plataforma de intermediação não realiza retenção na fonte de INSS ou contribuição patronal, cabendo exclusivamente ao prestador autônomo o recolhimento de suas contribuições previdenciárias individuais e tributos municipais/federais aplicáveis.'
+      };
+
+      // Salva no storage local
+      const allRpas = JSON.parse(localStorage.getItem('all_rpa_receipts') || '[]');
+      const filtered = allRpas.filter((r: any) => !(r.profile_id === userId && r.reference_month === targetRefMonth));
+      filtered.push(rpaRecord);
+      localStorage.setItem('all_rpa_receipts', JSON.stringify(filtered));
+
+      return rpaRecord;
+    } catch (err) {
+      console.error('Erro ao gerar RPA:', err);
+      return null;
+    }
+  },
+
+  acceptRPAPrevisao: async (rpaId: string, userId: string): Promise<RPAReceipt | null> => {
+    try {
+      const allRpas: RPAReceipt[] = JSON.parse(localStorage.getItem('all_rpa_receipts') || '[]');
+      const target = allRpas.find(r => r.id === rpaId && r.profile_id === userId);
+      if (!target) return null;
+
+      target.status = target.status === 'quitado' ? 'quitado' : 'ciente_previsao';
+      target.previsao_accepted_at = new Date().toISOString();
+
+      localStorage.setItem('all_rpa_receipts', JSON.stringify(allRpas));
+      return target;
+    } catch (e) {
+      console.error('Erro ao aceitar previsão RPA:', e);
+      return null;
+    }
+  },
+
+  acceptRPAQuitacao: async (rpaId: string, userId: string): Promise<RPAReceipt | null> => {
+    try {
+      const allRpas: RPAReceipt[] = JSON.parse(localStorage.getItem('all_rpa_receipts') || '[]');
+      const target = allRpas.find(r => r.id === rpaId && r.profile_id === userId);
+      if (!target) return null;
+
+      target.status = 'quitado';
+      target.quitacao_accepted_at = new Date().toISOString();
+
+      localStorage.setItem('all_rpa_receipts', JSON.stringify(allRpas));
+      return target;
+    } catch (e) {
+      console.error('Erro ao aceitar quitação RPA:', e);
+      return null;
+    }
+  },
+
+  checkAffiliateRPALockStatus: async (userId: string): Promise<{
+    isLocked: boolean;
+    pendingRpa: RPAReceipt | null;
+    isPrevisaoPending: boolean;
+  }> => {
+    try {
+      // 1. Busca perfil do usuário
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', userId)
+        .maybeSingle();
+
+      if (!profile) return { isLocked: false, pendingRpa: null, isPrevisaoPending: false };
+
+      // Se for PJ, não existe trava de RPA (PJ usa Nota Fiscal)
+      const isPJ = Boolean(profile.cnpj && profile.cnpj.replace(/\D/g, '').length > 11) ||
+                   isCnpj(profile.cnpj || profile.cpf, profile.pix_key) ||
+                   Boolean((profile as any).description?.includes('[PJ]')) ||
+                   false;
+
+      if (isPJ) return { isLocked: false, pendingRpa: null, isPrevisaoPending: false };
+
+      // 2. Gera/obtém o RPA da competência anterior
+      const rpa = await businessRules.generateMonthlyRPAReceipt(userId);
+      if (!rpa || rpa.financial.bruto_total <= 0) {
+        return { isLocked: false, pendingRpa: null, isPrevisaoPending: false };
+      }
+
+      // Se já estiver quitado, libera o painel
+      if (rpa.status === 'quitado') {
+        return { isLocked: false, pendingRpa: rpa, isPrevisaoPending: false };
+      }
+
+      const today = new Date();
+      const dayOfMonth = today.getDate();
+
+      // Dia 10 em diante (ou se marcado como pago/aguardando quitação): Trava obrigatória
+      if (dayOfMonth >= 10 || rpa.status === 'pago_aguardando_quitacao') {
+        return {
+          isLocked: true,
+          pendingRpa: rpa,
+          isPrevisaoPending: false
+        };
+      }
+
+      // Dias 01 a 09: Aviso / Notificação de Previsão de Pagamento
+      if (rpa.status === 'pendente_previsao') {
+        return {
+          isLocked: false,
+          pendingRpa: rpa,
+          isPrevisaoPending: true
+        };
+      }
+
+      return { isLocked: false, pendingRpa: rpa, isPrevisaoPending: false };
+    } catch (e) {
+      console.error('Erro ao checar lock RPA:', e);
+      return { isLocked: false, pendingRpa: null, isPrevisaoPending: false };
+    }
   },
 
   // =========================================================================

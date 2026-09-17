@@ -28,6 +28,8 @@ import { useAuth } from '../contexts/AuthContext';
 import { businessRules } from '../lib/businessRules';
 import { getFiscalPortalForCity, NATIONAL_MEI_PORTAL, normalizeCity } from '../lib/fiscalPortals';
 import { auditInvoicePdf, parseBrazilianCurrency, InvoiceAuditResult } from '../lib/pdfInvoiceParser';
+import RPAReceiptModal from '../components/RPAReceiptModal';
+import { RPAReceipt } from '../lib/businessRules';
 import toast from 'react-hot-toast';
 
 export default function AffiliateInvoice() {
@@ -53,9 +55,14 @@ export default function AffiliateInvoice() {
   const [isAuditing, setIsAuditing] = useState(false);
   const [auditResult, setAuditResult] = useState<InvoiceAuditResult | null>(null);
 
+  // Estados exclusivos de RPA (Pessoa Física)
+  const [rpaReceipt, setRpaReceipt] = useState<RPAReceipt | null>(null);
+  const [allUserRpas, setAllUserRpas] = useState<RPAReceipt[]>([]);
+  const [isRPAModalOpen, setIsRPAModalOpen] = useState(false);
+
   const companyData = {
-    razaoSocial: 'Serviços Urbanos Tecnologia Ltda.',
-    cnpj: '54.795.377/0001-03',
+    razaoSocial: 'SERVIÇOS URBANOS INTERMEDIAÇÃO DE NEGÓCIOS LTDA',
+    cnpj: '58.490.123/0001-45',
     descricaoServico: 'Intermediação de negócios, agenciamento e divulgação de planos de benefícios e serviços urbanos.'
   };
 
@@ -86,21 +93,33 @@ export default function AffiliateInvoice() {
     if (!user) return;
     try {
       setLoading(true);
-      const res = await businessRules.getAffiliateInvoiceSummary(user.id);
-      setSummary(res);
-      if (res.totalGross) {
-        setDeclaredAmount(res.totalGross.toFixed(2).replace('.', ','));
-      }
-      if (res.currentInvoice) {
-        setInvoiceLink(res.currentInvoice.invoice_link || '');
-        setInvoiceNumber(res.currentInvoice.invoice_number || '');
-        if (res.currentInvoice.amount_gross) {
-          setDeclaredAmount(Number(res.currentInvoice.amount_gross).toFixed(2).replace('.', ','));
+      const isPJUser = Boolean(profile?.cnpj && profile.cnpj.replace(/\D/g, '').length > 11);
+
+      if (isPJUser) {
+        const res = await businessRules.getAffiliateInvoiceSummary(user.id);
+        setSummary(res);
+        if (res.totalGross) {
+          setDeclaredAmount(res.totalGross.toFixed(2).replace('.', ','));
         }
+        if (res.currentInvoice) {
+          setInvoiceLink(res.currentInvoice.invoice_link || '');
+          setInvoiceNumber(res.currentInvoice.invoice_number || '');
+          if (res.currentInvoice.amount_gross) {
+            setDeclaredAmount(Number(res.currentInvoice.amount_gross).toFixed(2).replace('.', ','));
+          }
+        }
+      } else {
+        // Pessoa Física: Carrega Recibo RPA
+        const [currentRpa, rpasList] = await Promise.all([
+          businessRules.generateMonthlyRPAReceipt(user.id),
+          businessRules.getAffiliateRPAReceipts(user.id)
+        ]);
+        setRpaReceipt(currentRpa);
+        setAllUserRpas(rpasList || []);
       }
     } catch (error) {
-      console.error('Erro ao carregar dados da nota fiscal:', error);
-      toast.error('Erro ao carregar resumo de faturamento.');
+      console.error('Erro ao carregar dados fiscais:', error);
+      toast.error('Erro ao carregar resumo contábil.');
     } finally {
       setLoading(false);
     }
@@ -108,7 +127,7 @@ export default function AffiliateInvoice() {
 
   useEffect(() => {
     loadData();
-  }, [user]);
+  }, [user, profile]);
 
   const handleCopy = (text: string, fieldName: string) => {
     navigator.clipboard.writeText(text);
@@ -220,9 +239,175 @@ export default function AffiliateInvoice() {
     }
   };
 
+  if (taxpayerType === 'pf') {
+    return (
+      <AffiliateLayout title="Recibo de Pagamento a Autônomo (RPA)">
+        <div className="space-y-8 max-w-6xl mx-auto pb-16">
+          {/* Banner Informativo de Intermediação e Isenção de Retenção */}
+          <div className="bg-gradient-to-r from-emerald-500/10 via-teal-500/5 to-transparent border border-emerald-500/20 rounded-3xl p-6 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+            <div className="flex items-center gap-4">
+              <div className="size-12 rounded-2xl bg-emerald-500/20 text-emerald-600 flex items-center justify-center shrink-0">
+                <ShieldCheck size={24} />
+              </div>
+              <div>
+                <h4 className="text-sm font-black text-midnight uppercase tracking-tight">
+                  Regra Oficial de Repasse Autônomo (RPA)
+                </h4>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Como empresa de intermediação de negócios, a plataforma transfere <strong>100% dos seus repasses sem retenções na fonte de INSS (0%)</strong>. O recolhimento de suas contribuições previdenciárias é individual por conta própria.
+                </p>
+              </div>
+            </div>
+            <div className="shrink-0 bg-emerald-100/80 px-4 py-2 rounded-xl border border-emerald-300 text-[10px] font-black uppercase tracking-wider text-emerald-800 shadow-sm">
+              Depósito Todo Dia 10 via PIX
+            </div>
+          </div>
+
+          {/* Grid Principal do RPA Atual */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+            {/* Card de Rendimentos da Competência Fechada */}
+            <div className="lg:col-span-7 bg-white p-8 rounded-[2.5rem] border border-slate-200/80 shadow-sm flex flex-col justify-between">
+              <div>
+                <div className="flex justify-between items-start mb-6">
+                  <span className="text-[10px] font-black uppercase tracking-widest text-emerald-700 bg-emerald-50 px-3.5 py-1 rounded-full border border-emerald-200">
+                    Competência: {rpaReceipt?.month_label || 'Mês Anterior'}
+                  </span>
+                  <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 font-mono">
+                    {rpaReceipt?.rpa_number || 'RPA-PENDENTE'}
+                  </span>
+                </div>
+
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">
+                  Valor Total a Receber via PIX
+                </p>
+                <h2 className="text-4xl md:text-5xl font-black text-midnight tracking-tighter mb-4 font-mono">
+                  R$ {loading ? '...' : (rpaReceipt?.financial.liquido_total || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                </h2>
+
+                <p className="text-xs text-slate-500 font-medium mb-6 leading-relaxed">
+                  Este valor será depositado diretamente na sua chave PIX no <strong>dia 10</strong>. O documento oficial de RPA foi preenchido automaticamente pelo sistema no 1º dia útil.
+                </p>
+
+                {/* Discriminação */}
+                <div className="space-y-3 bg-slate-50 p-5 rounded-2xl border border-slate-100 text-xs">
+                  <div className="flex justify-between items-center text-slate-600">
+                    <span>Comissões de Rede MMN:</span>
+                    <span className="font-mono font-bold text-midnight">
+                      R$ {(rpaReceipt?.financial.rede_mmn || 0).toFixed(2).replace('.', ',')}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center text-slate-600">
+                    <span>Vendas Diretas / Polo:</span>
+                    <span className="font-mono font-bold text-midnight">
+                      R$ {(rpaReceipt?.financial.vendas_revendedor || 0).toFixed(2).replace('.', ',')}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center text-slate-600">
+                    <span>Cashback Mensal (5%):</span>
+                    <span className="font-mono font-bold text-midnight">
+                      R$ {(rpaReceipt?.financial.cashback_mensal || 0).toFixed(2).replace('.', ',')}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center text-slate-600">
+                    <span>Desconto de INSS na Fonte (0%):</span>
+                    <span className="font-mono font-bold text-emerald-600">
+                      R$ 0,00 (Isento na Fonte)
+                    </span>
+                  </div>
+                  <div className="pt-2.5 border-t border-slate-200 flex justify-between items-center font-black text-midnight text-sm">
+                    <span>Total Líquido do Recibo:</span>
+                    <span className="font-mono text-emerald-600 text-base">
+                      R$ {(rpaReceipt?.financial.liquido_total || 0).toFixed(2).replace('.', ',')}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Ações do RPA */}
+              <div className="mt-8 pt-6 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-4">
+                <div>
+                  <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block mb-1">
+                    Status de Quitação
+                  </span>
+                  <span className={`inline-flex items-center gap-1.5 text-xs font-black px-3 py-1 rounded-full uppercase tracking-wider ${
+                    rpaReceipt?.status === 'quitado' 
+                      ? 'bg-emerald-100 text-emerald-800' 
+                      : rpaReceipt?.status === 'ciente_previsao'
+                      ? 'bg-indigo-100 text-indigo-800'
+                      : 'bg-amber-100 text-amber-800'
+                  }`}>
+                    {rpaReceipt?.status === 'quitado' ? 'Quitado & Recebido' :
+                     rpaReceipt?.status === 'ciente_previsao' ? 'Ciência Registrada' :
+                     'Pendente de Aceite'}
+                  </span>
+                </div>
+
+                <button
+                  onClick={() => setIsRPAModalOpen(true)}
+                  className="w-full sm:w-auto px-6 py-3.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white rounded-2xl font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/20 transition-all cursor-pointer"
+                >
+                  <FileText size={16} />
+                  Visualizar & Assinar RPA
+                </button>
+              </div>
+            </div>
+
+            {/* Card Lateral: Dados do Tomador & Beneficiário */}
+            <div className="lg:col-span-5 space-y-6">
+              <div className="bg-white p-6 rounded-[2rem] border border-slate-200/80 shadow-sm space-y-4">
+                <div className="flex items-center gap-2 text-slate-400 font-black text-[10px] uppercase tracking-widest border-b border-slate-100 pb-3">
+                  <Building2 size={16} className="text-emerald-600" />
+                  <span>Empresa Intermediadora (Tomadora)</span>
+                </div>
+                <div className="space-y-1.5 text-xs">
+                  <p className="font-bold text-midnight">{companyData.razaoSocial}</p>
+                  <p className="text-slate-500">CNPJ: <span className="font-mono text-midnight font-bold">{companyData.cnpj}</span></p>
+                  <p className="text-[11px] text-slate-400">Av. Tancredo Neves, 2539, CEO Salvador Shopping - Salvador/BA</p>
+                </div>
+              </div>
+
+              <div className="bg-white p-6 rounded-[2rem] border border-slate-200/80 shadow-sm space-y-4">
+                <div className="flex items-center gap-2 text-slate-400 font-black text-[10px] uppercase tracking-widest border-b border-slate-100 pb-3">
+                  <User size={16} className="text-indigo-600" />
+                  <span>Dados do Prestador Autônomo</span>
+                </div>
+                <div className="space-y-2 text-xs">
+                  <p className="font-bold text-midnight">{profile?.full_name || 'Afiliado'}</p>
+                  <p className="text-slate-500">CPF: <span className="font-mono text-midnight font-bold">{profile?.cpf || 'Não informado'}</span></p>
+                  <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
+                    <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block mb-0.5">
+                      Chave PIX ({profile?.pix_type || 'CPF'})
+                    </span>
+                    <span className="font-mono font-bold text-midnight text-xs break-all">
+                      {profile?.pix_key || 'Chave PIX não cadastrada'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Modal Oficial de Recibo RPA */}
+          {rpaReceipt && (
+            <RPAReceiptModal
+              isOpen={isRPAModalOpen}
+              mode={rpaReceipt.status === 'quitado' ? 'view' : 'previsao'}
+              rpa={rpaReceipt}
+              onClose={() => setIsRPAModalOpen(false)}
+              onSuccess={() => {
+                loadData();
+                setIsRPAModalOpen(false);
+              }}
+            />
+          )}
+        </div>
+      </AffiliateLayout>
+    );
+  }
+
   return (
     <AffiliateLayout 
-      title="Emissão e Envio de Nota Fiscal" 
+      title="Emissão e Envio de Nota Fiscal (PJ)" 
     >
       <div className="space-y-8 max-w-6xl mx-auto pb-16">
 
@@ -234,7 +419,7 @@ export default function AffiliateInvoice() {
             </div>
             <div>
               <h4 className="text-sm font-black text-midnight uppercase tracking-tight">
-                Regra Oficial de Fechamento & Pagamento
+                Regra Oficial de Fechamento & Pagamento PJ
               </h4>
               <p className="text-xs text-slate-500 mt-0.5">
                 Período de apuração dos rendimentos: <strong>01 a 30 de cada mês</strong>. A nota fiscal deve ser emitida no <strong>valor exato a receber</strong> e enviada impreterivelmente <strong>até o dia 05 do mês subsequente</strong> para conferência e liberação no <strong>dia 10</strong>.

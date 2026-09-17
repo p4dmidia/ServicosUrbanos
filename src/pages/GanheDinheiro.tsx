@@ -61,7 +61,7 @@ export default function GanheDinheiro() {
   // Bruto mensal a receber = Cash Mensal (pago dia 10)
   const bruto = cashMensal;
 
-  // Apuração oficial unificada (INSS RPA 11% limitado ao teto de R$ 932,31 + IRPF RFB 2026)
+  // Apuração oficial unificada (Intermediação de Negócios 0% retenção na fonte)
   const taxesPF = calculateTaxDeductions(bruto, false);
   const inss = taxesPF.inss;
   const irrf = taxesPF.irrf;

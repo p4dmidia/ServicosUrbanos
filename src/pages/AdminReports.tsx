@@ -62,15 +62,65 @@ export default function AdminReports() {
     loadData();
   }, [startDate, endDate]);
 
+  // Pedidos válidos e concluídos no período
+  const completedOrders = useMemo(() => {
+    return orders.filter(o => {
+      const isPaid = o.status !== 'Cancelado' && 
+        (o.status === 'Pago' || o.status === 'Concluído' || o.status === 'Pago, Aguardando Retirada');
+      if (!isPaid) return false;
+      const orderDate = (o.order_date || o.created_at || '').substring(0, 10);
+      if (startDate && orderDate < startDate) return false;
+      if (endDate && orderDate > endDate) return false;
+      return true;
+    });
+  }, [orders, startDate, endDate]);
+
+  // Volume Transacional (GMV)
+  const totalGMV = useMemo(() => {
+    return completedOrders.reduce((sum, o) => sum + Number(o.amount || 0), 0);
+  }, [completedOrders]);
+
+  // Receita da Plataforma
+  const platformRevenue = useMemo(() => {
+    return totalGMV;
+  }, [totalGMV]);
+
+  // Comissões Provisionadas (MMN + Revendedor = 28% ou soma real das transações)
+  const totalCommissionsProvisioned = useMemo(() => {
+    if (reportData?.payoutMMN?.value && reportData.payoutMMN.value > 0) {
+      return reportData.payoutMMN.value;
+    }
+    return completedOrders.reduce((sum, o) => {
+      const cb = Number(o.cashback_amount || 0);
+      if (cb > 0) return sum + (cb * 4); // 28% (21% + 7%)
+      return sum + (Number(o.amount || 0) * 0.28);
+    }, 0);
+  }, [completedOrders, reportData]);
+
+  // Expansão da Rede
+  const networkMembersCount = useMemo(() => {
+    return reportData?.userGrowth?.value || 0;
+  }, [reportData]);
+
+  // Taxas e Totais de Cashback
+  const monthlyCashbackRate = reportData?.cashback?.monthlyRate ?? 5;
+  const yearlyCashbackRate = reportData?.cashback?.yearlyRate ?? 2;
+
+  const cashbackMonthly = useMemo(() => {
+    return completedOrders.reduce((sum, o) => sum + (Number(o.amount || 0) * (monthlyCashbackRate / 100)), 0);
+  }, [completedOrders, monthlyCashbackRate]);
+
+  const cashbackYearly = useMemo(() => {
+    return completedOrders.reduce((sum, o) => sum + (Number(o.amount || 0) * (yearlyCashbackRate / 100)), 0);
+  }, [completedOrders, yearlyCashbackRate]);
+
   const handleExport = () => {
-    if (!reportData) return;
-    
     const headers = ['Métrica', 'Valor', 'Tendência'];
     const rows = [
-      ['Volume Transacional (GMV)', `R$ ${reportData.gmv.value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, `${reportData.gmv.trend.toFixed(1)}%`],
-      ['Receita Bruta (Plataforma)', `R$ ${reportData.platformRevenue.value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, `${reportData.platformRevenue.trend.toFixed(1)}%`],
-      ['Crescimento de Rede', reportData.userGrowth.value, `${reportData.userGrowth.trend.toFixed(1)}%`],
-      ['Payout MMN', `R$ ${reportData.payoutMMN.value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, `${reportData.payoutMMN.trend.toFixed(1)}%`],
+      ['Volume Transacional (GMV)', `R$ ${totalGMV.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, `${(reportData?.gmv?.trend ?? 0).toFixed(1)}%`],
+      ['Receita Bruta (Plataforma)', `R$ ${platformRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, `${(reportData?.platformRevenue?.trend ?? 0).toFixed(1)}%`],
+      ['Crescimento de Rede', networkMembersCount, `${(reportData?.userGrowth?.trend ?? 0).toFixed(1)}%`],
+      ['Payout MMN', `R$ ${totalCommissionsProvisioned.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, `${(reportData?.payoutMMN?.trend ?? 0).toFixed(1)}%`],
     ];
     
     const csvContent = "\uFEFF" + [
@@ -89,25 +139,11 @@ export default function AdminReports() {
     toast.success('Relatório exportado com sucesso!');
   };
 
-  // Pedidos válidos no período
-  const completedOrders = useMemo(() => {
-    return orders.filter(o => {
-      const isPaid = o.status !== 'Cancelado' && 
-        (o.status === 'Pago' || o.status === 'Concluído' || o.status === 'Pago, Aguardando Retirada');
-      if (!isPaid) return false;
-      const orderDate = (o.order_date || o.created_at || '').substring(0, 10);
-      if (startDate && orderDate < startDate) return false;
-      if (endDate && orderDate > endDate) return false;
-      return true;
-    });
-  }, [orders, startDate, endDate]);
-
   // Ticket Médio
   const averageTicket = useMemo(() => {
     if (completedOrders.length === 0) return 0;
-    const total = completedOrders.reduce((sum, o) => sum + Number(o.amount || 0), 0);
-    return total / completedOrders.length;
-  }, [completedOrders]);
+    return totalGMV / completedOrders.length;
+  }, [completedOrders, totalGMV]);
 
   // Mix de Planos & Licenças
   const planStats = useMemo(() => {
@@ -141,9 +177,56 @@ export default function AdminReports() {
     return planStats.reduce((sum, p) => sum + p.total, 0);
   }, [planStats]);
 
-  // Dados do Gráfico Temporal
-  const chartLabels: string[] = reportData?.chart?.labels || [];
-  const chartValues: number[] = reportData?.chart?.values || [];
+  // Dados do Gráfico Temporal Dinâmico e Reativo
+  const chartData = useMemo(() => {
+    if (!startDate || !endDate) return { labels: [], values: [] };
+    
+    const start = new Date(startDate + 'T00:00:00');
+    const end = new Date(endDate + 'T00:00:00');
+    const diffDays = Math.max(1, Math.round((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1);
+
+    const labels: string[] = [];
+    const values: number[] = [];
+
+    if (diffDays <= 45) {
+      for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+        const yyyy = d.getFullYear();
+        const mm = String(d.getMonth() + 1).padStart(2, '0');
+        const dd = String(d.getDate()).padStart(2, '0');
+        const dStr = `${yyyy}-${mm}-${dd}`;
+
+        labels.push(`${d.getDate()}/${d.getMonth() + 1}`);
+
+        const dayTotal = completedOrders
+          .filter(o => (o.order_date || o.created_at || '').substring(0, 10) === dStr)
+          .reduce((sum, o) => sum + Number(o.amount || 0), 0);
+
+        values.push(dayTotal);
+      }
+    } else {
+      const monthsNames = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+      const cur = new Date(start.getFullYear(), start.getMonth(), 1);
+      while (cur <= end) {
+        const yyyy = cur.getFullYear();
+        const mm = String(cur.getMonth() + 1).padStart(2, '0');
+        const monthPrefix = `${yyyy}-${mm}`;
+
+        labels.push(monthsNames[cur.getMonth()]);
+
+        const monthTotal = completedOrders
+          .filter(o => (o.order_date || o.created_at || '').substring(0, 7) === monthPrefix)
+          .reduce((sum, o) => sum + Number(o.amount || 0), 0);
+
+        values.push(monthTotal);
+        cur.setMonth(cur.getMonth() + 1);
+      }
+    }
+
+    return { labels, values };
+  }, [completedOrders, startDate, endDate]);
+
+  const chartLabels: string[] = chartData.labels;
+  const chartValues: number[] = chartData.values;
   const maxChartValue = Math.max(...chartValues, 100);
 
   // Coordenadas para o Gráfico SVG Fluido
@@ -265,7 +348,7 @@ export default function AdminReports() {
            {[
              { 
                title: 'Volume Transacional (GMV)', 
-               value: reportData?.gmv?.value || 0, 
+               value: totalGMV, 
                trend: reportData?.gmv?.trend, 
                icon: DollarSign, 
                gradient: 'from-indigo-500/20 to-purple-500/5',
@@ -274,7 +357,7 @@ export default function AdminReports() {
              },
              { 
                title: 'Receita da Plataforma', 
-               value: reportData?.platformRevenue?.value || 0, 
+               value: platformRevenue, 
                trend: reportData?.platformRevenue?.trend, 
                icon: Activity, 
                gradient: 'from-emerald-500/20 to-teal-500/5',
@@ -283,7 +366,7 @@ export default function AdminReports() {
              },
              { 
                title: 'Expansão da Rede', 
-               value: reportData?.userGrowth?.value || 0, 
+               value: networkMembersCount, 
                trend: reportData?.userGrowth?.trend, 
                icon: Users, 
                gradient: 'from-purple-500/20 to-pink-500/5',
@@ -294,7 +377,7 @@ export default function AdminReports() {
              },
              { 
                title: 'Comissões Provisionadas', 
-               value: reportData?.payoutMMN?.value || 0, 
+               value: totalCommissionsProvisioned, 
                trend: reportData?.payoutMMN?.trend, 
                icon: Award, 
                gradient: 'from-amber-500/20 to-orange-500/5',
@@ -543,25 +626,25 @@ export default function AdminReports() {
                  <div className="space-y-5">
                     <div>
                        <div className="flex justify-between text-xs font-black uppercase tracking-wider mb-2">
-                          <span className="text-slate-400">Cashback Mensal ({reportData?.cashback?.monthlyRate ?? 5}%)</span>
+                          <span className="text-slate-400">Cashback Mensal ({monthlyCashbackRate}%)</span>
                           <span className="text-indigo-400 font-mono">
-                            R$ {Number(reportData?.cashback?.monthly || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                            R$ {cashbackMonthly.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                           </span>
                        </div>
                        <div className="h-2.5 bg-white/5 rounded-full overflow-hidden p-0.5 border border-white/5">
-                          <motion.div initial={{ width: 0 }} animate={{ width: `${Math.min(100, Math.max(10, (reportData?.cashback?.monthlyRate ?? 5) * 14))}%` }} className="h-full bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full shadow-sm" />
+                          <motion.div initial={{ width: 0 }} animate={{ width: `${Math.min(100, Math.max(10, monthlyCashbackRate * 14))}%` }} className="h-full bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full shadow-sm" />
                        </div>
                     </div>
 
                     <div>
                        <div className="flex justify-between text-xs font-black uppercase tracking-wider mb-2">
-                          <span className="text-slate-400">Cashback Anual ({reportData?.cashback?.yearlyRate ?? 2}%)</span>
+                          <span className="text-slate-400">Cashback Anual ({yearlyCashbackRate}%)</span>
                           <span className="text-blue-400 font-mono">
-                            R$ {Number(reportData?.cashback?.yearly || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                            R$ {cashbackYearly.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                           </span>
                        </div>
                        <div className="h-2.5 bg-white/5 rounded-full overflow-hidden p-0.5 border border-white/5">
-                          <motion.div initial={{ width: 0 }} animate={{ width: `${Math.min(100, Math.max(10, (reportData?.cashback?.yearlyRate ?? 2) * 20))}%` }} className="h-full bg-gradient-to-r from-blue-500 to-cyan-400 rounded-full shadow-sm" />
+                          <motion.div initial={{ width: 0 }} animate={{ width: `${Math.min(100, Math.max(10, yearlyCashbackRate * 20))}%` }} className="h-full bg-gradient-to-r from-blue-500 to-cyan-400 rounded-full shadow-sm" />
                        </div>
                     </div>
                  </div>

@@ -570,7 +570,7 @@ export default function AffiliateProfile() {
                   <span className="px-3 py-1 bg-purple-100 text-purple-700 border border-purple-200 rounded-full text-[9px] font-black uppercase tracking-widest">Vantagem Tributária</span>
                 </div>
                 <p className="text-xs text-slate-500 max-w-2xl mt-1 font-medium">
-                  Receba <strong>100% do valor bruto</strong> de suas comissões, com isenção total de retenções na fonte de INSS (11%) e IRRF (até 27,5%), mediante emissão de Nota Fiscal.
+                  Cadastre sua empresa (CNPJ) para emitir <strong>Nota Fiscal de Prestação de Serviços (NFS-e)</strong> diretamente na plataforma e receber seus repasses institucionais.
                 </p>
                 {pjRequest?.status === 'rejected' && (
                   <p className="text-xs text-red-600 font-bold mt-1.5 bg-red-50 p-2 rounded-xl border border-red-200">

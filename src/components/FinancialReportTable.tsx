@@ -506,7 +506,7 @@ export default function FinancialReportTable({
                     Total Bruto <br/><span className="text-[7px] text-slate-400 font-bold">(6% ACUMULADO)</span>
                   </th>
                   <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">
-                    INSS Previsto <br/><span className="text-[7px] text-amber-500 font-bold">(11% PF)</span>
+                    INSS Previsto <br/><span className="text-[7px] text-amber-500 font-bold">(0% Intermediação)</span>
                   </th>
                   <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right bg-slate-50/50">
                     Total Líquido <br/><span className="text-[7px] text-emerald-600 font-bold">(PROVISÃO)</span>

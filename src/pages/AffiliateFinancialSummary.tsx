@@ -138,8 +138,8 @@ export default function AffiliateFinancialSummary() {
         statement.totalBruto.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
       ],
       [
-        'INSS (Teto de R$ 8.475,55 * 11% = R$ 932,31)',
-        statement.isPJ ? 'Isento (PJ)' : statement.inss.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+        'INSS (0% - Intermediação de Negócios / Isenção na Fonte)',
+        statement.isPJ ? 'Isento (PJ)' : '0% (Intermediação)'
       ],
       [
         'BASE DE CALCULO DO IRPF (BRUTO-INSS)',
@@ -553,16 +553,14 @@ export default function AffiliateFinancialSummary() {
                 <div className="flex items-center justify-between p-3.5 rounded-xl bg-slate-50 border border-slate-100">
                   <div>
                     <span className="font-bold text-slate-800 uppercase block">
-                      INSS (Teto de R$ 8.475,55 * 11% = R$ 932,31)
+                      INSS (0% - Intermediação de Negócios)
                     </span>
                     <span className="text-[10px] text-slate-400">
-                      {statement.isPJ ? 'Pessoa Jurídica isenta de retenção previdenciária' : 'Retenção obrigatória Pessoa Física (INSS)'}
+                      {statement.isPJ ? 'Pessoa Jurídica isenta de retenção previdenciária' : '0% de retenção na fonte. Afiliado autônomo recolhe individualmente'}
                     </span>
                   </div>
-                  <span className={`font-mono font-black ${statement.isPJ ? 'text-slate-500' : 'text-red-600'}`}>
-                    {statement.isPJ 
-                      ? 'Isento (PJ)' 
-                      : statement.inss.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                  <span className="font-mono font-black text-emerald-600">
+                    R$ 0,00 (0%)
                   </span>
                 </div>
 

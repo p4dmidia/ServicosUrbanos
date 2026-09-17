@@ -237,13 +237,13 @@ export default function PaymentModal({ isOpen, onClose, selectedRecords, onConfi
                     <div className="flex flex-wrap items-center justify-end gap-2 text-[10px] font-bold">
                       <span className="text-slate-400">Bruto: R$ {currentRecord.bruto.toFixed(2).replace('.', ',')}</span>
                       {currentRecord.inss > 0 && (
-                        <span className="text-amber-600">INSS (11%): -R$ {currentRecord.inss.toFixed(2).replace('.', ',')}</span>
+                        <span className="text-amber-600">INSS (0% Intermediação): -R$ {currentRecord.inss.toFixed(2).replace('.', ',')}</span>
                       )}
                       {currentRecord.irrf > 0 && (
                         <span className="text-rose-600">IRRF (DARF): -R$ {currentRecord.irrf.toFixed(2).replace('.', ',')}</span>
                       )}
                       {currentRecord.inss === 0 && currentRecord.irrf === 0 && (
-                        <span className="text-emerald-600">Isento de Retenções na Fonte</span>
+                        <span className="text-emerald-600">Intermediação de Negócios (0% Retenção na Fonte)</span>
                       )}
                     </div>
                   )}

@@ -178,9 +178,14 @@ export interface RPAReceipt {
   // Discriminação dos Ganhos
   financial: {
     rede_mmn: number;
+    rede_g1?: number;
+    rede_g2?: number;
+    rede_g3?: number;
     vendas_revendedor: number;
     cashback_mensal: number;
     cashback_anual: number;
+    annual_cycle_period?: string; // "01/12/2025 a 30/11/2026"
+    annual_cycle_payout_date?: string; // "10/12/2026"
     bruto_total: number;
     deducao_inss: number; // 0.00 (Intermediação)
     deducao_irrf: number; // 0.00
@@ -3865,20 +3870,27 @@ export const businessRules = {
       
       const directReferrals = (allProfiles || []).filter(p => p.referred_by === userId).map(p => p.id);
       const secondReferrals = (allProfiles || []).filter(p => directReferrals.includes(p.referred_by || '')).map(p => p.id);
+      const thirdReferrals = (allProfiles || []).filter(p => secondReferrals.includes(p.referred_by || '')).map(p => p.id);
 
       const breakdown: any[] = [];
+
+      // Ciclo anual de apuração: 01/12 do ano anterior a 30/11 do ano de competência
+      const cycleStartYear = targetYear - 1;
+      const cycleEndYear = targetYear;
+      const cycleStartDate = new Date(cycleStartYear, 11, 1, 0, 0, 0, 0); // 01/12/(targetYear-1)
+      const cycleEndDate = new Date(cycleEndYear, 10, 30, 23, 59, 59, 999); // 30/11/targetYear
 
       (allOrders || []).forEach((o: any) => {
         const isOwn = o.customer_id === userId;
         const isG1 = directReferrals.includes(o.customer_id);
         const isG2 = secondReferrals.includes(o.customer_id);
+        const isG3 = thirdReferrals.includes(o.customer_id);
         const amt = Number(o.amount || 0);
         if (amt <= 0) return;
 
         const rawDate = o.order_date || o.created_at || '';
         const orderDateObj = new Date(rawDate);
         const orderDateBR = orderDateObj.toLocaleDateString('pt-BR');
-        const orderYear = orderDateObj.getFullYear();
 
         let isSameMonth = true;
         if (targetRefMonth) {
@@ -3888,7 +3900,7 @@ export const businessRules = {
           isSameMonth = rawDate.startsWith(yyyyMm) || orderDateBR.includes(monthPrefix);
         }
 
-        const isSameYear = orderYear === targetYear;
+        const inAnnualCycle = orderDateObj >= cycleStartDate && orderDateObj <= cycleEndDate;
 
         const orderNum = `#${o.id}`;
 
@@ -3924,14 +3936,14 @@ export const businessRules = {
               });
             }
 
-            // Provisão Anual (2%): em Dezembro, agrega todos os pedidos de todo o ano corrente!
-            if (isDecember && isSameYear) {
+            // Provisão Anual (2%): no RPA de Dezembro, discrimina todos os pedidos do ciclo anual (01.12 a 30.11)
+            if (isDecember && inAnnualCycle) {
               breakdown.push({
                 id: `ord-${o.id}-reseller-a`,
                 orderId: String(o.id),
                 orderNumber: orderNum,
                 date: orderDateBR,
-                origin: 'Provisão Anual Polo Regional (2%)',
+                origin: `Provisão Anual Polo Regional (2% - Ciclo 01/12/${cycleStartYear} a 30/11/${cycleEndYear})`,
                 amount: amt,
                 rate: '2%',
                 commissionAmount: parseFloat((amt * 0.02).toFixed(2)),
@@ -3978,6 +3990,20 @@ export const businessRules = {
               amount: amt,
               rate: '7%',
               commissionAmount: parseFloat((amt * 0.07).toFixed(2)),
+              status: o.status || 'Concluído'
+            });
+          }
+        } else if (isG3) {
+          if (isSameMonth) {
+            breakdown.push({
+              id: `ord-${o.id}-g3`,
+              orderId: String(o.id),
+              orderNumber: orderNum,
+              date: orderDateBR,
+              origin: `Comissão Rede MMN (Nível G3 - ${o.customer_name || 'Afiliado'})`,
+              amount: amt,
+              rate: '3%',
+              commissionAmount: parseFloat((amt * 0.03).toFixed(2)),
               status: o.status || 'Concluído'
             });
           }
@@ -4149,53 +4175,126 @@ export const businessRules = {
       );
 
       let redeAmount = 0;
+      let redeG1 = 0;
+      let redeG2 = 0;
+      let redeG3 = 0;
       let revendedorAmount = 0;
       let cashbackMensal = 0;
       let cashbackAnual = 0;
 
-      commissions.forEach(t => {
-        const amt = Number(t.amount || 0);
-        const desc = (t.description || '').toLowerCase();
-        if (desc.includes('revendedor') || desc.includes('regional')) {
-          revendedorAmount += amt;
-        } else if (desc.includes('anual')) {
-          if (isDecember) cashbackAnual += amt;
-        } else if (desc.includes('mensal')) {
-          cashbackMensal += amt;
-        } else {
-          redeAmount += amt;
-        }
-      });
-
-      let brutoTotal = redeAmount + revendedorAmount + cashbackMensal + (isDecember ? cashbackAnual : 0);
-
-      // Se não houver transações gravadas no mês fechado, verifica pelo breakdown discriminado de pedidos
-      if (brutoTotal <= 0 && ordersBreakdown.length > 0) {
-        let oRede = 0;
-        let oRevendedor = 0;
-        let oCashback = 0;
-        let oAnual = 0;
-
+      // Apura a discriminação prioritariamente a partir do breakdown detalhado de pedidos do mês
+      if (ordersBreakdown.length > 0) {
         ordersBreakdown.forEach((o: any) => {
           const amt = Number(o.commissionAmount || 0);
           const orig = (o.origin || '').toLowerCase();
           if (orig.includes('anual')) {
-            if (isDecember) oAnual += amt;
+            // Processado abaixo no ciclo anual
           } else if (orig.includes('polo') || orig.includes('revendedor') || orig.includes('direta')) {
-            oRevendedor += amt;
-          } else if (orig.includes('g0') || orig.includes('titular')) {
-            oCashback += amt;
+            revendedorAmount += amt;
+          } else if (orig.includes('g0') || orig.includes('titular') || orig.includes('mensal')) {
+            cashbackMensal += amt;
           } else {
-            oRede += amt;
+            redeAmount += amt;
+            if (orig.includes('g1')) redeG1 += amt;
+            else if (orig.includes('g2')) redeG2 += amt;
+            else if (orig.includes('g3')) redeG3 += amt;
+            else redeG1 += amt;
           }
         });
 
-        redeAmount = parseFloat(oRede.toFixed(2));
-        revendedorAmount = parseFloat(oRevendedor.toFixed(2));
-        cashbackMensal = parseFloat(oCashback.toFixed(2));
-        cashbackAnual = isDecember ? parseFloat(oAnual.toFixed(2)) : 0;
-        brutoTotal = parseFloat((redeAmount + revendedorAmount + cashbackMensal + (isDecember ? cashbackAnual : 0)).toFixed(2));
+        redeAmount = parseFloat(redeAmount.toFixed(2));
+        redeG1 = parseFloat(redeG1.toFixed(2));
+        redeG2 = parseFloat(redeG2.toFixed(2));
+        redeG3 = parseFloat(redeG3.toFixed(2));
+        revendedorAmount = parseFloat(revendedorAmount.toFixed(2));
+        cashbackMensal = parseFloat(cashbackMensal.toFixed(2));
+      } else {
+        // Fallback: se não houver breakdown de pedidos, apura pelas transações gravadas
+        commissions.forEach(t => {
+          const amt = Number(t.amount || 0);
+          const desc = (t.description || '').toLowerCase();
+          if (desc.includes('anual')) {
+            // Processado no ciclo anual
+          } else if (desc.includes('revendedor') || desc.includes('regional') || desc.includes('polo')) {
+            revendedorAmount += amt;
+          } else if (desc.includes('mensal') || desc.includes('g0') || desc.includes('titular')) {
+            cashbackMensal += amt;
+          } else {
+            redeAmount += amt;
+            if (desc.includes('g1') || desc.includes('nível 1') || desc.includes('nivel 1') || desc.includes('1º nível')) {
+              redeG1 += amt;
+            } else if (desc.includes('g2') || desc.includes('nível 2') || desc.includes('nivel 2') || desc.includes('2º nível')) {
+              redeG2 += amt;
+            } else if (desc.includes('g3') || desc.includes('nível 3') || desc.includes('nivel 3') || desc.includes('3º nível')) {
+              redeG3 += amt;
+            } else {
+              redeG1 += amt;
+            }
+          }
+        });
+
+        redeAmount = parseFloat(redeAmount.toFixed(2));
+        redeG1 = parseFloat(redeG1.toFixed(2));
+        redeG2 = parseFloat(redeG2.toFixed(2));
+        redeG3 = parseFloat(redeG3.toFixed(2));
+        revendedorAmount = parseFloat(revendedorAmount.toFixed(2));
+        cashbackMensal = parseFloat(cashbackMensal.toFixed(2));
       }
+
+      // Ciclo anual de vigência e apuração: 01/12 do ano anterior a 30/11 do ano de competência
+      const cycleStartYear = year - 1;
+      const cycleEndYear = year;
+      const cycleStartDate = new Date(cycleStartYear, 11, 1, 0, 0, 0, 0); // 01/12/(year-1)
+      const cycleEndDate = new Date(cycleEndYear, 10, 30, 23, 59, 59, 999); // 30/11/year
+      const cyclePeriodLabel = `01/12/${cycleStartYear} a 30/11/${cycleEndYear}`;
+      const cyclePayoutDate = `10/12/${cycleEndYear}`;
+      
+      const { data: cycleAllTxs } = await supabase
+        .from('transactions')
+        .select('*')
+        .eq('profile_id', userId)
+        .gte('created_at', cycleStartDate.toISOString())
+        .lte('created_at', cycleEndDate.toISOString());
+
+      const annualCycleComms = (cycleAllTxs || []).filter(t => 
+        t.type === 'commission' && 
+        (t.status === 'completed' || t.status === 'pago' || t.status === 'pending') &&
+        (t.description || '').toLowerCase().includes('anual')
+      );
+
+      let accumulatedAnnual = 0;
+      annualCycleComms.forEach(t => {
+        accumulatedAnnual += Number(t.amount || 0);
+      });
+
+      // Se não houver transações gravadas de anual, calcula a provisão anual de 2% via pedidos do ciclo
+      if (accumulatedAnnual <= 0) {
+        const [{ data: userCycleOrders }, { data: allProfilesList }] = await Promise.all([
+          supabase.from('orders').select('*').in('status', ['Pago', 'Concluído', 'Pago, Aguardando Retirada', 'Aguardando Pagamento']),
+          supabase.from('profiles').select('id, full_name, referred_by, role, reseller_id')
+        ]);
+        const uProf = (allProfilesList || []).find(p => p.id === userId);
+        const isResell = uProf?.role === 'regional_reseller' || uProf?.role === 'reseller' || !!uProf?.reseller_id;
+
+        (userCycleOrders || []).forEach((o: any) => {
+          const rawDate = o.order_date || o.created_at || '';
+          const oDate = new Date(rawDate);
+          if (oDate >= cycleStartDate && oDate <= cycleEndDate && o.customer_id === userId) {
+            const oAmt = Number(o.amount || 0);
+            if (isResell) {
+              accumulatedAnnual += oAmt * 0.02; // 2% provisão anual do ciclo
+            }
+          }
+        });
+      }
+
+      cashbackAnual = parseFloat(accumulatedAnnual.toFixed(2));
+
+      // Em meses regulares (Jan a Nov), o valor total do recibo do mês contempla as comissões apuradas no mês
+      // Em Dezembro, o valor total do recibo contempla também a liberação oficial do cashback anual acumulado do ciclo
+      const brutoTotal = isDecember 
+        ? parseFloat((redeAmount + revendedorAmount + cashbackMensal + cashbackAnual).toFixed(2))
+        : parseFloat((redeAmount + revendedorAmount + cashbackMensal).toFixed(2));
 
       const monthLabel = new Date(year, month - 1, 1).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
       const nextMonth = month === 12 ? 1 : month + 1;
@@ -4238,9 +4337,14 @@ export const businessRules = {
         },
         financial: {
           rede_mmn: parseFloat(redeAmount.toFixed(2)),
+          rede_g1: parseFloat(redeG1.toFixed(2)),
+          rede_g2: parseFloat(redeG2.toFixed(2)),
+          rede_g3: parseFloat(redeG3.toFixed(2)),
           vendas_revendedor: parseFloat(revendedorAmount.toFixed(2)),
           cashback_mensal: parseFloat(cashbackMensal.toFixed(2)),
           cashback_anual: parseFloat(cashbackAnual.toFixed(2)),
+          annual_cycle_period: cyclePeriodLabel,
+          annual_cycle_payout_date: cyclePayoutDate,
           bruto_total: parseFloat(brutoTotal.toFixed(2)),
           deducao_inss: 0.00,
           deducao_irrf: 0.00,

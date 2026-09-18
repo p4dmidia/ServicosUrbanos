@@ -150,10 +150,10 @@ export default function RPAReceiptModal({
       doc.text('3. DISCRIMINAÇÃO DOS RENDIMENTOS DA COMPETÊNCIA', 16, y + 4.5);
 
       const items = [
-        { desc: '01. Comissões e Bônus de Rede MMN Afiliados', val: rpa.financial.rede_mmn },
+        { desc: '01. Comissões e Bônus de Rede MMN (G1, G2, G3)', val: rpa.financial.rede_mmn },
         { desc: '02. Comissões de Vendas Diretas e Polo Regional', val: rpa.financial.vendas_revendedor },
-        { desc: '03. Incentivo / Cashback Mensal', val: rpa.financial.cashback_mensal },
-        { desc: rpa.reference_month?.endsWith('-12') ? '04. Incentivo / Provisão Anual (10/Dez)' : '04. Incentivo / Provisão Anual (Pago em 10/Dez)', val: rpa.financial.cashback_anual },
+        { desc: '03. Incentivo / Cashback Mensal (G0 Titular 5%)', val: rpa.financial.cashback_mensal },
+        { desc: rpa.reference_month?.endsWith('-12') ? `04. Incentivo / Provisão Anual (Ciclo ${rpa.financial.annual_cycle_period || '01/12 a 30/11'} - Pago em 10/Dez)` : `04. Provisão Anual Acumulada (Ciclo ${rpa.financial.annual_cycle_period || '01/12 a 30/11'} - Pago em 10/Dez)`, val: rpa.financial.cashback_anual },
         { desc: '05. TOTAL DOS RENDIMENTOS BRUTOS', val: rpa.financial.bruto_total, isBold: true },
         { desc: '06. Retenção de INSS na Fonte (0% - Intermediação)', val: 0.00 },
         { desc: '07. Retenção de Imposto de Renda na Fonte (IRRF 0%)', val: 0.00 },
@@ -417,28 +417,40 @@ export default function RPAReceiptModal({
             </div>
 
             <div className="divide-y divide-white/5">
-              <div className="px-5 py-2.5 flex items-center justify-between">
-                <span className="text-slate-400">Comissões de Rede MMN</span>
-                <span className="font-mono font-bold text-white">R$ {rpa.financial.rede_mmn.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+              <div className="px-5 py-2.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-300 font-semibold">Comissões de Rede MMN</span>
+                  <span className="font-mono font-bold text-white">R$ {rpa.financial.rede_mmn.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                </div>
+                <div className="mt-1 flex flex-wrap gap-2 text-[10px] text-slate-400 pl-2 border-l border-white/10">
+                  <span>Nível G1: <strong className="font-mono text-slate-200">R$ {(rpa.financial.rede_g1 || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</strong></span>
+                  <span>•</span>
+                  <span>Nível G2: <strong className="font-mono text-slate-200">R$ {(rpa.financial.rede_g2 || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</strong></span>
+                  <span>•</span>
+                  <span>Nível G3: <strong className="font-mono text-slate-200">R$ {(rpa.financial.rede_g3 || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</strong></span>
+                </div>
               </div>
               <div className="px-5 py-2.5 flex items-center justify-between">
                 <span className="text-slate-400">Comissões de Vendas Diretas / Revendedor</span>
                 <span className="font-mono font-bold text-white">R$ {rpa.financial.vendas_revendedor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
               </div>
               <div className="px-5 py-2.5 flex items-center justify-between">
-                <span className="text-slate-400">Cashback Mensal (5%)</span>
+                <span className="text-slate-400">Cashback Mensal (5% - G0 Titular)</span>
                 <span className="font-mono font-bold text-white">R$ {rpa.financial.cashback_mensal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
               </div>
-              <div className="px-5 py-2.5 flex items-center justify-between">
-                <div className="flex items-center gap-1.5">
-                  <span className="text-slate-400">Cashback / Provisão Anual (2%)</span>
-                  {!rpa.reference_month?.endsWith('-12') && (
+              <div className="px-5 py-2.5">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-slate-300 font-semibold">Cashback / Provisão Anual (2%)</span>
                     <span className="text-[8px] bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 px-1.5 py-0.5 rounded font-bold uppercase tracking-wider">
-                      Pago em 10/Dez
+                      {rpa.reference_month?.endsWith('-12') ? 'Liberado no Total' : 'Pago em 10/Dez'}
                     </span>
-                  )}
+                  </div>
+                  <span className="font-mono font-bold text-white">R$ {rpa.financial.cashback_anual.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
                 </div>
-                <span className="font-mono font-bold text-white">R$ {rpa.financial.cashback_anual.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                <p className="text-[10px] text-indigo-300/80 mt-1 pl-2 border-l border-indigo-500/30 font-medium">
+                  Vigência do Ciclo: <strong>{rpa.financial.annual_cycle_period || '01/12 a 30/11'}</strong> (Acumulado)
+                </p>
               </div>
 
               {/* Total Bruto */}

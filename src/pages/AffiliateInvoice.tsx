@@ -389,37 +389,54 @@ export default function AffiliateInvoice() {
 
                 {/* Discriminação */}
                 <div className="space-y-3 bg-slate-50 p-5 rounded-2xl border border-slate-100 text-xs">
-                  <div className="flex justify-between items-center text-slate-600">
-                    <span>Comissões de Rede MMN:</span>
-                    <span className="font-mono font-bold text-midnight">
-                      R$ {(rpaReceipt?.financial.rede_mmn || 0).toFixed(2).replace('.', ',')}
-                    </span>
+                  <div className="text-slate-600">
+                    <div className="flex justify-between items-center">
+                      <span className="font-semibold">Comissões de Rede MMN:</span>
+                      <span className="font-mono font-bold text-midnight">
+                        R$ {(rpaReceipt?.financial.rede_mmn || 0).toFixed(2).replace('.', ',')}
+                      </span>
+                    </div>
+                    {/* Detalhamento de Níveis G1, G2, G3 */}
+                    <div className="mt-1 flex flex-wrap gap-2 text-[10px] text-slate-500 font-medium pl-2 border-l-2 border-slate-200">
+                      <span>Nível G1: <strong className="font-mono text-slate-700">R$ {(rpaReceipt?.financial.rede_g1 || 0).toFixed(2).replace('.', ',')}</strong></span>
+                      <span>•</span>
+                      <span>Nível G2: <strong className="font-mono text-slate-700">R$ {(rpaReceipt?.financial.rede_g2 || 0).toFixed(2).replace('.', ',')}</strong></span>
+                      <span>•</span>
+                      <span>Nível G3: <strong className="font-mono text-slate-700">R$ {(rpaReceipt?.financial.rede_g3 || 0).toFixed(2).replace('.', ',')}</strong></span>
+                    </div>
                   </div>
+
                   <div className="flex justify-between items-center text-slate-600">
-                    <span>Vendas Diretas / Polo:</span>
+                    <span className="font-semibold">Vendas Diretas / Polo:</span>
                     <span className="font-mono font-bold text-midnight">
                       R$ {(rpaReceipt?.financial.vendas_revendedor || 0).toFixed(2).replace('.', ',')}
                     </span>
                   </div>
+
                   <div className="flex justify-between items-center text-slate-600">
-                    <span>Cashback Mensal (5%):</span>
+                    <span className="font-semibold">Cashback Mensal (5% - G0 Titular):</span>
                     <span className="font-mono font-bold text-midnight">
                       R$ {(rpaReceipt?.financial.cashback_mensal || 0).toFixed(2).replace('.', ',')}
                     </span>
                   </div>
-                  <div className="flex justify-between items-center text-slate-600">
-                    <div className="flex items-center gap-1.5">
-                      <span>Cashback / Provisão Anual (2%):</span>
-                      {!refMonthStr.endsWith('-12') && (
+
+                  <div className="text-slate-600">
+                    <div className="flex justify-between items-center">
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-semibold">Cashback / Provisão Anual (2%):</span>
                         <span className="text-[9px] bg-indigo-50 text-indigo-600 border border-indigo-200 px-1.5 py-0.5 rounded font-bold uppercase tracking-wider">
-                          Pago em 10/Dez
+                          {refMonthStr.endsWith('-12') ? 'Liberado no Total' : 'Pago em 10/Dez'}
                         </span>
-                      )}
+                      </div>
+                      <span className="font-mono font-bold text-midnight">
+                        R$ {(rpaReceipt?.financial.cashback_anual || 0).toFixed(2).replace('.', ',')}
+                      </span>
                     </div>
-                    <span className="font-mono font-bold text-midnight">
-                      R$ {(rpaReceipt?.financial.cashback_anual || 0).toFixed(2).replace('.', ',')}
-                    </span>
+                    <p className="text-[10px] text-indigo-600/80 mt-1 pl-2 border-l-2 border-indigo-200 font-medium">
+                      Período de Apuração: <strong>{rpaReceipt?.financial.annual_cycle_period || '01/12 a 30/11'}</strong> (Acumulado)
+                    </p>
                   </div>
+
                   <div className="flex justify-between items-center text-slate-600">
                     <span>Desconto de INSS na Fonte (0%):</span>
                     <span className="font-mono font-bold text-emerald-600">
@@ -596,7 +613,7 @@ export default function AffiliateInvoice() {
                       —
                     </td>
                     <td className="py-4 px-4 text-right font-mono text-emerald-600 text-sm">
-                      R$ {(rpaReceipt?.financial.liquido_total || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                      R$ {(rpaReceipt?.ordersBreakdown?.reduce((acc, curr) => acc + (curr.commissionAmount || 0), 0) || rpaReceipt?.financial.liquido_total || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                     </td>
                     <td className="py-4 px-4 text-center text-[10px] uppercase font-bold text-emerald-700">
                       100% Repasse

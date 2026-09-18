@@ -153,7 +153,7 @@ export default function RPAReceiptModal({
         { desc: '01. Comissões e Bônus de Rede MMN Afiliados', val: rpa.financial.rede_mmn },
         { desc: '02. Comissões de Vendas Diretas e Polo Regional', val: rpa.financial.vendas_revendedor },
         { desc: '03. Incentivo / Cashback Mensal', val: rpa.financial.cashback_mensal },
-        { desc: '04. Incentivo / Provisão Anual', val: rpa.financial.cashback_anual },
+        { desc: rpa.reference_month?.endsWith('-12') ? '04. Incentivo / Provisão Anual (10/Dez)' : '04. Incentivo / Provisão Anual (Pago em 10/Dez)', val: rpa.financial.cashback_anual },
         { desc: '05. TOTAL DOS RENDIMENTOS BRUTOS', val: rpa.financial.bruto_total, isBold: true },
         { desc: '06. Retenção de INSS na Fonte (0% - Intermediação)', val: 0.00 },
         { desc: '07. Retenção de Imposto de Renda na Fonte (IRRF 0%)', val: 0.00 },
@@ -430,7 +430,14 @@ export default function RPAReceiptModal({
                 <span className="font-mono font-bold text-white">R$ {rpa.financial.cashback_mensal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
               </div>
               <div className="px-5 py-2.5 flex items-center justify-between">
-                <span className="text-slate-400">Cashback Anual (2%)</span>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-slate-400">Cashback / Provisão Anual (2%)</span>
+                  {!rpa.reference_month?.endsWith('-12') && (
+                    <span className="text-[8px] bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 px-1.5 py-0.5 rounded font-bold uppercase tracking-wider">
+                      Pago em 10/Dez
+                    </span>
+                  )}
+                </div>
                 <span className="font-mono font-bold text-white">R$ {rpa.financial.cashback_anual.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
               </div>
 

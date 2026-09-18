@@ -408,6 +408,19 @@ export default function AffiliateInvoice() {
                     </span>
                   </div>
                   <div className="flex justify-between items-center text-slate-600">
+                    <div className="flex items-center gap-1.5">
+                      <span>Cashback / Provisão Anual (2%):</span>
+                      {!refMonthStr.endsWith('-12') && (
+                        <span className="text-[9px] bg-indigo-50 text-indigo-600 border border-indigo-200 px-1.5 py-0.5 rounded font-bold uppercase tracking-wider">
+                          Pago em 10/Dez
+                        </span>
+                      )}
+                    </div>
+                    <span className="font-mono font-bold text-midnight">
+                      R$ {(rpaReceipt?.financial.cashback_anual || 0).toFixed(2).replace('.', ',')}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center text-slate-600">
                     <span>Desconto de INSS na Fonte (0%):</span>
                     <span className="font-mono font-bold text-emerald-600">
                       R$ 0,00 (Isento na Fonte)

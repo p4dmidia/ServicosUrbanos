@@ -411,7 +411,7 @@ export default function AffiliateFinancialSummary() {
             </div>
 
             {/* GRID DE CARDS MODERNOS: RESUMO CONSOLIDADO */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div className={`grid grid-cols-1 sm:grid-cols-2 ${statement.isDecemberAnnualPayout ? 'lg:grid-cols-5' : 'lg:grid-cols-4'} gap-6`}>
               
               {/* Card 1: Cashback Rede MMN */}
               <div className="bg-slate-900 p-6 rounded-3xl border border-white/10 shadow-xl relative overflow-hidden flex flex-col justify-between">
@@ -453,6 +453,28 @@ export default function AffiliateFinancialSummary() {
                 </div>
               </div>
 
+              {/* Card Extra: Bônus Anual Liberado (Apenas na competência de fechamento anual) */}
+              {statement.isDecemberAnnualPayout && (
+                <div className="bg-slate-900 p-6 rounded-3xl border border-blue-500/30 shadow-xl relative overflow-hidden flex flex-col justify-between">
+                  <div className="flex items-center justify-between mb-4">
+                    <span className="text-[10px] font-black uppercase tracking-widest text-blue-300">
+                      Bônus Anual (13º)
+                    </span>
+                    <div className="size-10 rounded-2xl bg-blue-500/10 border border-blue-500/20 text-blue-400 flex items-center justify-center">
+                      <Calendar size={18} />
+                    </div>
+                  </div>
+                  <div>
+                    <h3 className="text-2xl lg:text-3xl font-black font-mono text-blue-400 tracking-tight">
+                      {(statement.brutoAnualMmn + statement.brutoAnualRevendedor).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                    </h3>
+                    <p className="text-[10px] font-bold text-blue-300 uppercase tracking-wider mt-1">
+                      Liberado p/ 10 de Dezembro
+                    </p>
+                  </div>
+                </div>
+              )}
+
               {/* Card 3: Total Bruto */}
               <div className="bg-slate-900 p-6 rounded-3xl border border-amber-500/30 shadow-xl relative overflow-hidden flex flex-col justify-between">
                 <div className="flex items-center justify-between mb-4">
@@ -473,11 +495,11 @@ export default function AffiliateFinancialSummary() {
                 </div>
               </div>
 
-              {/* Card 4: Líquido a Receber */}
+              {/* Card 4: Líquido a Receber / Quitado */}
               <div className="bg-gradient-to-br from-emerald-900/80 via-emerald-950 to-slate-950 p-6 rounded-3xl border border-emerald-500/40 shadow-xl shadow-emerald-950/40 relative overflow-hidden flex flex-col justify-between">
                 <div className="flex items-center justify-between mb-4">
                   <span className="text-[10px] font-black uppercase tracking-widest text-emerald-300">
-                    Líquido a Receber
+                    {statement.isPaid ? 'Líquido Quitado / Pago' : 'Líquido a Receber'}
                   </span>
                   <div className="size-10 rounded-2xl bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 flex items-center justify-center">
                     <CheckCircle2 size={18} />
@@ -488,7 +510,9 @@ export default function AffiliateFinancialSummary() {
                     {statement.liquido.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                   </h3>
                   <p className="text-[10px] font-bold text-emerald-300 uppercase tracking-wider mt-1">
-                    Transferência PIX Dia {statement.previsaoPagamentoStr.split('.')[0]}
+                    {statement.isPaid 
+                      ? 'Transferência PIX Efetivada' 
+                      : `Transferência PIX Dia ${statement.previsaoPagamentoStr.split('.')[0]}`}
                   </p>
                 </div>
               </div>
@@ -616,13 +640,17 @@ export default function AffiliateFinancialSummary() {
                     <span className="text-[10px] text-slate-400">
                       {statement.isDecemberAnnualPayout 
                         ? 'Acumulado anual liberado no ciclo de 10 de Dezembro'
-                        : 'Liberado exclusivamente no ciclo de pagamento de 10 de Dezembro'}
+                        : statement.acumuladoAnualMmn > 0 
+                          ? 'Acumulado na Poupança Urba (liberação em 10 de Dezembro)'
+                          : 'Liberado exclusivamente no ciclo de pagamento de 10 de Dezembro'}
                     </span>
                   </div>
-                  <span className="font-mono font-black text-red-600">
-                    {statement.brutoAnualMmn > 0 
-                      ? statement.brutoAnualMmn.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
-                      : '-'}
+                  <span className={`font-mono font-black ${statement.isDecemberAnnualPayout ? 'text-emerald-600' : 'text-blue-600'}`}>
+                    {statement.isDecemberAnnualPayout
+                      ? (statement.brutoAnualMmn > 0 ? statement.brutoAnualMmn.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : 'R$ 0,00')
+                      : (statement.acumuladoAnualMmn > 0 
+                          ? `${statement.acumuladoAnualMmn.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} (Poupança)` 
+                          : '-')}
                   </span>
                 </div>
 
@@ -635,13 +663,17 @@ export default function AffiliateFinancialSummary() {
                     <span className="text-[10px] text-slate-400">
                       {statement.isDecemberAnnualPayout 
                         ? 'Acumulado anual de revenda liberado no ciclo de 10 de Dezembro'
-                        : 'Liberado exclusivamente no ciclo de pagamento de 10 de Dezembro'}
+                        : statement.acumuladoAnualRevendedor > 0 
+                          ? 'Acumulado na Poupança de Revenda (liberação em 10 de Dezembro)'
+                          : 'Liberado exclusivamente no ciclo de pagamento de 10 de Dezembro'}
                     </span>
                   </div>
-                  <span className="font-mono font-black text-red-600">
-                    {statement.brutoAnualRevendedor > 0 
-                      ? statement.brutoAnualRevendedor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
-                      : '-'}
+                  <span className={`font-mono font-black ${statement.isDecemberAnnualPayout ? 'text-emerald-600' : 'text-blue-600'}`}>
+                    {statement.isDecemberAnnualPayout
+                      ? (statement.brutoAnualRevendedor > 0 ? statement.brutoAnualRevendedor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : 'R$ 0,00')
+                      : (statement.acumuladoAnualRevendedor > 0 
+                          ? `${statement.acumuladoAnualRevendedor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} (Poupança)` 
+                          : '-')}
                   </span>
                 </div>
 
@@ -704,18 +736,20 @@ export default function AffiliateFinancialSummary() {
                   </span>
                 </div>
 
-                {/* 9. LÍQUIDO A RECEBER */}
-                <div className="flex items-center justify-between p-4 rounded-2xl bg-emerald-600 text-white shadow-lg mt-4">
+                {/* 9. LÍQUIDO A RECEBER OU QUITADO */}
+                <div className={`flex items-center justify-between p-4 rounded-2xl text-white shadow-lg mt-4 ${statement.isPaid ? 'bg-emerald-700' : 'bg-emerald-600'}`}>
                   <div className="flex items-center gap-3">
                     <div className="size-10 rounded-xl bg-white/20 flex items-center justify-center">
-                      <Wallet size={20} />
+                      {statement.isPaid ? <CheckCircle2 size={20} /> : <Wallet size={20} />}
                     </div>
                     <div>
                       <span className="text-xs font-black uppercase tracking-wider block">
-                        LÍQUIDO A RECEBER
+                        {statement.isPaid ? 'LÍQUIDO PAGO / QUITADO' : 'LÍQUIDO A RECEBER'}
                       </span>
                       <span className="text-[10px] text-emerald-100 font-bold">
-                        Disponível para saque e transferência PIX no dia {statement.previsaoPagamentoStr.split('.')[0]}
+                        {statement.isPaid 
+                          ? 'Transferência PIX efetivada com sucesso' 
+                          : `Disponível para saque e transferência PIX no dia ${statement.previsaoPagamentoStr.split('.')[0]}`}
                       </span>
                     </div>
                   </div>

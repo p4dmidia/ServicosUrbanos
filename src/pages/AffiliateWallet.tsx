@@ -104,34 +104,36 @@ export default function AffiliateWallet() {
     });
   }, [filteredTransactions]);
 
-  const totalsPending = useMemo(() => {
+  const totalsSummary = useMemo(() => {
     const pendingList = enrichedTransactions.filter(t => t.status === 'Pendente');
-    const totalBruto = pendingList.reduce((acc, t) => acc + t.bruto, 0);
+    const paidList = enrichedTransactions.filter(t => t.status === 'Pago');
 
-    // Agrupar valor de contratos por pedido para evitar duplicidade de valor em pedidos com múltiplos lançamentos (ex: 5% Mensal + 2% Anual do mesmo contrato)
-    const uniqueOrders = new Map<string, number>();
-    pendingList.forEach(t => {
-      const key = t.orderId && t.orderId !== '---' ? String(t.orderId) : `txn-${t.id}`;
-      const amount = Number(t.contractAmount || 0);
-      const existing = uniqueOrders.get(key) || 0;
-      if (amount > existing) {
-        uniqueOrders.set(key, amount);
-      } else if (!uniqueOrders.has(key)) {
-        uniqueOrders.set(key, amount);
-      }
-    });
-
-    const totalContratos = Array.from(uniqueOrders.values()).reduce((acc, v) => acc + v, 0);
-    const percentualRepasse = totalContratos > 0 ? (totalBruto / totalContratos) * 100 : 0;
+    const calcGroup = (list: any[]) => {
+      const uniqueOrders = new Map<string, number>();
+      list.forEach(t => {
+        const key = t.orderId && t.orderId !== '---' ? String(t.orderId) : `txn-${t.id}`;
+        const amount = Number(t.contractAmount || 0);
+        const existing = uniqueOrders.get(key) || 0;
+        if (amount > existing) {
+          uniqueOrders.set(key, amount);
+        } else if (!uniqueOrders.has(key)) {
+          uniqueOrders.set(key, amount);
+        }
+      });
+      const totalContratos = Array.from(uniqueOrders.values()).reduce((acc, v) => acc + v, 0);
+      const totalBruto = list.reduce((acc, t) => acc + t.bruto, 0);
+      const percentualRepasse = totalContratos > 0 ? (totalBruto / totalContratos) * 100 : 0;
+      return { totalContratos, percentualRepasse, totalBruto, count: list.length };
+    };
 
     return {
-      totalBruto,
-      totalContratos,
-      percentualRepasse,
-      mediaPercentual: percentualRepasse,
-      count: pendingList.length
+      pending: calcGroup(pendingList),
+      paid: calcGroup(paidList),
+      all: calcGroup(enrichedTransactions)
     };
   }, [enrichedTransactions]);
+
+  const totalsPending = totalsSummary.pending;
 
   const totalPending = totalsPending.totalBruto;
 
@@ -711,24 +713,47 @@ export default function AffiliateWallet() {
                           ))}
                         </tbody>
                         <tfoot>
-                          <tr className="bg-slate-950 text-white font-black uppercase tracking-widest text-[10px]">
-                            <td colSpan={5} className="px-6 py-4 rounded-l-2xl">
-                              <div className="flex items-center gap-2">
-                                <span className="size-2 rounded-full bg-emerald-400" />
-                                <span>TOTAIS A RECEBER (PENDENTE)</span>
-                              </div>
-                            </td>
-                            <td className="px-5 py-4 text-right font-mono text-xs text-slate-200">
-                              {totalsPending.totalContratos.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                            </td>
-                            <td className="px-4 py-4 text-center font-mono text-xs text-indigo-300">
-                              {totalsPending.percentualRepasse > 0 ? `${totalsPending.percentualRepasse.toFixed(2)}%` : '---'}
-                            </td>
-                            <td className="px-5 py-4 text-right font-mono text-sm text-emerald-400 font-black">
-                              {totalsPending.totalBruto.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                            </td>
-                            <td className="px-4 py-4 rounded-r-2xl"></td>
-                          </tr>
+                          {totalsSummary.paid.count > 0 && (
+                            <tr className="bg-emerald-950 text-white font-black uppercase tracking-widest text-[10px] border-b border-emerald-900/50">
+                              <td colSpan={5} className="px-6 py-3.5 rounded-l-2xl">
+                                <div className="flex items-center gap-2 text-emerald-300">
+                                  <span className="size-2 rounded-full bg-emerald-400 animate-pulse" />
+                                  <span>TOTAIS QUITADOS / PAGOS (VIA PIX)</span>
+                                </div>
+                              </td>
+                              <td className="px-5 py-3.5 text-right font-mono text-xs text-emerald-200">
+                                {totalsSummary.paid.totalContratos.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                              </td>
+                              <td className="px-4 py-3.5 text-center font-mono text-xs text-emerald-300">
+                                {totalsSummary.paid.percentualRepasse > 0 ? `${totalsSummary.paid.percentualRepasse.toFixed(2)}%` : '---'}
+                              </td>
+                              <td className="px-5 py-3.5 text-right font-mono text-sm text-emerald-300 font-black">
+                                {totalsSummary.paid.totalBruto.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                              </td>
+                              <td className="px-4 py-3.5 rounded-r-2xl"></td>
+                            </tr>
+                          )}
+
+                          {totalsSummary.pending.count > 0 && (
+                            <tr className="bg-slate-950 text-white font-black uppercase tracking-widest text-[10px]">
+                              <td colSpan={5} className="px-6 py-4 rounded-l-2xl">
+                                <div className="flex items-center gap-2 text-amber-300">
+                                  <span className="size-2 rounded-full bg-amber-400" />
+                                  <span>TOTAIS A RECEBER (POUPANÇA ANUAL / PENDENTE)</span>
+                                </div>
+                              </td>
+                              <td className="px-5 py-4 text-right font-mono text-xs text-slate-200">
+                                {totalsSummary.pending.totalContratos.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                              </td>
+                              <td className="px-4 py-4 text-center font-mono text-xs text-indigo-300">
+                                {totalsSummary.pending.percentualRepasse > 0 ? `${totalsSummary.pending.percentualRepasse.toFixed(2)}%` : '---'}
+                              </td>
+                              <td className="px-5 py-4 text-right font-mono text-sm text-amber-400 font-black">
+                                {totalsSummary.pending.totalBruto.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                              </td>
+                              <td className="px-4 py-4 rounded-r-2xl"></td>
+                            </tr>
+                          )}
                         </tfoot>
                       </table>
                     </div>

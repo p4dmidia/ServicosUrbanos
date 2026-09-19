@@ -1773,6 +1773,32 @@ export const businessRules = {
         console.error("Erro no cálculo de níveis:", err);
       }
 
+      // 3. Buscar meses quitados via RPA ou fatura aprovada
+      const quitadoMonths = new Set<string>();
+      try {
+        const { data: prof } = await supabase
+          .from('profiles')
+          .select('description')
+          .eq('id', userId)
+          .single();
+        const profDesc = prof?.description || '';
+        const matches = profDesc.matchAll(/\[RPA_QUITADO:([0-9]{4}-[0-9]{2})/g);
+        for (const m of matches) {
+          quitadoMonths.add(m[1]);
+        }
+        const { data: dbInvs } = await supabase
+          .from('affiliate_invoices')
+          .select('reference_month, status, invoice_link')
+          .eq('profile_id', userId);
+        (dbInvs || []).forEach(inv => {
+          if (inv.status === 'approved' || inv.invoice_link === 'quitado') {
+            quitadoMonths.add(inv.reference_month);
+          }
+        });
+      } catch (e) {
+        console.error("Erro ao carregar competências quitadas:", e);
+      }
+
       const activity = transactions.map(t => {
         const orderMatch = t.description?.match(/Pedido\s*#\s*([A-Z0-9-]+)/i);
         const orderId = t.order_id ? String(t.order_id) : (orderMatch ? orderMatch[1].trim() : null);
@@ -1826,10 +1852,15 @@ export const businessRules = {
           .replace(/Comiss[aã]o Mensal/gi, 'Cashback Mensal')
           .replace(/Comiss[aã]o Anual/gi, 'Cashback Anual');
 
+        const txDate = new Date(t.created_at);
+        const txMonthStr = `${txDate.getFullYear()}-${String(txDate.getMonth() + 1).padStart(2, '0')}`;
+        const isMonthPaid = quitadoMonths.has(txMonthStr);
+        const isMensal = desc.toLowerCase().includes('mensal');
+
         let displayStatus = 'Pendente';
         if (order?.status === 'Cancelado' || t.status === 'cancelled' || t.status === 'failed') {
           displayStatus = 'Cancelado';
-        } else if (t.status === 'completed' || t.status === 'pago') {
+        } else if (t.status === 'completed' || t.status === 'pago' || (isMonthPaid && isMensal)) {
           displayStatus = 'Pago';
         } else {
           displayStatus = 'Pendente';
@@ -6883,38 +6914,36 @@ export const businessRules = {
     const brutoMensalRevendedor = monthResellerCommissions.reduce((sum, t) => sum + Number(t.amount || 0), 0);
 
     // 3. Cashback Anual AFILIADO (MMN)
-    let brutoAnualMmn = 0;
-    let annualMmnComms: any[] = [];
     const annualStartDate = new Date(nextYear - 1, 11, 1, 0, 0, 0, 0); // 01/12/(ano-1)
     const annualEndDate = new Date(nextYear, 10, 30, 23, 59, 59, 999); // 30/11/ano
-    if (isDecemberAnnualPayout) {
-      annualMmnComms = (userTxs || []).filter(t => {
-        if (t.type !== 'commission') return false;
-        const desc = (t.description || '').toLowerCase();
-        const isReseller = desc.includes('revendedor') || desc.includes('regional') || desc.includes('revenda') || desc.includes('(reg)') || t.metadata?.is_reseller;
-        if (isReseller) return false;
-        const d = new Date(t.created_at);
-        return d >= annualStartDate && d <= annualEndDate && desc.includes('anual');
-      });
-      brutoAnualMmn = annualMmnComms.reduce((sum, t) => sum + Number(t.amount || 0), 0);
-    }
+    
+    // Todos os lançamentos anuais do ciclo (Poupança MMN)
+    const allAnnualMmnComms = (userTxs || []).filter(t => {
+      if (t.type !== 'commission') return false;
+      const desc = (t.description || '').toLowerCase();
+      const isReseller = desc.includes('revendedor') || desc.includes('regional') || desc.includes('revenda') || desc.includes('(reg)') || t.metadata?.is_reseller;
+      if (isReseller) return false;
+      const d = new Date(t.created_at);
+      return d >= annualStartDate && d <= annualEndDate && desc.includes('anual');
+    });
+    const acumuladoAnualMmn = allAnnualMmnComms.reduce((sum, t) => sum + Number(t.amount || 0), 0);
+    const brutoAnualMmn = isDecemberAnnualPayout ? acumuladoAnualMmn : 0;
+    const annualMmnComms = isDecemberAnnualPayout ? allAnnualMmnComms : [];
 
     // 4. Cashback Anual REVENDEDOR
-    let brutoAnualRevendedor = 0;
-    let annualResellerComms: any[] = [];
-    if (isDecemberAnnualPayout) {
-      annualResellerComms = (userTxs || []).filter(t => {
-        if (t.type !== 'commission') return false;
-        const desc = (t.description || '').toLowerCase();
-        const isReseller = desc.includes('revendedor') || desc.includes('regional') || desc.includes('revenda') || desc.includes('(reg)') || t.metadata?.is_reseller;
-        if (!isReseller) return false;
-        const d = new Date(t.created_at);
-        return d >= annualStartDate && d <= annualEndDate && desc.includes('anual');
-      });
-      brutoAnualRevendedor = annualResellerComms.reduce((sum, t) => sum + Number(t.amount || 0), 0);
-    }
+    const allAnnualResellerComms = (userTxs || []).filter(t => {
+      if (t.type !== 'commission') return false;
+      const desc = (t.description || '').toLowerCase();
+      const isReseller = desc.includes('revendedor') || desc.includes('regional') || desc.includes('revenda') || desc.includes('(reg)') || t.metadata?.is_reseller;
+      if (!isReseller) return false;
+      const d = new Date(t.created_at);
+      return d >= annualStartDate && d <= annualEndDate && desc.includes('anual');
+    });
+    const acumuladoAnualRevendedor = allAnnualResellerComms.reduce((sum, t) => sum + Number(t.amount || 0), 0);
+    const brutoAnualRevendedor = isDecemberAnnualPayout ? acumuladoAnualRevendedor : 0;
+    const annualResellerComms = isDecemberAnnualPayout ? allAnnualResellerComms : [];
 
-    // Total Bruto
+    // Total Bruto (soma o mensal e, se for pagamento de Dezembro, inclui o bônus anual)
     const totalBruto = brutoMensalMmn + brutoMensalRevendedor + brutoAnualMmn + brutoAnualRevendedor;
 
     // Apuração Fiscal Oficial
@@ -7066,6 +7095,9 @@ export const businessRules = {
       brutoMensalRevendedor,
       brutoAnualMmn,
       brutoAnualRevendedor,
+      acumuladoAnualMmn,
+      acumuladoAnualRevendedor,
+      totalAcumuladoAnual: acumuladoAnualMmn + acumuladoAnualRevendedor,
       totalBruto,
       inss: tax.inss,
       baseIrrf: tax.irrfBase || Math.max(0, totalBruto - tax.inss),

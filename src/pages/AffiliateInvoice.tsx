@@ -67,7 +67,7 @@ export default function AffiliateInvoice() {
   // Navegação e Filtro por Mês da Competência do RPA
   const defaultClosedDate = useMemo(() => {
     const now = new Date();
-    return new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    return new Date(now.getFullYear(), now.getMonth(), 1);
   }, []);
 
   const [currentDate, setCurrentDate] = useState(defaultClosedDate);
@@ -100,6 +100,33 @@ export default function AffiliateInvoice() {
     descricaoServico: 'Intermediação de negócios, agenciamento e divulgação de planos de benefícios e serviços urbanos.'
   };
 
+  // Totais agregados da tabela de pedidos vinculados ao RPA
+  const { totalContratosUnicos, totalComissaoCalculada, mediaPercentual } = useMemo(() => {
+    if (!rpaReceipt?.ordersBreakdown || rpaReceipt.ordersBreakdown.length === 0) {
+      return { totalContratosUnicos: 0, totalComissaoCalculada: 0, mediaPercentual: 0 };
+    }
+    const uniqueOrders = new Map<string, number>();
+    let totalComissao = 0;
+
+    rpaReceipt.ordersBreakdown.forEach((o: any) => {
+      const key = o.orderId && o.orderId !== '---' ? String(o.orderId) : (o.orderNumber || o.id);
+      const amt = Number(o.contractAmount || o.amount || 0);
+      if (!uniqueOrders.has(key) || amt > (uniqueOrders.get(key) || 0)) {
+        uniqueOrders.set(key, amt);
+      }
+      totalComissao += Number(o.commissionAmount || o.bruto || 0);
+    });
+
+    const totalContratos = Array.from(uniqueOrders.values()).reduce((a, b) => a + b, 0);
+    const perc = totalContratos > 0 ? (totalComissao / totalContratos) * 100 : 0;
+
+    return {
+      totalContratosUnicos: totalContratos,
+      totalComissaoCalculada: totalComissao,
+      mediaPercentual: perc
+    };
+  }, [rpaReceipt?.ordersBreakdown]);
+
   // Inicializa a cidade e o tipo tributário com base no perfil do afiliado
   useEffect(() => {
     if (profile) {
@@ -110,7 +137,8 @@ export default function AffiliateInvoice() {
       setCityInput(city);
       setStateInput(state);
 
-      if (profile.cnpj || (profile.cpf && profile.cpf.replace(/\D/g, '').length === 14)) {
+      const isPJ = profile.person_type === 'PJ' || Boolean(profile.cnpj && profile.cnpj.replace(/\D/g, '').length === 14) || Boolean((profile as any).description?.includes('[PJ]'));
+      if (isPJ) {
         setTaxpayerType('pj');
       } else {
         setTaxpayerType('pf');
@@ -128,10 +156,11 @@ export default function AffiliateInvoice() {
     try {
       setLoading(true);
       const activeRefMonth = targetMonthStr || refMonthStr;
-      const isPJUser = Boolean(profile?.cnpj && profile.cnpj.replace(/\D/g, '').length > 11);
+      const isPJUser = taxpayerType === 'pj';
 
       if (isPJUser) {
-        const res = await businessRules.getAffiliateInvoiceSummary(user.id);
+        const [y, m] = activeRefMonth.split('-');
+        const res = await businessRules.getAffiliateInvoiceSummary(user.id, parseInt(y, 10), parseInt(m, 10) - 1);
         setSummary(res);
         if (res.totalGross) {
           setDeclaredAmount(res.totalGross.toFixed(2).replace('.', ','));
@@ -163,7 +192,7 @@ export default function AffiliateInvoice() {
 
   useEffect(() => {
     loadData(refMonthStr);
-  }, [user, profile, refMonthStr]);
+  }, [user, profile, refMonthStr, taxpayerType]);
 
   const handleCopy = (text: string, fieldName: string) => {
     navigator.clipboard.writeText(text);
@@ -389,34 +418,31 @@ export default function AffiliateInvoice() {
 
                 {/* Discriminação */}
                 <div className="space-y-3 bg-slate-50 p-5 rounded-2xl border border-slate-100 text-xs">
-                  <div className="text-slate-600">
-                    <div className="flex justify-between items-center">
-                      <span className="font-semibold">Comissões de Rede MMN:</span>
-                      <span className="font-mono font-bold text-midnight">
-                        R$ {(rpaReceipt?.financial.rede_mmn || 0).toFixed(2).replace('.', ',')}
-                      </span>
-                    </div>
-                    {/* Detalhamento de Níveis G1, G2, G3 */}
-                    <div className="mt-1 flex flex-wrap gap-2 text-[10px] text-slate-500 font-medium pl-2 border-l-2 border-slate-200">
-                      <span>Nível G1: <strong className="font-mono text-slate-700">R$ {(rpaReceipt?.financial.rede_g1 || 0).toFixed(2).replace('.', ',')}</strong></span>
-                      <span>•</span>
-                      <span>Nível G2: <strong className="font-mono text-slate-700">R$ {(rpaReceipt?.financial.rede_g2 || 0).toFixed(2).replace('.', ',')}</strong></span>
-                      <span>•</span>
-                      <span>Nível G3: <strong className="font-mono text-slate-700">R$ {(rpaReceipt?.financial.rede_g3 || 0).toFixed(2).replace('.', ',')}</strong></span>
-                    </div>
-                  </div>
-
                   <div className="flex justify-between items-center text-slate-600">
-                    <span className="font-semibold">Vendas Diretas / Polo:</span>
+                    <span className="font-semibold">Nível G0:</span>
                     <span className="font-mono font-bold text-midnight">
-                      R$ {(rpaReceipt?.financial.vendas_revendedor || 0).toFixed(2).replace('.', ',')}
+                      R$ {(rpaReceipt?.financial.rede_g0 || rpaReceipt?.financial.cashback_mensal || 0).toFixed(2).replace('.', ',')}
                     </span>
                   </div>
 
                   <div className="flex justify-between items-center text-slate-600">
-                    <span className="font-semibold">Cashback Mensal (5% - G0 Titular):</span>
+                    <span className="font-semibold">Nível G1:</span>
                     <span className="font-mono font-bold text-midnight">
-                      R$ {(rpaReceipt?.financial.cashback_mensal || 0).toFixed(2).replace('.', ',')}
+                      R$ {(rpaReceipt?.financial.rede_g1 || 0).toFixed(2).replace('.', ',')}
+                    </span>
+                  </div>
+
+                  <div className="flex justify-between items-center text-slate-600">
+                    <span className="font-semibold">Nível G2:</span>
+                    <span className="font-mono font-bold text-midnight">
+                      R$ {(rpaReceipt?.financial.rede_g2 || 0).toFixed(2).replace('.', ',')}
+                    </span>
+                  </div>
+
+                  <div className="flex justify-between items-center text-slate-600">
+                    <span className="font-semibold">Revendedor:</span>
+                    <span className="font-mono font-bold text-midnight">
+                      R$ {(rpaReceipt?.financial.vendas_revendedor || 0).toFixed(2).replace('.', ',')}
                     </span>
                   </div>
 
@@ -435,6 +461,26 @@ export default function AffiliateInvoice() {
                     <p className="text-[10px] text-indigo-600/80 mt-1 pl-2 border-l-2 border-indigo-200 font-medium">
                       Período de Apuração: <strong>{rpaReceipt?.financial.annual_cycle_period || '01/12 a 30/11'}</strong> (Acumulado)
                     </p>
+                  </div>
+
+                  <div className="flex justify-between items-center text-slate-600">
+                    <div className="flex items-center gap-1.5">
+                      <span>Desconto de IRPF na Fonte:</span>
+                      {(rpaReceipt?.financial?.deducao_irrf || 0) > 0 ? (
+                        <span className="text-[9px] bg-amber-50 text-amber-700 border border-amber-200 px-1.5 py-0.5 rounded font-bold uppercase tracking-wider">
+                          27,5% s/ excedente &gt; R$ 5 mil
+                        </span>
+                      ) : (
+                        <span className="text-[9px] bg-emerald-50 text-emerald-700 border border-emerald-200 px-1.5 py-0.5 rounded font-bold uppercase tracking-wider">
+                          Isento até R$ 5.000,00
+                        </span>
+                      )}
+                    </div>
+                    <span className={`font-mono font-bold ${(rpaReceipt?.financial?.deducao_irrf || 0) > 0 ? 'text-rose-600' : 'text-emerald-600'}`}>
+                      {(rpaReceipt?.financial?.deducao_irrf || 0) > 0
+                        ? `- R$ ${(rpaReceipt?.financial?.deducao_irrf || 0).toFixed(2).replace('.', ',')}`
+                        : 'R$ 0,00 (Isento na Fonte)'}
+                    </span>
                   </div>
 
                   <div className="flex justify-between items-center text-slate-600">
@@ -543,80 +589,123 @@ export default function AffiliateInvoice() {
               </div>
             </div>
 
-            {/* Tabela de Pedidos */}
+            {/* Tabela de Pedidos Padrão Financeiro */}
             <div className="mt-6 overflow-x-auto">
-              <table className="w-full text-left border-collapse">
+              <table className="w-full text-left border-separate border-spacing-y-2.5">
                 <thead>
-                  <tr className="border-b border-slate-100 text-[10px] font-black uppercase tracking-wider text-slate-400">
-                    <th className="py-3 px-4">Nº do Pedido</th>
-                    <th className="py-3 px-4">Data</th>
-                    <th className="py-3 px-4">Origem / Regra</th>
-                    <th className="py-3 px-4 text-right">Valor do Pedido</th>
-                    <th className="py-3 px-4 text-center">Alíquota (%)</th>
-                    <th className="py-3 px-4 text-right">Valor Creditado</th>
-                    <th className="py-3 px-4 text-center">Status</th>
+                  <tr className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                    <th className="px-5 py-2">ID DO PEDIDO</th>
+                    <th className="px-5 py-2">AFILIADO / ORIGEM</th>
+                    <th className="px-3 py-2 text-center">NÍVEL</th>
+                    <th className="px-4 py-2 text-center">CATEGORIA / PERÍODO</th>
+                    <th className="px-4 py-2">DATA</th>
+                    <th className="px-5 py-2 text-right">VALOR DO CONTRATO</th>
+                    <th className="px-4 py-2 text-center">PERCENTUAL</th>
+                    <th className="px-5 py-2 text-right text-emerald-700">VALOR BRUTO CASHBACK</th>
+                    <th className="px-4 py-2 text-center">STATUS</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100 text-xs">
+                <tbody>
                   {rpaReceipt?.ordersBreakdown && rpaReceipt.ordersBreakdown.length > 0 ? (
-                    rpaReceipt.ordersBreakdown.map((order, idx) => (
-                      <tr key={order.id || idx} className="hover:bg-slate-50/80 transition-colors">
-                        <td className="py-3.5 px-4 font-mono font-bold text-midnight">
-                          <span className="bg-slate-100 px-2.5 py-1 rounded-lg border border-slate-200 text-slate-700">
-                            {order.orderNumber}
+                    rpaReceipt.ordersBreakdown.map((order: any, idx: number) => (
+                      <tr
+                        key={order.id || idx}
+                        className="bg-slate-50/70 hover:bg-white hover:shadow-lg hover:shadow-slate-100 transition-all rounded-2xl text-xs font-medium"
+                      >
+                        <td className="px-5 py-4 rounded-l-2xl font-black text-midnight font-mono">
+                          {order.orderNumber}
+                        </td>
+                        <td className="px-5 py-4 font-bold text-slate-700">
+                          {order.affiliateName || order.origin || 'Afiliado'}
+                        </td>
+                        <td className="px-3 py-4 text-center">
+                          {order.level === 'REG' ? (
+                            <span className="inline-flex items-center justify-center px-2.5 py-1 rounded-xl text-[10px] font-black bg-purple-100 text-purple-700 border border-purple-200/60" title="Revendedor Regional">
+                              🏢 REG
+                            </span>
+                          ) : order.level === '0' || order.level === 'G0' ? (
+                            <span className="inline-flex items-center justify-center px-2 py-0.5 rounded-xl text-[10px] font-black bg-amber-100 text-amber-800 border border-amber-200" title="Titular da Compra (G0)">
+                              🟡 G0
+                            </span>
+                          ) : order.level === '1' || order.level === 'G1' ? (
+                            <span className="inline-flex items-center justify-center px-2 py-0.5 rounded-xl text-[10px] font-black bg-emerald-100 text-emerald-800 border border-emerald-200" title="1º Nível (G1)">
+                              🟢 G1
+                            </span>
+                          ) : order.level === '2' || order.level === 'G2' ? (
+                            <span className="inline-flex items-center justify-center px-2 py-0.5 rounded-xl text-[10px] font-black bg-sky-100 text-sky-800 border border-sky-200" title="2º Nível (G2)">
+                              🔵 G2
+                            </span>
+                          ) : order.level === '3' || order.level === 'G3' ? (
+                            <span className="inline-flex items-center justify-center px-2 py-0.5 rounded-xl text-[10px] font-black bg-indigo-100 text-indigo-800 border border-indigo-200" title="3º Nível (G3)">
+                              🟣 G3
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center justify-center px-2 py-0.5 rounded-xl text-[10px] font-black bg-slate-200 text-slate-600">
+                              {order.level || '—'}
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-4 py-4 text-center">
+                          <span className={`px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-wider ${
+                            (order.category || '').toUpperCase().includes('MENSAL')
+                              ? 'bg-rose-50 text-rose-600 border border-rose-100'
+                              : 'bg-amber-50 text-amber-600 border border-amber-100'
+                          }`}>
+                            {order.category || 'MENSAL'}
                           </span>
                         </td>
-                        <td className="py-3.5 px-4 text-slate-500 font-medium">
+                        <td className="px-4 py-4 text-slate-500 text-[11px]">
                           {order.date}
                         </td>
-                        <td className="py-3.5 px-4">
-                          <span className="inline-flex items-center gap-1.5 font-bold text-slate-700">
-                            {order.origin}
+                        <td className="px-5 py-4 text-right font-mono font-bold text-slate-600 text-xs">
+                          R$ {Number(order.contractAmount || order.amount || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                        </td>
+                        <td className="px-4 py-4 text-center font-mono font-bold text-indigo-600 text-xs">
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-lg text-xs font-black bg-indigo-50 text-indigo-700 border border-indigo-100 font-mono">
+                            {order.rate || (order.percentage ? `${Number(order.percentage).toFixed(2)}%` : '5.00%')}
                           </span>
                         </td>
-                        <td className="py-3.5 px-4 text-right font-mono font-bold text-slate-600">
-                          R$ {order.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                        <td className="px-5 py-4 text-right font-mono font-black text-emerald-600">
+                          +R$ {Number(order.commissionAmount || order.bruto || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                         </td>
-                        <td className="py-3.5 px-4 text-center font-mono font-black text-indigo-600">
-                          <span className="bg-indigo-50 px-2 py-0.5 rounded-md border border-indigo-100">
-                            {order.rate}
-                          </span>
-                        </td>
-                        <td className="py-3.5 px-4 text-right font-mono font-black text-emerald-600">
-                          R$ {order.commissionAmount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                        </td>
-                        <td className="py-3.5 px-4 text-center">
-                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-emerald-100 text-emerald-800">
-                            <CheckCircle2 size={11} />
-                            {order.status || 'Apurado'}
+                        <td className="px-4 py-4 text-center rounded-r-2xl">
+                          <span className={`inline-flex items-center gap-1 text-[9px] font-black px-2.5 py-1 rounded-full uppercase tracking-wider ${
+                            order.status === 'Pago' || order.status === 'completed' || order.status === 'pago' || order.status === 'Concluído'
+                              ? 'bg-emerald-100 text-emerald-800'
+                              : 'bg-amber-100 text-amber-800'
+                          }`}>
+                            {order.status === 'Pago' || order.status === 'completed' || order.status === 'pago' || order.status === 'Concluído' ? 'Pago' : 'Pendente'}
                           </span>
                         </td>
                       </tr>
                     ))
                   ) : (
                     <tr>
-                      <td colSpan={7} className="py-8 text-center text-slate-400">
+                      <td colSpan={9} className="py-12 text-center text-slate-400">
                         Nenhum pedido individual detalhado nesta competência.
                       </td>
                     </tr>
                   )}
                 </tbody>
                 <tfoot>
-                  <tr className="border-t-2 border-slate-200 font-black text-midnight bg-slate-50/50">
-                    <td colSpan={3} className="py-4 px-4 uppercase text-[11px] tracking-wider text-slate-500">
-                      Totalizador dos Pedidos do Recibo
+                  <tr className="bg-slate-950 text-white font-black uppercase tracking-widest text-[10px]">
+                    <td colSpan={5} className="px-6 py-4 rounded-l-2xl">
+                      <div className="flex items-center gap-2">
+                        <span className="size-2 rounded-full bg-emerald-400 animate-pulse" />
+                        <span>TOTAIS A RECEBER (PENDENTE)</span>
+                      </div>
                     </td>
-                    <td className="py-4 px-4 text-right font-mono text-slate-700">
-                      R$ {(rpaReceipt?.ordersBreakdown?.reduce((acc, curr) => acc + (curr.amount || 0), 0) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                    <td className="px-5 py-4 text-right font-mono text-xs text-slate-200">
+                      R$ {totalContratosUnicos.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                     </td>
-                    <td className="py-4 px-4 text-center text-slate-400 font-mono text-xs">
-                      —
+                    <td className="px-4 py-4 text-center font-mono text-xs text-indigo-300">
+                      {mediaPercentual > 0 ? `${mediaPercentual.toFixed(2)}%` : '—'}
                     </td>
-                    <td className="py-4 px-4 text-right font-mono text-emerald-600 text-sm">
-                      R$ {(rpaReceipt?.ordersBreakdown?.reduce((acc, curr) => acc + (curr.commissionAmount || 0), 0) || rpaReceipt?.financial.liquido_total || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                    <td className="px-5 py-4 text-right font-mono text-sm text-emerald-400 font-black">
+                      R$ {(rpaReceipt?.financial.liquido_total || totalComissaoCalculada || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                     </td>
-                    <td className="py-4 px-4 text-center text-[10px] uppercase font-bold text-emerald-700">
-                      100% Repasse
+                    <td className="px-4 py-4 text-center rounded-r-2xl text-[9px] text-emerald-400 font-bold">
+                      100% REPASSE
                     </td>
                   </tr>
                 </tfoot>

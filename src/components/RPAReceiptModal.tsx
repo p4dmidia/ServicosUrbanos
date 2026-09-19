@@ -147,17 +147,21 @@ export default function RPAReceiptModal({
       doc.rect(14, y, 182, 6, 'FD');
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(8);
-      doc.text('3. DISCRIMINAÇÃO DOS RENDIMENTOS DA COMPETÊNCIA', 16, y + 4.5);
+      const irrfVal = rpa.financial.deducao_irrf || 0;
+      const irrfDesc = irrfVal > 0 
+        ? '07. Retenção de Imposto de Renda na Fonte (IRRF 27,5% s/ excedente de R$ 5.000)'
+        : '07. Retenção de Imposto de Renda na Fonte (IRRF Isento até R$ 5.000)';
 
       const items = [
-        { desc: '01. Comissões e Bônus de Rede MMN (G1, G2, G3)', val: rpa.financial.rede_mmn },
-        { desc: '02. Comissões de Vendas Diretas e Polo Regional', val: rpa.financial.vendas_revendedor },
-        { desc: '03. Incentivo / Cashback Mensal (G0 Titular 5%)', val: rpa.financial.cashback_mensal },
-        { desc: rpa.reference_month?.endsWith('-12') ? `04. Incentivo / Provisão Anual (Ciclo ${rpa.financial.annual_cycle_period || '01/12 a 30/11'} - Pago em 10/Dez)` : `04. Provisão Anual Acumulada (Ciclo ${rpa.financial.annual_cycle_period || '01/12 a 30/11'} - Pago em 10/Dez)`, val: rpa.financial.cashback_anual },
-        { desc: '05. TOTAL DOS RENDIMENTOS BRUTOS', val: rpa.financial.bruto_total, isBold: true },
-        { desc: '06. Retenção de INSS na Fonte (0% - Intermediação)', val: 0.00 },
-        { desc: '07. Retenção de Imposto de Renda na Fonte (IRRF 0%)', val: 0.00 },
-        { desc: '08. VALOR LÍQUIDO EFETIVAMENTE PAGO / A PAGAR', val: rpa.financial.liquido_total, isHighlight: true }
+        { desc: '01. Nível G0 (Cashback Titular 5%)', val: rpa.financial.rede_g0 || rpa.financial.cashback_mensal || 0 },
+        { desc: '02. Nível G1 (Comissão de Rede MMN)', val: rpa.financial.rede_g1 || 0 },
+        { desc: '03. Nível G2 (Comissão de Rede MMN)', val: rpa.financial.rede_g2 || 0 },
+        { desc: '04. Revendedor (Vendas Diretas / Polo Regional)', val: rpa.financial.vendas_revendedor || 0 },
+        { desc: rpa.reference_month?.endsWith('-12') ? `05. Cashback Anual (Ciclo ${rpa.financial.annual_cycle_period || '01/12 a 30/11'} - Liberado)` : `05. Provisão Anual Acumulada (Ciclo ${rpa.financial.annual_cycle_period || '01/12 a 30/11'} - Pago em 10/Dez)`, val: rpa.financial.cashback_anual },
+        { desc: '06. TOTAL DOS RENDIMENTOS BRUTOS', val: rpa.financial.bruto_total, isBold: true },
+        { desc: irrfDesc, val: irrfVal > 0 ? -irrfVal : 0.00, isDeduction: irrfVal > 0 },
+        { desc: '08. Retenção de INSS na Fonte (0% - Intermediação)', val: 0.00 },
+        { desc: '09. VALOR LÍQUIDO EFETIVAMENTE PAGO / A PAGAR', val: rpa.financial.liquido_total, isHighlight: true }
       ];
 
       y += 6;
@@ -417,26 +421,21 @@ export default function RPAReceiptModal({
             </div>
 
             <div className="divide-y divide-white/5">
-              <div className="px-5 py-2.5">
-                <div className="flex items-center justify-between">
-                  <span className="text-slate-300 font-semibold">Comissões de Rede MMN</span>
-                  <span className="font-mono font-bold text-white">R$ {rpa.financial.rede_mmn.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
-                </div>
-                <div className="mt-1 flex flex-wrap gap-2 text-[10px] text-slate-400 pl-2 border-l border-white/10">
-                  <span>Nível G1: <strong className="font-mono text-slate-200">R$ {(rpa.financial.rede_g1 || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</strong></span>
-                  <span>•</span>
-                  <span>Nível G2: <strong className="font-mono text-slate-200">R$ {(rpa.financial.rede_g2 || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</strong></span>
-                  <span>•</span>
-                  <span>Nível G3: <strong className="font-mono text-slate-200">R$ {(rpa.financial.rede_g3 || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</strong></span>
-                </div>
+              <div className="px-5 py-2.5 flex items-center justify-between">
+                <span className="text-slate-300 font-semibold">Nível G0</span>
+                <span className="font-mono font-bold text-white">R$ {(rpa.financial.rede_g0 || rpa.financial.cashback_mensal || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
               </div>
               <div className="px-5 py-2.5 flex items-center justify-between">
-                <span className="text-slate-400">Comissões de Vendas Diretas / Revendedor</span>
-                <span className="font-mono font-bold text-white">R$ {rpa.financial.vendas_revendedor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                <span className="text-slate-300 font-semibold">Nível G1</span>
+                <span className="font-mono font-bold text-white">R$ {(rpa.financial.rede_g1 || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
               </div>
               <div className="px-5 py-2.5 flex items-center justify-between">
-                <span className="text-slate-400">Cashback Mensal (5% - G0 Titular)</span>
-                <span className="font-mono font-bold text-white">R$ {rpa.financial.cashback_mensal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                <span className="text-slate-300 font-semibold">Nível G2</span>
+                <span className="font-mono font-bold text-white">R$ {(rpa.financial.rede_g2 || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+              </div>
+              <div className="px-5 py-2.5 flex items-center justify-between">
+                <span className="text-slate-300 font-semibold">Revendedor</span>
+                <span className="font-mono font-bold text-white">R$ {(rpa.financial.vendas_revendedor || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
               </div>
               <div className="px-5 py-2.5">
                 <div className="flex items-center justify-between">
@@ -459,20 +458,33 @@ export default function RPAReceiptModal({
                 <span className="font-mono text-sm text-white">R$ {rpa.financial.bruto_total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
               </div>
 
-              {/* Deduções Fiscais 0% */}
+              {/* Deduções Fiscais: IRPF e INSS */}
+              <div className="px-5 py-2.5 flex items-center justify-between text-slate-400 bg-white/[0.02]">
+                <div className="flex items-center gap-2">
+                  <span>Desconto de IRPF na Fonte (Ganhos &gt; R$ 5.000,00)</span>
+                  {(rpa.financial.deducao_irrf || 0) > 0 ? (
+                    <span className="text-[9px] bg-rose-500/10 text-rose-400 border border-rose-500/20 px-2 py-0.5 rounded-md font-bold">
+                      27,5% s/ Excedente
+                    </span>
+                  ) : (
+                    <span className="text-[9px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2 py-0.5 rounded-md font-bold">
+                      Isento até R$ 5.000,00
+                    </span>
+                  )}
+                </div>
+                <span className={`font-mono font-bold ${(rpa.financial.deducao_irrf || 0) > 0 ? 'text-rose-400' : 'text-emerald-400'}`}>
+                  {(rpa.financial.deducao_irrf || 0) > 0
+                    ? `- R$ ${(rpa.financial.deducao_irrf || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
+                    : 'R$ 0,00 (Isento na Fonte)'}
+                </span>
+              </div>
+
               <div className="px-5 py-2.5 flex items-center justify-between text-slate-400 bg-emerald-500/[0.02]">
                 <div className="flex items-center gap-2">
                   <span>Retenção de INSS na Fonte (0% - Intermediação)</span>
                   <span className="text-[9px] bg-emerald-500/10 text-emerald-400 px-2 py-0.5 rounded-md font-bold">Sem Desconto</span>
                 </div>
-                <span className="font-mono font-bold text-emerald-400">R$ 0,00</span>
-              </div>
-              <div className="px-5 py-2.5 flex items-center justify-between text-slate-400 bg-emerald-500/[0.02]">
-                <div className="flex items-center gap-2">
-                  <span>Retenção de IRRF na Fonte (0%)</span>
-                  <span className="text-[9px] bg-emerald-500/10 text-emerald-400 px-2 py-0.5 rounded-md font-bold">Sem Desconto</span>
-                </div>
-                <span className="font-mono font-bold text-emerald-400">R$ 0,00</span>
+                <span className="font-mono font-bold text-emerald-400">R$ 0,00 (Isento na Fonte)</span>
               </div>
 
               {/* Total Líquido a Receber */}

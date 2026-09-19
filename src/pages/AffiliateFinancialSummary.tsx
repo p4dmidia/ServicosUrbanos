@@ -544,23 +544,42 @@ export default function AffiliateFinancialSummary() {
                 </div>
               </div>
 
-              {/* Banner Total a Receber */}
-              <div className="bg-amber-100 border border-amber-300/80 rounded-2xl p-4 text-amber-950 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-                <div className="flex items-center gap-2.5">
-                  <AlertCircle size={20} className="text-amber-700 shrink-0" />
-                  <div>
-                    <span className="text-xs sm:text-sm font-black uppercase tracking-wide block">
-                      TOTAL A RECEBER ATÉ {statement.limiteNotaFiscalStr}
-                    </span>
-                    <span className="text-[10px] text-amber-800 font-bold">
-                      Documento: {statement.rpaNumber} • {(statement.ordersList || []).length} pedido(s) apurado(s)
-                    </span>
+              {/* Banner Total a Receber ou Quitado */}
+              {statement.isPaid ? (
+                <div className="bg-emerald-100 border border-emerald-300/80 rounded-2xl p-4 text-emerald-950 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                  <div className="flex items-center gap-2.5">
+                    <CheckCircle2 size={20} className="text-emerald-700 shrink-0" />
+                    <div>
+                      <span className="text-xs sm:text-sm font-black uppercase tracking-wide block text-emerald-900">
+                        PAGAMENTO EFETIVADO & QUITADO
+                      </span>
+                      <span className="text-[10px] text-emerald-800 font-bold">
+                        Documento: {statement.rpaNumber} • Transferido via PIX • {(statement.ordersList || []).length} pedido(s) vinculados
+                      </span>
+                    </div>
                   </div>
+                  <span className="font-mono font-black text-sm sm:text-base text-emerald-900 shrink-0">
+                    {statement.liquido.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                  </span>
                 </div>
-                <span className="font-mono font-black text-sm sm:text-base text-amber-900 shrink-0">
-                  {statement.totalBruto.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                </span>
-              </div>
+              ) : (
+                <div className="bg-amber-100 border border-amber-300/80 rounded-2xl p-4 text-amber-950 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                  <div className="flex items-center gap-2.5">
+                    <AlertCircle size={20} className="text-amber-700 shrink-0" />
+                    <div>
+                      <span className="text-xs sm:text-sm font-black uppercase tracking-wide block">
+                        TOTAL A RECEBER ATÉ {statement.limiteNotaFiscalStr}
+                      </span>
+                      <span className="text-[10px] text-amber-800 font-bold">
+                        Documento: {statement.rpaNumber} • {(statement.ordersList || []).length} pedido(s) apurado(s)
+                      </span>
+                    </div>
+                  </div>
+                  <span className="font-mono font-black text-sm sm:text-base text-amber-900 shrink-0">
+                    {statement.totalBruto.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                  </span>
+                </div>
+              )}
 
               {/* Linhas Discriminatórias Fiscais */}
               <div className="space-y-2 text-xs md:text-sm">
@@ -871,20 +890,22 @@ export default function AffiliateFinancialSummary() {
               <div className="bg-white rounded-3xl border border-slate-200 shadow-xl p-6 md:p-8 space-y-6">
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-slate-100">
                   <div className="flex items-center gap-3">
-                    <div className="size-11 rounded-2xl bg-amber-500 text-white flex items-center justify-center shadow-md">
-                      <Clock size={22} />
+                    <div className={`size-11 rounded-2xl ${statement.isPaid ? 'bg-emerald-600' : 'bg-amber-500'} text-white flex items-center justify-center shadow-md`}>
+                      {statement.isPaid ? <CheckCircle2 size={22} /> : <Clock size={22} />}
                     </div>
                     <div>
                       <div className="flex items-center gap-2">
                         <h3 className="text-lg font-black text-midnight uppercase tracking-tight">
-                          Competência Atual em Aberto ({monthLabel})
+                          {statement.isPaid ? `Competência Quitada & Paga (${monthLabel})` : `Competência Atual em Aberto (${monthLabel})`}
                         </h3>
-                        <span className="px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-900 text-[10px] font-mono font-black">
+                        <span className={`px-2.5 py-0.5 rounded-full ${statement.isPaid ? 'bg-emerald-100 text-emerald-900' : 'bg-amber-100 text-amber-900'} text-[10px] font-mono font-black`}>
                           {statement.rpaNumber}
                         </span>
                       </div>
                       <p className="text-xs text-slate-400 font-bold uppercase tracking-wider mt-0.5">
-                        Apuração em andamento para quitação dia {statement.previsaoPagamentoStr}
+                        {statement.isPaid 
+                          ? 'Pagamento quitado e creditado na chave PIX cadastrada'
+                          : `Apuração em andamento para quitação dia ${statement.previsaoPagamentoStr}`}
                       </p>
                     </div>
                   </div>
@@ -913,11 +934,15 @@ export default function AffiliateFinancialSummary() {
                     <span className="text-[10px] text-slate-500 font-bold">Apurados no período</span>
                   </div>
                   <div className="p-4 bg-emerald-50 rounded-2xl border border-emerald-200">
-                    <span className="text-[10px] text-emerald-700 uppercase font-bold block">Líquido Previsto</span>
+                    <span className="text-[10px] text-emerald-700 uppercase font-bold block">
+                      {statement.isPaid ? 'Líquido Pago' : 'Líquido Previsto'}
+                    </span>
                     <span className="font-mono font-black text-emerald-700 text-lg block mt-1">
                       {statement.liquido.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                     </span>
-                    <span className="text-[10px] text-emerald-600 font-bold">PIX em {statement.previsaoPagamentoStr}</span>
+                    <span className="text-[10px] text-emerald-600 font-bold">
+                      {statement.isPaid ? 'Creditado via PIX' : `PIX em ${statement.previsaoPagamentoStr}`}
+                    </span>
                   </div>
                 </div>
 

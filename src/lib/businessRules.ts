@@ -4161,56 +4161,33 @@ export const businessRules = {
     let allRpas: RPAReceipt[] = [];
     const rpaMap = new Map<string, RPAReceipt>();
 
-    // 1. Busca do banco de dados (Supabase affiliate_invoices)
+    // 1. Busca quitações registradas no Supabase (profiles.description) - 100% permanente e resiliente
     try {
-      let query = supabase.from('affiliate_invoices').select('*');
-      if (userId) query = query.eq('profile_id', userId);
-      if (referenceMonth) query = query.eq('reference_month', referenceMonth);
-      const { data, error } = await query;
+      let profQuery = supabase.from('profiles').select('id, full_name, description');
+      if (userId) profQuery = profQuery.eq('id', userId);
+      const { data: profs } = await profQuery;
 
-      if (!error && data && data.length > 0) {
-        data.forEach((inv: any) => {
-          let meta: any = {};
-          if (inv.rejection_reason) {
-            try {
-              meta = JSON.parse(inv.rejection_reason);
-            } catch (e) {}
-          }
-
-          const isRpa =
-            inv.file_url === 'RPA_RECEIPT' ||
-            (inv.invoice_number && inv.invoice_number.startsWith('RPA-')) ||
-            meta.type === 'rpa_receipt' ||
-            meta.status === 'quitado' ||
-            meta.status === 'ciente_previsao' ||
-            inv.invoice_link === 'quitado' ||
-            inv.invoice_link === 'ciente_previsao';
-
-          if (isRpa) {
-            const rawStatus = meta.status || inv.invoice_link;
-            const status: 'pendente_previsao' | 'ciente_previsao' | 'pago_aguardando_quitacao' | 'quitado' =
-              rawStatus === 'quitado' || inv.status === 'approved'
-                ? 'quitado'
-                : rawStatus === 'ciente_previsao'
-                ? 'ciente_previsao'
-                : rawStatus === 'pago_aguardando_quitacao'
-                ? 'pago_aguardando_quitacao'
-                : 'pendente_previsao';
-
-            const key = `${inv.profile_id}_${inv.reference_month}`;
+      (profs || []).forEach((p: any) => {
+        const desc = p.description || '';
+        const quitadoMatches = desc.matchAll(/\[RPA_QUITADO:([0-9]{4}-[0-9]{2})(?::([^\]]*))?\]/g);
+        for (const m of quitadoMatches) {
+          const refM = m[1];
+          const acceptedAt = m[2] || new Date().toISOString();
+          if (!referenceMonth || referenceMonth === refM) {
+            const key = `${p.id}_${refM}`;
             rpaMap.set(key, {
-              id: meta.rpa_id || `rpa-${inv.reference_month}-${inv.profile_id.slice(0, 8)}`,
-              rpa_number: inv.invoice_number || `RPA-${inv.reference_month.replace('-', '')}-${inv.profile_id.slice(0, 4).toUpperCase()}`,
-              profile_id: inv.profile_id,
-              reference_month: inv.reference_month,
-              month_label: meta.month_label || '',
-              created_at: inv.created_at,
-              status: status,
-              previsao_accepted_at: meta.previsao_accepted_at || (status === 'ciente_previsao' || status === 'quitado' ? inv.created_at : null),
-              quitacao_accepted_at: meta.quitacao_accepted_at || (status === 'quitado' ? (inv.updated_at || inv.created_at) : null),
-              beneficiary: meta.beneficiary || {},
-              company: meta.company || {},
-              financial: meta.financial || {
+              id: `rpa-${refM}-${p.id.slice(0, 8)}`,
+              rpa_number: `RPA-${refM.replace('-', '')}-${p.id.slice(0, 4).toUpperCase()}`,
+              profile_id: p.id,
+              reference_month: refM,
+              month_label: '',
+              created_at: acceptedAt,
+              status: 'quitado',
+              quitacao_accepted_at: acceptedAt,
+              previsao_accepted_at: acceptedAt,
+              beneficiary: { name: p.full_name || 'Afiliado', cpf: '', pix_key: '', pix_type: 'CPF' },
+              company: { name: 'SERVIÇOS URBANOS INTERMEDIAÇÃO DE NEGÓCIOS LTDA', cnpj: '58.490.123/0001-45', address: '', city_state: '', activity: '' },
+              financial: {
                 rede_mmn: 0,
                 rede_g0: 0,
                 rede_g1: 0,
@@ -4219,16 +4196,115 @@ export const businessRules = {
                 vendas_revendedor: 0,
                 cashback_mensal: 0,
                 cashback_anual: 0,
-                bruto_total: Number(inv.amount_gross || 0),
+                bruto_total: 0,
                 deducao_inss: 0,
                 deducao_irrf: 0,
-                liquido_total: Number(inv.amount_gross || 0),
+                liquido_total: 0,
                 payment_forecast_date: ''
               },
-              legal_disclaimer: meta.legal_disclaimer || '',
-              ordersList: meta.ordersList || [],
-              ordersBreakdown: meta.ordersBreakdown || []
+              legal_disclaimer: ''
             });
+          }
+        }
+
+        const previsaoMatches = desc.matchAll(/\[RPA_PREVISAO:([0-9]{4}-[0-9]{2})(?::([^\]]*))?\]/g);
+        for (const m of previsaoMatches) {
+          const refM = m[1];
+          const acceptedAt = m[2] || new Date().toISOString();
+          const key = `${p.id}_${refM}`;
+          if ((!referenceMonth || referenceMonth === refM) && !rpaMap.has(key)) {
+            rpaMap.set(key, {
+              id: `rpa-${refM}-${p.id.slice(0, 8)}`,
+              rpa_number: `RPA-${refM.replace('-', '')}-${p.id.slice(0, 4).toUpperCase()}`,
+              profile_id: p.id,
+              reference_month: refM,
+              month_label: '',
+              created_at: acceptedAt,
+              status: 'ciente_previsao',
+              previsao_accepted_at: acceptedAt,
+              beneficiary: { name: p.full_name || 'Afiliado', cpf: '', pix_key: '', pix_type: 'CPF' },
+              company: { name: 'SERVIÇOS URBANOS INTERMEDIAÇÃO DE NEGÓCIOS LTDA', cnpj: '58.490.123/0001-45', address: '', city_state: '', activity: '' },
+              financial: {
+                rede_mmn: 0,
+                rede_g0: 0,
+                rede_g1: 0,
+                rede_g2: 0,
+                rede_g3: 0,
+                vendas_revendedor: 0,
+                cashback_mensal: 0,
+                cashback_anual: 0,
+                bruto_total: 0,
+                deducao_inss: 0,
+                deducao_irrf: 0,
+                liquido_total: 0,
+                payment_forecast_date: ''
+              },
+              legal_disclaimer: ''
+            });
+          }
+        }
+      });
+    } catch (e) {
+      console.warn('Erro ao verificar status RPA no perfil:', e);
+    }
+
+    // 2. Busca do banco de dados (Supabase affiliate_invoices)
+    try {
+      let query = supabase.from('affiliate_invoices').select('*');
+      if (userId) query = query.eq('profile_id', userId);
+      if (referenceMonth) query = query.eq('reference_month', referenceMonth);
+      const { data, error } = await query;
+
+      if (!error && data && data.length > 0) {
+        data.forEach((inv: any) => {
+          const isRpa =
+            inv.file_url === 'RPA_RECEIPT' ||
+            (inv.invoice_number && inv.invoice_number.startsWith('RPA-')) ||
+            inv.invoice_link === 'quitado' ||
+            inv.invoice_link === 'ciente_previsao' ||
+            inv.status === 'approved';
+
+          if (isRpa) {
+            const status: 'pendente_previsao' | 'ciente_previsao' | 'pago_aguardando_quitacao' | 'quitado' =
+              inv.invoice_link === 'quitado' || inv.status === 'approved'
+                ? 'quitado'
+                : inv.invoice_link === 'ciente_previsao'
+                ? 'ciente_previsao'
+                : 'pendente_previsao';
+
+            const key = `${inv.profile_id}_${inv.reference_month}`;
+            const existingInMap = rpaMap.get(key);
+            if (!existingInMap || status === 'quitado') {
+              rpaMap.set(key, {
+                id: `rpa-${inv.reference_month}-${inv.profile_id.slice(0, 8)}`,
+                rpa_number: inv.invoice_number || `RPA-${inv.reference_month.replace('-', '')}-${inv.profile_id.slice(0, 4).toUpperCase()}`,
+                profile_id: inv.profile_id,
+                reference_month: inv.reference_month,
+                month_label: '',
+                created_at: inv.created_at,
+                status: status,
+                previsao_accepted_at: status === 'ciente_previsao' || status === 'quitado' ? inv.created_at : null,
+                quitacao_accepted_at: status === 'quitado' ? (inv.updated_at || inv.created_at) : null,
+                beneficiary: existingInMap?.beneficiary || { name: 'Afiliado', cpf: '', pix_key: '', pix_type: 'CPF' },
+                company: { name: 'SERVIÇOS URBANOS INTERMEDIAÇÃO DE NEGÓCIOS LTDA', cnpj: '58.490.123/0001-45', address: '', city_state: '', activity: '' },
+                financial: existingInMap?.financial || {
+                  rede_mmn: 0,
+                  rede_g0: 0,
+                  rede_g1: 0,
+                  rede_g2: 0,
+                  rede_g3: 0,
+                  vendas_revendedor: 0,
+                  cashback_mensal: 0,
+                  cashback_anual: 0,
+                  bruto_total: Number(inv.amount_gross || 0),
+                  deducao_inss: 0,
+                  deducao_irrf: 0,
+                  liquido_total: Number(inv.amount_gross || 0),
+                  payment_forecast_date: ''
+                },
+                legal_disclaimer: ''
+              });
+            }
           }
         });
       }
@@ -4526,21 +4602,36 @@ export const businessRules = {
 
   acceptRPAPrevisao: async (rpaId: string, userId: string): Promise<RPAReceipt | null> => {
     try {
+      const refMonth = rpaId.match(/rpa-([0-9]{4}-[0-9]{2})/)?.[1];
       const allRpas: RPAReceipt[] = JSON.parse(localStorage.getItem('all_rpa_receipts') || '[]');
-      let target = allRpas.find(r => (r.id === rpaId || r.profile_id === userId));
+      let target = allRpas.find(r => r.id === rpaId || (r.profile_id === userId && (!refMonth || r.reference_month === refMonth)));
       
       // Se não estiver no local, gera/recupera
       if (!target) {
-        target = await businessRules.generateMonthlyRPAReceipt(userId);
+        target = await businessRules.generateMonthlyRPAReceipt(userId, refMonth);
       }
       if (!target) return null;
 
       target.status = target.status === 'quitado' ? 'quitado' : 'ciente_previsao';
       target.previsao_accepted_at = new Date().toISOString();
 
-      localStorage.setItem('all_rpa_receipts', JSON.stringify(allRpas));
+      const filtered = allRpas.filter(r => !(r.profile_id === userId && r.reference_month === target!.reference_month));
+      filtered.push(target);
+      localStorage.setItem('all_rpa_receipts', JSON.stringify(filtered));
 
-      // Persiste no Supabase para nunca mais perder em novos logins/dispositivos
+      // 1. Persiste de forma resiliente no Supabase (profiles.description)
+      try {
+        const { data: p } = await supabase.from('profiles').select('description').eq('id', userId).single();
+        let desc = p?.description || '';
+        const tag = `[RPA_PREVISAO:${target.reference_month}:${target.previsao_accepted_at}]`;
+        desc = desc.replace(new RegExp(`\\[RPA_PREVISAO:${target.reference_month}:?[^\\]]*\\]`, 'g'), '').trim();
+        desc = `${desc} ${tag}`.trim();
+        await supabase.from('profiles').update({ description: desc }).eq('id', userId);
+      } catch (profErr) {
+        console.warn('Erro ao salvar ciência de RPA no perfil:', profErr);
+      }
+
+      // 2. Persiste no Supabase affiliate_invoices
       try {
         await supabase
           .from('affiliate_invoices')
@@ -4555,18 +4646,7 @@ export const businessRules = {
           invoice_number: target.rpa_number,
           invoice_link: 'ciente_previsao',
           file_url: 'RPA_RECEIPT',
-          status: 'pending',
-          rejection_reason: JSON.stringify({
-            type: 'rpa_receipt',
-            status: 'ciente_previsao',
-            previsao_accepted_at: target.previsao_accepted_at,
-            rpa_id: target.id,
-            rpa_number: target.rpa_number,
-            month_label: target.month_label,
-            financial: target.financial,
-            beneficiary: target.beneficiary,
-            company: target.company
-          })
+          status: 'pending'
         };
 
         await supabase.from('affiliate_invoices').insert([payload]);
@@ -4583,12 +4663,13 @@ export const businessRules = {
 
   acceptRPAQuitacao: async (rpaId: string, userId: string): Promise<RPAReceipt | null> => {
     try {
+      const refMonth = rpaId.match(/rpa-([0-9]{4}-[0-9]{2})/)?.[1];
       const allRpas: RPAReceipt[] = JSON.parse(localStorage.getItem('all_rpa_receipts') || '[]');
-      let target = allRpas.find(r => (r.id === rpaId || r.profile_id === userId));
+      let target = allRpas.find(r => r.id === rpaId || (r.profile_id === userId && (!refMonth || r.reference_month === refMonth)));
       
       // Se não estiver no local, gera/recupera
       if (!target) {
-        target = await businessRules.generateMonthlyRPAReceipt(userId);
+        target = await businessRules.generateMonthlyRPAReceipt(userId, refMonth);
       }
       if (!target) return null;
 
@@ -4599,7 +4680,20 @@ export const businessRules = {
       filtered.push(target);
       localStorage.setItem('all_rpa_receipts', JSON.stringify(filtered));
 
-      // Persiste no Supabase para nunca mais perder em novos logins/dispositivos
+      // 1. Persiste de forma permanente no Supabase (profiles.description)
+      try {
+        const { data: p } = await supabase.from('profiles').select('description').eq('id', userId).single();
+        let desc = p?.description || '';
+        const tag = `[RPA_QUITADO:${target.reference_month}:${target.quitacao_accepted_at}]`;
+        desc = desc.replace(new RegExp(`\\[RPA_QUITADO:${target.reference_month}:?[^\\]]*\\]`, 'g'), '').trim();
+        desc = desc.replace(new RegExp(`\\[RPA_PREVISAO:${target.reference_month}:?[^\\]]*\\]`, 'g'), '').trim();
+        desc = `${desc} ${tag}`.trim();
+        await supabase.from('profiles').update({ description: desc }).eq('id', userId);
+      } catch (profErr) {
+        console.warn('Erro ao salvar quitação de RPA no perfil:', profErr);
+      }
+
+      // 2. Persiste no Supabase affiliate_invoices
       try {
         await supabase
           .from('affiliate_invoices')
@@ -4614,27 +4708,31 @@ export const businessRules = {
           invoice_number: target.rpa_number,
           invoice_link: 'quitado',
           file_url: 'RPA_RECEIPT',
-          status: 'approved',
-          rejection_reason: JSON.stringify({
-            type: 'rpa_receipt',
-            status: 'quitado',
-            quitacao_accepted_at: target.quitacao_accepted_at,
-            previsao_accepted_at: target.previsao_accepted_at,
-            rpa_id: target.id,
-            rpa_number: target.rpa_number,
-            month_label: target.month_label,
-            financial: target.financial,
-            beneficiary: target.beneficiary,
-            company: target.company
-          })
+          status: 'approved'
         };
 
-        const { error: insErr } = await supabase.from('affiliate_invoices').insert([payload]);
-        if (insErr) {
-          console.error('Erro ao persistir quitação de RPA no Supabase:', insErr);
-        }
+        await supabase.from('affiliate_invoices').insert([payload]);
       } catch (dbErr) {
         console.warn('Persistência no Supabase em fallback:', dbErr);
+      }
+
+      // 3. Arquiva automaticamente na Pasta de Pagamentos Mensais
+      try {
+        await businessRules.archiveMonthlyPayout({
+          refMonth: target.reference_month,
+          userId: userId,
+          userName: target.beneficiary?.name || '',
+          pixKey: target.beneficiary?.pix_key || '',
+          totalBruto: target.financial.bruto_total,
+          inss: target.financial.deducao_inss,
+          irrf: target.financial.deducao_irrf,
+          liquido: target.financial.liquido_total,
+          paidAt: target.quitacao_accepted_at,
+          rpaNumber: target.rpa_number,
+          status: 'Pago'
+        });
+      } catch (archErr) {
+        console.warn('Erro ao arquivar pagamento mensal:', archErr);
       }
 
       return target;
@@ -6558,17 +6656,105 @@ export const businessRules = {
     try {
       const targetMonth = typeof filter === 'string' ? filter : filter?.refMonth;
       const targetUserId = typeof filter === 'object' ? filter?.userId : undefined;
+      const archiveMap = new Map<string, any>();
+
+      // 1. Coleta itens arquivados do localStorage
       const allMonths: string[] = JSON.parse(localStorage.getItem('monthly_payout_archived_months') || '[]');
-      let allRecords: any[] = [];
       for (const m of allMonths) {
         if (targetMonth && targetMonth !== m) continue;
         const monthItems = JSON.parse(localStorage.getItem(`monthly_payout_archives_${m}`) || '[]');
-        allRecords.push(...monthItems);
+        monthItems.forEach((item: any) => {
+          const uId = item.userId || item.profile_id;
+          const refM = item.refMonth || m;
+          if (uId && refM) {
+            archiveMap.set(`${uId}_${refM}`, {
+              ...item,
+              userId: uId,
+              refMonth: refM,
+              paidAt: item.paidAt || new Date().toISOString()
+            });
+          }
+        });
       }
+
+      // 2. Coleta RPAs quitados de profiles.description
+      try {
+        let profQuery = supabase.from('profiles').select('id, full_name, cpf, cnpj, pix_key, pix_type, description');
+        if (targetUserId) profQuery = profQuery.eq('id', targetUserId);
+        const { data: profs } = await profQuery;
+
+        (profs || []).forEach((p: any) => {
+          const desc = p.description || '';
+          const quitadoMatches = desc.matchAll(/\[RPA_QUITADO:([0-9]{4}-[0-9]{2})(?::([^\]]*))?\]/g);
+          for (const match of quitadoMatches) {
+            const refM = match[1];
+            const paidAt = match[2] || new Date().toISOString();
+            if (!targetMonth || targetMonth === refM) {
+              const key = `${p.id}_${refM}`;
+              if (!archiveMap.has(key)) {
+                archiveMap.set(key, {
+                  userId: p.id,
+                  affiliateName: p.full_name || 'Afiliado Autônomo',
+                  userName: p.full_name || 'Afiliado Autônomo',
+                  cpfCnpj: p.cpf || p.cnpj || '',
+                  pixKey: p.pix_key || '',
+                  refMonth: refM,
+                  periodoStr: `01.${refM.split('-')[1]} a 30.${refM.split('-')[1]}.${refM.split('-')[0]}`,
+                  previsaoPagamentoStr: `10.${String(Number(refM.split('-')[1]) === 12 ? 1 : Number(refM.split('-')[1]) + 1).padStart(2, '0')}.${Number(refM.split('-')[1]) === 12 ? Number(refM.split('-')[0]) + 1 : refM.split('-')[0]}`,
+                  paidAt: paidAt,
+                  rpaNumber: `RPA Nº ${refM.replace('-', '')}-${(p.cpf ? p.cpf.replace(/\D/g, '').slice(-4) : p.id.slice(0, 4)).toUpperCase()}`,
+                  status: 'Pago',
+                  totalBruto: 0,
+                  liquido: 0
+                });
+              }
+            }
+          }
+        });
+      } catch (e) {
+        console.warn('Erro ao ler perfis para arquivos:', e);
+      }
+
+      // 3. Coleta transações de saque/payout concluídas
+      try {
+        let txQuery = supabase.from('transactions').select('*').in('type', ['withdrawal', 'payout']).in('status', ['completed', 'pago']);
+        if (targetUserId) txQuery = txQuery.eq('profile_id', targetUserId);
+        const { data: paidTxs } = await txQuery;
+
+        (paidTxs || []).forEach((tx: any) => {
+          const txRefMonth = (tx.description || '').match(/([0-9]{4}-[0-9]{2})/)?.[1] || 
+                             (tx.created_at ? tx.created_at.slice(0, 7) : '');
+          if (txRefMonth && (!targetMonth || targetMonth === txRefMonth)) {
+            const key = `${tx.profile_id}_${txRefMonth}`;
+            const existing = archiveMap.get(key);
+            if (existing) {
+              if (!existing.liquido || existing.liquido <= 0) existing.liquido = Number(tx.amount || 0);
+              if (!existing.totalBruto || existing.totalBruto <= 0) existing.totalBruto = Number(tx.amount || 0);
+              existing.receiptUrl = tx.receipt_url || existing.receiptUrl;
+            } else {
+              archiveMap.set(key, {
+                userId: tx.profile_id,
+                affiliateName: 'Afiliado',
+                userName: 'Afiliado',
+                refMonth: txRefMonth,
+                paidAt: tx.created_at,
+                liquido: Number(tx.amount || 0),
+                totalBruto: Number(tx.amount || 0),
+                status: 'Pago',
+                receiptUrl: tx.receipt_url || null
+              });
+            }
+          }
+        });
+      } catch (e) {
+        console.warn('Erro ao ler transações pagas:', e);
+      }
+
+      let allRecords = Array.from(archiveMap.values());
       if (targetUserId) {
         allRecords = allRecords.filter(r => r.userId === targetUserId);
       }
-      return allRecords.sort((a, b) => new Date(b.paidAt).getTime() - new Date(a.paidAt).getTime());
+      return allRecords.sort((a, b) => new Date(b.paidAt || 0).getTime() - new Date(a.paidAt || 0).getTime());
     } catch (e) {
       console.error('Erro ao buscar arquivos de pagamento:', e);
       return [];
@@ -6735,10 +6921,27 @@ export const businessRules = {
     const payoutTx = (userTxs || []).find(t => {
       if (t.type !== 'withdrawal' && t.type !== 'payout') return false;
       const desc = t.description || '';
-      return desc.includes(refMonthStr) || desc.includes(`Ref: ${String(month).padStart(2, '0')}/${selYear}`);
+      return (t.status === 'completed' || t.status === 'pago') && (desc.includes(refMonthStr) || desc.includes(`Ref: ${String(month).padStart(2, '0')}/${selYear}`));
     });
 
-    const isPaid = !!archivedRecord || (payoutTx && payoutTx.status === 'completed');
+    const profDesc = profile?.description || '';
+    const hasRpaQuitadoTag = profDesc.includes(`[RPA_QUITADO:${refMonthStr}`);
+
+    let isDbInvoiceQuitado = false;
+    try {
+      const { data: dbInvs } = await supabase
+        .from('affiliate_invoices')
+        .select('id, status, invoice_link, created_at, updated_at')
+        .eq('profile_id', userId)
+        .eq('reference_month', refMonthStr)
+        .maybeSingle();
+      if (dbInvs && (dbInvs.status === 'approved' || dbInvs.invoice_link === 'quitado')) {
+        isDbInvoiceQuitado = true;
+      }
+    } catch (e) {}
+
+    const isPaid = !!archivedRecord || !!payoutTx || hasRpaQuitadoTag || isDbInvoiceQuitado;
+    const paidAt = archivedRecord?.paidAt || payoutTx?.created_at || (hasRpaQuitadoTag ? (profDesc.match(new RegExp(`\\[RPA_QUITADO:${refMonthStr}:([^\\]]*)\\]`))?.[1] || new Date().toISOString()) : null);
 
     // Formatação do Número do RPA Oficial
     const rpaSuffix = (profile?.cpf ? profile.cpf.replace(/\D/g, '').slice(-4) : userId.slice(0, 4)).toUpperCase();

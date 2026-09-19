@@ -362,6 +362,18 @@ export default function RPAReceiptModal({
                 </p>
               </div>
             </div>
+          ) : rpa.status === 'ciente_previsao' ? (
+            <div className="bg-emerald-500/10 border border-emerald-500/20 p-5 rounded-2xl flex items-start gap-3.5">
+              <CheckCircle2 size={20} className="text-emerald-400 shrink-0 mt-0.5" />
+              <div>
+                <h4 className="text-sm font-bold text-emerald-300 uppercase tracking-wide">
+                  Ciência do RPA Registrada ({rpa.month_label})
+                </h4>
+                <p className="text-xs text-emerald-200/80 mt-1 leading-relaxed">
+                  Você já registrou sua ciência quanto aos valores calculados deste recibo. O crédito está programado para depósito na sua chave PIX até o dia 10.
+                </p>
+              </div>
+            </div>
           ) : mode === 'previsao' ? (
             <div className="bg-indigo-500/10 border border-indigo-500/20 p-5 rounded-2xl flex items-start gap-3.5">
               <Calendar size={20} className="text-indigo-400 shrink-0 mt-0.5" />
@@ -612,14 +624,31 @@ export default function RPAReceiptModal({
                 Confirmo Recebimento & Dou Quitação
               </button>
             ) : mode === 'previsao' ? (
-              <button
-                onClick={handleAcceptPrevisao}
-                disabled={submitting}
-                className="w-full sm:w-auto px-8 py-3.5 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white rounded-2xl font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2 shadow-xl shadow-indigo-600/30 transition-all cursor-pointer"
-              >
-                {submitting ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={18} />}
-                Estou Ciente do Valor a Receber no Dia 10
-              </button>
+              rpa.status === 'ciente_previsao' || rpa.status === 'quitado' ? (
+                <div className="flex items-center gap-3">
+                  <span className="px-5 py-3 rounded-2xl bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 text-xs font-black uppercase tracking-wider flex items-center gap-2 shadow-lg shadow-indigo-600/10">
+                    <CheckCircle2 size={16} className="text-emerald-400" />
+                    Ciência já Registrada
+                  </span>
+                  {onClose && (
+                    <button
+                      onClick={onClose}
+                      className="px-6 py-3 bg-white/10 hover:bg-white/20 text-white rounded-2xl font-bold text-xs uppercase tracking-wider transition-all cursor-pointer"
+                    >
+                      Fechar
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <button
+                  onClick={handleAcceptPrevisao}
+                  disabled={submitting}
+                  className="w-full sm:w-auto px-8 py-3.5 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white rounded-2xl font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2 shadow-xl shadow-indigo-600/30 transition-all cursor-pointer"
+                >
+                  {submitting ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={18} />}
+                  Estou Ciente do Valor a Receber no Dia 10
+                </button>
+              )
             ) : (
               onClose && (
                 <button

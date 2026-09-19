@@ -1418,12 +1418,23 @@ export const businessRules = {
 
       // Apuração consolidada líquida do mês atual (MMN + Revendedor com apuração fiscal oficial para o Dia 10)
       let consolidatedLiquid = availableBalance;
+      let isCurrentMonthPaid = false;
+      let activeNetworkBalance = availableBalance;
+
       try {
         const currentYear = now.getFullYear();
         const currentMonth = now.getMonth() + 1;
         const stmt = await businessRules.getConsolidatedFinancialStatement(userId, currentYear, currentMonth);
-        if (stmt && typeof stmt.liquido === 'number') {
-          consolidatedLiquid = stmt.liquido;
+        if (stmt) {
+          isCurrentMonthPaid = !!stmt.isPaid;
+          if (isCurrentMonthPaid) {
+            // Se o mês já foi baixado/quitado, o saldo a receber em aberto é zero
+            consolidatedLiquid = 0;
+            activeNetworkBalance = 0;
+          } else if (typeof stmt.liquido === 'number') {
+            consolidatedLiquid = stmt.liquido;
+            activeNetworkBalance = stmt.brutoMensalMmn;
+          }
         }
       } catch (e) {
         console.warn('Erro ao obter demonstrativo consolidado para getAffiliateStats:', e);
@@ -1437,7 +1448,8 @@ export const businessRules = {
         maintenanceFee: 0,
         totalEarnings,
         availableBalance: consolidatedLiquid,
-        networkAvailableBalance: availableBalance,
+        networkAvailableBalance: activeNetworkBalance,
+        isCurrentMonthPaid,
         cashbackBalance: 0,
         consumptionCount,
         isEligible: !!hasActiveSub,

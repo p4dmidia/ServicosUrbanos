@@ -207,16 +207,20 @@ export default function AffiliateDashboard() {
             className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm hover:shadow-xl transition-all"
           >
             <div className="flex justify-between items-start mb-4">
-              <div className="p-3 rounded-2xl bg-indigo-50 text-indigo-600">
+              <div className={`p-3 rounded-2xl ${stats.isCurrentMonthPaid ? 'bg-emerald-50 text-emerald-600' : 'bg-indigo-50 text-indigo-600'}`}>
                 <Wallet size={22} />
               </div>
-              <div className="flex items-center gap-1 text-[10px] font-black text-indigo-500 bg-indigo-50 px-2 py-1 rounded-lg uppercase">
-                 Saldo Mensal
+              <div className={`flex items-center gap-1 text-[10px] font-black px-2 py-1 rounded-lg uppercase ${
+                stats.isCurrentMonthPaid ? 'text-emerald-600 bg-emerald-50' : 'text-indigo-500 bg-indigo-50'
+              }`}>
+                 {stats.isCurrentMonthPaid ? 'Quitado / Pago' : 'Saldo Mensal'}
               </div>
             </div>
-            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Disponível Dia 10</p>
-            <h3 className="text-2xl font-black text-midnight tracking-tighter">
-              R$ {stats.availableBalance.toFixed(2)}
+            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">
+              {stats.isCurrentMonthPaid ? 'Repasse Efetivado' : 'Disponível Dia 10'}
+            </p>
+            <h3 className={`text-2xl font-black tracking-tighter ${stats.isCurrentMonthPaid ? 'text-emerald-600' : 'text-midnight'}`}>
+              R$ {Number(stats.availableBalance || 0).toFixed(2)}
             </h3>
           </motion.div>
 

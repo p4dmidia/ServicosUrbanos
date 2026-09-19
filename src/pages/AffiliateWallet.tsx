@@ -322,10 +322,12 @@ export default function AffiliateWallet() {
               </div>
 
               <div className="relative z-10 my-auto">
-                 <h2 className="text-2xl sm:text-3xl font-black tracking-tighter italic uppercase mb-1">R$ {Number(stats.networkAvailableBalance ?? stats.monthlyBonus ?? stats.availableBalance).toFixed(2)}</h2>
+                 <h2 className="text-2xl sm:text-3xl font-black tracking-tighter italic uppercase mb-1">R$ {Number(stats.networkAvailableBalance || 0).toFixed(2)}</h2>
                  <div className="flex items-center gap-1.5">
-                    <div className="size-1.5 bg-emerald-500 rounded-full animate-pulse"></div>
-                    <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Pagamentos Todo Dia 10</p>
+                    <div className={`size-1.5 rounded-full ${stats.isCurrentMonthPaid ? 'bg-emerald-400' : 'bg-emerald-500 animate-pulse'}`}></div>
+                    <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">
+                       {stats.isCurrentMonthPaid ? 'Repasse do Mês Quitado' : 'Pagamentos Todo Dia 10'}
+                    </p>
                  </div>
               </div>
 

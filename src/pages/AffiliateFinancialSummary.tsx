@@ -283,7 +283,8 @@ export default function AffiliateFinancialSummary() {
   return (
     <AffiliateLayout 
       title="Financeiro Resumo"
-      customBalance={statement?.liquido}
+      customBalance={statement?.isPaid ? 0 : statement?.liquido}
+      customBalanceLabel={statement?.isPaid ? "Competência Quitada" : "Saldo Mensal Disponível (Dia 10)"}
     >
       <div className="p-6 md:p-10 lg:p-12 space-y-8 max-w-5xl mx-auto">
         

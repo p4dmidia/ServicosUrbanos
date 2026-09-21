@@ -1417,9 +1417,16 @@ export const businessRules = {
       }
 
       // Apuração consolidada líquida do mês atual (MMN + Revendedor com apuração fiscal oficial para o Dia 10)
+      const pendingMonthlyMmn = transactions
+        .filter(t => t.type === 'commission' && 
+                !isResellerTx(t) &&
+                t.description?.includes('Mensal') && 
+                t.status === 'pending')
+        .reduce((acc, t) => acc + Number(t.amount || 0), 0);
+
       let consolidatedLiquid = availableBalance;
       let isCurrentMonthPaid = false;
-      let activeNetworkBalance = availableBalance;
+      let activeNetworkBalance = pendingMonthlyMmn > 0 ? pendingMonthlyMmn : availableBalance;
 
       try {
         const currentYear = now.getFullYear();
@@ -1427,13 +1434,16 @@ export const businessRules = {
         const stmt = await businessRules.getConsolidatedFinancialStatement(userId, currentYear, currentMonth);
         if (stmt) {
           isCurrentMonthPaid = !!stmt.isPaid;
-          if (isCurrentMonthPaid) {
-            // Se o mês já foi baixado/quitado, o saldo a receber em aberto é zero
+          if (stmt.pendingBruto !== undefined && stmt.pendingBruto > 0) {
+            isCurrentMonthPaid = false;
+            consolidatedLiquid = stmt.pendingLiquido !== undefined ? stmt.pendingLiquido : stmt.liquido;
+            activeNetworkBalance = stmt.pendingBrutoMensalMmn !== undefined ? stmt.pendingBrutoMensalMmn : (pendingMonthlyMmn > 0 ? pendingMonthlyMmn : stmt.brutoMensalMmn);
+          } else if (isCurrentMonthPaid) {
             consolidatedLiquid = 0;
             activeNetworkBalance = 0;
           } else if (typeof stmt.liquido === 'number') {
             consolidatedLiquid = stmt.liquido;
-            activeNetworkBalance = stmt.brutoMensalMmn;
+            activeNetworkBalance = pendingMonthlyMmn > 0 ? pendingMonthlyMmn : stmt.brutoMensalMmn;
           }
         }
       } catch (e) {
@@ -1852,15 +1862,10 @@ export const businessRules = {
           .replace(/Comiss[aã]o Mensal/gi, 'Cashback Mensal')
           .replace(/Comiss[aã]o Anual/gi, 'Cashback Anual');
 
-        const txDate = new Date(t.created_at);
-        const txMonthStr = `${txDate.getFullYear()}-${String(txDate.getMonth() + 1).padStart(2, '0')}`;
-        const isMonthPaid = quitadoMonths.has(txMonthStr);
-        const isMensal = desc.toLowerCase().includes('mensal');
-
         let displayStatus = 'Pendente';
         if (order?.status === 'Cancelado' || t.status === 'cancelled' || t.status === 'failed') {
           displayStatus = 'Cancelado';
-        } else if (t.status === 'completed' || t.status === 'pago' || (isMonthPaid && isMensal)) {
+        } else if (t.status === 'completed' || t.status === 'pago') {
           displayStatus = 'Pago';
         } else {
           displayStatus = 'Pendente';
@@ -4574,18 +4579,31 @@ export const businessRules = {
       // Verifica status existente no histórico consolidado de RPAs (banco de dados + storage)
       const existingRpas = await (businessRules as any).getAffiliateRPAReceipts(userId, targetRefMonth);
       const existing = existingRpas.find((r: any) => r.reference_month === targetRefMonth);
-      const existingStatus = existing ? existing.status : (liquidoTotal > 0 ? 'pendente_previsao' : 'sem_movimentacao');
+      
+      const hasPendingComms = commissions.some(t => t.status === 'pending');
+      const isPriorQuitado = existing && existing.status === 'quitado';
+
+      let rpaId = existing?.id || `rpa-${targetRefMonth}-${userId.slice(0, 8)}`;
+      let rpaNum = existing?.rpa_number || `RPA-${targetRefMonth.replace('-', '')}-${userId.slice(0, 4).toUpperCase()}`;
+      let rpaStatus = existing ? existing.status : (liquidoTotal > 0 ? 'pendente_previsao' : 'sem_movimentacao');
+
+      // Se o RPA anterior já foi quitado, mas existem novas comissões pendentes, abre RPA complementar -02
+      if (isPriorQuitado && hasPendingComms) {
+        rpaId = `rpa-${targetRefMonth}-02-${userId.slice(0, 8)}`;
+        rpaNum = `RPA-${targetRefMonth.replace('-', '')}-${userId.slice(0, 4).toUpperCase()}-02`;
+        rpaStatus = 'pendente_previsao';
+      }
 
       const rpaRecord: RPAReceipt = {
-        id: existing?.id || `rpa-${targetRefMonth}-${userId.slice(0, 8)}`,
-        rpa_number: existing?.rpa_number || `RPA-${targetRefMonth.replace('-', '')}-${userId.slice(0, 4).toUpperCase()}`,
+        id: rpaId,
+        rpa_number: rpaNum,
         profile_id: userId,
         reference_month: targetRefMonth,
         month_label: monthLabel.charAt(0).toUpperCase() + monthLabel.slice(1),
-        created_at: existing?.created_at || new Date().toISOString(),
-        status: existingStatus,
-        previsao_accepted_at: existing?.previsao_accepted_at || null,
-        quitacao_accepted_at: existing?.quitacao_accepted_at || null,
+        created_at: (isPriorQuitado && hasPendingComms) ? new Date().toISOString() : (existing?.created_at || new Date().toISOString()),
+        status: rpaStatus,
+        previsao_accepted_at: (isPriorQuitado && hasPendingComms) ? null : (existing?.previsao_accepted_at || null),
+        quitacao_accepted_at: (isPriorQuitado && hasPendingComms) ? null : (existing?.quitacao_accepted_at || null),
         beneficiary: {
           name: profile.full_name || 'Afiliado Autônomo',
           cpf: profile.cpf || 'Não informado',
@@ -4631,7 +4649,7 @@ export const businessRules = {
       // Salva no storage local se houver movimentação ou status atualizado
       try {
         const allRpas = JSON.parse(localStorage.getItem('all_rpa_receipts') || '[]');
-        const filtered = allRpas.filter((r: any) => !(r.profile_id === userId && r.reference_month === targetRefMonth));
+        const filtered = allRpas.filter((r: any) => !(r.id === rpaRecord.id || (r.profile_id === userId && r.reference_month === targetRefMonth && r.status !== 'quitado')));
         filtered.push(rpaRecord);
         localStorage.setItem('all_rpa_receipts', JSON.stringify(filtered));
       } catch (e) {}
@@ -5313,6 +5331,10 @@ export const businessRules = {
         t.type === 'withdrawal' && (t.status === 'completed' || t.status === 'pago')
       );
 
+      const pendingMonthlyReseller = monthCommissions
+        .filter(t => t.description?.includes('Mensal') && (t.status === 'pending'))
+        .reduce((acc, t) => acc + Number(t.amount || 0), 0);
+
       const monthlyEarned = monthCommissions
         .filter(t => t.description?.includes('Mensal'))
         .reduce((acc, t) => acc + Number(t.amount || 0), 0);
@@ -5321,7 +5343,8 @@ export const businessRules = {
         .filter(t => t.description?.includes('Mensal'))
         .reduce((acc, t) => acc + Math.abs(Number(t.amount || 0)), 0);
 
-      const monthlyToReceive = Math.max(0, monthlyEarned - monthlyPaid);
+      const calculatedDiff = Math.max(0, monthlyEarned - monthlyPaid);
+      const monthlyToReceive = pendingMonthlyReseller > 0 ? pendingMonthlyReseller : calculatedDiff;
 
       const weeklyEarned = 0;
       const weeklyPaid = 0;
@@ -6901,6 +6924,7 @@ export const businessRules = {
       return d >= startDate && d <= endDate && desc.includes('mensal');
     });
     const brutoMensalMmn = monthMmnCommissions.reduce((sum, t) => sum + Number(t.amount || 0), 0);
+    const pendingBrutoMensalMmn = monthMmnCommissions.filter(t => t.status === 'pending').reduce((sum, t) => sum + Number(t.amount || 0), 0);
 
     // 2. Cashback Mensal do Revendedor
     const monthResellerCommissions = (userTxs || []).filter(t => {
@@ -6912,6 +6936,7 @@ export const businessRules = {
       return d >= startDate && d <= endDate && desc.includes('mensal');
     });
     const brutoMensalRevendedor = monthResellerCommissions.reduce((sum, t) => sum + Number(t.amount || 0), 0);
+    const pendingBrutoMensalRevendedor = monthResellerCommissions.filter(t => t.status === 'pending').reduce((sum, t) => sum + Number(t.amount || 0), 0);
 
     // 3. Cashback Anual AFILIADO (MMN)
     const annualStartDate = new Date(nextYear - 1, 11, 1, 0, 0, 0, 0); // 01/12/(ano-1)
@@ -6928,6 +6953,7 @@ export const businessRules = {
     });
     const acumuladoAnualMmn = allAnnualMmnComms.reduce((sum, t) => sum + Number(t.amount || 0), 0);
     const brutoAnualMmn = isDecemberAnnualPayout ? acumuladoAnualMmn : 0;
+    const pendingAnnualMmn = isDecemberAnnualPayout ? allAnnualMmnComms.filter(t => t.status === 'pending').reduce((sum, t) => sum + Number(t.amount || 0), 0) : 0;
     const annualMmnComms = isDecemberAnnualPayout ? allAnnualMmnComms : [];
 
     // 4. Cashback Anual REVENDEDOR
@@ -6941,15 +6967,17 @@ export const businessRules = {
     });
     const acumuladoAnualRevendedor = allAnnualResellerComms.reduce((sum, t) => sum + Number(t.amount || 0), 0);
     const brutoAnualRevendedor = isDecemberAnnualPayout ? acumuladoAnualRevendedor : 0;
+    const pendingAnnualReseller = isDecemberAnnualPayout ? allAnnualResellerComms.filter(t => t.status === 'pending').reduce((sum, t) => sum + Number(t.amount || 0), 0) : 0;
     const annualResellerComms = isDecemberAnnualPayout ? allAnnualResellerComms : [];
 
-    // Total Bruto (soma o mensal e, se for pagamento de Dezembro, inclui o bônus anual)
+    // Total Bruto geral e pendente
     const totalBruto = brutoMensalMmn + brutoMensalRevendedor + brutoAnualMmn + brutoAnualRevendedor;
+    const pendingBruto = pendingBrutoMensalMmn + pendingBrutoMensalRevendedor + pendingAnnualMmn + pendingAnnualReseller;
 
-    // Apuração Fiscal Oficial
-    const tax = calculateCumulativeTaxDeductions({
-      payoutBruto: totalBruto,
-      isPjUser: isPJ
+    const hasPendingCommissions = pendingBruto > 0 || (userTxs || []).some(t => {
+      if (t.type !== 'commission' || t.status !== 'pending') return false;
+      const d = new Date(t.created_at);
+      return d >= startDate && d <= endDate && (t.description || '').toLowerCase().includes('mensal');
     });
 
     const refMonthStr = `${selYear}-${String(month).padStart(2, '0')}`;
@@ -6981,12 +7009,27 @@ export const businessRules = {
       }
     } catch (e) {}
 
-    const isPaid = !!archivedRecord || !!payoutTx || hasRpaQuitadoTag || isDbInvoiceQuitado;
-    const paidAt = archivedRecord?.paidAt || payoutTx?.created_at || (hasRpaQuitadoTag ? (profDesc.match(new RegExp(`\\[RPA_QUITADO:${refMonthStr}:([^\\]]*)\\]`))?.[1] || new Date().toISOString()) : null);
+    const isPriorPaid = !!archivedRecord || !!payoutTx || hasRpaQuitadoTag || isDbInvoiceQuitado;
+    const isPaid = !hasPendingCommissions && isPriorPaid;
+    const paidAt = isPaid ? (archivedRecord?.paidAt || payoutTx?.created_at || (hasRpaQuitadoTag ? (profDesc.match(new RegExp(`\\[RPA_QUITADO:${refMonthStr}:([^\\]]*)\\]`))?.[1] || new Date().toISOString()) : null)) : null;
 
-    // Formatação do Número do RPA Oficial
+    // Se houver parcelas pendentes com pagamentos anteriores, ajusta o número do RPA para complementar (ex: -02)
+    const isSupplemental = hasPendingCommissions && isPriorPaid;
     const rpaSuffix = (profile?.cpf ? profile.cpf.replace(/\D/g, '').slice(-4) : userId.slice(0, 4)).toUpperCase();
-    const rpaNumber = `RPA Nº ${selYear}${String(month).padStart(2, '0')}-${rpaSuffix}`;
+    const rpaNumber = isSupplemental 
+      ? `RPA Nº ${selYear}${String(month).padStart(2, '0')}-${rpaSuffix}-02`
+      : `RPA Nº ${selYear}${String(month).padStart(2, '0')}-${rpaSuffix}`;
+
+    // Valor bruto a pagar/exibir no demonstrativo atual
+    const displayBruto = hasPendingCommissions ? pendingBruto : totalBruto;
+    const displayMensalMmn = hasPendingCommissions ? pendingBrutoMensalMmn : brutoMensalMmn;
+    const displayMensalRevendedor = hasPendingCommissions ? pendingBrutoMensalRevendedor : brutoMensalRevendedor;
+
+    // Apuração Fiscal Oficial sobre o valor em aberto (ou total quitado)
+    const tax = calculateCumulativeTaxDeductions({
+      payoutBruto: displayBruto,
+      isPjUser: isPJ
+    });
 
     // Agrupa todas as comissões apuradas nesta competência
     const allPeriodComms = [
@@ -7058,6 +7101,8 @@ export const businessRules = {
         if (pctMatch) commissionRate = parseFloat(pctMatch[1]);
       }
 
+      const itemStatus = (t.status === 'completed' || t.status === 'pago') ? 'Pago' : 'Pendente';
+
       return {
         id: t.id,
         orderId: rawOrderId || t.id,
@@ -7069,6 +7114,7 @@ export const businessRules = {
         orderAmount: orderAmount,
         commissionRate: commissionRate,
         commissionAmount: commissionAmount,
+        status: itemStatus,
         description: desc
       };
     });
@@ -7091,21 +7137,27 @@ export const businessRules = {
       limiteNotaFiscalStr,
       isDecemberAnnualPayout,
       annualPeriodLabel,
-      brutoMensalMmn,
-      brutoMensalRevendedor,
+      brutoMensalMmn: displayMensalMmn,
+      brutoMensalRevendedor: displayMensalRevendedor,
+      pendingBrutoMensalMmn,
+      pendingBrutoMensalRevendedor,
+      pendingBruto,
+      pendingLiquido: tax.liquido,
       brutoAnualMmn,
       brutoAnualRevendedor,
       acumuladoAnualMmn,
       acumuladoAnualRevendedor,
       totalAcumuladoAnual: acumuladoAnualMmn + acumuladoAnualRevendedor,
-      totalBruto,
+      totalBruto: displayBruto,
+      totalHistoricoBruto: totalBruto,
+      isSupplemental,
       inss: tax.inss,
-      baseIrrf: tax.irrfBase || Math.max(0, totalBruto - tax.inss),
+      baseIrrf: tax.irrfBase || Math.max(0, displayBruto - tax.inss),
       irrf: tax.irrf,
       liquido: tax.liquido,
       isPaid,
       receiptUrl: archivedRecord?.receiptUrl || payoutTx?.receipt_url || null,
-      paidAt: archivedRecord?.paidAt || payoutTx?.created_at || null,
+      paidAt: isPaid ? (archivedRecord?.paidAt || payoutTx?.created_at || null) : null,
       refMonth: refMonthStr
     };
   },

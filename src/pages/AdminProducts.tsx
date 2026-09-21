@@ -406,6 +406,7 @@ export default function AdminProducts() {
                       <option value="trimestral" className="bg-[#0a0e17]">trimestral</option>
                       <option value="semestral" className="bg-[#0a0e17]">semestral</option>
                       <option value="anual" className="bg-[#0a0e17]">anual</option>
+                      <option value="revendedor" className="bg-[#0a0e17]">revendedor (Regional)</option>
                     </select>
                   </div>
 

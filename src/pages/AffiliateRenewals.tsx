@@ -18,10 +18,11 @@ export default function AffiliateRenewals() {
 
   const getPlanOrder = (item: any): number => {
     const p = ((item?.plan_type || item?.name || '') + '').toLowerCase();
-    if (p.includes('anual') || p.includes('ano') || p.includes('365')) return 1;
-    if (p.includes('semestral') || p.includes('180')) return 2;
-    if (p.includes('trimestral') || p.includes('90')) return 3;
-    if (p.includes('mensal') || p.includes('30')) return 4;
+    if (p.includes('revendedor') || p.includes('regional')) return 1;
+    if (p.includes('anual') || p.includes('ano') || p.includes('365')) return 2;
+    if (p.includes('semestral') || p.includes('180')) return 3;
+    if (p.includes('trimestral') || p.includes('90')) return 4;
+    if (p.includes('mensal') || p.includes('30')) return 5;
     return 99;
   };
 
@@ -31,16 +32,19 @@ export default function AffiliateRenewals() {
 
   const getPlanDrawInfo = (planType?: string) => {
     const p = (planType || '').toLowerCase();
+    if (p.includes('revendedor') || p.includes('regional')) {
+      return '365 dias • 48 sorteios + Licença Regional';
+    }
     if (p.includes('anual') || p.includes('ano')) {
-      return '365 dias  48 sorteios';
+      return '365 dias • 48 sorteios';
     }
     if (p.includes('semestral')) {
-      return '180 dias  24 sorteios';
+      return '180 dias • 24 sorteios';
     }
     if (p.includes('trimestral')) {
-      return '90 dias  12 sorteios';
+      return '90 dias • 12 sorteios';
     }
-    return '30 dias  4 sorteios';
+    return '30 dias • 4 sorteios';
   };
 
   const loadData = async () => {
@@ -70,14 +74,22 @@ export default function AffiliateRenewals() {
 
       setStats(statsData);
 
-      const rawPlans = plansRes.data && plansRes.data.length > 0 ? plansRes.data : [
-        { id: 'sub-anual', name: 'Plano Anual', price: 99, duration_days: 365, plan_type: 'anual', image: '🏆' },
+      const officialDefaults = [
+        { id: 'sub-revendedor', name: 'Revendedor Regional', price: 85, duration_days: 365, plan_type: 'revendedor', image: '👑' },
+        { id: 'sub-anual', name: 'Plano Anual', price: 72, duration_days: 365, plan_type: 'anual', image: '🏆' },
         { id: 'sub-semestral', name: 'Plano Semestral', price: 45, duration_days: 180, plan_type: 'semestral', image: '💼' },
         { id: 'sub-trimestral', name: 'Plano Trimestral', price: 25, duration_days: 90, plan_type: 'trimestral', image: '🌟' },
-        { id: 'sub-mensal', name: 'Plano Mensal', price: 20, duration_days: 30, plan_type: 'mensal', image: '📅' }
+        { id: 'sub-mensal', name: 'Plano Mensal', price: 10, duration_days: 30, plan_type: 'mensal', image: '📅' }
       ];
 
-      const sortedPlans = [...rawPlans].sort((a, b) => getPlanOrder(a) - getPlanOrder(b));
+      const dbPlans = plansRes.data || [];
+      const mergedPlansMap = new Map();
+      officialDefaults.forEach(def => mergedPlansMap.set(def.plan_type, def));
+      dbPlans.forEach(p => {
+        if (p.plan_type) mergedPlansMap.set(p.plan_type, p);
+      });
+
+      const sortedPlans = Array.from(mergedPlansMap.values()).sort((a, b) => getPlanOrder(a) - getPlanOrder(b));
 
       setPlansList(sortedPlans);
 
@@ -257,7 +269,7 @@ export default function AffiliateRenewals() {
             <div className="space-y-6">
               <h3 className="text-lg font-black text-midnight tracking-tighter uppercase italic">Planos de Renovação Disponíveis</h3>
               
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">
                 {(() => {
                   const rWindow = getRenewalWindow(subscription);
                   const isWindowOpen = !rWindow || rWindow.isWindowOpen || !stats?.isEligible;
@@ -265,6 +277,7 @@ export default function AffiliateRenewals() {
                   const isButtonDisabled = Boolean(stats?.isEligible && !isWindowOpen);
 
                   return orderedPlans.map((planItem) => {
+                    const isLeader = planItem.plan_type === 'revendedor';
                     const isPopular = planItem.plan_type === 'trimestral' && !stats?.isEligible;
                     const isActivePlan = subscription && subscription.plan_type === planItem.plan_type && stats?.isEligible;
                     const isEcon = !stats?.isEligible && planItem.plan_type === 'anual';
@@ -273,19 +286,27 @@ export default function AffiliateRenewals() {
                       <div 
                         key={planItem.id} 
                         className={`bg-white border rounded-[2rem] p-6 flex flex-col justify-between gap-6 hover:shadow-xl hover:shadow-primary-blue/5 transition-all relative overflow-hidden ${
-                          isActivePlan || isEcon
+                          isActivePlan
                             ? 'border-emerald-500 ring-2 ring-emerald-500/10' 
-                            : isPopular 
-                              ? 'border-primary-blue ring-2 ring-primary-blue/10' 
-                              : 'border-slate-200'
+                            : isLeader
+                              ? 'border-amber-500 ring-2 ring-amber-500/15 bg-gradient-to-b from-amber-50/20 to-white'
+                              : isEcon
+                                ? 'border-emerald-500/60 ring-2 ring-emerald-500/10'
+                                : isPopular 
+                                  ? 'border-primary-blue ring-2 ring-primary-blue/10' 
+                                  : 'border-slate-200'
                         }`}
                       >
                         {isActivePlan ? (
                           <span className="absolute top-0 right-0 bg-emerald-500 text-white text-[9px] font-black uppercase tracking-widest px-3 py-1 rounded-bl-xl leading-none">
                             Ativo
                           </span>
+                        ) : isLeader ? (
+                          <span className="absolute top-0 right-0 bg-gradient-to-r from-amber-500 to-amber-600 text-white text-[9px] font-black uppercase tracking-widest px-3 py-1 rounded-bl-xl leading-none shadow-sm flex items-center gap-1">
+                            👑 Líder Regional
+                          </span>
                         ) : isEcon ? (
-                          <span className="absolute top-0 right-0 bg-emerald-500 text-white text-[9px] font-black uppercase tracking-widest px-3 py-1 rounded-bl-xl leading-none">
+                          <span className="absolute top-0 right-0 bg-emerald-600 text-white text-[9px] font-black uppercase tracking-widest px-3 py-1 rounded-bl-xl leading-none">
                             Mais Econômico
                           </span>
                         ) : isPopular ? (
@@ -298,13 +319,17 @@ export default function AffiliateRenewals() {
                           <div>
                             <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-0.5">Opção</span>
                             <h4 className="text-base font-black text-midnight uppercase tracking-tight leading-tight">{planItem.name}</h4>
-                            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-100 border border-slate-200/80 text-xs font-black text-slate-700 mt-2">
-                              <Gift size={13} className="text-primary-blue shrink-0" />
+                            <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-black mt-2 ${
+                              isLeader 
+                                ? 'bg-amber-100/80 border border-amber-300/80 text-amber-900' 
+                                : 'bg-slate-100 border border-slate-200/80 text-slate-700'
+                            }`}>
+                              <Gift size={13} className={isLeader ? 'text-amber-600 shrink-0' : 'text-primary-blue shrink-0'} />
                               <span>{getPlanDrawInfo(planItem.plan_type)}</span>
                             </div>
                           </div>
                           <div className="pt-1">
-                            <span className="text-2xl font-black text-primary-blue font-mono">
+                            <span className={`text-2xl font-black font-mono ${isLeader ? 'text-amber-600' : 'text-primary-blue'}`}>
                               R$ {Number(planItem.price).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                             </span>
                             <span className="text-[10px] text-slate-400 font-bold uppercase ml-1">
@@ -320,18 +345,22 @@ export default function AffiliateRenewals() {
                             className={`w-full py-3.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all active:scale-[0.98] ${
                               isButtonDisabled
                                 ? 'bg-slate-100 border border-slate-200 text-slate-400 cursor-not-allowed opacity-60'
-                                : isActivePlan || isEcon
+                                : isActivePlan
                                   ? 'bg-emerald-500 text-white hover:bg-emerald-600 shadow-lg shadow-emerald-500/15 cursor-pointer' 
-                                  : isPopular 
-                                    ? 'bg-primary-blue text-white hover:bg-primary-blue/90 shadow-lg shadow-primary-blue/15 cursor-pointer' 
-                                    : 'bg-slate-50 border border-slate-200 text-slate-600 hover:bg-slate-100 hover:text-midnight cursor-pointer'
+                                  : isLeader
+                                    ? 'bg-gradient-to-r from-amber-500 to-amber-600 text-white hover:from-amber-600 hover:to-amber-700 shadow-lg shadow-amber-500/20 cursor-pointer'
+                                    : isEcon
+                                      ? 'bg-emerald-600 text-white hover:bg-emerald-700 shadow-lg shadow-emerald-600/15 cursor-pointer'
+                                      : isPopular 
+                                        ? 'bg-primary-blue text-white hover:bg-primary-blue/90 shadow-lg shadow-primary-blue/15 cursor-pointer' 
+                                        : 'bg-slate-50 border border-slate-200 text-slate-600 hover:bg-slate-100 hover:text-midnight cursor-pointer'
                             }`}
                           >
                             {isActivePlan 
                               ? (isButtonDisabled ? 'Plano em Vigência' : 'Renovar Plano') 
                               : stats?.isEligible 
-                                ? (isButtonDisabled ? 'Bloqueado até Renovação' : 'Trocar para este') 
-                                : 'Escolher Plano'}
+                                ? (isButtonDisabled ? 'Bloqueado até Renovação' : (isLeader ? 'Tornar-se Revendedor' : 'Trocar para este')) 
+                                : (isLeader ? 'Ativar Revendedor' : 'Escolher Plano')}
                           </button>
                           {isButtonDisabled && rWindow && (
                             <p className="text-[8px] text-slate-400 font-bold text-center mt-1">
@@ -339,8 +368,8 @@ export default function AffiliateRenewals() {
                             </p>
                           )}
                           {!isButtonDisabled && stats?.isEligible && (
-                            <p className="text-[8px] text-emerald-600 font-bold text-center mt-1">
-                              {isActivePlan ? 'Renovação antecipada liberada' : 'Migração de plano liberada'}
+                            <p className={`text-[8px] font-bold text-center mt-1 ${isLeader ? 'text-amber-600' : 'text-emerald-600'}`}>
+                              {isActivePlan ? 'Renovação antecipada liberada' : (isLeader ? 'Licença Regional exclusiva' : 'Migração de plano liberada')}
                             </p>
                           )}
                         </div>

@@ -128,7 +128,26 @@ export default function AdminOrders() {
         .select('*')
         .or(`order_id.eq.${order.id},description.ilike.%#${order.id}%`);
 
-      // 3. Buscar perfil do G1 (patrocinador direto)
+      // 3. Buscar perfil da Empresa (Matriz) para fallback
+      const EMPRESA_ID = '194e5265-cdb6-431f-9f77-8888b1ee74ae';
+      let empresaProfile: any = null;
+      try {
+        const { data: pEmp } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', EMPRESA_ID)
+          .maybeSingle();
+        empresaProfile = pEmp || {
+          id: EMPRESA_ID,
+          full_name: 'Serviços Urbanos Tecnologia Ltda.',
+          cpf: '54795377000103',
+          pix_key: '71992102042',
+          city: 'Salvador',
+          state: 'BA'
+        };
+      } catch (e) {}
+
+      // 4. Buscar perfil do G1 (patrocinador direto)
       let g1Profile: any = null;
       if (customer?.referred_by) {
         const { data: pG1 } = await supabase
@@ -138,10 +157,11 @@ export default function AdminOrders() {
           .maybeSingle();
         g1Profile = pG1;
       }
+      if (!g1Profile) g1Profile = empresaProfile;
 
-      // 4. Buscar perfil do G2 (upline do G1)
+      // 5. Buscar perfil do G2 (upline do G1)
       let g2Profile: any = null;
-      if (g1Profile?.referred_by) {
+      if (g1Profile && g1Profile.id !== EMPRESA_ID && g1Profile.referred_by) {
         const { data: pG2 } = await supabase
           .from('profiles')
           .select('*')
@@ -149,14 +169,15 @@ export default function AdminOrders() {
           .maybeSingle();
         g2Profile = pG2;
       }
+      if (!g2Profile) g2Profile = empresaProfile;
 
-      // 5. Buscar perfil do Revendedor Regional
+      // 6. Buscar perfil do Revendedor Regional
       const resellerTx = (transactions || []).find(t => 
         t.description?.includes('Revendedor') || t.description?.includes('Regional')
       );
       let resellerId = order.reseller_id || customer?.reseller_id || resellerTx?.profile_id;
-      if (!resellerId && g1Profile?.role === 'regional_reseller') resellerId = g1Profile.id;
-      if (!resellerId && g2Profile?.role === 'regional_reseller') resellerId = g2Profile.id;
+      if (!resellerId && g1Profile?.role === 'regional_reseller' && g1Profile.id !== EMPRESA_ID) resellerId = g1Profile.id;
+      if (!resellerId && g2Profile?.role === 'regional_reseller' && g2Profile.id !== EMPRESA_ID) resellerId = g2Profile.id;
 
       let resellerProfile: any = null;
       if (resellerId) {
@@ -167,15 +188,25 @@ export default function AdminOrders() {
           .maybeSingle();
         resellerProfile = pReseller;
       }
+      if (!resellerProfile) resellerProfile = empresaProfile;
 
-      // 6. Calcular comissões pagas por perfil (Mensal 4% + Anual 2%)
-      const calcCommissions = (profileId?: string, isReseller: boolean = false) => {
+      // 7. Calcular comissões pagas por perfil e por nível
+      const calcCommissions = (profileId?: string, levelTag: 'G0' | 'G1' | 'G2' | 'REG' = 'G0') => {
         if (!profileId || !transactions) return { mensal: 0, anual: 0, total: 0 };
         const userTxs = transactions.filter(t => {
-          if (t.profile_id !== profileId) return false;
-          const isRes = t.description?.includes('Revendedor') || t.description?.includes('Regional');
-          return isReseller ? isRes : !isRes;
+          const desc = t.description || '';
+          if (levelTag === 'REG') {
+            return (desc.includes('Revendedor') || desc.includes('Regional') || desc.includes('(REG)')) && (t.profile_id === profileId || t.profile_id === EMPRESA_ID);
+          } else if (levelTag === 'G0') {
+            return (desc.includes('G0') || desc.includes('Titular') || desc.includes('Próprio')) && t.profile_id === profileId;
+          } else if (levelTag === 'G1') {
+            return desc.includes('G1') && (t.profile_id === profileId || (profileId === EMPRESA_ID && t.profile_id === EMPRESA_ID));
+          } else if (levelTag === 'G2') {
+            return desc.includes('G2') && (t.profile_id === profileId || (profileId === EMPRESA_ID && t.profile_id === EMPRESA_ID));
+          }
+          return t.profile_id === profileId;
         });
+
         const mensal = userTxs
           .filter(t => t.description?.includes('Mensal'))
           .reduce((acc, t) => acc + Number(t.amount || 0), 0);
@@ -191,10 +222,10 @@ export default function AdminOrders() {
         };
       };
 
-      const g0Commissions = calcCommissions(customer?.id, false);
-      const g1Commissions = calcCommissions(g1Profile?.id, false);
-      const g2Commissions = calcCommissions(g2Profile?.id, false);
-      const resellerCommissions = calcCommissions(resellerProfile?.id, true);
+      const g0Commissions = calcCommissions(customer?.id, 'G0');
+      const g1Commissions = calcCommissions(g1Profile?.id, 'G1');
+      const g2Commissions = calcCommissions(g2Profile?.id, 'G2');
+      const resellerCommissions = calcCommissions(resellerProfile?.id, 'REG');
 
       // Localização exata de onde foi o pedido
       const location = {
@@ -941,7 +972,7 @@ export default function AdminOrders() {
 
                         <div>
                           <p className="text-sm font-black text-white">
-                            {orderDetails?.g1?.profile?.full_name || 'Sic Comercio / Matriz (Sem Indicador Direto)'}
+                            {orderDetails?.g1?.profile?.full_name || 'Serviços Urbanos Tecnologia Ltda. (Empresa)'}
                           </p>
                           <p className="text-[11px] text-slate-400 font-mono">CPF: {orderDetails?.g1?.profile?.cpf || '---'}</p>
                           <p className="text-[11px] text-slate-500 font-mono">PIX: {orderDetails?.g1?.profile?.pix_key || '---'}</p>
@@ -982,7 +1013,7 @@ export default function AdminOrders() {
 
                         <div>
                           <p className="text-sm font-black text-white">
-                            {orderDetails?.g2?.profile?.full_name || 'Sic Comercio / Matriz (Sem Upline G2)'}
+                            {orderDetails?.g2?.profile?.full_name || 'Serviços Urbanos Tecnologia Ltda. (Empresa)'}
                           </p>
                           <p className="text-[11px] text-slate-400 font-mono">CPF: {orderDetails?.g2?.profile?.cpf || '---'}</p>
                           <p className="text-[11px] text-slate-500 font-mono">PIX: {orderDetails?.g2?.profile?.pix_key || '---'}</p>
@@ -1023,7 +1054,7 @@ export default function AdminOrders() {
 
                         <div>
                           <p className="text-sm font-black text-white">
-                            {orderDetails?.reseller?.profile?.full_name || 'Sic Comercio / Sem Revendedor Regional'}
+                            {orderDetails?.reseller?.profile?.full_name || 'Serviços Urbanos Tecnologia Ltda. (Empresa)'}
                           </p>
                           <p className="text-[11px] text-slate-400 font-mono">
                             CPF: {orderDetails?.reseller?.profile?.cpf || '---'} • Polo: {orderDetails?.reseller?.profile?.city || 'Regional'}

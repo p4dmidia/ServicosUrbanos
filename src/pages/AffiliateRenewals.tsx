@@ -265,119 +265,202 @@ export default function AffiliateRenewals() {
               </div>
             )}
 
-            {/* Painel de Renovação */}
-            <div className="space-y-6">
-              <h3 className="text-lg font-black text-midnight tracking-tighter uppercase italic">Planos de Renovação Disponíveis</h3>
-              
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">
-                {(() => {
-                  const rWindow = getRenewalWindow(subscription);
-                  const isWindowOpen = !rWindow || rWindow.isWindowOpen || !stats?.isEligible;
-                  // Bloqueia compra apenas se a conta for elegível e ainda não estiver no mês de cobrança da renovação
-                  const isButtonDisabled = Boolean(stats?.isEligible && !isWindowOpen);
+            {/* Painel de Renovação e Licenciamento */}
+            <div className="space-y-8">
+              {(() => {
+                const rWindow = getRenewalWindow(subscription);
+                const isWindowOpen = !rWindow || rWindow.isWindowOpen || !stats?.isEligible;
+                const isButtonDisabled = Boolean(stats?.isEligible && !isWindowOpen);
 
-                  return orderedPlans.map((planItem) => {
-                    const isLeader = planItem.plan_type === 'revendedor';
-                    const isPopular = planItem.plan_type === 'trimestral' && !stats?.isEligible;
-                    const isActivePlan = subscription && subscription.plan_type === planItem.plan_type && stats?.isEligible;
-                    const isEcon = !stats?.isEligible && planItem.plan_type === 'anual';
-                    
-                    return (
-                      <div 
-                        key={planItem.id} 
-                        className={`bg-white border rounded-[2rem] p-6 flex flex-col justify-between gap-6 hover:shadow-xl hover:shadow-primary-blue/5 transition-all relative overflow-hidden ${
-                          isActivePlan
-                            ? 'border-emerald-500 ring-2 ring-emerald-500/10' 
-                            : isLeader
-                              ? 'border-amber-500 ring-2 ring-amber-500/15 bg-gradient-to-b from-amber-50/20 to-white'
-                              : isEcon
-                                ? 'border-emerald-500/60 ring-2 ring-emerald-500/10'
-                                : isPopular 
-                                  ? 'border-primary-blue ring-2 ring-primary-blue/10' 
-                                  : 'border-slate-200'
-                        }`}
-                      >
-                        {isActivePlan ? (
-                          <span className="absolute top-0 right-0 bg-emerald-500 text-white text-[9px] font-black uppercase tracking-widest px-3 py-1 rounded-bl-xl leading-none">
-                            Ativo
-                          </span>
-                        ) : isLeader ? (
-                          <span className="absolute top-0 right-0 bg-gradient-to-r from-amber-500 to-amber-600 text-white text-[9px] font-black uppercase tracking-widest px-3 py-1 rounded-bl-xl leading-none shadow-sm flex items-center gap-1">
-                            👑 Líder Regional
-                          </span>
-                        ) : isEcon ? (
-                          <span className="absolute top-0 right-0 bg-emerald-600 text-white text-[9px] font-black uppercase tracking-widest px-3 py-1 rounded-bl-xl leading-none">
-                            Mais Econômico
-                          </span>
-                        ) : isPopular ? (
-                          <span className="absolute top-0 right-0 bg-primary-blue text-white text-[9px] font-black uppercase tracking-widest px-3 py-1 rounded-bl-xl leading-none">
-                            Popular
-                          </span>
-                        ) : null}
+                const resellerPlan = orderedPlans.find(p => p.plan_type === 'revendedor');
+                const regularPlans = orderedPlans.filter(p => p.plan_type !== 'revendedor');
 
-                        <div className="space-y-2">
-                          <div>
-                            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-0.5">Opção</span>
-                            <h4 className="text-base font-black text-midnight uppercase tracking-tight leading-tight">{planItem.name}</h4>
-                            <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-black mt-2 ${
-                              isLeader 
-                                ? 'bg-amber-100/80 border border-amber-300/80 text-amber-900' 
-                                : 'bg-slate-100 border border-slate-200/80 text-slate-700'
-                            }`}>
-                              <Gift size={13} className={isLeader ? 'text-amber-600 shrink-0' : 'text-primary-blue shrink-0'} />
-                              <span>{getPlanDrawInfo(planItem.plan_type)}</span>
+                const isResellerActive = subscription && subscription.plan_type === 'revendedor' && stats?.isEligible;
+
+                return (
+                  <>
+                    {/* 1. CARD HERO DESTAQUE: REVENDEDOR REGIONAL */}
+                    {resellerPlan && (
+                      <div className="relative overflow-hidden rounded-[2.5rem] border-2 border-amber-400/70 bg-gradient-to-br from-amber-500/10 via-amber-500/5 to-transparent p-7 md:p-9 shadow-xl shadow-amber-500/5 transition-all">
+                        <div className="absolute top-0 right-0 bg-gradient-to-r from-amber-500 to-amber-600 text-white text-[10px] font-black uppercase tracking-widest px-4 py-1.5 rounded-bl-2xl shadow-sm flex items-center gap-1.5">
+                          👑 Licença de Liderança Regional
+                        </div>
+
+                        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-8 mt-2">
+                          <div className="space-y-4 max-w-2xl">
+                            <div className="flex items-center gap-3">
+                              <div className="size-12 rounded-2xl bg-gradient-to-br from-amber-400 to-amber-600 text-white flex items-center justify-center font-black text-2xl shadow-lg shadow-amber-500/30 shrink-0">
+                                👑
+                              </div>
+                              <div>
+                                <span className="text-[10px] font-black text-amber-700 uppercase tracking-widest block">Nível Avançado</span>
+                                <h3 className="text-xl md:text-2xl font-black text-midnight uppercase tracking-tight leading-tight">
+                                  {resellerPlan.name}
+                                </h3>
+                              </div>
+                            </div>
+
+                            <p className="text-xs md:text-sm text-slate-600 font-medium leading-relaxed">
+                              Licença exclusiva para líderes e gestores regionais. Garante comissões de revendedor sobre todas as indicações e vendas da sua regional, além de participação completa nos sorteios semanais.
+                            </p>
+
+                            {/* Chips de Benefícios */}
+                            <div className="flex flex-wrap items-center gap-2 pt-1">
+                              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-100/80 border border-amber-300 text-amber-950 text-xs font-black">
+                                🏆 Comissão Regional (4% M + 2% A)
+                              </span>
+                              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 border border-slate-200 text-slate-700 text-xs font-black">
+                                🌐 Rede G0, G1 e G2
+                              </span>
+                              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 border border-slate-200 text-slate-700 text-xs font-black">
+                                🎁 48 Sorteios Semanais
+                              </span>
+                              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 border border-slate-200 text-slate-700 text-xs font-black">
+                                📅 365 Dias de Vigência
+                              </span>
                             </div>
                           </div>
-                          <div className="pt-1">
-                            <span className={`text-2xl font-black font-mono ${isLeader ? 'text-amber-600' : 'text-primary-blue'}`}>
-                              R$ {Number(planItem.price).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                            </span>
-                            <span className="text-[10px] text-slate-400 font-bold uppercase ml-1">
-                              / {planItem.duration_days} dias
-                            </span>
+
+                          {/* Preço e Botão */}
+                          <div className="flex flex-col sm:flex-row lg:flex-col items-start sm:items-center lg:items-end justify-between lg:justify-center gap-4 shrink-0 bg-white/80 backdrop-blur-sm p-6 rounded-3xl border border-amber-200/80 shadow-sm w-full lg:w-72">
+                            <div className="text-left lg:text-right">
+                              <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">Investimento Anual</span>
+                              <div className="flex items-baseline gap-1">
+                                <span className="text-3xl font-black text-amber-600 font-mono">
+                                  R$ {Number(resellerPlan.price).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                </span>
+                                <span className="text-[11px] text-slate-400 font-bold uppercase">/ ano</span>
+                              </div>
+                            </div>
+
+                            <button
+                              disabled={isButtonDisabled}
+                              onClick={() => handlePay(resellerPlan)}
+                              className={`w-full py-4 rounded-2xl text-xs font-black uppercase tracking-widest transition-all shadow-lg active:scale-[0.98] cursor-pointer ${
+                                isButtonDisabled
+                                  ? 'bg-slate-100 border border-slate-200 text-slate-400 cursor-not-allowed opacity-60'
+                                  : isResellerActive
+                                    ? 'bg-emerald-500 text-white hover:bg-emerald-600 shadow-emerald-500/20'
+                                    : 'bg-gradient-to-r from-amber-500 to-amber-600 text-white hover:from-amber-600 hover:to-amber-700 shadow-amber-500/25'
+                              }`}
+                            >
+                              {isResellerActive 
+                                ? (isButtonDisabled ? 'Licença em Vigência' : 'Renovar Licença') 
+                                : stats?.isEligible 
+                                  ? (isButtonDisabled ? 'Bloqueado até Renovação' : 'Tornar-se Revendedor') 
+                                  : 'Ativar Revendedor'}
+                            </button>
                           </div>
                         </div>
-
-                        <div className="space-y-2 w-full">
-                          <button
-                            disabled={isButtonDisabled}
-                            onClick={() => handlePay(planItem)}
-                            className={`w-full py-3.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all active:scale-[0.98] ${
-                              isButtonDisabled
-                                ? 'bg-slate-100 border border-slate-200 text-slate-400 cursor-not-allowed opacity-60'
-                                : isActivePlan
-                                  ? 'bg-emerald-500 text-white hover:bg-emerald-600 shadow-lg shadow-emerald-500/15 cursor-pointer' 
-                                  : isLeader
-                                    ? 'bg-gradient-to-r from-amber-500 to-amber-600 text-white hover:from-amber-600 hover:to-amber-700 shadow-lg shadow-amber-500/20 cursor-pointer'
-                                    : isEcon
-                                      ? 'bg-emerald-600 text-white hover:bg-emerald-700 shadow-lg shadow-emerald-600/15 cursor-pointer'
-                                      : isPopular 
-                                        ? 'bg-primary-blue text-white hover:bg-primary-blue/90 shadow-lg shadow-primary-blue/15 cursor-pointer' 
-                                        : 'bg-slate-50 border border-slate-200 text-slate-600 hover:bg-slate-100 hover:text-midnight cursor-pointer'
-                            }`}
-                          >
-                            {isActivePlan 
-                              ? (isButtonDisabled ? 'Plano em Vigência' : 'Renovar Plano') 
-                              : stats?.isEligible 
-                                ? (isButtonDisabled ? 'Bloqueado até Renovação' : (isLeader ? 'Tornar-se Revendedor' : 'Trocar para este')) 
-                                : (isLeader ? 'Ativar Revendedor' : 'Escolher Plano')}
-                          </button>
-                          {isButtonDisabled && rWindow && (
-                            <p className="text-[8px] text-slate-400 font-bold text-center mt-1">
-                              Disponível a partir de {rWindow.openDate.toLocaleDateString('pt-BR')}
-                            </p>
-                          )}
-                          {!isButtonDisabled && stats?.isEligible && (
-                            <p className={`text-[8px] font-bold text-center mt-1 ${isLeader ? 'text-amber-600' : 'text-emerald-600'}`}>
-                              {isActivePlan ? 'Renovação antecipada liberada' : (isLeader ? 'Licença Regional exclusiva' : 'Migração de plano liberada')}
-                            </p>
-                          )}
-                        </div>
                       </div>
-                    );
-                  });
-                })()}
-              </div>
+                    )}
+
+                    {/* 2. GRADE DE PLANOS AFILIADO PREMIUM (4 COLUNAS ESPAÇOSAS) */}
+                    <div className="space-y-4 pt-2">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                        <h3 className="text-base font-black text-midnight tracking-tight uppercase">
+                          Planos de Afiliado Premium (Consumo & Rede)
+                        </h3>
+                        <span className="text-[11px] font-bold text-slate-400 uppercase">
+                          Participe dos sorteios semanais e receba comissões de rede (G0, G1 e G2)
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                        {regularPlans.map((planItem) => {
+                          const isPopular = planItem.plan_type === 'trimestral' && !stats?.isEligible;
+                          const isActivePlan = subscription && subscription.plan_type === planItem.plan_type && stats?.isEligible;
+                          const isEcon = !stats?.isEligible && planItem.plan_type === 'anual';
+
+                          return (
+                            <div 
+                              key={planItem.id} 
+                              className={`bg-white border rounded-[2rem] p-6 flex flex-col justify-between gap-6 hover:shadow-xl hover:shadow-primary-blue/5 transition-all relative overflow-hidden ${
+                                isActivePlan
+                                  ? 'border-emerald-500 ring-2 ring-emerald-500/10' 
+                                  : isEcon
+                                    ? 'border-emerald-500/60 ring-2 ring-emerald-500/10'
+                                    : isPopular 
+                                      ? 'border-primary-blue ring-2 ring-primary-blue/10' 
+                                      : 'border-slate-200'
+                              }`}
+                            >
+                              {isActivePlan ? (
+                                <span className="absolute top-0 right-0 bg-emerald-500 text-white text-[9px] font-black uppercase tracking-widest px-3 py-1 rounded-bl-xl leading-none">
+                                  Ativo
+                                </span>
+                              ) : isEcon ? (
+                                <span className="absolute top-0 right-0 bg-emerald-600 text-white text-[9px] font-black uppercase tracking-widest px-3 py-1 rounded-bl-xl leading-none">
+                                  Mais Econômico
+                                </span>
+                              ) : isPopular ? (
+                                <span className="absolute top-0 right-0 bg-primary-blue text-white text-[9px] font-black uppercase tracking-widest px-3 py-1 rounded-bl-xl leading-none">
+                                  Popular
+                                </span>
+                              ) : null}
+
+                              <div className="space-y-3">
+                                <div>
+                                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-0.5">Opção</span>
+                                  <h4 className="text-base font-black text-midnight uppercase tracking-tight leading-tight">{planItem.name}</h4>
+                                  <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-slate-100 border border-slate-200/80 text-xs font-black text-slate-700 mt-2.5">
+                                    <Gift size={13} className="text-primary-blue shrink-0" />
+                                    <span>{getPlanDrawInfo(planItem.plan_type)}</span>
+                                  </div>
+                                </div>
+                                <div className="pt-2 border-t border-slate-100">
+                                  <div className="flex items-baseline gap-1">
+                                    <span className="text-2xl font-black text-primary-blue font-mono">
+                                      R$ {Number(planItem.price).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                    </span>
+                                    <span className="text-[10px] text-slate-400 font-bold uppercase">
+                                      / {planItem.duration_days} dias
+                                    </span>
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div className="space-y-2 w-full pt-2">
+                                <button
+                                  disabled={isButtonDisabled}
+                                  onClick={() => handlePay(planItem)}
+                                  className={`w-full py-3.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all active:scale-[0.98] cursor-pointer ${
+                                    isButtonDisabled
+                                      ? 'bg-slate-100 border border-slate-200 text-slate-400 cursor-not-allowed opacity-60'
+                                      : isActivePlan
+                                        ? 'bg-emerald-500 text-white hover:bg-emerald-600 shadow-lg shadow-emerald-500/15' 
+                                        : isEcon
+                                          ? 'bg-emerald-600 text-white hover:bg-emerald-700 shadow-lg shadow-emerald-600/15'
+                                          : isPopular 
+                                            ? 'bg-primary-blue text-white hover:bg-primary-blue/90 shadow-lg shadow-primary-blue/15' 
+                                            : 'bg-slate-50 border border-slate-200 text-slate-600 hover:bg-slate-100 hover:text-midnight'
+                                  }`}
+                                >
+                                  {isActivePlan 
+                                    ? (isButtonDisabled ? 'Plano em Vigência' : 'Renovar Plano') 
+                                    : stats?.isEligible 
+                                      ? (isButtonDisabled ? 'Bloqueado até Renovação' : 'Trocar para este') 
+                                      : 'Escolher Plano'}
+                                </button>
+                                {isButtonDisabled && rWindow && (
+                                  <p className="text-[8px] text-slate-400 font-bold text-center mt-1">
+                                    Disponível a partir de {rWindow.openDate.toLocaleDateString('pt-BR')}
+                                  </p>
+                                )}
+                                {!isButtonDisabled && stats?.isEligible && (
+                                  <p className="text-[8px] text-emerald-600 font-bold text-center mt-1">
+                                    {isActivePlan ? 'Renovação antecipada liberada' : 'Migração de plano liberada'}
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </>
+                );
+              })()}
             </div>
 
             {/* Histórico de Faturas / Assinaturas */}

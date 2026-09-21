@@ -4580,19 +4580,16 @@ export const businessRules = {
       const existingRpas = await (businessRules as any).getAffiliateRPAReceipts(userId, targetRefMonth);
       const existing = existingRpas.find((r: any) => r.reference_month === targetRefMonth);
       
-      const hasPendingComms = commissions.some(t => t.status === 'pending');
-      const isPriorQuitado = existing && existing.status === 'quitado';
+      const isProfileQuitado = Boolean(
+        profile.description && 
+        (profile.description.includes(`[RPA_QUITADO:${targetRefMonth}`) || profile.description.includes('[RPA_QUITADO:'))
+      );
+      const isPriorQuitado = isProfileQuitado || (existing && existing.status === 'quitado');
 
       let rpaId = existing?.id || `rpa-${targetRefMonth}-${userId.slice(0, 8)}`;
       let rpaNum = existing?.rpa_number || `RPA-${targetRefMonth.replace('-', '')}-${userId.slice(0, 4).toUpperCase()}`;
-      let rpaStatus = existing ? existing.status : (liquidoTotal > 0 ? 'pendente_previsao' : 'sem_movimentacao');
-
-      // Se o RPA anterior já foi quitado, mas existem novas comissões pendentes, abre RPA complementar -02
-      if (isPriorQuitado && hasPendingComms) {
-        rpaId = `rpa-${targetRefMonth}-02-${userId.slice(0, 8)}`;
-        rpaNum = `RPA-${targetRefMonth.replace('-', '')}-${userId.slice(0, 4).toUpperCase()}-02`;
-        rpaStatus = 'pendente_previsao';
-      }
+      let rpaStatus: 'pendente_previsao' | 'ciente_previsao' | 'pago_aguardando_quitacao' | 'quitado' | 'sem_movimentacao' = 
+        isPriorQuitado ? 'quitado' : (existing ? existing.status : (liquidoTotal > 0 ? 'pendente_previsao' : 'sem_movimentacao'));
 
       const rpaRecord: RPAReceipt = {
         id: rpaId,
@@ -4600,10 +4597,10 @@ export const businessRules = {
         profile_id: userId,
         reference_month: targetRefMonth,
         month_label: monthLabel.charAt(0).toUpperCase() + monthLabel.slice(1),
-        created_at: (isPriorQuitado && hasPendingComms) ? new Date().toISOString() : (existing?.created_at || new Date().toISOString()),
+        created_at: existing?.created_at || new Date().toISOString(),
         status: rpaStatus,
-        previsao_accepted_at: (isPriorQuitado && hasPendingComms) ? null : (existing?.previsao_accepted_at || null),
-        quitacao_accepted_at: (isPriorQuitado && hasPendingComms) ? null : (existing?.quitacao_accepted_at || null),
+        previsao_accepted_at: existing?.previsao_accepted_at || null,
+        quitacao_accepted_at: isPriorQuitado ? (existing?.quitacao_accepted_at || new Date().toISOString()) : (existing?.quitacao_accepted_at || null),
         beneficiary: {
           name: profile.full_name || 'Afiliado Autônomo',
           cpf: profile.cpf || 'Não informado',
@@ -4826,22 +4823,24 @@ export const businessRules = {
 
       if (isPJ) return { isLocked: false, pendingRpa: null, isPrevisaoPending: false };
 
-      // 2. Gera/obtém o RPA da competência anterior
+      // 2. Gera/obtém o RPA da competência
       const rpa = await businessRules.generateMonthlyRPAReceipt(userId);
       if (!rpa || rpa.financial.bruto_total <= 0) {
         return { isLocked: false, pendingRpa: null, isPrevisaoPending: false };
       }
 
-      // Se já estiver quitado, libera o painel
-      if (rpa.status === 'quitado') {
+      // 3. Se o perfil já possui tag de quitado ou o RPA está quitado, libera o painel 100%
+      const isProfileQuitado = Boolean(
+        profile.description && 
+        (profile.description.includes(`[RPA_QUITADO:${rpa.reference_month}`) || profile.description.includes('[RPA_QUITADO:'))
+      );
+
+      if (rpa.status === 'quitado' || isProfileQuitado) {
         return { isLocked: false, pendingRpa: rpa, isPrevisaoPending: false };
       }
 
-      const today = new Date();
-      const dayOfMonth = today.getDate();
-
-      // Dia 10 em diante (ou se marcado como pago/aguardando quitação): Trava obrigatória
-      if (dayOfMonth >= 10 || rpa.status === 'pago_aguardando_quitacao') {
+      // 4. Trava obrigatória apenas se o pagamento foi realizado/liberado e está aguardando assinatura de quitação
+      if (rpa.status === 'pago_aguardando_quitacao') {
         return {
           isLocked: true,
           pendingRpa: rpa,
@@ -4849,7 +4848,7 @@ export const businessRules = {
         };
       }
 
-      // Dias 01 a 09: Aviso / Notificação de Previsão de Pagamento
+      // 5. Se está em previsão (apurando comissões para o próximo dia 10), exibe apenas aviso informativo sem travar o painel
       if (rpa.status === 'pendente_previsao') {
         return {
           isLocked: false,

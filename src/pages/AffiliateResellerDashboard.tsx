@@ -145,17 +145,20 @@ export default function AffiliateResellerDashboard() {
         const sub = subscriptionsMap.get(d.id);
         const lastOrderStatus = ordersMap.get(d.id);
 
-        let calculatedStatus: 'Ativo' | 'Cancelado' | 'Inadimplente' = 'Inadimplente';
+        let calculatedStatus: 'Ativo' | 'Cancelado' | 'Pendente' | 'Inadimplente' = 'Inadimplente';
 
-        if (sub && sub.status === 'active' && new Date(sub.end_date) >= now) {
+        const isSubActive = sub && sub.status === 'active' && new Date(sub.end_date) >= now;
+        const isOrderPaid = ['Pago', 'Pago, Aguardando Retirada', 'Concluído', 'Entregue', 'Enviado'].includes(lastOrderStatus);
+        const isOrderPending = ['Aguardando Pagamento', 'Pendente', 'Processando'].includes(lastOrderStatus);
+        const isOrderCancelled = lastOrderStatus === 'Cancelado';
+        const isProfileActive = d.status === 'active';
+
+        if (isSubActive || isOrderPaid || (isProfileActive && !isOrderCancelled && !isOrderPending)) {
           calculatedStatus = 'Ativo';
-        } else if (
-          d.status === 'cancelled' || 
-          d.status === 'cancelado' || 
-          sub?.status === 'cancelled' || 
-          lastOrderStatus === 'Cancelado'
-        ) {
+        } else if (d.status === 'cancelled' || d.status === 'cancelado' || sub?.status === 'cancelled' || isOrderCancelled) {
           calculatedStatus = 'Cancelado';
+        } else if (isOrderPending) {
+          calculatedStatus = 'Pendente';
         } else {
           calculatedStatus = 'Inadimplente';
         }
@@ -366,9 +369,14 @@ export default function AffiliateResellerDashboard() {
                             <span className="size-1.5 rounded-full bg-red-500"></span>
                             Cancelado
                           </span>
-                        ) : (
+                        ) : deal.calculatedStatus === 'Pendente' ? (
                           <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-amber-50 text-amber-600 border border-amber-200/60 rounded-full text-[10px] font-black uppercase tracking-wider shadow-xs">
                             <span className="size-1.5 rounded-full bg-amber-500"></span>
+                            Pendente
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-slate-100 text-slate-600 border border-slate-200 rounded-full text-[10px] font-black uppercase tracking-wider shadow-xs">
+                            <span className="size-1.5 rounded-full bg-slate-400"></span>
                             Inadimplente
                           </span>
                         )}

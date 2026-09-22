@@ -267,9 +267,26 @@ export default function AdminOrders() {
   const handleUpdateStatus = async (orderId: string, newStatus: string) => {
     setActionLoading(orderId);
     try {
+      const order = orders.find(o => o.id === orderId) || selectedOrder;
+      
+      // Se o pedido não tiver reseller_id definido, busca o do cliente ou atribui o próprio cliente se for revendedor
+      let updatePayload: Record<string, any> = { status: newStatus };
+      if (order && !order.reseller_id && order.customer_id) {
+        const { data: prof } = await supabase
+          .from('profiles')
+          .select('id, role, reseller_id')
+          .eq('id', order.customer_id)
+          .maybeSingle();
+        
+        const resolvedResellerId = prof?.reseller_id || (prof?.role === 'regional_reseller' ? prof.id : null);
+        if (resolvedResellerId) {
+          updatePayload.reseller_id = resolvedResellerId;
+        }
+      }
+
       const { error } = await supabase
         .from('orders')
-        .update({ status: newStatus })
+        .update(updatePayload)
         .eq('id', orderId);
 
       if (error) throw error;
@@ -282,7 +299,8 @@ export default function AdminOrders() {
       
       loadOrders();
     } catch (err: any) {
-      toast.error('Erro ao atualizar status do pedido.');
+      console.error('Erro ao atualizar status do pedido:', err);
+      toast.error(err?.message || 'Erro ao atualizar status do pedido.');
     } finally {
       setActionLoading(null);
     }

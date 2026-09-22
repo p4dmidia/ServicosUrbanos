@@ -109,21 +109,30 @@ export default function AffiliateWallet() {
     const paidList = enrichedTransactions.filter(t => t.status === 'Pago');
 
     const calcGroup = (list: any[]) => {
+      // Filtrar apenas comissões ativas/reais geradas por contratos (sem saques/resgates negativos e sem cancelamentos/recusas)
+      const commissionItems = list.filter(t => 
+        Number(t.bruto || t.amount || 0) > 0 && 
+        t.status !== 'Cancelado' && 
+        t.status !== 'Recusado'
+      );
+
       const uniqueOrders = new Map<string, number>();
-      list.forEach(t => {
+      commissionItems.forEach(t => {
         const key = t.orderId && t.orderId !== '---' ? String(t.orderId) : `txn-${t.id}`;
         const amount = Number(t.contractAmount || 0);
-        const existing = uniqueOrders.get(key) || 0;
-        if (amount > existing) {
-          uniqueOrders.set(key, amount);
-        } else if (!uniqueOrders.has(key)) {
-          uniqueOrders.set(key, amount);
+        if (amount > 0) {
+          const existing = uniqueOrders.get(key) || 0;
+          if (amount > existing) {
+            uniqueOrders.set(key, amount);
+          } else if (!uniqueOrders.has(key)) {
+            uniqueOrders.set(key, amount);
+          }
         }
       });
       const totalContratos = Array.from(uniqueOrders.values()).reduce((acc, v) => acc + v, 0);
-      const totalBruto = list.reduce((acc, t) => acc + t.bruto, 0);
+      const totalBruto = commissionItems.reduce((acc, t) => acc + Number(t.bruto || t.amount || 0), 0);
       const percentualRepasse = totalContratos > 0 ? (totalBruto / totalContratos) * 100 : 0;
-      return { totalContratos, percentualRepasse, totalBruto, count: list.length };
+      return { totalContratos, percentualRepasse, totalBruto, count: commissionItems.length };
     };
 
     return {
@@ -669,11 +678,15 @@ export default function AffiliateWallet() {
                                 <span className={`text-[10px] font-black px-2.5 py-1 rounded-lg uppercase ${
                                   t.isReseller
                                     ? 'bg-purple-50 text-purple-700 border border-purple-100'
-                                    : t.cashbackType?.includes('Mensal') 
-                                      ? 'bg-rose-50 text-rose-600 border border-rose-100' 
-                                      : t.cashbackType?.includes('Anual') 
-                                        ? 'bg-amber-50 text-amber-600 border border-amber-100' 
-                                        : 'bg-blue-50 text-blue-600 border border-blue-100'
+                                    : t.cashbackType?.includes('Adiantamento')
+                                      ? 'bg-amber-50 text-amber-800 border border-amber-200'
+                                      : t.cashbackType?.includes('Resgate')
+                                        ? 'bg-indigo-50 text-indigo-700 border border-indigo-200'
+                                        : t.cashbackType?.includes('Mensal') 
+                                          ? 'bg-rose-50 text-rose-600 border border-rose-100' 
+                                          : t.cashbackType?.includes('Anual') 
+                                            ? 'bg-amber-50 text-amber-600 border border-amber-100' 
+                                            : 'bg-blue-50 text-blue-600 border border-blue-100'
                                 }`}>
                                   {t.cashbackType}
                                 </span>
@@ -694,19 +707,26 @@ export default function AffiliateWallet() {
                                 </span>
                               </td>
                               <td className="px-5 py-5 text-right border-y border-transparent group-hover:border-slate-100 whitespace-nowrap">
-                                <p className="text-sm font-black tracking-tighter text-emerald-600 font-mono">
-                                  +{Number(t.bruto || t.amount || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                                <p className={`text-sm font-black tracking-tighter font-mono ${
+                                  t.status === 'Cancelado' || t.status === 'Recusado'
+                                    ? 'text-slate-400 line-through'
+                                    : Number(t.bruto || t.amount || 0) < 0
+                                      ? 'text-rose-500'
+                                      : 'text-emerald-600'
+                                }`}>
+                                  {Number(t.bruto || t.amount || 0) < 0 ? '-' : '+'}
+                                  {Math.abs(Number(t.bruto || t.amount || 0)).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                                 </p>
                               </td>
                               <td className="px-4 py-5 rounded-r-3xl text-center border-y border-transparent group-hover:border-slate-100 whitespace-nowrap">
                                 <span className={`text-[9px] font-black px-2.5 py-1 rounded-md uppercase whitespace-nowrap ${
-                                  t.status === 'Cancelado' 
-                                    ? 'bg-red-50 text-red-600 border border-red-100' 
+                                  t.status === 'Cancelado' || t.status === 'Recusado'
+                                    ? 'bg-rose-50 text-rose-600 border border-rose-200' 
                                     : t.status === 'Pago'
                                       ? 'bg-emerald-50 text-emerald-600 border border-emerald-100'
                                       : 'bg-amber-50 text-amber-700 border border-amber-200'
                                 }`}>
-                                  {t.status === 'Cancelado' ? 'Cancelado' : t.status === 'Pago' ? 'Pago' : 'Pendente'}
+                                  {t.status === 'Recusado' ? 'Recusado' : t.status === 'Cancelado' ? 'Cancelado' : t.status === 'Pago' ? 'Pago' : 'Pendente'}
                                 </span>
                               </td>
                             </motion.tr>

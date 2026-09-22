@@ -57,6 +57,12 @@ export default function AdminWithdrawals() {
     // 11 é Dezembro (0-indexado)
     return now.getMonth() === 11 && now.getDate() >= 10;
   }, []);
+
+  // Tranca inteligente de data: Pagamento Mensal é liberado a partir do dia 10 de cada mês
+  const isMonthlyPayoutWindow = useMemo(() => {
+    const now = new Date();
+    return now.getDate() >= 10;
+  }, []);
   
   // Payment Modal State
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
@@ -295,15 +301,17 @@ export default function AdminWithdrawals() {
   };
 
   const handleOpenAdvancePaymentModal = (adv: any) => {
+    if (!adv) return;
+    const numAmount = Number(adv.amount || 0);
     const record = {
       payeeId: adv.profile_id,
-      payeeName: adv.user_name,
-      payeeCpf: adv.cpf,
-      payeePixKey: adv.pix_key,
-      payeeWhatsapp: adv.whatsapp,
-      orderId: `ADV-${adv.id.substring(0, 6)}`,
-      repasse: adv.amount,
-      bruto: adv.amount,
+      payeeName: adv.user_name || 'Afiliado',
+      payeeCpf: adv.cpf || '',
+      payeePixKey: adv.pix_key || adv.cpf || '',
+      payeeWhatsapp: adv.whatsapp || '',
+      orderId: `ADV-${adv.id ? String(adv.id).substring(0, 6) : '001'}`,
+      repasse: numAmount,
+      bruto: numAmount,
       inss: 0,
       irrf: 0,
       is_pj: false,
@@ -332,6 +340,11 @@ export default function AdminWithdrawals() {
   const handleOpenPaymentModal = (userItem: any, payoutType: 'mensal' | 'anual' | 'total') => {
     if (!userItem.isEligible) {
       toast.error('Usuário inadimplente: pagamentos bloqueados até a regularização do plano.');
+      return;
+    }
+
+    if (payoutType === 'mensal' && !isMonthlyPayoutWindow) {
+      toast.error('Pagamento Mensal bloqueado: liberado a partir do dia 10 de cada mês!');
       return;
     }
 
@@ -1046,11 +1059,18 @@ export default function AdminWithdrawals() {
                     {/* Blocos de Valores por Ciclo */}
                     <div className="flex flex-wrap items-center gap-4 w-full xl:w-auto justify-between xl:justify-end border-t xl:border-t-0 pt-4 xl:pt-0 border-white/5">
                       
-                      {/* 1. Mensal (Exige NF) */}
+                      {/* 1. Mensal (Liberado a partir do dia 10 de cada mês) */}
                       <div className="bg-white/5 p-4 rounded-2xl border border-white/5 text-center min-w-[130px]">
-                        <span className="text-[9px] font-black text-emerald-400 uppercase tracking-wider block mb-1">
-                          Mensal Líquido
-                        </span>
+                        <div className="flex items-center justify-center gap-1 mb-1">
+                          <span className="text-[9px] font-black text-emerald-400 uppercase tracking-wider block">
+                            Mensal Líquido
+                          </span>
+                          {!isMonthlyPayoutWindow && (
+                            <span title="Bloqueado: Liberado a partir do dia 10 de cada mês">
+                              <Lock size={10} className="text-amber-400" />
+                            </span>
+                          )}
+                        </div>
                         <span className="text-lg font-black text-white font-mono block">
                           R$ {(w.monthlyLiquid || 0).toFixed(2).replace('.', ',')}
                         </span>
@@ -1060,15 +1080,36 @@ export default function AdminWithdrawals() {
                           </span>
                         )}
                         <button
-                          disabled={!w.isEligible || (w.monthlyLiquid || 0) <= 0}
+                          disabled={!w.isEligible || (w.monthlyLiquid || 0) <= 0 || !isMonthlyPayoutWindow}
                           onClick={() => handleOpenPaymentModal(w, 'mensal')}
-                          className="mt-2 w-full py-1.5 px-3 rounded-xl text-[9px] font-black uppercase tracking-wider transition-all cursor-pointer bg-emerald-600 hover:bg-emerald-500 text-white disabled:opacity-30 disabled:pointer-events-none shadow-sm"
+                          title={
+                            !isMonthlyPayoutWindow
+                              ? 'Bloqueado: Liberado a partir do dia 10 de cada mês (antes disso apenas via Adiantamento)'
+                              : (w.monthlyLiquid || 0) <= 0
+                                ? 'Saldo mensal quitado / sem pendência'
+                                : 'Pagar Repasse Mensal'
+                          }
+                          className={`mt-2 w-full py-1.5 px-3 rounded-xl text-[9px] font-black uppercase tracking-wider transition-all cursor-pointer flex items-center justify-center gap-1 ${
+                            !isMonthlyPayoutWindow
+                              ? 'bg-slate-800/90 text-slate-400 border border-slate-700/60 cursor-not-allowed opacity-75'
+                              : (w.monthlyLiquid || 0) <= 0
+                                ? 'bg-slate-800/60 text-slate-500 cursor-not-allowed opacity-50'
+                                : 'bg-emerald-600 hover:bg-emerald-500 text-white disabled:opacity-30 disabled:pointer-events-none shadow-sm'
+                          }`}
                         >
-                          Pagar Mensal
+                          {!isMonthlyPayoutWindow ? (
+                            <>
+                              <Lock size={10} /> Libera Dia 10
+                            </>
+                          ) : (w.monthlyLiquid || 0) <= 0 ? (
+                            'Quitado'
+                          ) : (
+                            'Pagar Mensal'
+                          )}
                         </button>
                       </div>
 
-                      {/* 3. Anual (Liberado exclusivamente em 10 de Dezembro) */}
+                      {/* 2. Anual (Liberado exclusivamente em 10 de Dezembro) */}
                       <div className="bg-white/5 p-4 rounded-2xl border border-white/5 text-center min-w-[130px]">
                         <div className="flex items-center justify-center gap-1 mb-1">
                           <span className="text-[9px] font-black text-blue-400 uppercase tracking-wider block">
@@ -1103,14 +1144,20 @@ export default function AdminWithdrawals() {
                         </button>
                       </div>
 
-                      {/* 4. Total Consolidado (Liberado Hoje: Mensal apurado no mês com NF) */}
+                      {/* 3. Total Consolidado (Liberado Hoje: Mensal a partir do dia 10 e Anual em 10/Dez) */}
                       {(() => {
-                        const liquidPayableToday = w.liberadoLiquid !== undefined 
-                          ? w.liberadoLiquid 
-                          : (w.canPayMonthly ? (w.monthlyLiquid || 0) : 0);
-                        const grossPayableToday = w.liberadoPending !== undefined
-                          ? w.liberadoPending
-                          : (w.canPayMonthly ? (w.monthlyPending || 0) : 0);
+                        const monthlyPartLiquid = isMonthlyPayoutWindow ? (w.monthlyLiquid || 0) : 0;
+                        const monthlyPartGross = isMonthlyPayoutWindow ? (w.monthlyPending || 0) : 0;
+                        const monthlyPartInss = isMonthlyPayoutWindow ? (w.monthlyInss || 0) : 0;
+                        const monthlyPartIrrf = isMonthlyPayoutWindow ? (w.monthlyIrrf || 0) : 0;
+
+                        const annualPartLiquid = isDecemberAnnualWindow ? (w.annualLiquid || 0) : 0;
+                        const annualPartGross = isDecemberAnnualWindow ? (w.annualPending || 0) : 0;
+
+                        const liquidPayableToday = w.canPayMonthly ? (monthlyPartLiquid + annualPartLiquid) : 0;
+                        const grossPayableToday = w.canPayMonthly ? (monthlyPartGross + annualPartGross) : 0;
+                        const inssPayableToday = w.canPayMonthly ? monthlyPartInss : 0;
+                        const irrfPayableToday = w.canPayMonthly ? monthlyPartIrrf : 0;
 
                         return (
                           <div className="bg-gradient-to-br from-indigo-900/40 to-slate-900/60 p-4 rounded-2xl border border-indigo-500/30 text-center min-w-[150px]">
@@ -1123,15 +1170,20 @@ export default function AdminWithdrawals() {
                             {!w.isPJ && grossPayableToday > 0 && (
                               <div className="text-[8px] text-slate-400 mt-1 space-y-0.5">
                                 <span className="block font-medium">Bruto: R$ {grossPayableToday.toFixed(2).replace('.', ',')}</span>
-                                <span className="block text-amber-300/80">INSS: -R$ {(w.liberadoInss || 0).toFixed(2).replace('.', ',')}</span>
-                                {(w.liberadoIrrf || 0) > 0 && (
-                                  <span className="block text-rose-300/80">IRRF: -R$ {(w.liberadoIrrf || 0).toFixed(2).replace('.', ',')}</span>
+                                <span className="block text-amber-300/80">INSS: -R$ {inssPayableToday.toFixed(2).replace('.', ',')}</span>
+                                {irrfPayableToday > 0 && (
+                                  <span className="block text-rose-300/80">IRRF: -R$ {irrfPayableToday.toFixed(2).replace('.', ',')}</span>
                                 )}
                               </div>
                             )}
                             {w.isPJ && grossPayableToday > 0 && (
                               <span className="text-[8px] text-blue-300 font-bold block mt-1">
                                 PJ Isento
+                              </span>
+                            )}
+                            {!isMonthlyPayoutWindow && (w.monthlyLiquid || 0) > 0 && (
+                              <span className="text-[8px] text-emerald-400/90 block mt-1 font-medium">
+                                + R$ {(w.monthlyLiquid || 0).toFixed(2).replace('.', ',')} libera dia 10
                               </span>
                             )}
                             {!isDecemberAnnualWindow && (w.annualPending || 0) > 0 && (
@@ -1142,9 +1194,19 @@ export default function AdminWithdrawals() {
                             <button
                               disabled={!w.isEligible || liquidPayableToday <= 0}
                               onClick={() => handleOpenPaymentModal(w, 'total')}
-                              className="mt-2 w-full py-1.5 px-3 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-30 disabled:pointer-events-none text-white rounded-xl text-[9px] font-black uppercase tracking-wider shadow-lg shadow-indigo-600/30 transition-all cursor-pointer"
+                              className={`mt-2 w-full py-1.5 px-3 rounded-xl text-[9px] font-black uppercase tracking-wider shadow-lg transition-all cursor-pointer flex items-center justify-center gap-1 ${
+                                liquidPayableToday <= 0
+                                  ? 'bg-slate-800/90 text-slate-400 border border-slate-700/60 cursor-not-allowed opacity-75'
+                                  : 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-indigo-600/30'
+                              }`}
                             >
-                              Pagar Liberados
+                              {liquidPayableToday <= 0 && !isMonthlyPayoutWindow ? (
+                                <>
+                                  <Lock size={10} /> Libera Dia 10
+                                </>
+                              ) : (
+                                'Pagar Liberados'
+                              )}
                             </button>
                           </div>
                         );

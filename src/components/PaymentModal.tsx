@@ -182,7 +182,7 @@ export default function PaymentModal({ isOpen, onClose, selectedRecords, onConfi
                     {record.payeeName}
                   </p>
                   <p className={`text-xs font-black italic ${idx === currentIndex ? 'text-white/90' : 'text-indigo-600'}`}>
-                    R$ {record.repasse.toFixed(2).replace('.', ',')}
+                    R$ {Number(record.repasse || 0).toFixed(2).replace('.', ',')}
                   </p>
                 </div>
               ))}
@@ -227,22 +227,22 @@ export default function PaymentModal({ isOpen, onClose, selectedRecords, onConfi
               </div>
               <div className="text-right">
                 <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest mb-1">
-                  {currentRecord.is_pj ? 'Valor a Pagar (PJ Isento)' : ((currentRecord.inss > 0 || currentRecord.irrf > 0) ? 'Valor Líquido PIX (com Deduções)' : 'Valor do Repasse')}
+                  {currentRecord.is_pj ? 'Valor a Pagar (PJ Isento)' : ((Number(currentRecord.inss || 0) > 0 || Number(currentRecord.irrf || 0) > 0) ? 'Valor Líquido PIX (com Deduções)' : 'Valor do Repasse')}
                 </p>
-                <p className="text-4xl font-black text-emerald-600 italic tracking-tighter">R$ {currentRecord.repasse.toFixed(2).replace('.', ',')}</p>
+                <p className="text-4xl font-black text-emerald-600 italic tracking-tighter">R$ {Number(currentRecord.repasse || 0).toFixed(2).replace('.', ',')}</p>
                 
                 {/* Detalhamento de Impostos e Itens */}
                 <div className="flex flex-col items-end gap-1 mt-2 border-t border-slate-100 pt-2">
                   {currentRecord.bruto && !currentRecord.is_pj && (
                     <div className="flex flex-wrap items-center justify-end gap-2 text-[10px] font-bold">
-                      <span className="text-slate-400">Bruto: R$ {currentRecord.bruto.toFixed(2).replace('.', ',')}</span>
-                      {currentRecord.inss > 0 && (
-                        <span className="text-amber-600">INSS (0% Intermediação): -R$ {currentRecord.inss.toFixed(2).replace('.', ',')}</span>
+                      <span className="text-slate-400">Bruto: R$ {Number(currentRecord.bruto || 0).toFixed(2).replace('.', ',')}</span>
+                      {Number(currentRecord.inss || 0) > 0 && (
+                        <span className="text-amber-600">INSS (0% Intermediação): -R$ {Number(currentRecord.inss || 0).toFixed(2).replace('.', ',')}</span>
                       )}
-                      {currentRecord.irrf > 0 && (
-                        <span className="text-rose-600">IRRF (DARF): -R$ {currentRecord.irrf.toFixed(2).replace('.', ',')}</span>
+                      {Number(currentRecord.irrf || 0) > 0 && (
+                        <span className="text-rose-600">IRRF (DARF): -R$ {Number(currentRecord.irrf || 0).toFixed(2).replace('.', ',')}</span>
                       )}
-                      {currentRecord.inss === 0 && currentRecord.irrf === 0 && (
+                      {Number(currentRecord.inss || 0) === 0 && Number(currentRecord.irrf || 0) === 0 && (
                         <span className="text-emerald-600">Intermediação de Negócios (0% Retenção na Fonte)</span>
                       )}
                     </div>

@@ -223,12 +223,17 @@ export interface RPAReceipt {
 }
 
 /**
- * Apuração Fiscal de Intermediação de Negócios (Marketplace).
- * - Conforme parecer jurídico-tributário, o ecossistema atua na intermediação de negócios.
- * - Desconto de INSS na fonte: 0% (recolhimento individual a cargo do próprio prestador autônomo).
- * - INSS Patronal: 0%.
- * - IRRF: 0%.
- * - Líquido a transferir = 100% do Bruto (Repasse Integral).
+ * Apuração Fiscal Oficial de RPA (Recibo de Pagamento a Autônomo) - Pessoa Física e PJ:
+ * Conforme Tabela Oficial da Receita Federal e parâmetros da Contabilidade:
+ * 1. INSS Retido (11%): Aplicado sobre o valor bruto pago ao autônomo (Pessoa Física).
+ * 2. Base de Cálculo IRPF = Valor Bruto - INSS Retido.
+ * 3. Tabela Progressiva Mensal do IRPF:
+ *    - Até R$ 2.428,80: Isento (0,0% | Parcela a deduzir: R$ 0,00)
+ *    - De R$ 2.428,81 até R$ 2.826,65: 7,5% | Parcela a deduzir: R$ 182,16
+ *    - De R$ 2.826,66 até R$ 3.751,05: 15,0% | Parcela a deduzir: R$ 394,16
+ *    - De R$ 3.751,06 até R$ 4.664,68: 22,5% | Parcela a deduzir: R$ 675,49
+ *    - Acima de R$ 4.664,68: 27,5% | Parcela a deduzir: R$ 908,73
+ * 4. Pessoa Jurídica (PJ/MEI com NF): Isenção de retenção na fonte (0% INSS e 0% IRRF).
  */
 export function calculateCumulativeTaxDeductions({
   payoutBruto,
@@ -239,17 +244,58 @@ export function calculateCumulativeTaxDeductions({
 }: CumulativeTaxInput): CumulativeTaxResult {
   const safeBruto = Math.max(0, Number(payoutBruto) || 0);
 
+  // PJ / MEI: Isenção de retenção na fonte (recolhe via DAS / tributação própria)
+  if (isPjUser) {
+    return {
+      bruto: parseFloat(safeBruto.toFixed(2)),
+      inss: 0,
+      irrf: 0,
+      liquido: parseFloat(safeBruto.toFixed(2)),
+      patronal: 0,
+      isPJ: true,
+      totalMonthBruto: parseFloat((alreadyPaidBrutoInMonth + safeBruto).toFixed(2)),
+      totalMonthInss: 0,
+      totalMonthIrrf: 0,
+      irrfBase: 0
+    };
+  }
+
+  // 1. INSS Retido (11% sobre o valor bruto do autônomo PF)
+  const inss = parseFloat((safeBruto * 0.11).toFixed(2));
+
+  // 2. Base de Cálculo do IRPF
+  const irrfBase = Math.max(0, parseFloat((safeBruto - inss).toFixed(2)));
+
+  // 3. Tabela Progressiva Mensal do IRPF
+  let irrfCalculated = 0;
+  if (irrfBase <= 2428.80) {
+    irrfCalculated = 0;
+  } else if (irrfBase <= 2826.65) {
+    irrfCalculated = (irrfBase * 0.075) - 182.16;
+  } else if (irrfBase <= 3751.05) {
+    irrfCalculated = (irrfBase * 0.15) - 394.16;
+  } else if (irrfBase <= 4664.68) {
+    irrfCalculated = (irrfBase * 0.225) - 675.49;
+  } else {
+    irrfCalculated = (irrfBase * 0.275) - 908.73;
+  }
+
+  const irrf = Math.max(0, parseFloat(irrfCalculated.toFixed(2)));
+
+  // 4. Valor Líquido após retenções
+  const liquido = Math.max(0, parseFloat((safeBruto - inss - irrf).toFixed(2)));
+
   return {
     bruto: parseFloat(safeBruto.toFixed(2)),
-    inss: 0,
-    irrf: 0,
-    liquido: parseFloat(safeBruto.toFixed(2)),
+    inss: inss,
+    irrf: irrf,
+    liquido: liquido,
     patronal: 0,
-    isPJ: !!isPjUser,
+    isPJ: false,
     totalMonthBruto: parseFloat((alreadyPaidBrutoInMonth + safeBruto).toFixed(2)),
-    totalMonthInss: 0,
-    totalMonthIrrf: 0,
-    irrfBase: 0
+    totalMonthInss: parseFloat((alreadyRetainedInssInMonth + inss).toFixed(2)),
+    totalMonthIrrf: parseFloat((alreadyRetainedIrrfInMonth + irrf).toFixed(2)),
+    irrfBase: irrfBase
   };
 }
 
@@ -1820,21 +1866,29 @@ export const businessRules = {
 
         const desc = t.description || '';
         const isReseller = desc.includes('Revendedor') || desc.includes('Regional');
+        const isAdvance = t.type === 'advance' || desc.toLowerCase().includes('adiantamento');
+        const isWithdrawal = t.type === 'withdrawal' && !isAdvance;
 
-        // Classificar saques e comissões como 'Mensal' ou 'Anual' baseado na descrição
+        // Classificar saques, adiantamentos e comissões como 'Mensal' ou 'Anual' baseado na descrição
         let cashbackType = 'Outros';
         const typeMatch = desc.match(/(Mensal|Anual)/i);
-        if (typeMatch) {
+        if (isAdvance) {
+          cashbackType = 'Adiantamento';
+        } else if (isWithdrawal) {
+          cashbackType = 'Resgate';
+        } else if (typeMatch) {
           const matched = typeMatch[1].toLowerCase();
           if (matched === 'mensal') cashbackType = isReseller ? 'Mensal (REG)' : 'Mensal';
           else if (matched === 'anual') cashbackType = isReseller ? 'Anual (REG)' : 'Anual';
         } else {
-          cashbackType = t.type === 'withdrawal' ? 'Resgate' : (isReseller ? 'Comissão (REG)' : 'Cashback');
+          cashbackType = isReseller ? 'Comissão (REG)' : 'Cashback';
         }
 
-        // Determinar o nível com precisão (G0, G1, G2 ou REG)
+        // Determinar o nível com precisão (G0, G1, G2 ou REG). Para adiantamentos e resgates, é sempre '---'
         let level = '---';
-        if (isReseller) {
+        if (isAdvance || isWithdrawal) {
+          level = '---';
+        } else if (isReseller) {
           level = 'REG';
         } else if (desc.includes('G0') || desc.includes('Titular')) {
           level = '0';
@@ -1868,21 +1922,32 @@ export const businessRules = {
 
         let displayStatus = 'Pendente';
         const isOrderPaid = order?.status === 'Pago' || order?.status === 'Concluído' || order?.status === 'Pago, Aguardando Retirada';
+        const isRejected = t.status === 'rejected' || desc.toLowerCase().includes('rejeitado') || desc.toLowerCase().includes('recusado');
         const isOrderCancelled = order?.status === 'Cancelado' || t.status === 'cancelled' || t.status === 'failed';
 
-        if (isOrderCancelled) {
+        if (isRejected) {
+          displayStatus = 'Recusado';
+        } else if (isOrderCancelled) {
           displayStatus = 'Cancelado';
-        } else if (t.status === 'completed' || t.status === 'pago' || isOrderPaid) {
+        } else if (t.status === 'completed' || t.status === 'pago' || t.status === 'paid' || isOrderPaid) {
           displayStatus = 'Pago';
         } else {
           displayStatus = 'Pendente';
         }
 
-        let displayName = order?.buyer_name || (t.type === 'withdrawal' ? 'Resgate' : 'Sistema');
-        if (isReseller && order?.buyer_name) {
-          displayName = `${order.buyer_name} (Regional)`;
-        } else if (level === '0' && order?.buyer_name) {
-          displayName = `${order.buyer_name} (Você)`;
+        let displayName = 'Sistema';
+        if (isAdvance) {
+          displayName = 'Adiantamento';
+        } else if (isWithdrawal) {
+          displayName = 'Resgate';
+        } else if (order?.buyer_name) {
+          if (isReseller) {
+            displayName = `${order.buyer_name} (Regional)`;
+          } else if (level === '0') {
+            displayName = `${order.buyer_name} (Você)`;
+          } else {
+            displayName = order.buyer_name;
+          }
         }
 
         const contractAmount = Number(order?.order_amount || 0);
@@ -1899,7 +1964,7 @@ export const businessRules = {
           orderId: orderId || '---',
           affiliateName: displayName,
           level: level,
-          category: isReseller ? 'reseller' : (t.type === 'commission' ? 'network' : 'withdrawal'),
+          category: isReseller ? 'reseller' : (isAdvance || isWithdrawal ? 'withdrawal' : 'network'),
           isReseller: isReseller,
           cashbackType: cashbackType,
           date: new Date(t.created_at).toLocaleDateString('pt-BR'),
@@ -4609,12 +4674,16 @@ export const businessRules = {
 
       adiantamentoTotal = parseFloat(adiantamentoTotal.toFixed(2));
 
-      // Apuração de IRPF na Fonte: Isenção até R$ 5.000,00 mensais; Retenção de 27.5% sobre o valor que exceder R$ 5.000,00
-      let deducaoIrrf = 0;
-      if (brutoTotal > 5000) {
-        deducaoIrrf = parseFloat(((brutoTotal - 5000) * 0.275).toFixed(2));
-      }
-      const liquidoTotal = parseFloat(Math.max(0, brutoTotal - deducaoIrrf - adiantamentoTotal).toFixed(2));
+      // Apuração de Retenções Fiscais Oficiais (11% INSS + Tabela Progressiva IRPF)
+      const isPJ = (profile as any)?.person_type === 'PJ' || 
+                   (profile?.cnpj && profile.cnpj.replace(/\D/g, '').length === 14) || 
+                   (profile?.description && profile.description.includes('[PJ]')) ||
+                   profile?.pix_type === 'CNPJ';
+
+      const tax = calculateTaxDeductions(brutoTotal, isPJ);
+      const deducaoInss = tax.inss;
+      const deducaoIrrf = tax.irrf;
+      const liquidoTotal = parseFloat(Math.max(0, tax.liquido - adiantamentoTotal).toFixed(2));
 
       const monthLabel = new Date(year, month - 1, 1).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
       const nextMonth = month === 12 ? 1 : month + 1;
@@ -4677,7 +4746,7 @@ export const businessRules = {
           annual_cycle_period: cyclePeriodLabel,
           annual_cycle_payout_date: cyclePayoutDate,
           bruto_total: parseFloat(brutoTotal.toFixed(2)),
-          deducao_inss: 0.00,
+          deducao_inss: deducaoInss,
           deducao_irrf: deducaoIrrf,
           adiantamento: adiantamentoTotal,
           adiantamento_date: adiantamentoDate || undefined,
@@ -4687,7 +4756,7 @@ export const businessRules = {
           payment_forecast_date: forecastDate
         },
         legal_disclaimer:
-          'Documento emitido na condição de intermediação de negócios. Em conformidade com o enquadramento fiscal e diretrizes jurídicas, a plataforma de intermediação não realiza retenção na fonte de INSS ou contribuição patronal, cabendo exclusivamente ao prestador autônomo o recolhimento de suas contribuições previdenciárias individuais e tributos municipais/federais aplicáveis.',
+          'Recibo de Pagamento a Autônomo (RPA) emitido com retenção na fonte de 11% de INSS e IRPF apurado pela Tabela Progressiva Oficial da Receita Federal do Brasil.',
         ordersList: ordersList,
         ordersBreakdown: ordersBreakdown
       };

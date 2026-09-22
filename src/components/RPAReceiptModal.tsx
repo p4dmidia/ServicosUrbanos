@@ -40,10 +40,6 @@ export default function RPAReceiptModal({
   const [submitting, setSubmitting] = useState(false);
   const [downloadingPdf, setDownloadingPdf] = useState(false);
 
-  if (!isOpen || !rpa) return null;
-
-  const isLockMode = mode === 'quitacao';
-
   const isDate10Reached = useMemo(() => {
     if (!rpa?.reference_month) return true;
     try {
@@ -58,6 +54,10 @@ export default function RPAReceiptModal({
       return true;
     }
   }, [rpa?.reference_month]);
+
+  if (!isOpen || !rpa) return null;
+
+  const isLockMode = mode === 'quitacao';
 
   const handleAcceptPrevisao = async () => {
     try {
@@ -162,10 +162,8 @@ export default function RPAReceiptModal({
       doc.rect(14, y, 182, 6, 'FD');
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(8);
+      const inssVal = rpa.financial.deducao_inss || 0;
       const irrfVal = rpa.financial.deducao_irrf || 0;
-      const irrfDesc = irrfVal > 0 
-        ? '07. Retenção de Imposto de Renda na Fonte (IRRF 27,5% s/ excedente de R$ 5.000)'
-        : '07. Retenção de Imposto de Renda na Fonte (IRRF Isento até R$ 5.000)';
 
       const items = [
         { desc: '01. Nível G0 (Cashback Titular 5%)', val: rpa.financial.rede_g0 || rpa.financial.cashback_mensal || 0 },
@@ -174,11 +172,11 @@ export default function RPAReceiptModal({
         { desc: '04. Revendedor (Vendas Diretas / Polo Regional)', val: rpa.financial.vendas_revendedor || 0 },
         { desc: rpa.reference_month?.endsWith('-12') ? `05. Cashback Anual (Ciclo ${rpa.financial.annual_cycle_period || '01/12 a 30/11'} - Liberado)` : `05. Provisão Anual Acumulada (Ciclo ${rpa.financial.annual_cycle_period || '01/12 a 30/11'} - Pago em 10/Dez)`, val: rpa.financial.cashback_anual },
         { desc: '06. TOTAL DOS RENDIMENTOS BRUTOS', val: rpa.financial.bruto_total, isBold: true },
-        { desc: irrfDesc, val: irrfVal > 0 ? -irrfVal : 0.00, isDeduction: irrfVal > 0 },
+        { desc: '07. (-) Retenção de INSS na Fonte (11% Autônomo PF)', val: inssVal > 0 ? -inssVal : 0.00, isDeduction: inssVal > 0 },
+        { desc: '08. (-) Retenção de IRPF na Fonte (Tabela Progressiva)', val: irrfVal > 0 ? -irrfVal : 0.00, isDeduction: irrfVal > 0 },
         ...(rpa.financial.adiantamento && rpa.financial.adiantamento > 0 ? [
-          { desc: `08. (-) Adiantamento de Rendimentos${rpa.financial.adiantamento_date ? ` (Pago em ${rpa.financial.adiantamento_date})` : ''}`, val: -rpa.financial.adiantamento, isDeduction: true }
+          { desc: `09. (-) Adiantamento de Rendimentos${rpa.financial.adiantamento_date ? ` (Pago em ${rpa.financial.adiantamento_date})` : ''}`, val: -rpa.financial.adiantamento, isDeduction: true }
         ] : []),
-        { desc: '09. Retenção de INSS na Fonte (0% - Intermediação)', val: 0.00 },
         { desc: '10. VALOR LÍQUIDO EFETIVAMENTE PAGO / A PAGAR', val: rpa.financial.liquido_total, isHighlight: true }
       ];
 
@@ -488,17 +486,33 @@ export default function RPAReceiptModal({
                 <span className="font-mono text-sm text-white">R$ {rpa.financial.bruto_total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
               </div>
 
-              {/* Deduções Fiscais: IRPF e INSS */}
+              {/* Deduções Fiscais: INSS 11% e IRPF Tabela Progressiva */}
               <div className="px-5 py-2.5 flex items-center justify-between text-slate-400 bg-white/[0.02]">
                 <div className="flex items-center gap-2">
-                  <span>Desconto de IRPF na Fonte (Ganhos &gt; R$ 5.000,00)</span>
+                  <span>(-) Retenção de INSS na Fonte (11% Autônomo PF)</span>
+                  {(rpa.financial.deducao_inss || 0) > 0 && (
+                    <span className="text-[9px] bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 px-2 py-0.5 rounded-md font-bold">
+                      11% Oficial
+                    </span>
+                  )}
+                </div>
+                <span className={`font-mono font-bold ${(rpa.financial.deducao_inss || 0) > 0 ? 'text-indigo-400' : 'text-slate-400'}`}>
+                  {(rpa.financial.deducao_inss || 0) > 0
+                    ? `- R$ ${(rpa.financial.deducao_inss || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
+                    : 'R$ 0,00'}
+                </span>
+              </div>
+
+              <div className="px-5 py-2.5 flex items-center justify-between text-slate-400 bg-white/[0.02]">
+                <div className="flex items-center gap-2">
+                  <span>(-) Retenção de IRPF na Fonte (Tabela Progressiva Mensal)</span>
                   {(rpa.financial.deducao_irrf || 0) > 0 ? (
                     <span className="text-[9px] bg-rose-500/10 text-rose-400 border border-rose-500/20 px-2 py-0.5 rounded-md font-bold">
-                      27,5% s/ Excedente
+                      Progressivo
                     </span>
                   ) : (
                     <span className="text-[9px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2 py-0.5 rounded-md font-bold">
-                      Isento até R$ 5.000,00
+                      Faixa Isenta
                     </span>
                   )}
                 </div>
@@ -507,14 +521,6 @@ export default function RPAReceiptModal({
                     ? `- R$ ${(rpa.financial.deducao_irrf || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
                     : 'R$ 0,00 (Isento na Fonte)'}
                 </span>
-              </div>
-
-              <div className="px-5 py-2.5 flex items-center justify-between text-slate-400 bg-emerald-500/[0.02]">
-                <div className="flex items-center gap-2">
-                  <span>Retenção de INSS na Fonte (0% - Intermediação)</span>
-                  <span className="text-[9px] bg-emerald-500/10 text-emerald-400 px-2 py-0.5 rounded-md font-bold">Sem Desconto</span>
-                </div>
-                <span className="font-mono font-bold text-emerald-400">R$ 0,00 (Isento na Fonte)</span>
               </div>
 
               {/* (-) Adiantamento de Rendimentos se houver */}

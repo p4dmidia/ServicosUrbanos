@@ -43,9 +43,13 @@ import PaymentModal from '../components/PaymentModal';
 export default function AdminWithdrawals() {
   const [loading, setLoading] = useState(true);
   const [payableBalances, setPayableBalances] = useState<any[]>([]);
-  const [viewTab, setViewTab] = useState<'network' | 'reseller' | 'history' | 'monthly_folder'>('network');
+  const [viewTab, setViewTab] = useState<'network' | 'reseller' | 'advances' | 'history' | 'monthly_folder'>('network');
   const [cycleFilter, setCycleFilter] = useState<'all' | 'monthly' | 'annual'>('all');
   const [searchTerm, setSearchTerm] = useState('');
+
+  // Advances State
+  const [advanceRequestsList, setAdvanceRequestsList] = useState<any[]>([]);
+  const [loadingAdvances, setLoadingAdvances] = useState(false);
 
   // Tranca inteligente de data: Pagamento Anual é liberado exclusivamente em 10 de Dezembro
   const isDecemberAnnualWindow = useMemo(() => {
@@ -85,6 +89,19 @@ export default function AdminWithdrawals() {
   // Pagination State
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
+
+  const loadAdvances = async () => {
+    try {
+      setLoadingAdvances(true);
+      const data = await businessRules.getAffiliateAdvanceRequests();
+      setAdvanceRequestsList(data);
+    } catch (e) {
+      console.error('Erro ao carregar adiantamentos:', e);
+      toast.error('Erro ao carregar solicitações de adiantamento.');
+    } finally {
+      setLoadingAdvances(false);
+    }
+  };
 
   const loadBalances = async (category: 'network' | 'reseller') => {
     try {
@@ -161,6 +178,8 @@ export default function AdminWithdrawals() {
         inss: statement.inss,
         baseIRPF: statement.baseIrrf,
         irrf: statement.irrf,
+        adiantamento: statement.adiantamento,
+        adiantamentoDate: statement.adiantamentoDate,
         liquido: statement.liquido,
         receiptUrl: statement.receiptUrl,
         isPaid: statement.isPaid
@@ -262,6 +281,8 @@ export default function AdminWithdrawals() {
       loadHistory();
     } else if (viewTab === 'monthly_folder') {
       loadArchives(selectedArchiveMonth);
+    } else if (viewTab === 'advances') {
+      loadAdvances();
     } else {
       loadBalances(viewTab);
     }
@@ -271,6 +292,40 @@ export default function AdminWithdrawals() {
   const copyToClipboard = (text: string, label: string) => {
     navigator.clipboard.writeText(text);
     toast.success(`${label} copiado!`);
+  };
+
+  const handleOpenAdvancePaymentModal = (adv: any) => {
+    const record = {
+      payeeId: adv.profile_id,
+      payeeName: adv.user_name,
+      payeeCpf: adv.cpf,
+      payeePixKey: adv.pix_key,
+      payeeWhatsapp: adv.whatsapp,
+      orderId: `ADV-${adv.id.substring(0, 6)}`,
+      repasse: adv.amount,
+      bruto: adv.amount,
+      inss: 0,
+      irrf: 0,
+      is_pj: false,
+      payoutType: 'mensal',
+      viewCategory: 'advances',
+      descLabel: 'Adiantamento Mensal de Rendimentos',
+      advanceId: adv.id
+    };
+    setSelectedForPayment([record]);
+    setIsPaymentModalOpen(true);
+  };
+
+  const handleRejectAdvance = async (advId: string) => {
+    const reason = window.prompt('Informe o motivo da recusa do adiantamento:');
+    if (reason === null) return;
+    try {
+      await businessRules.rejectAdvanceRequest(advId, reason);
+      toast.success('Solicitação de adiantamento recusada.');
+      loadAdvances();
+    } catch (e) {
+      toast.error('Erro ao recusar adiantamento.');
+    }
   };
 
   // Abrir PaymentModal para pagamento individual de um ciclo ou total
@@ -364,6 +419,14 @@ export default function AdminWithdrawals() {
 
       if (payeeGroup.receiptFile) {
         receiptUrl = await businessRules.uploadReceipt(payeeGroup.receiptFile);
+      }
+
+      if (record.advanceId) {
+        await businessRules.processAdvancePayout(record.advanceId, receiptUrl);
+        toast.success(`Adiantamento de R$ ${record.repasse.toFixed(2).replace('.', ',')} liquidado com sucesso!`);
+        setIsPaymentModalOpen(false);
+        await loadAdvances();
+        return;
       }
 
       await businessRules.processPayout(
@@ -637,6 +700,18 @@ export default function AdminWithdrawals() {
           >
             <Building2 size={16} />
             Revendedores Regionais
+          </button>
+
+          <button
+            onClick={() => setViewTab('advances')}
+            className={`flex-1 min-w-[180px] py-3.5 px-4 rounded-2xl text-xs font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 cursor-pointer ${
+              viewTab === 'advances'
+                ? 'bg-gradient-to-r from-amber-500 to-orange-600 text-white shadow-lg shadow-amber-500/30'
+                : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            <DollarSign size={16} />
+            Adiantamentos ({advanceRequestsList.filter(a => a.status === 'pending').length})
           </button>
 
           <button
@@ -1438,6 +1513,131 @@ export default function AdminWithdrawals() {
           </div>
         )}
 
+        {/* TAB 5: ADIANTAMENTOS MENSAIS SOLICITADOS */}
+        {viewTab === 'advances' && (
+          <div className="space-y-6">
+            <div className="bg-[#0a0e17] p-6 md:p-8 rounded-[2.5rem] border border-white/5 shadow-2xl space-y-6">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-white/5">
+                <div>
+                  <h3 className="text-lg font-black text-white uppercase tracking-tight flex items-center gap-2">
+                    <DollarSign className="text-amber-400" size={20} />
+                    Solicitações de Adiantamento Mensal
+                  </h3>
+                  <p className="text-xs text-slate-400 mt-1">
+                    Afiliados Pessoa Física que solicitaram antecipação dos rendimentos apurados no mês.
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <span className="text-xs font-mono font-bold text-amber-400 bg-amber-500/10 px-3 py-1.5 rounded-xl border border-amber-500/20">
+                    Total Solicitações: {advanceRequestsList.length}
+                  </span>
+                </div>
+              </div>
+
+              {loadingAdvances ? (
+                <div className="py-20 text-center">
+                  <Loader2 size={36} className="animate-spin text-amber-500 mx-auto mb-4" />
+                  <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Carregando solicitações de adiantamento...</p>
+                </div>
+              ) : advanceRequestsList.length === 0 ? (
+                <div className="py-20 text-center">
+                  <DollarSign size={48} className="text-slate-600 mx-auto mb-4 opacity-40" />
+                  <h4 className="text-base font-black text-white uppercase tracking-tight">Nenhuma solicitação de adiantamento encontrada</h4>
+                  <p className="text-xs text-slate-500 mt-1">
+                    Quando um afiliado solicitar antecipação na aba Recibo RPA, o pedido aparecerá aqui para aprovação e pagamento via PIX.
+                  </p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse text-xs">
+                    <thead>
+                      <tr className="border-b border-white/10 text-slate-400 text-[10px] font-black uppercase tracking-widest">
+                        <th className="py-4 px-3">Data Solicitação</th>
+                        <th className="py-4 px-3">Afiliado / Beneficiário</th>
+                        <th className="py-4 px-3">Competência</th>
+                        <th className="py-4 px-3 text-right">Valor Solicitado</th>
+                        <th className="py-4 px-3">Chave PIX</th>
+                        <th className="py-4 px-3 text-center">Status</th>
+                        <th className="py-4 px-3 text-center">Ações</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-white/5">
+                      {advanceRequestsList.map((adv: any) => (
+                        <tr key={adv.id} className="hover:bg-white/5 transition-colors">
+                          <td className="py-4 px-3 whitespace-nowrap text-slate-400 font-mono">
+                            {new Date(adv.created_at).toLocaleDateString('pt-BR')}
+                          </td>
+                          <td className="py-4 px-3">
+                            <div className="flex flex-col">
+                              <span className="font-bold text-white uppercase">{adv.user_name}</span>
+                              <span className="text-[10px] text-slate-500 font-mono">CPF: {adv.cpf}</span>
+                            </div>
+                          </td>
+                          <td className="py-4 px-3 whitespace-nowrap font-mono text-slate-300">
+                            {adv.ref_month}
+                          </td>
+                          <td className="py-4 px-3 text-right font-mono font-black text-amber-300 text-sm whitespace-nowrap">
+                            R$ {(adv.amount || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                          </td>
+                          <td className="py-4 px-3 font-mono text-emerald-400 text-[11px] whitespace-nowrap">
+                            {adv.pix_key} ({adv.pix_type})
+                          </td>
+                          <td className="py-4 px-3 text-center whitespace-nowrap">
+                            {adv.status === 'paid' ? (
+                              <span className="px-2.5 py-1 rounded-full text-[9px] font-black uppercase bg-emerald-500/10 text-emerald-300 border border-emerald-500/20">
+                                Pago ({adv.paid_at})
+                              </span>
+                            ) : adv.status === 'rejected' ? (
+                              <span className="px-2.5 py-1 rounded-full text-[9px] font-black uppercase bg-rose-500/10 text-rose-300 border border-rose-500/20">
+                                Recusado
+                              </span>
+                            ) : (
+                              <span className="px-2.5 py-1 rounded-full text-[9px] font-black uppercase bg-amber-500/10 text-amber-300 border border-amber-500/20 animate-pulse">
+                                Pendente Análise
+                              </span>
+                            )}
+                          </td>
+                          <td className="py-4 px-3 text-center whitespace-nowrap">
+                            {adv.status === 'pending' ? (
+                              <div className="flex items-center justify-center gap-2">
+                                <button
+                                  onClick={() => handleOpenAdvancePaymentModal(adv)}
+                                  className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black text-[10px] uppercase tracking-wider flex items-center gap-1.5 transition-all shadow-md shadow-emerald-600/20 cursor-pointer"
+                                >
+                                  <Check size={12} /> Pagar PIX
+                                </button>
+                                <button
+                                  onClick={() => handleRejectAdvance(adv.id)}
+                                  className="px-2.5 py-1.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border border-rose-500/20 font-bold text-[10px] uppercase transition-all cursor-pointer"
+                                  title="Recusar Adiantamento"
+                                >
+                                  <X size={12} />
+                                </button>
+                              </div>
+                            ) : adv.receipt_url ? (
+                              <a
+                                href={adv.receipt_url}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="inline-flex items-center gap-1 px-3 py-1 rounded-xl bg-indigo-500/20 hover:bg-indigo-500/30 text-indigo-300 font-black text-[9px] uppercase tracking-wider transition-colors"
+                              >
+                                <FileText size={12} /> Comprovante PIX
+                              </a>
+                            ) : (
+                              <span className="text-[10px] text-slate-500 font-bold">---</span>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* MODAL DE DEMONSTRATIVO OFICIAL: VALOR LÍQUIDO IDÊNTICO À PLANILHA */}
         {isStatementModalOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm overflow-y-auto">
@@ -1642,6 +1842,21 @@ export default function AdminWithdrawals() {
                         {(statementData.irrf || 0) > 0 ? `- R$ ${(statementData.irrf || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : 'Isento'}
                       </span>
                     </div>
+
+                    {/* (-) ADIANTAMENTO SE HOUVER */}
+                    {(statementData.adiantamento || 0) > 0 && (
+                      <div className="flex items-center justify-between p-3 rounded-xl bg-amber-500/10 border border-amber-500/20">
+                        <div>
+                          <span className="text-amber-300 font-bold uppercase block">(-) ADIANTAMENTO DE RENDIMENTOS</span>
+                          {statementData.adiantamentoDate && (
+                            <span className="text-[9px] text-amber-400/80">Pago em {statementData.adiantamentoDate}</span>
+                          )}
+                        </div>
+                        <span className="font-mono font-black text-amber-300">
+                          - R$ {(statementData.adiantamento || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                        </span>
+                      </div>
+                    )}
 
                     <div className="flex items-center justify-between p-4 rounded-xl bg-emerald-600 text-white shadow-lg shadow-emerald-600/20">
                       <div>
@@ -1876,6 +2091,30 @@ export default function AdminWithdrawals() {
                           : Number(consolidatedData.irrf || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                       </span>
                     </div>
+
+                    {/* 8.1 (-) ADIANTAMENTO SE HOUVER */}
+                    {(consolidatedData.adiantamento || 0) > 0 && (
+                      <div className="flex items-center justify-between p-3.5 rounded-xl bg-amber-50 border border-amber-200">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="font-bold text-amber-950 uppercase block">
+                              (-) ADIANTAMENTO DE RENDIMENTOS
+                            </span>
+                            {consolidatedData.adiantamentoDate && (
+                              <span className="px-2 py-0.5 rounded-md bg-amber-200 text-amber-900 text-[9px] font-black uppercase tracking-wider">
+                                Pago em {consolidatedData.adiantamentoDate}
+                              </span>
+                            )}
+                          </div>
+                          <span className="text-[10px] text-amber-700">
+                            Valor antecipado no mês corrente e descontado do acerto final no dia {consolidatedData.previsaoPagamentoStr.split('.')[0]}
+                          </span>
+                        </div>
+                        <span className="font-mono font-black text-amber-700">
+                          - {Number(consolidatedData.adiantamento || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                        </span>
+                      </div>
+                    )}
 
                     {/* 9. LÍQUIDO A RECEBER */}
                     <div className="flex items-center justify-between p-4 rounded-2xl bg-emerald-600 text-white shadow-lg mt-4">

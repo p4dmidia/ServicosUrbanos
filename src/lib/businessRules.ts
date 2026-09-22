@@ -190,6 +190,10 @@ export interface RPAReceipt {
     bruto_total: number;
     deducao_inss: number; // 0.00 (Intermediação)
     deducao_irrf: number; // 0.00
+    adiantamento?: number; // Valor de adiantamento descontado
+    adiantamento_date?: string; // Data em que o adiantamento foi pago (DD/MM/AAAA)
+    adiantamento_status?: 'none' | 'pending' | 'approved' | 'paid' | 'rejected';
+    adiantamento_receipt_url?: string;
     liquido_total: number;
     payment_forecast_date: string; // "10/MM/AAAA"
   };
@@ -4571,12 +4575,46 @@ export const businessRules = {
         ? parseFloat((redeAmount + revendedorAmount + cashbackMensal + cashbackAnual).toFixed(2))
         : parseFloat((redeAmount + revendedorAmount + cashbackMensal).toFixed(2));
 
+      // Apuração de Adiantamento de Rendimentos no mês
+      const advanceTxs = (txs || []).filter(t => {
+        const desc = (t.description || '').toLowerCase();
+        const isAdv = t.type === 'advance' || desc.includes('[adiantamento]') || desc.includes('adiantamento');
+        return isAdv && (t.status === 'completed' || t.status === 'pago');
+      });
+
+      let adiantamentoTotal = 0;
+      let adiantamentoDate = '';
+      let adiantamentoReceiptUrl = '';
+      advanceTxs.forEach(t => {
+        adiantamentoTotal += Math.abs(Number(t.amount || 0));
+        const matchDate = (t.description || '').match(/\[DATA:([0-9/]+)\]/);
+        if (matchDate) adiantamentoDate = matchDate[1];
+        else if (t.created_at) adiantamentoDate = new Date(t.created_at).toLocaleDateString('pt-BR');
+        const matchRec = (t.description || '').match(/\[RECIBO:(.*?)\]/);
+        if (matchRec) adiantamentoReceiptUrl = matchRec[1];
+      });
+
+      // Fallback: busca no storage local
+      try {
+        const allAdv = JSON.parse(localStorage.getItem('affiliate_advance_requests') || '[]');
+        const userPaidAdv = allAdv.filter((a: any) => a.profile_id === userId && a.ref_month === targetRefMonth && a.status === 'paid');
+        if (adiantamentoTotal === 0 && userPaidAdv.length > 0) {
+          userPaidAdv.forEach((a: any) => {
+            adiantamentoTotal += Math.abs(Number(a.amount || 0));
+            if (a.paid_at) adiantamentoDate = a.paid_at;
+            if (a.receipt_url) adiantamentoReceiptUrl = a.receipt_url;
+          });
+        }
+      } catch (e) {}
+
+      adiantamentoTotal = parseFloat(adiantamentoTotal.toFixed(2));
+
       // Apuração de IRPF na Fonte: Isenção até R$ 5.000,00 mensais; Retenção de 27.5% sobre o valor que exceder R$ 5.000,00
       let deducaoIrrf = 0;
       if (brutoTotal > 5000) {
         deducaoIrrf = parseFloat(((brutoTotal - 5000) * 0.275).toFixed(2));
       }
-      const liquidoTotal = parseFloat(Math.max(0, brutoTotal - deducaoIrrf).toFixed(2));
+      const liquidoTotal = parseFloat(Math.max(0, brutoTotal - deducaoIrrf - adiantamentoTotal).toFixed(2));
 
       const monthLabel = new Date(year, month - 1, 1).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
       const nextMonth = month === 12 ? 1 : month + 1;
@@ -4641,6 +4679,10 @@ export const businessRules = {
           bruto_total: parseFloat(brutoTotal.toFixed(2)),
           deducao_inss: 0.00,
           deducao_irrf: deducaoIrrf,
+          adiantamento: adiantamentoTotal,
+          adiantamento_date: adiantamentoDate || undefined,
+          adiantamento_status: adiantamentoTotal > 0 ? 'paid' : undefined,
+          adiantamento_receipt_url: adiantamentoReceiptUrl || undefined,
           liquido_total: liquidoTotal,
           payment_forecast_date: forecastDate
         },
@@ -4665,9 +4707,252 @@ export const businessRules = {
     }
   },
 
+  // =========================================================================
+  // GESTÃO DE ADIANTAMENTO MENSAL DE RENDIMENTOS (RECIBO RPA - PF)
+  // =========================================================================
+
+  requestAffiliateAdvance: async (userId: string, amount: number, notes?: string) => {
+    try {
+      const now = new Date();
+      const currentRefMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+      
+      if (!amount || amount <= 0) {
+        throw new Error('Informe um valor válido para o adiantamento.');
+      }
+
+      // Busca perfil
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', userId)
+        .single();
+
+      if (!profile) throw new Error('Perfil não encontrado.');
+
+      // Verifica se o usuário já possui adiantamento pendente ou pago no mês
+      const { data: userTxs } = await supabase
+        .from('transactions')
+        .select('*')
+        .eq('profile_id', userId)
+        .order('created_at', { ascending: false });
+
+      const existing = (userTxs || []).find((t: any) => {
+        const desc = (t.description || '').toLowerCase();
+        const isAdv = t.type === 'advance' || desc.includes('[adiantamento]');
+        const isSameMonth = (t.created_at || '').startsWith(currentRefMonth) || desc.includes(currentRefMonth);
+        return isAdv && isSameMonth && (t.status === 'pending' || t.status === 'completed' || t.status === 'pago');
+      });
+
+      if (existing) {
+        if (existing.status === 'pending') {
+          throw new Error('Você já possui uma solicitação de adiantamento em análise para este mês.');
+        } else {
+          throw new Error('Você já utilizou a sua cota de adiantamento deste mês.');
+        }
+      }
+
+      const advanceId = `adv_${Date.now()}_${userId.substring(0, 5)}`;
+      const description = `Adiantamento de Rendimentos [REF:${currentRefMonth}] [ADIANTAMENTO]${notes ? ` - ${notes}` : ''}`;
+
+      // Grava na tabela de transações
+      const { data: newTx, error: txErr } = await supabase
+        .from('transactions')
+        .insert([{
+          profile_id: userId,
+          amount: -Math.abs(amount),
+          type: 'advance',
+          status: 'pending',
+          description: description,
+          created_at: new Date().toISOString()
+        }])
+        .select()
+        .single();
+
+      // Salva no localStorage como redundância resiliente
+      try {
+        const allAdv = JSON.parse(localStorage.getItem('affiliate_advance_requests') || '[]');
+        allAdv.push({
+          id: newTx?.id || advanceId,
+          profile_id: userId,
+          user_name: profile.full_name || 'Afiliado',
+          cpf: profile.cpf || '',
+          pix_key: profile.pix_key || '',
+          pix_type: profile.pix_type || 'CPF',
+          amount: amount,
+          ref_month: currentRefMonth,
+          status: 'pending',
+          notes: notes || '',
+          created_at: new Date().toISOString()
+        });
+        localStorage.setItem('affiliate_advance_requests', JSON.stringify(allAdv));
+      } catch (e) {}
+
+      return newTx || { id: advanceId, status: 'pending', amount };
+    } catch (err: any) {
+      console.error('Erro ao solicitar adiantamento:', err);
+      throw err;
+    }
+  },
+
+  getAffiliateAdvanceRequests: async (refMonth?: string, userId?: string) => {
+    try {
+      const now = new Date();
+      const targetRefMonth = refMonth || `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+      
+      let query = supabase
+        .from('transactions')
+        .select('*, profiles:profile_id(full_name, cpf, pix_key, pix_type, whatsapp)')
+        .order('created_at', { ascending: false });
+
+      if (userId) {
+        query = query.eq('profile_id', userId);
+      }
+
+      const { data: txs } = await query;
+      
+      const advanceTxs = (txs || []).filter((t: any) => {
+        const desc = (t.description || '').toLowerCase();
+        const isAdv = t.type === 'advance' || desc.includes('[adiantamento]');
+        const isMonthMatch = (t.created_at || '').startsWith(targetRefMonth) || desc.includes(targetRefMonth);
+        return isAdv && isMonthMatch;
+      });
+
+      const localAdv = JSON.parse(localStorage.getItem('affiliate_advance_requests') || '[]');
+
+      const formatted = advanceTxs.map((t: any) => {
+        const matchDate = (t.description || '').match(/\[DATA:([0-9/]+)\]/);
+        const matchRec = (t.description || '').match(/\[RECIBO:(.*?)\]/);
+        return {
+          id: t.id,
+          profile_id: t.profile_id,
+          user_name: t.profiles?.full_name || 'Afiliado',
+          cpf: t.profiles?.cpf || '',
+          pix_key: t.profiles?.pix_key || '',
+          pix_type: t.profiles?.pix_type || 'CPF',
+          whatsapp: t.profiles?.whatsapp || '',
+          amount: Math.abs(Number(t.amount || 0)),
+          ref_month: targetRefMonth,
+          status: (t.status === 'completed' || t.status === 'pago') ? 'paid' : (t.status === 'rejected' ? 'rejected' : 'pending'),
+          created_at: t.created_at,
+          paid_at: (t.status === 'completed' || t.status === 'pago') ? (matchDate ? matchDate[1] : new Date(t.created_at).toLocaleDateString('pt-BR')) : null,
+          receipt_url: matchRec ? matchRec[1] : null,
+          description: t.description
+        };
+      });
+
+      if (formatted.length === 0 && localAdv.length > 0) {
+        return localAdv.filter((a: any) => (!refMonth || a.ref_month === targetRefMonth) && (!userId || a.profile_id === userId));
+      }
+
+      return formatted;
+    } catch (e) {
+      console.error('Erro ao buscar adiantamentos:', e);
+      return [];
+    }
+  },
+
+  processAdvancePayout: async (advanceId: string, receiptUrl?: string) => {
+    try {
+      const now = new Date();
+      const dateStr = now.toLocaleDateString('pt-BR');
+      
+      const { data: tx } = await supabase
+        .from('transactions')
+        .select('*')
+        .eq('id', advanceId)
+        .maybeSingle();
+
+      if (tx) {
+        let desc = tx.description || 'Adiantamento de Rendimentos';
+        if (!desc.includes('[DATA:')) {
+          desc += ` [DATA:${dateStr}]`;
+        }
+        if (receiptUrl && !desc.includes('[RECIBO:')) {
+          desc += ` [RECIBO:${receiptUrl}]`;
+        }
+        await supabase
+          .from('transactions')
+          .update({
+            status: 'completed',
+            type: 'withdrawal',
+            description: desc
+          })
+          .eq('id', advanceId);
+      }
+
+      try {
+        const allAdv = JSON.parse(localStorage.getItem('affiliate_advance_requests') || '[]');
+        const updated = allAdv.map((a: any) => {
+          if (a.id === advanceId) {
+            return {
+              ...a,
+              status: 'paid',
+              paid_at: dateStr,
+              receipt_url: receiptUrl || null
+            };
+          }
+          return a;
+        });
+        localStorage.setItem('affiliate_advance_requests', JSON.stringify(updated));
+      } catch (e) {}
+
+      return true;
+    } catch (err) {
+      console.error('Erro ao processar pagamento do adiantamento:', err);
+      throw err;
+    }
+  },
+
+  rejectAdvanceRequest: async (advanceId: string, reason?: string) => {
+    try {
+      await supabase
+        .from('transactions')
+        .update({
+          status: 'rejected',
+          description: `Adiantamento Rejeitado: ${reason || 'Não aprovado pela administração'}`
+        })
+        .eq('id', advanceId);
+
+      try {
+        const allAdv = JSON.parse(localStorage.getItem('affiliate_advance_requests') || '[]');
+        const updated = allAdv.map((a: any) => {
+          if (a.id === advanceId) {
+            return {
+              ...a,
+              status: 'rejected',
+              rejection_reason: reason || ''
+            };
+          }
+          return a;
+        });
+        localStorage.setItem('affiliate_advance_requests', JSON.stringify(updated));
+      } catch (e) {}
+
+      return true;
+    } catch (err) {
+      console.error('Erro ao rejeitar adiantamento:', err);
+      throw err;
+    }
+  },
+
   acceptRPAPrevisao: async (rpaId: string, userId: string): Promise<RPAReceipt | null> => {
     try {
       const refMonth = rpaId.match(/rpa-([0-9]{4}-[0-9]{2})/)?.[1];
+      
+      // Validação: Só pode dar o aceite a partir do dia 10 da data de pagamento
+      if (refMonth) {
+        const [yStr, mStr] = refMonth.split('-');
+        const yNum = parseInt(yStr, 10);
+        const mNum = parseInt(mStr, 10);
+        const nextMonth = mNum === 12 ? 1 : mNum + 1;
+        const nextYear = mNum === 12 ? yNum + 1 : yNum;
+        const paymentDate = new Date(nextYear, nextMonth - 1, 10, 0, 0, 0);
+        const now = new Date();
+        if (now < paymentDate) {
+          throw new Error(`O aceite de ciência do recibo RPA só estará disponível a partir do dia 10/${String(nextMonth).padStart(2, '0')}/${nextYear}.`);
+        }
+      }
+
       const allRpas: RPAReceipt[] = JSON.parse(localStorage.getItem('all_rpa_receipts') || '[]');
       let target = allRpas.find(r => r.id === rpaId || (r.profile_id === userId && (!refMonth || r.reference_month === refMonth)));
       
@@ -4720,9 +5005,9 @@ export const businessRules = {
       }
 
       return target;
-    } catch (e) {
+    } catch (e: any) {
       console.error('Erro ao aceitar previsão RPA:', e);
-      return null;
+      throw e;
     }
   },
 
@@ -7141,6 +7426,41 @@ export const businessRules = {
 
     const ordersList = Array.from(new Set(ordersBreakdown.map(o => o.orderNumber)));
 
+    // 5. Apuração de Adiantamentos de Rendimentos pagos na competência
+    const advanceTxs = (userTxs || []).filter(t => {
+      const desc = (t.description || '').toLowerCase();
+      const isAdv = t.type === 'advance' || desc.includes('[adiantamento]') || desc.includes('adiantamento');
+      const isMonthMatch = (t.created_at || '').startsWith(refMonthStr) || desc.includes(refMonthStr);
+      return isAdv && isMonthMatch && (t.status === 'completed' || t.status === 'pago');
+    });
+
+    let adiantamentoTotal = 0;
+    let adiantamentoDate = '';
+    let adiantamentoReceiptUrl = '';
+    advanceTxs.forEach(t => {
+      adiantamentoTotal += Math.abs(Number(t.amount || 0));
+      const matchDate = (t.description || '').match(/\[DATA:([0-9/]+)\]/);
+      if (matchDate) adiantamentoDate = matchDate[1];
+      else if (t.created_at) adiantamentoDate = new Date(t.created_at).toLocaleDateString('pt-BR');
+      const matchRec = (t.description || '').match(/\[RECIBO:(.*?)\]/);
+      if (matchRec) adiantamentoReceiptUrl = matchRec[1];
+    });
+
+    try {
+      const allAdv = JSON.parse(localStorage.getItem('affiliate_advance_requests') || '[]');
+      const userPaidAdv = allAdv.filter((a: any) => a.profile_id === userId && a.ref_month === refMonthStr && a.status === 'paid');
+      if (adiantamentoTotal === 0 && userPaidAdv.length > 0) {
+        userPaidAdv.forEach((a: any) => {
+          adiantamentoTotal += Math.abs(Number(a.amount || 0));
+          if (a.paid_at) adiantamentoDate = a.paid_at;
+          if (a.receipt_url) adiantamentoReceiptUrl = a.receipt_url;
+        });
+      }
+    } catch (e) {}
+
+    adiantamentoTotal = parseFloat(adiantamentoTotal.toFixed(2));
+    const finalLiquido = Math.max(0, tax.liquido - adiantamentoTotal);
+
     return {
       userId,
       beneficiaryName: profile?.full_name || 'Afiliado / Revendedor',
@@ -7162,7 +7482,7 @@ export const businessRules = {
       pendingBrutoMensalMmn,
       pendingBrutoMensalRevendedor,
       pendingBruto,
-      pendingLiquido: tax.liquido,
+      pendingLiquido: finalLiquido,
       brutoAnualMmn,
       brutoAnualRevendedor,
       acumuladoAnualMmn,
@@ -7174,7 +7494,10 @@ export const businessRules = {
       inss: tax.inss,
       baseIrrf: tax.irrfBase || Math.max(0, displayBruto - tax.inss),
       irrf: tax.irrf,
-      liquido: tax.liquido,
+      adiantamento: adiantamentoTotal,
+      adiantamentoDate: adiantamentoDate || null,
+      adiantamentoReceiptUrl: adiantamentoReceiptUrl || null,
+      liquido: finalLiquido,
       isPaid,
       receiptUrl: archivedRecord?.receiptUrl || payoutTx?.receipt_url || null,
       paidAt: isPaid ? (archivedRecord?.paidAt || payoutTx?.created_at || null) : null,

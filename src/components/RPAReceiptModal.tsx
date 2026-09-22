@@ -44,6 +44,21 @@ export default function RPAReceiptModal({
 
   const isLockMode = mode === 'quitacao';
 
+  const isDate10Reached = useMemo(() => {
+    if (!rpa?.reference_month) return true;
+    try {
+      const [yStr, mStr] = rpa.reference_month.split('-');
+      const yNum = parseInt(yStr, 10);
+      const mNum = parseInt(mStr, 10);
+      const nextMonth = mNum === 12 ? 1 : mNum + 1;
+      const nextYear = mNum === 12 ? yNum + 1 : yNum;
+      const paymentDate = new Date(nextYear, nextMonth - 1, 10, 0, 0, 0);
+      return new Date() >= paymentDate;
+    } catch (e) {
+      return true;
+    }
+  }, [rpa?.reference_month]);
+
   const handleAcceptPrevisao = async () => {
     try {
       setSubmitting(true);
@@ -160,8 +175,11 @@ export default function RPAReceiptModal({
         { desc: rpa.reference_month?.endsWith('-12') ? `05. Cashback Anual (Ciclo ${rpa.financial.annual_cycle_period || '01/12 a 30/11'} - Liberado)` : `05. Provisão Anual Acumulada (Ciclo ${rpa.financial.annual_cycle_period || '01/12 a 30/11'} - Pago em 10/Dez)`, val: rpa.financial.cashback_anual },
         { desc: '06. TOTAL DOS RENDIMENTOS BRUTOS', val: rpa.financial.bruto_total, isBold: true },
         { desc: irrfDesc, val: irrfVal > 0 ? -irrfVal : 0.00, isDeduction: irrfVal > 0 },
-        { desc: '08. Retenção de INSS na Fonte (0% - Intermediação)', val: 0.00 },
-        { desc: '09. VALOR LÍQUIDO EFETIVAMENTE PAGO / A PAGAR', val: rpa.financial.liquido_total, isHighlight: true }
+        ...(rpa.financial.adiantamento && rpa.financial.adiantamento > 0 ? [
+          { desc: `08. (-) Adiantamento de Rendimentos${rpa.financial.adiantamento_date ? ` (Pago em ${rpa.financial.adiantamento_date})` : ''}`, val: -rpa.financial.adiantamento, isDeduction: true }
+        ] : []),
+        { desc: '09. Retenção de INSS na Fonte (0% - Intermediação)', val: 0.00 },
+        { desc: '10. VALOR LÍQUIDO EFETIVAMENTE PAGO / A PAGAR', val: rpa.financial.liquido_total, isHighlight: true }
       ];
 
       y += 6;
@@ -499,6 +517,23 @@ export default function RPAReceiptModal({
                 <span className="font-mono font-bold text-emerald-400">R$ 0,00 (Isento na Fonte)</span>
               </div>
 
+              {/* (-) Adiantamento de Rendimentos se houver */}
+              {(rpa.financial.adiantamento || 0) > 0 && (
+                <div className="px-5 py-2.5 flex items-center justify-between text-slate-300 bg-amber-500/10 border-t border-amber-500/20">
+                  <div className="flex items-center gap-2">
+                    <span className="text-amber-300 font-bold">(-) Adiantamento de Rendimentos</span>
+                    {rpa.financial.adiantamento_date && (
+                      <span className="text-[9px] bg-amber-500/20 text-amber-300 border border-amber-500/30 px-2 py-0.5 rounded-md font-bold">
+                        Pago em {rpa.financial.adiantamento_date}
+                      </span>
+                    )}
+                  </div>
+                  <span className="font-mono font-bold text-amber-300">
+                    - R$ {rpa.financial.adiantamento.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                  </span>
+                </div>
+              )}
+
               {/* Total Líquido a Receber */}
               <div className="px-5 py-4 bg-emerald-500/10 border-t border-emerald-500/20 flex items-center justify-between">
                 <div>
@@ -539,27 +574,25 @@ export default function RPAReceiptModal({
                       <th className="py-2.5 px-4">Data</th>
                       <th className="py-2.5 px-4">Origem</th>
                       <th className="py-2.5 px-4 text-right">Valor Base</th>
-                      <th className="py-2.5 px-4 text-center">Taxa</th>
-                      <th className="py-2.5 px-4 text-right">Líquido</th>
+                      <th className="py-2.5 px-4 text-center">Alíquota</th>
+                      <th className="py-2.5 px-4 text-right">Comissão</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-white/5">
-                    {rpa.ordersBreakdown.map((item, i) => (
-                      <tr key={item.id || i} className="hover:bg-white/[0.02]">
-                        <td className="py-2.5 px-4 font-mono font-bold text-slate-200">
-                          <span className="bg-white/5 px-2 py-0.5 rounded border border-white/10">
-                            {item.orderNumber}
+                  <tbody className="divide-y divide-white/5 text-slate-300 font-medium">
+                    {rpa.ordersBreakdown.map((item, idx) => (
+                      <tr key={idx} className="hover:bg-white/[0.02] transition-colors">
+                        <td className="py-2.5 px-4 font-mono font-bold text-white">{item.orderNumber}</td>
+                        <td className="py-2.5 px-4 text-slate-400">{item.date}</td>
+                        <td className="py-2.5 px-4">
+                          <span className="px-2 py-0.5 rounded-md bg-white/5 text-[10px] font-bold">
+                            {item.origin}
                           </span>
                         </td>
-                        <td className="py-2.5 px-4 text-slate-400">{item.date}</td>
-                        <td className="py-2.5 px-4 text-slate-300 font-medium">{item.origin}</td>
-                        <td className="py-2.5 px-4 text-right font-mono text-slate-400">
+                        <td className="py-2.5 px-4 text-right font-mono">
                           R$ {item.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                         </td>
-                        <td className="py-2.5 px-4 text-center font-mono font-bold text-indigo-400">
-                          {item.rate}
-                        </td>
-                        <td className="py-2.5 px-4 text-right font-mono font-bold text-emerald-400">
+                        <td className="py-2.5 px-4 text-center font-mono text-emerald-400 font-bold">{item.rate}</td>
+                        <td className="py-2.5 px-4 text-right font-mono font-bold text-emerald-300">
                           R$ {item.commissionAmount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                         </td>
                       </tr>
@@ -570,35 +603,36 @@ export default function RPAReceiptModal({
             </div>
           )}
 
-          {/* Cláusula Legal de Intermediação */}
-          <div className="bg-white/5 p-4 rounded-2xl border border-white/5 flex gap-3 items-start">
-            <ShieldCheck size={18} className="text-indigo-400 shrink-0 mt-0.5" />
-            <p className="text-[10px] text-slate-400 leading-relaxed font-medium">
+          {/* Declaração Legal e Responsabilidade Individual do Afiliado */}
+          <div className="bg-white/5 p-5 rounded-2xl border border-white/5 space-y-2">
+            <div className="flex items-center gap-2 text-slate-400 font-black text-[10px] uppercase tracking-widest border-b border-white/5 pb-2">
+              <ShieldCheck size={14} className="text-indigo-400" />
+              <span>Declaração Legal de Intermediação & Responsabilidade Previdenciária</span>
+            </div>
+            <p className="text-[11px] text-slate-300 leading-relaxed font-normal">
               {rpa.legal_disclaimer}
             </p>
           </div>
 
-          {/* Histórico de Assinatura Eletrônica */}
-          <div className="p-4 rounded-2xl bg-white/[0.02] border border-white/5 flex flex-wrap items-center justify-between gap-3 text-[10px] text-slate-400 font-mono">
+          {/* Metadados de Assinatura Digital */}
+          <div className="bg-white/[0.02] p-4 rounded-2xl border border-white/5 flex flex-wrap items-center justify-between gap-4 text-[10px] text-slate-400">
+            <div>
+              <span>Código de Autenticação Digital: </span>
+              <strong className="font-mono text-slate-300">{rpa.id}</strong>
+            </div>
+
             <div>
               <span>Status do Recibo: </span>
-              <strong className={`uppercase ${
+              <strong className={
                 rpa.status === 'quitado' ? 'text-emerald-400' :
                 rpa.status === 'ciente_previsao' ? 'text-indigo-400' :
                 'text-amber-400'
-              }`}>
+              }>
                 {rpa.status === 'quitado' ? 'Quitado / Recebido' :
                  rpa.status === 'ciente_previsao' ? 'Ciência Registrada' :
                  'Pendente de Aceite'}
               </strong>
             </div>
-
-            {rpa.quitacao_accepted_at && (
-              <div>
-                <span>Quitação em: </span>
-                <strong className="text-white">{new Date(rpa.quitacao_accepted_at).toLocaleString('pt-BR')}</strong>
-              </div>
-            )}
           </div>
         </div>
 
@@ -629,6 +663,21 @@ export default function RPAReceiptModal({
                   <span className="px-5 py-3 rounded-2xl bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 text-xs font-black uppercase tracking-wider flex items-center gap-2 shadow-lg shadow-indigo-600/10">
                     <CheckCircle2 size={16} className="text-emerald-400" />
                     Ciência já Registrada
+                  </span>
+                  {onClose && (
+                    <button
+                      onClick={onClose}
+                      className="px-6 py-3 bg-white/10 hover:bg-white/20 text-white rounded-2xl font-bold text-xs uppercase tracking-wider transition-all cursor-pointer"
+                    >
+                      Fechar
+                    </button>
+                  )}
+                </div>
+              ) : !isDate10Reached ? (
+                <div className="flex items-center gap-3">
+                  <span className="px-5 py-3 rounded-2xl bg-amber-500/10 text-amber-300 border border-amber-500/30 text-xs font-bold uppercase tracking-wider flex items-center gap-2">
+                    <Clock size={16} className="text-amber-400" />
+                    Aceite disponível a partir do dia 10
                   </span>
                   {onClose && (
                     <button

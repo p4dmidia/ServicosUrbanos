@@ -33,10 +33,10 @@ export default function AffiliateRenewals() {
   const getPlanDrawInfo = (planType?: string) => {
     const p = (planType || '').toLowerCase();
     if (p.includes('revendedor') || p.includes('regional')) {
-      return '365 dias • 48 sorteios + Licença Regional';
+      return '365 dias • 48 sorteios anuais + Licença Regional';
     }
     if (p.includes('anual') || p.includes('ano')) {
-      return '365 dias • 48 sorteios';
+      return '365 dias • 48 sorteios anuais';
     }
     if (p.includes('semestral')) {
       return '180 dias • 24 sorteios';
@@ -301,7 +301,7 @@ export default function AffiliateRenewals() {
                             </div>
 
                             <p className="text-xs md:text-sm text-slate-600 font-medium leading-relaxed">
-                              Licença exclusiva para líderes e gestores regionais. Garante comissões de revendedor sobre todas as indicações e vendas da sua regional, além de participação completa nos sorteios semanais.
+                              Licença exclusiva para líderes e gestores regionais. Garante comissões de revendedor sobre todas as indicações e vendas da sua regional, além de participação completa nos 48 sorteios anuais.
                             </p>
 
                             {/* Chips de Benefícios */}
@@ -313,7 +313,7 @@ export default function AffiliateRenewals() {
                                 🌐 Rede G0, G1 e G2
                               </span>
                               <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 border border-slate-200 text-slate-700 text-xs font-black">
-                                🎁 48 Sorteios Semanais
+                                🎁 48 Sorteios Anuais
                               </span>
                               <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 border border-slate-200 text-slate-700 text-xs font-black">
                                 📅 365 Dias de Vigência

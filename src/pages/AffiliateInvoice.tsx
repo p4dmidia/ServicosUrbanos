@@ -64,6 +64,13 @@ export default function AffiliateInvoice() {
   const [allUserRpas, setAllUserRpas] = useState<RPAReceipt[]>([]);
   const [isRPAModalOpen, setIsRPAModalOpen] = useState(false);
 
+  // Estados de Adiantamento Mensal (PF)
+  const [advanceRequests, setAdvanceRequests] = useState<any[]>([]);
+  const [isAdvanceModalOpen, setIsAdvanceModalOpen] = useState(false);
+  const [advanceAmountInput, setAdvanceAmountInput] = useState('');
+  const [advanceNotesInput, setAdvanceNotesInput] = useState('');
+  const [submittingAdvance, setSubmittingAdvance] = useState(false);
+
   // Navegação e Filtro por Mês da Competência do RPA
   const defaultClosedDate = useMemo(() => {
     const now = new Date();
@@ -173,20 +180,55 @@ export default function AffiliateInvoice() {
           }
         }
       } else {
-        // Pessoa Física: Carrega Recibo RPA para o mês selecionado
-        const [currentRpa, rpasList] = await Promise.all([
+        // Pessoa Física: Carrega Recibo RPA para o mês selecionado e solicitações de adiantamento
+        const [currentRpa, rpasList, advList] = await Promise.all([
           businessRules.generateMonthlyRPAReceipt(user.id, activeRefMonth),
-          businessRules.getAffiliateRPAReceipts(user.id)
+          businessRules.getAffiliateRPAReceipts(user.id),
+          businessRules.getAffiliateAdvanceRequests(activeRefMonth, user.id)
         ]);
 
         setRpaReceipt(currentRpa);
         setAllUserRpas(rpasList || []);
+        setAdvanceRequests(advList || []);
       }
     } catch (error) {
       console.error('Erro ao carregar dados fiscais:', error);
       toast.error('Erro ao carregar resumo contábil.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleRequestAdvance = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user) return;
+    try {
+      setSubmittingAdvance(true);
+      const cleanVal = parseFloat(advanceAmountInput.replace(/\./g, '').replace(',', '.'));
+      if (isNaN(cleanVal) || cleanVal <= 0) {
+        toast.error('Informe um valor válido para o adiantamento.');
+        return;
+      }
+
+      const availableGross = rpaReceipt?.financial?.bruto_total || 0;
+      if (cleanVal > availableGross && availableGross > 0) {
+        toast.error(`O valor solicitado (R$ ${cleanVal.toFixed(2)}) não pode ultrapassar o total de rendimentos apurados no mês (R$ ${availableGross.toFixed(2)}).`);
+        return;
+      }
+
+      await businessRules.requestAffiliateAdvance(user.id, cleanVal, advanceNotesInput);
+      toast.success('Solicitação de adiantamento enviada com sucesso! A administração analisará seu pedido.', {
+        duration: 5000,
+        icon: '💵'
+      });
+      setIsAdvanceModalOpen(false);
+      setAdvanceAmountInput('');
+      setAdvanceNotesInput('');
+      await loadData(refMonthStr);
+    } catch (err: any) {
+      toast.error(err.message || 'Erro ao enviar solicitação de adiantamento.');
+    } finally {
+      setSubmittingAdvance(false);
     }
   };
 
@@ -391,6 +433,80 @@ export default function AffiliateInvoice() {
             </div>
           </div>
 
+          {/* Card de Solicitação de Adiantamento Mensal de Rendimentos */}
+          <div className="bg-gradient-to-r from-amber-500/15 via-orange-500/10 to-amber-500/5 border border-amber-500/30 rounded-3xl p-6 flex flex-col md:flex-row items-start md:items-center justify-between gap-6 shadow-sm">
+            <div className="flex items-start gap-4">
+              <div className="size-12 rounded-2xl bg-amber-500/20 text-amber-600 border border-amber-500/30 flex items-center justify-center shrink-0 shadow-sm">
+                <DollarSign size={24} />
+              </div>
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <h4 className="text-sm font-black text-midnight uppercase tracking-tight">
+                    Adiantamento Mensal de Rendimentos
+                  </h4>
+                  <span className="px-2.5 py-0.5 rounded-full bg-amber-200/70 text-amber-900 text-[9px] font-black uppercase tracking-wider">
+                    1 Solicitação por Mês
+                  </span>
+                </div>
+                <p className="text-xs text-slate-600 max-w-2xl leading-relaxed">
+                  Todo afiliado tem direito a solicitar a antecipação de seus rendimentos apurados no mês. O valor antecipado é transferido para sua chave PIX e <strong>descontado automaticamente no acerto do dia 10</strong>.
+                </p>
+                {advanceRequests && advanceRequests.length > 0 && (
+                  <div className="pt-2 flex flex-wrap items-center gap-2">
+                    {advanceRequests.map((adv: any) => (
+                      <div 
+                        key={adv.id} 
+                        className={`inline-flex items-center gap-2 px-3 py-1 rounded-xl text-xs font-bold border ${
+                          adv.status === 'paid' 
+                            ? 'bg-emerald-100/80 text-emerald-800 border-emerald-300' 
+                            : adv.status === 'rejected'
+                            ? 'bg-rose-100/80 text-rose-800 border-rose-300'
+                            : 'bg-amber-100 text-amber-800 border-amber-300'
+                        }`}
+                      >
+                        <span>
+                          {adv.status === 'paid' ? '✅ Adiantamento Pago:' : adv.status === 'rejected' ? '❌ Adiantamento Recusado:' : '⏳ Em Análise:'} R$ {adv.amount.toFixed(2).replace('.', ',')}
+                        </span>
+                        {adv.paid_at && <span className="text-[10px] text-emerald-700 font-normal">({adv.paid_at})</span>}
+                        {adv.receipt_url && (
+                          <a 
+                            href={adv.receipt_url} 
+                            target="_blank" 
+                            rel="noopener noreferrer" 
+                            className="text-[10px] text-emerald-900 underline font-black ml-1"
+                          >
+                            Ver Comprovante PIX
+                          </a>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="shrink-0 flex items-center gap-3 w-full md:w-auto justify-end">
+              {(!advanceRequests || !advanceRequests.some((a: any) => a.status === 'pending' || a.status === 'paid')) ? (
+                <button
+                  onClick={() => {
+                    const gross = rpaReceipt?.financial?.bruto_total || 0;
+                    setAdvanceAmountInput(gross > 0 ? gross.toFixed(2).replace('.', ',') : '');
+                    setIsAdvanceModalOpen(true);
+                  }}
+                  disabled={(rpaReceipt?.financial?.bruto_total || 0) <= 0}
+                  className="w-full md:w-auto px-6 py-3.5 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 disabled:opacity-50 text-white rounded-2xl font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2 shadow-lg shadow-amber-600/20 transition-all cursor-pointer"
+                >
+                  <DollarSign size={16} />
+                  Solicitar Adiantamento
+                </button>
+              ) : (
+                <span className="text-xs font-bold text-amber-800 bg-amber-100 px-4 py-2 rounded-xl border border-amber-300">
+                  {advanceRequests.some((a: any) => a.status === 'paid') ? 'Adiantamento Concedido' : 'Solicitação em Análise'}
+                </span>
+              )}
+            </div>
+          </div>
+
           {/* Grid Principal do RPA Atual */}
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
             {/* Card de Rendimentos da Competência Fechada */}
@@ -489,6 +605,22 @@ export default function AffiliateInvoice() {
                       R$ 0,00 (Isento na Fonte)
                     </span>
                   </div>
+
+                  {/* (-) Adiantamento de Rendimentos se houver */}
+                  {(rpaReceipt?.financial?.adiantamento || 0) > 0 && (
+                    <div className="flex justify-between items-center text-slate-600 bg-amber-500/10 p-2.5 rounded-xl border border-amber-500/20">
+                      <div>
+                        <span className="font-bold text-amber-900 block">(-) Adiantamento de Rendimentos:</span>
+                        {rpaReceipt?.financial?.adiantamento_date && (
+                          <span className="text-[9px] text-amber-700 font-medium">Pago em {rpaReceipt.financial.adiantamento_date}</span>
+                        )}
+                      </div>
+                      <span className="font-mono font-black text-amber-700">
+                        - R$ {(rpaReceipt?.financial?.adiantamento || 0).toFixed(2).replace('.', ',')}
+                      </span>
+                    </div>
+                  )}
+
                   <div className="pt-2.5 border-t border-slate-200 flex justify-between items-center font-black text-midnight text-sm">
                     <span>Total Líquido do Recibo:</span>
                     <span className="font-mono text-emerald-600 text-base">
@@ -725,6 +857,115 @@ export default function AffiliateInvoice() {
                 setIsRPAModalOpen(false);
               }}
             />
+          )}
+
+          {/* Modal de Solicitação de Adiantamento Mensal */}
+          {isAdvanceModalOpen && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-200">
+              <motion.div 
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                className="bg-slate-900 border border-slate-700/80 rounded-3xl max-w-lg w-full overflow-hidden shadow-2xl text-white"
+              >
+                <div className="p-6 border-b border-slate-800 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="size-10 rounded-xl bg-amber-500/20 text-amber-400 border border-amber-500/30 flex items-center justify-center">
+                      <DollarSign size={20} />
+                    </div>
+                    <div>
+                      <h3 className="text-base font-black text-white uppercase tracking-tight">
+                        Solicitar Adiantamento Mensal
+                      </h3>
+                      <p className="text-xs text-slate-400">
+                        Competência: {rpaReceipt?.month_label || monthLabel}
+                      </p>
+                    </div>
+                  </div>
+                  <button 
+                    onClick={() => setIsAdvanceModalOpen(false)}
+                    className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+                  >
+                    <AlertCircle size={20} className="rotate-45" />
+                  </button>
+                </div>
+
+                <form onSubmit={handleRequestAdvance} className="p-6 space-y-5">
+                  <div className="bg-amber-500/10 border border-amber-500/20 p-4 rounded-2xl space-y-1">
+                    <span className="text-[10px] font-black uppercase tracking-wider text-amber-300 block">
+                      Saldo Bruto Acumulado na Competência:
+                    </span>
+                    <span className="text-2xl font-mono font-black text-amber-200">
+                      R$ {(rpaReceipt?.financial?.bruto_total || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                    </span>
+                    <p className="text-[11px] text-amber-200/80 mt-1">
+                      O valor do adiantamento será transferido via PIX e abatido automaticamente na liquidação do dia 10.
+                    </p>
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold text-slate-300 uppercase tracking-wider block">
+                      Valor a Antecipar (R$):
+                    </label>
+                    <div className="relative">
+                      <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-sm">
+                        R$
+                      </span>
+                      <input 
+                        type="text"
+                        required
+                        value={advanceAmountInput}
+                        onChange={(e) => setAdvanceAmountInput(e.target.value)}
+                        placeholder="0,00"
+                        className="w-full pl-12 pr-4 py-3.5 bg-slate-800/80 border border-slate-700 rounded-2xl text-white font-mono font-bold text-lg focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-all"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="bg-slate-800/60 p-4 rounded-2xl border border-slate-700/60 space-y-1">
+                    <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block">
+                      Chave PIX Cadastrada para Recebimento:
+                    </span>
+                    <span className="text-xs font-mono font-bold text-emerald-400 block truncate">
+                      {profile?.pix_key || 'Chave PIX não cadastrada no perfil'}
+                    </span>
+                    <p className="text-[10px] text-slate-400">
+                      Tipo: {profile?.pix_type || 'CPF'} • Titular: {profile?.full_name || 'Afiliado'}
+                    </p>
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold text-slate-300 uppercase tracking-wider block">
+                      Observações / Justificativa (Opcional):
+                    </label>
+                    <textarea 
+                      rows={2}
+                      value={advanceNotesInput}
+                      onChange={(e) => setAdvanceNotesInput(e.target.value)}
+                      placeholder="Ex: Solicitação de antecipação referente às vendas da 1ª quinzena."
+                      className="w-full p-3.5 bg-slate-800/80 border border-slate-700 rounded-2xl text-white text-xs focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-all resize-none"
+                    />
+                  </div>
+
+                  <div className="pt-2 flex items-center justify-end gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setIsAdvanceModalOpen(false)}
+                      className="px-5 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs uppercase tracking-wider transition-all"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={submittingAdvance}
+                      className="px-6 py-3 rounded-xl bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white font-black text-xs uppercase tracking-wider flex items-center gap-2 shadow-lg shadow-amber-600/30 transition-all disabled:opacity-50 cursor-pointer"
+                    >
+                      {submittingAdvance ? <Loader2 size={16} className="animate-spin" /> : <DollarSign size={16} />}
+                      Confirmar Solicitação
+                    </button>
+                  </div>
+                </form>
+              </motion.div>
+            </div>
           )}
         </div>
       </AffiliateLayout>

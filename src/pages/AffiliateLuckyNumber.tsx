@@ -815,8 +815,8 @@ export default function AffiliateLuckyNumber() {
                 <span className="text-midnight font-black text-sm">24 sorteios</span>
               </div>
               <div className="bg-emerald-500/10 border border-emerald-500/20 p-2.5 rounded-2xl text-emerald-800">
-                <span className="text-emerald-600 block text-[9px] uppercase">12 Meses</span>
-                <span className="font-black text-sm">48 sorteios</span>
+                <span className="text-emerald-600 block text-[9px] uppercase">12 Meses (Anual)</span>
+                <span className="font-black text-sm">48 sorteios anuais</span>
               </div>
             </div>
 

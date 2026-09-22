@@ -127,11 +127,11 @@ export default function Login() {
                 .eq('id', data.user.id)
                 .single();
 
-            // Redireciona para o dashboard do afiliado
+            // Redireciona para o dashboard correto
             if (profile?.role === 'admin') {
                 navigate('/admin/dashboard');
-            } else if (profile?.role === 'merchant' || profile?.role === 'owner' || profile?.role === 'manager') {
-                navigate('/lojista/dashboard');
+            } else if (profile?.role === 'regional_reseller') {
+                navigate('/afiliado/dashboard');
             } else {
                 navigate('/afiliado/dashboard');
             }

@@ -1,40 +1,37 @@
 import * as dotenv from 'dotenv';
 dotenv.config();
 
-import { createClient } from '@supabase/supabase-js';
+import { supabase } from '../src/lib/supabase';
+import { businessRules } from '../src/lib/businessRules';
 
-const supabaseUrl = process.env.VITE_SUPABASE_URL!;
-const supabaseKey = process.env.VITE_SUPABASE_ANON_KEY!;
+async function test() {
+  const email = `auth-tester-${Date.now()}@test.com`;
+  const password = 'TestPassword123!';
+  const signRes = await supabase.auth.signUp({ email, password });
+  await supabase.auth.signInWithPassword({ email, password });
+  await supabase.from('profiles').update({ role: 'owner' }).eq('id', signRes.data?.user?.id);
 
-const supabase = createClient(supabaseUrl, supabaseKey);
+  const { data: prof } = await supabase.from('profiles').select('*').ilike('full_name', '%silvana%').single();
+  console.log('User found:', prof.id, prof.full_name, prof.role);
 
-async function inspect() {
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('id, full_name, email, role')
-    .ilike('full_name', '%silvana%')
-    .maybeSingle();
-
-  console.log("Silvana profile:", profile);
-
-  if (!profile) return;
-
-  const { data: txs } = await supabase
-    .from('transactions')
-    .select('*')
-    .eq('profile_id', profile.id)
-    .order('created_at', { ascending: false });
-
-  console.log(`Transactions for Silvana (${txs?.length || 0}):`);
+  // Check all transactions in DB for Silvana
+  const { data: txs } = await supabase.from('transactions').select('*').eq('profile_id', prof.id);
+  console.log(`\nDirect DB Transactions for ${prof.full_name} (${txs?.length}):`);
   console.table(txs);
 
-  const { data: orders } = await supabase
-    .from('orders')
-    .select('id, customer_name, amount, status, created_at, order_date')
-    .in('id', [1300, 1301, 1297, 1298, 1299]);
+  // Check getEcosystemActivity
+  const activity = await businessRules.getEcosystemActivity(prof.id);
+  console.log(`\ngetEcosystemActivity items (${activity.length}):`);
+  console.table(activity);
 
-  console.log("Orders found:");
-  console.table(orders);
+  // Check getResellerFinancialSummary
+  const resellerSum = await businessRules.getResellerFinancialSummary(prof.id, 2026, 8);
+  console.log(`\ngetResellerFinancialSummary itemized (${resellerSum.itemizedTransactions?.length}):`);
+  console.table(resellerSum.itemizedTransactions);
+
+  if (signRes.data?.user?.id) {
+    await supabase.from('profiles').update({ role: 'customer' }).eq('id', signRes.data.user.id);
+  }
 }
 
-inspect().catch(console.error);
+test().catch(console.error);

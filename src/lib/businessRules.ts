@@ -1908,10 +1908,14 @@ export const businessRules = {
         };
       });
 
-      // Filtrar comissões de afiliados que não pertencem à rede (não mapeadas)
+      // Filtrar comissões de afiliados que não pertencem à rede (não mapeadas) e deduplicar
+      const seenNetworkKeys = new Set<string>();
       return activity.filter(item => {
         if (item.originalType === 'commission' && item.orderId !== '---') {
           if (item.level === '---') return false;
+          const key = `${item.orderId}_${item.level}_${item.cashbackType}_${item.isReseller ? 'REG' : 'MMN'}`;
+          if (seenNetworkKeys.has(key)) return false;
+          seenNetworkKeys.add(key);
         }
         return true;
       });
@@ -5309,14 +5313,28 @@ export const businessRules = {
 
       if (txError) throw txError;
 
-      // Filtrar apenas comissões e repasses de revendedor regional
-      const resellerTransactions = (allTransactions || []).filter(t => {
+      // Filtrar apenas comissões e repasses de revendedor regional e deduplicar
+      const rawResellerTransactions = (allTransactions || []).filter(t => {
         const desc = (t.description || '').toLowerCase();
         return desc.includes('revendedor') || 
                desc.includes('regional') || 
                desc.includes('revenda') || 
                t.metadata?.is_reseller === true || 
                t.metadata?.type === 'reseller';
+      });
+
+      const seenResellerKeys = new Set<string>();
+      const resellerTransactions = rawResellerTransactions.filter(t => {
+        const match = t.description?.match(/Pedido\s*#?\s*([a-zA-Z0-9_-]+)/i);
+        const ord = t.order_id || (match ? match[1] : null);
+        if (ord && t.type === 'commission') {
+          const isM = (t.description || '').toLowerCase().includes('mensal');
+          const isA = (t.description || '').toLowerCase().includes('anual');
+          const key = `${ord}_${isM ? 'M' : isA ? 'A' : 'O'}`;
+          if (seenResellerKeys.has(key)) return false;
+          seenResellerKeys.add(key);
+        }
+        return true;
       });
 
       // Transações do mês selecionado

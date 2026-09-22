@@ -1863,9 +1863,12 @@ export const businessRules = {
           .replace(/Comiss[aã]o Anual/gi, 'Cashback Anual');
 
         let displayStatus = 'Pendente';
-        if (order?.status === 'Cancelado' || t.status === 'cancelled' || t.status === 'failed') {
+        const isOrderPaid = order?.status === 'Pago' || order?.status === 'Concluído' || order?.status === 'Pago, Aguardando Retirada';
+        const isOrderCancelled = order?.status === 'Cancelado' || t.status === 'cancelled' || t.status === 'failed';
+
+        if (isOrderCancelled) {
           displayStatus = 'Cancelado';
-        } else if (t.status === 'completed' || t.status === 'pago') {
+        } else if (t.status === 'completed' || t.status === 'pago' || isOrderPaid) {
           displayStatus = 'Pago';
         } else {
           displayStatus = 'Pendente';

@@ -220,7 +220,7 @@ export default function AffiliateResellerFinancial() {
       s.status === 'completed' || s.status === 'pago' ? 'Liquidado' : 'Aguardando Pagamento'
     ]);
 
-    const regMensalRate = data?.config?.commission_regional_mensal ?? 4;
+    const regMensalRate = data?.config?.commission_regional_mensal ?? 10;
     const regAnualRate = data?.config?.commission_regional_anual ?? 2;
     const regTotalRate = regMensalRate + regAnualRate;
 
@@ -725,9 +725,9 @@ export default function AffiliateResellerFinancial() {
                           <th className="px-5 py-2">CLIENTE / COMPRADOR</th>
                           <th className="px-5 py-2">DATA</th>
                           <th className="px-5 py-2 text-right">VALOR VENDA</th>
-                          <th className="px-5 py-2 text-right text-amber-600 font-black">MENSAL ({data?.config?.commission_regional_mensal ?? 4}%)</th>
+                          <th className="px-5 py-2 text-right text-amber-600 font-black">MENSAL ({data?.config?.commission_regional_mensal ?? 10}%)</th>
                           <th className="px-5 py-2 text-right">ANUAL ({data?.config?.commission_regional_anual ?? 2}%)</th>
-                          <th className="px-5 py-2 text-right">TOTAL COMISSÃO ({(Number(data?.config?.commission_regional_mensal ?? 4) + Number(data?.config?.commission_regional_anual ?? 2)).toFixed(0)}%)</th>
+                          <th className="px-5 py-2 text-right">TOTAL COMISSÃO ({(Number(data?.config?.commission_regional_mensal ?? 10) + Number(data?.config?.commission_regional_anual ?? 2)).toFixed(0)}%)</th>
                           <th className="px-5 py-2 text-center">STATUS</th>
                         </tr>
                       </thead>

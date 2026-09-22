@@ -264,7 +264,7 @@ export default function AffiliateResellerDashboard() {
             <div className="flex gap-6 pt-1 font-black text-xs text-midnight">
               <div>
                 <span className="text-slate-400 font-bold block uppercase text-[8px]">Mensal (Dia 10)</span>
-                <span className="text-purple-600 font-mono text-sm">+{regionalConfig?.commission_regional_mensal || '4.00'}%</span>
+                <span className="text-purple-600 font-mono text-sm">+{regionalConfig?.commission_regional_mensal || '10.00'}%</span>
               </div>
               <div>
                 <span className="text-slate-400 font-bold block uppercase text-[8px]">Anual (10/Dez)</span>

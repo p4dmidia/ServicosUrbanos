@@ -307,7 +307,7 @@ export default function AffiliateRenewals() {
                             {/* Chips de Benefícios */}
                             <div className="flex flex-wrap items-center gap-2 pt-1">
                               <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-100/80 border border-amber-300 text-amber-950 text-xs font-black">
-                                🏆 Comissão Regional (4% M + 2% A)
+                                🏆 Comissão Regional (10% M + 2% A)
                               </span>
                               <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 border border-slate-200 text-slate-700 text-xs font-black">
                                 🌐 Rede G0, G1 e G2

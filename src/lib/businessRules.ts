@@ -5538,9 +5538,9 @@ export const businessRules = {
         month: selMonth,
         rates: {
           semanal: 0,
-          mensal: Number(config?.commission_regional_mensal ?? 4.00),
+          mensal: Number(config?.commission_regional_mensal ?? 10.00),
           anual: Number(config?.commission_regional_anual ?? 2.00),
-          total: Number(config?.commission_regional_mensal ?? 4.00) + Number(config?.commission_regional_anual ?? 2.00)
+          total: Number(config?.commission_regional_mensal ?? 10.00) + Number(config?.commission_regional_anual ?? 2.00)
         },
         monthlyEarned,
         monthlyPaid,
@@ -5555,7 +5555,7 @@ export const businessRules = {
         totalMonthlyPendingHistorical,
         tax,
         config: {
-          commission_regional_mensal: Number(config?.commission_regional_mensal ?? 4.00),
+          commission_regional_mensal: Number(config?.commission_regional_mensal ?? 10.00),
           commission_regional_anual: Number(config?.commission_regional_anual ?? 2.00)
         },
         salesList,

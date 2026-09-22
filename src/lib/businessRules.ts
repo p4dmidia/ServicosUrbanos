@@ -224,9 +224,8 @@ export interface RPAReceipt {
 
 /**
  * Apuração Fiscal Oficial de RPA (Recibo de Pagamento a Autônomo) - Pessoa Física e PJ:
- * Conforme Tabela Oficial da Receita Federal e parâmetros da Contabilidade:
- * 1. INSS Retido (11%): Aplicado sobre o valor bruto pago ao autônomo (Pessoa Física).
- * 2. Base de Cálculo IRPF = Valor Bruto - INSS Retido.
+ * 1. INSS: 0% de retenção na fonte (recolhimento individual por conta própria do autônomo).
+ * 2. Base de Cálculo IRPF = Valor Bruto.
  * 3. Tabela Progressiva Mensal do IRPF:
  *    - Até R$ 2.428,80: Isento (0,0% | Parcela a deduzir: R$ 0,00)
  *    - De R$ 2.428,81 até R$ 2.826,65: 7,5% | Parcela a deduzir: R$ 182,16
@@ -260,11 +259,12 @@ export function calculateCumulativeTaxDeductions({
     };
   }
 
-  // 1. INSS Retido (11% sobre o valor bruto do autônomo PF)
-  const inss = parseFloat((safeBruto * 0.11).toFixed(2));
+  // 1. INSS na Fonte (0% - não é cobrado/retido do Afiliado)
+  const inss = 0;
 
-  // 2. Base de Cálculo do IRPF
-  const irrfBase = Math.max(0, parseFloat((safeBruto - inss).toFixed(2)));
+  // 2. Base de Cálculo do IRPF: Deduz o valor de 11% do INSS da base para enquadramento na tabela progressiva
+  const inssDeductionForIrBase = safeBruto * 0.11;
+  const irrfBase = Math.max(0, safeBruto - inssDeductionForIrBase);
 
   // 3. Tabela Progressiva Mensal do IRPF
   let irrfCalculated = 0;
@@ -282,20 +282,20 @@ export function calculateCumulativeTaxDeductions({
 
   const irrf = Math.max(0, parseFloat(irrfCalculated.toFixed(2)));
 
-  // 4. Valor Líquido após retenções
-  const liquido = Math.max(0, parseFloat((safeBruto - inss - irrf).toFixed(2)));
+  // 4. Valor Líquido após dedução do IRPF (sem reter INSS)
+  const liquido = Math.max(0, parseFloat((safeBruto - irrf).toFixed(2)));
 
   return {
     bruto: parseFloat(safeBruto.toFixed(2)),
-    inss: inss,
+    inss: 0,
     irrf: irrf,
     liquido: liquido,
     patronal: 0,
     isPJ: false,
     totalMonthBruto: parseFloat((alreadyPaidBrutoInMonth + safeBruto).toFixed(2)),
-    totalMonthInss: parseFloat((alreadyRetainedInssInMonth + inss).toFixed(2)),
+    totalMonthInss: 0,
     totalMonthIrrf: parseFloat((alreadyRetainedIrrfInMonth + irrf).toFixed(2)),
-    irrfBase: irrfBase
+    irrfBase: parseFloat(irrfBase.toFixed(2))
   };
 }
 
@@ -2182,8 +2182,7 @@ export const businessRules = {
     const lastDayLastMonth = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59);
 
     const [
-      { data: currentRevenue },
-      { data: lastRevenue },
+      { data: allPaidOrdersData },
       { count: totalUserCount },
       { count: currentMonthUserCount },
       { count: lastMonthUserCount },
@@ -2196,9 +2195,8 @@ export const businessRules = {
       { count: resellerCount },
       { count: subscriberCount }
     ] = await Promise.all([
-      // Revenue
-      supabase.from('orders').select('amount').in('status', ['Pago, Aguardando Retirada', 'Concluído']).gte('order_date', firstDayCurrentMonth.toISOString()),
-      supabase.from('orders').select('amount').in('status', ['Pago, Aguardando Retirada', 'Concluído']).gte('order_date', firstDayLastMonth.toISOString()).lte('order_date', lastDayLastMonth.toISOString()),
+      // All paid orders for global and period metrics
+      supabase.from('orders').select('amount, order_date, created_at, status').in('status', ['Pago', 'Pago, Aguardando Retirada', 'Concluído', 'Entregue', 'Enviado']),
       
       // Users
       supabase.from('profiles').select('*', { count: 'exact', head: true }), // Total
@@ -2226,6 +2224,15 @@ export const businessRules = {
       supabase.from('subscriptions').select('*', { count: 'exact', head: true }).eq('status', 'active').gt('end_date', now.toISOString())
     ]);
 
+    const allPaidOrders = allPaidOrdersData || [];
+    const getOrderDate = (o: any) => new Date(o.order_date || o.created_at || Date.now());
+
+    const currentRevenue = allPaidOrders.filter(o => getOrderDate(o) >= firstDayCurrentMonth);
+    const lastRevenue = allPaidOrders.filter(o => {
+      const d = getOrderDate(o);
+      return d >= firstDayLastMonth && d <= lastDayLastMonth;
+    });
+
     // Totais Atuais (Gerais) calculados dinamicamente com base nas alíquotas ativas (MMN + Revendedor)
     const [
       { data: mmnConfigData },
@@ -2243,13 +2250,14 @@ export const businessRules = {
     const rTotal = rMensal + rAnual; // 12%
     const totalRepasseRate = netRate + rTotal; // 33%
 
-    const currentTotalRevenue = currentRevenue?.reduce((acc, o) => acc + Number(o.amount), 0) || 0;
-    const lastTotalRevenue = lastRevenue?.reduce((acc, o) => acc + Number(o.amount), 0) || 0;
+    const totalGlobalRevenue = allPaidOrders.reduce((acc, o) => acc + Number(o.amount || 0), 0);
+    const currentTotalRevenue = currentRevenue.reduce((acc, o) => acc + Number(o.amount || 0), 0);
+    const lastTotalRevenue = lastRevenue.reduce((acc, o) => acc + Number(o.amount || 0), 0);
 
-    const currentTotalCommissions = currentTotalRevenue * (totalRepasseRate / 100);
+    const currentTotalCommissions = totalGlobalRevenue * (totalRepasseRate / 100);
     const lastTotalCommissions = lastTotalRevenue * (totalRepasseRate / 100);
-    const currentNetworkCommissions = currentTotalRevenue * (netRate / 100);
-    const currentResellerCommissions = currentTotalRevenue * (rTotal / 100);
+    const currentNetworkCommissions = totalGlobalRevenue * (netRate / 100);
+    const currentResellerCommissions = totalGlobalRevenue * (rTotal / 100);
 
     // Cálculos de Tendência
     const calculateTrend = (current: number, last: number) => {
@@ -2264,7 +2272,7 @@ export const businessRules = {
     const branchesLast = (totalBranchCount || 0) - (currentMonthBranchCount || 0);
 
     return {
-      revenueTotal: currentTotalRevenue,
+      revenueTotal: totalGlobalRevenue,
       revenueTrend: calculateTrend(currentTotalRevenue, lastTotalRevenue),
       userCount: totalUserCount || 0,
       userTrend: calculateTrend(usersCurrent, usersLast),
@@ -2285,7 +2293,7 @@ export const businessRules = {
     const { data, error } = await supabase
       .from('orders')
       .select('*')
-      .order('order_date', { ascending: false });
+      .order('created_at', { ascending: false });
 
     if (error) throw error;
     return (data || []).map(o => ({
@@ -4756,7 +4764,7 @@ export const businessRules = {
           payment_forecast_date: forecastDate
         },
         legal_disclaimer:
-          'Recibo de Pagamento a Autônomo (RPA) emitido com retenção na fonte de 11% de INSS e IRPF apurado pela Tabela Progressiva Oficial da Receita Federal do Brasil.',
+          'Recibo de Pagamento a Autônomo (RPA) emitido com dedução do IRPF na Fonte (Tabela Progressiva Oficial) e repasses sem retenções na fonte de INSS (0%), cabendo ao prestador autônomo o recolhimento individual de suas contribuições previdenciárias.',
         ordersList: ordersList,
         ordersBreakdown: ordersBreakdown
       };
@@ -4817,6 +4825,19 @@ export const businessRules = {
           throw new Error('Você já possui uma solicitação de adiantamento em análise para este mês.');
         } else {
           throw new Error('Você já utilizou a sua cota de adiantamento deste mês.');
+        }
+      }
+
+      // Valida se o valor solicitado não ultrapassa o saldo líquido da competência (pós-impostos)
+      try {
+        const rpa = await businessRules.generateMonthlyRPAReceipt(userId, currentRefMonth);
+        const maxNet = rpa?.financial?.liquido_total || 0;
+        if (maxNet > 0 && amount > maxNet + 0.05) {
+          throw new Error(`O adiantamento solicitado (R$ ${amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}) excede o saldo líquido disponível pós-impostos (R$ ${maxNet.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}).`);
+        }
+      } catch (rpaErr: any) {
+        if (rpaErr?.message && rpaErr.message.includes('excede')) {
+          throw rpaErr;
         }
       }
 

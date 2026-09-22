@@ -52,7 +52,7 @@ export default function AdminDashboard() {
         const { data: ordersData, error: ordersError } = await supabase
           .from('orders')
           .select('id, amount, order_date, status, created_at')
-          .in('status', ['Pago, Aguardando Retirada', 'Concluído']);
+          .in('status', ['Pago', 'Pago, Aguardando Retirada', 'Concluído', 'Entregue', 'Enviado']);
         
         if (ordersError) throw ordersError;
         setOrders(ordersData || []);

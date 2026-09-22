@@ -167,8 +167,12 @@ export default function AffiliateInvoice() {
 
       if (isPJUser) {
         const [y, m] = activeRefMonth.split('-');
-        const res = await businessRules.getAffiliateInvoiceSummary(user.id, parseInt(y, 10), parseInt(m, 10) - 1);
+        const [res, advList] = await Promise.all([
+          businessRules.getAffiliateInvoiceSummary(user.id, parseInt(y, 10), parseInt(m, 10) - 1),
+          businessRules.getAffiliateAdvanceRequests(activeRefMonth, user.id)
+        ]);
         setSummary(res);
+        setAdvanceRequests(advList || []);
         if (res.totalGross) {
           setDeclaredAmount(res.totalGross.toFixed(2).replace('.', ','));
         }
@@ -210,14 +214,20 @@ export default function AffiliateInvoice() {
         return;
       }
 
-      const availableGross = rpaReceipt?.financial?.bruto_total || 0;
-      if (cleanVal > availableGross && availableGross > 0) {
-        toast.error(`O valor solicitado (R$ ${cleanVal.toFixed(2)}) não pode ultrapassar o total de rendimentos apurados no mês (R$ ${availableGross.toFixed(2)}).`);
+      const isPJUser = taxpayerType === 'pj';
+      const availableNet = isPJUser 
+        ? (summary?.totalGross || summary?.monthlyGross || 0)
+        : (rpaReceipt?.financial?.liquido_total !== undefined 
+            ? rpaReceipt.financial.liquido_total 
+            : (rpaReceipt?.financial?.bruto_total || 0));
+
+      if (cleanVal > availableNet && availableNet > 0) {
+        toast.error(`O valor solicitado (R$ ${cleanVal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}) não pode ultrapassar o saldo disponível da competência (R$ ${availableNet.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}).`);
         return;
       }
 
       await businessRules.requestAffiliateAdvance(user.id, cleanVal, advanceNotesInput);
-      toast.success('Solicitação de adiantamento enviada com sucesso! A administração analisará seu pedido.', {
+      toast.success('Solicitação de adiantamento enviada com sucesso! A administração analisará seu pedido para transferência via PIX.', {
         duration: 5000,
         icon: '💵'
       });
@@ -361,7 +371,7 @@ export default function AffiliateInvoice() {
                   Regra Oficial de Repasse Autônomo (RPA)
                 </h4>
                 <p className="text-xs text-slate-500 mt-0.5">
-                  Como empresa de intermediação de negócios, a plataforma transfere <strong>100% dos seus repasses sem retenções na fonte de INSS (0%)</strong>. O recolhimento de suas contribuições previdenciárias é individual por conta própria.
+                  Como empresa de intermediação de negócios, a plataforma transfere seus repasses com a dedução do <strong>IRPF na Fonte (conforme tabela progressiva)</strong> e sem retenções na fonte de INSS (0%). O recolhimento de suas contribuições previdenciárias é individual por conta própria.
                 </p>
               </div>
             </div>
@@ -489,11 +499,11 @@ export default function AffiliateInvoice() {
               {(!advanceRequests || !advanceRequests.some((a: any) => a.status === 'pending' || a.status === 'paid')) ? (
                 <button
                   onClick={() => {
-                    const gross = rpaReceipt?.financial?.bruto_total || 0;
-                    setAdvanceAmountInput(gross > 0 ? gross.toFixed(2).replace('.', ',') : '');
+                    const maxNet = rpaReceipt?.financial?.liquido_total || 0;
+                    setAdvanceAmountInput(maxNet > 0 ? maxNet.toFixed(2).replace('.', ',') : '');
                     setIsAdvanceModalOpen(true);
                   }}
-                  disabled={(rpaReceipt?.financial?.bruto_total || 0) <= 0}
+                  disabled={(rpaReceipt?.financial?.liquido_total || 0) <= 0}
                   className="w-full md:w-auto px-6 py-3.5 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 disabled:opacity-50 text-white rounded-2xl font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2 shadow-lg shadow-amber-600/20 transition-all cursor-pointer"
                 >
                   <DollarSign size={16} />
@@ -584,11 +594,11 @@ export default function AffiliateInvoice() {
                       <span>Desconto de IRPF na Fonte:</span>
                       {(rpaReceipt?.financial?.deducao_irrf || 0) > 0 ? (
                         <span className="text-[9px] bg-amber-50 text-amber-700 border border-amber-200 px-1.5 py-0.5 rounded font-bold uppercase tracking-wider">
-                          27,5% s/ excedente &gt; R$ 5 mil
+                          Tabela Progressiva
                         </span>
                       ) : (
                         <span className="text-[9px] bg-emerald-50 text-emerald-700 border border-emerald-200 px-1.5 py-0.5 rounded font-bold uppercase tracking-wider">
-                          Isento até R$ 5.000,00
+                          Isento na Fonte
                         </span>
                       )}
                     </div>
@@ -890,15 +900,34 @@ export default function AffiliateInvoice() {
                 </div>
 
                 <form onSubmit={handleRequestAdvance} className="p-6 space-y-5">
-                  <div className="bg-amber-500/10 border border-amber-500/20 p-4 rounded-2xl space-y-1">
-                    <span className="text-[10px] font-black uppercase tracking-wider text-amber-300 block">
-                      Saldo Bruto Acumulado na Competência:
+                  <div className="bg-amber-500/10 border border-amber-500/20 p-4 rounded-2xl space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-black uppercase tracking-wider text-amber-300 block">
+                        Saldo Líquido Disponível (Pós-IRPF):
+                      </span>
+                      <span className="text-[10px] font-bold text-amber-400/80 uppercase">
+                        Limite Máximo
+                      </span>
+                    </div>
+                    <span className="text-2xl font-mono font-black text-amber-200 block">
+                      R$ {(rpaReceipt?.financial?.liquido_total || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                     </span>
-                    <span className="text-2xl font-mono font-black text-amber-200">
-                      R$ {(rpaReceipt?.financial?.bruto_total || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                    </span>
-                    <p className="text-[11px] text-amber-200/80 mt-1">
-                      O valor do adiantamento será transferido via PIX e abatido automaticamente na liquidação do dia 10.
+                    <div className="pt-2 border-t border-amber-500/20 grid grid-cols-2 gap-2 text-[11px] text-amber-200/80">
+                      <div>
+                        <span className="text-slate-400 block text-[9px] uppercase font-bold">Bruto Apurado:</span>
+                        <span className="font-mono font-bold text-white">
+                          R$ {(rpaReceipt?.financial?.bruto_total || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-slate-400 block text-[9px] uppercase font-bold">(-) IRPF na Fonte:</span>
+                        <span className="font-mono font-bold text-rose-300">
+                          - R$ {(rpaReceipt?.financial?.deducao_irrf || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                        </span>
+                      </div>
+                    </div>
+                    <p className="text-[10px] text-amber-200/70 mt-1">
+                      O valor do adiantamento é limitado ao saldo líquido após o desconto do IRPF. O adiantamento será transferido via PIX e abatido na liquidação do dia 10.
                     </p>
                   </div>
 
@@ -995,6 +1024,128 @@ export default function AffiliateInvoice() {
           </div>
           <div className="shrink-0 bg-white px-4 py-2 rounded-xl border border-amber-500/30 text-[10px] font-black uppercase tracking-wider text-amber-700 shadow-sm">
             Prazo limite: Até dia 05 do mês subsequente
+          </div>
+        </div>
+
+        {/* Barra de Filtro de Mês / Competência da NF */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 rounded-3xl border border-slate-200/80 shadow-sm">
+          <div className="flex items-center gap-3.5">
+            <div className="size-11 rounded-2xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 shadow-sm shrink-0">
+              <Calendar size={22} />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h4 className="text-xs font-black text-midnight uppercase tracking-wider">
+                  Competência Fiscal PJ
+                </h4>
+                {isDefaultCompetence && (
+                  <span className="px-2 py-0.5 bg-indigo-100 text-indigo-800 rounded-md text-[10px] font-bold uppercase tracking-wider">
+                    Mês Atual
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Navegue entre os meses com as setas para filtrar o faturamento apurado e notas fiscais
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2.5 self-stretch sm:self-auto justify-between sm:justify-end">
+            {!isDefaultCompetence && (
+              <button
+                onClick={handleResetToCurrentMonth}
+                className="px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-[10px] uppercase tracking-wider transition-all cursor-pointer"
+              >
+                Mês Atual
+              </button>
+            )}
+            <div className="flex items-center gap-1 bg-slate-50 p-1 rounded-2xl border border-slate-200/80">
+              <button
+                onClick={handlePrevMonth}
+                className="p-2 rounded-xl text-slate-600 hover:text-midnight hover:bg-white transition-all shadow-sm cursor-pointer"
+                title="Mês Anterior"
+              >
+                <ChevronLeft size={16} />
+              </button>
+              <div className="px-3 py-1 font-black text-xs text-midnight uppercase tracking-wider min-w-[140px] text-center font-mono">
+                {summary?.monthLabel || monthLabel}
+              </div>
+              <button
+                onClick={handleNextMonth}
+                className="p-2 rounded-xl text-slate-600 hover:text-midnight hover:bg-white transition-all shadow-sm cursor-pointer"
+                title="Próximo Mês"
+              >
+                <ChevronRight size={16} />
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Card de Adiantamento / Solicitação de Saque PJ */}
+        <div className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+          <div className="flex items-center gap-4">
+            <div className="size-12 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-600 flex items-center justify-center shrink-0">
+              <DollarSign size={24} />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h4 className="text-sm font-black text-midnight uppercase tracking-tight">
+                  Adiantamento / Solicitação de Saque PJ
+                </h4>
+                <span className="text-[10px] bg-amber-100 text-amber-800 border border-amber-300 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">
+                  1 por mês
+                </span>
+              </div>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Você pode solicitar até 1 adiantamento por competência do seu faturamento acumulado via PIX.
+              </p>
+              {advanceRequests && advanceRequests.length > 0 && (
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {advanceRequests.map((adv: any) => (
+                    <div key={adv.id} className="inline-flex items-center gap-2 px-3 py-1 rounded-xl bg-slate-50 border border-slate-200 text-xs">
+                      <span className="font-mono font-bold text-slate-700">
+                        R$ {Number(adv.amount).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                      </span>
+                      <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full ${
+                        adv.status === 'paid' || adv.status === 'completed' 
+                          ? 'bg-emerald-100 text-emerald-800' 
+                          : adv.status === 'pending'
+                          ? 'bg-amber-100 text-amber-800'
+                          : 'bg-rose-100 text-rose-800'
+                      }`}>
+                        {adv.status === 'paid' || adv.status === 'completed' ? 'Pago via PIX' : adv.status === 'pending' ? 'Em Análise' : 'Recusado'}
+                      </span>
+                      {adv.receipt_url && (
+                        <a href={adv.receipt_url} target="_blank" rel="noreferrer" className="text-[10px] text-emerald-600 font-bold underline">
+                          Comprovante
+                        </a>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="shrink-0 flex items-center gap-3 w-full md:w-auto justify-end">
+            {(!advanceRequests || !advanceRequests.some((a: any) => a.status === 'pending' || a.status === 'paid' || a.status === 'completed')) ? (
+              <button
+                onClick={() => {
+                  const maxNet = summary?.totalGross || summary?.monthlyGross || 0;
+                  setAdvanceAmountInput(maxNet > 0 ? maxNet.toFixed(2).replace('.', ',') : '');
+                  setIsAdvanceModalOpen(true);
+                }}
+                disabled={(summary?.totalGross || summary?.monthlyGross || 0) <= 0}
+                className="w-full md:w-auto px-6 py-3.5 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 disabled:opacity-50 text-white rounded-2xl font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2 shadow-lg shadow-amber-600/20 transition-all cursor-pointer"
+              >
+                <DollarSign size={16} />
+                Solicitar Adiantamento PJ
+              </button>
+            ) : (
+              <span className="text-xs font-bold text-amber-800 bg-amber-100 px-4 py-2 rounded-xl border border-amber-300">
+                {advanceRequests.some((a: any) => a.status === 'paid' || a.status === 'completed') ? 'Adiantamento Concedido' : 'Solicitação em Análise'}
+              </span>
+            )}
           </div>
         </div>
 
@@ -1559,6 +1710,120 @@ export default function AffiliateInvoice() {
             </div>
           </form>
         </div>
+
+        {/* Modal de Solicitação de Adiantamento PJ */}
+        {isAdvanceModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-200">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="bg-slate-900 border border-slate-700/80 rounded-3xl max-w-lg w-full overflow-hidden shadow-2xl text-white"
+            >
+              <div className="p-6 border-b border-slate-800 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="size-10 rounded-xl bg-amber-500/20 text-amber-400 border border-amber-500/30 flex items-center justify-center">
+                    <DollarSign size={20} />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-black text-white uppercase tracking-tight">
+                      Solicitar Adiantamento / Saque PJ
+                    </h3>
+                    <p className="text-xs text-slate-400">
+                      Competência: {summary?.monthLabel || monthLabel}
+                    </p>
+                  </div>
+                </div>
+                <button 
+                  onClick={() => setIsAdvanceModalOpen(false)}
+                  className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+                >
+                  <AlertCircle size={20} className="rotate-45" />
+                </button>
+              </div>
+
+              <form onSubmit={handleRequestAdvance} className="p-6 space-y-5">
+                <div className="bg-amber-500/10 border border-amber-500/20 p-4 rounded-2xl space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-black uppercase tracking-wider text-amber-300 block">
+                      Saldo Disponível Acumulado (PJ):
+                    </span>
+                    <span className="text-[10px] font-bold text-amber-400/80 uppercase">
+                      Isenção de Retenção
+                    </span>
+                  </div>
+                  <span className="text-2xl font-mono font-black text-amber-200 block">
+                    R$ {(summary?.totalGross || summary?.monthlyGross || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                  </span>
+                  <p className="text-[10px] text-amber-200/70 mt-1">
+                    Como Pessoa Jurídica (PJ/MEI), não há retenções na fonte de INSS ou IRPF. O adiantamento será transferido via PIX para a conta da sua empresa e abatido na apuração do dia 10.
+                  </p>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-xs font-bold text-slate-300 uppercase tracking-wider block">
+                    Valor a Antecipar (R$):
+                  </label>
+                  <div className="relative">
+                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-sm">
+                      R$
+                    </span>
+                    <input 
+                      type="text"
+                      required
+                      value={advanceAmountInput}
+                      onChange={(e) => setAdvanceAmountInput(e.target.value)}
+                      placeholder="0,00"
+                      className="w-full pl-12 pr-4 py-3.5 bg-slate-800/80 border border-slate-700 rounded-2xl text-white font-mono font-bold text-lg focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-all"
+                    />
+                  </div>
+                </div>
+
+                <div className="bg-slate-800/60 p-4 rounded-2xl border border-slate-700/60 space-y-1">
+                  <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block">
+                    Chave PIX Cadastrada da Empresa:
+                  </span>
+                  <span className="text-xs font-mono font-bold text-emerald-400 block truncate">
+                    {profile?.pix_key || 'Chave PIX não cadastrada no perfil'}
+                  </span>
+                  <p className="text-[10px] text-slate-400">
+                    Tipo: {profile?.pix_type || 'CNPJ'} • Empresa: {profile?.company_name || profile?.full_name || 'Afiliado PJ'}
+                  </p>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-xs font-bold text-slate-300 uppercase tracking-wider block">
+                    Observações / Justificativa (Opcional):
+                  </label>
+                  <textarea 
+                    rows={2}
+                    value={advanceNotesInput}
+                    onChange={(e) => setAdvanceNotesInput(e.target.value)}
+                    placeholder="Ex: Solicitação de antecipação referente às vendas da 1ª quinzena."
+                    className="w-full p-3.5 bg-slate-800/80 border border-slate-700 rounded-2xl text-white text-xs focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-all resize-none"
+                  />
+                </div>
+
+                <div className="pt-2 flex items-center justify-end gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setIsAdvanceModalOpen(false)}
+                    className="px-5 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs uppercase tracking-wider transition-all"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={submittingAdvance}
+                    className="px-6 py-3 rounded-xl bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white font-black text-xs uppercase tracking-wider flex items-center gap-2 shadow-lg shadow-amber-600/30 transition-all disabled:opacity-50 cursor-pointer"
+                  >
+                    {submittingAdvance ? <Loader2 size={16} className="animate-spin" /> : <DollarSign size={16} />}
+                    Confirmar Solicitação
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
 
       </div>
     </AffiliateLayout>

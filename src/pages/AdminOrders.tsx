@@ -338,7 +338,7 @@ export default function AdminOrders() {
       const matchesStatus = statusFilter === 'Todos' 
         ? true 
         : statusFilter === 'Pago'
-          ? (o.status === 'Pago' || o.status === 'Pago, Aguardando Retirada' || o.status === 'Concluído')
+          ? (o.status === 'Pago' || o.status === 'Pago, Aguardando Retirada' || o.status === 'Concluído' || o.status === 'Entregue' || o.status === 'Enviado')
           : o.status === statusFilter;
 
       if (!matchesSearch || !matchesStatus) return false;
@@ -346,7 +346,7 @@ export default function AdminOrders() {
       // Filtro de período
       if (periodFilter === 'all') return true;
 
-      const orderDate = getOrderLocalDate(o.created_at);
+      const orderDate = getOrderLocalDate(o.order_date || o.created_at || o.date);
       if (!orderDate) return true;
 
       switch (periodFilter) {
@@ -373,7 +373,6 @@ export default function AdminOrders() {
   }, [orders, searchTerm, statusFilter, periodFilter, customStartDate, customEndDate]);
 
   const periodMetrics = useMemo(() => {
-    let totalAmount = 0;
     let paidAmount = 0;
     let pendingAmount = 0;
     let canceledAmount = 0;
@@ -383,9 +382,8 @@ export default function AdminOrders() {
 
     filteredOrders.forEach(o => {
       const amt = Number(o.amount) || 0;
-      totalAmount += amt;
 
-      const isPaid = o.status === 'Pago' || o.status === 'Pago, Aguardando Retirada' || o.status === 'Concluído';
+      const isPaid = o.status === 'Pago' || o.status === 'Pago, Aguardando Retirada' || o.status === 'Concluído' || o.status === 'Entregue' || o.status === 'Enviado';
       const isPending = o.status === 'Aguardando Pagamento' || o.status === 'Pendente';
       const isCanceled = o.status === 'Cancelado';
 
@@ -401,16 +399,20 @@ export default function AdminOrders() {
       }
     });
 
+    const validAmount = paidAmount + pendingAmount;
+    const validCount = paidCount + pendingCount;
+
     return {
-      totalAmount,
+      totalAmount: validAmount,
       paidAmount,
       pendingAmount,
       canceledAmount,
-      totalCount: filteredOrders.length,
+      totalCount: validCount,
+      allCount: filteredOrders.length,
       paidCount,
       pendingCount,
       canceledCount,
-      avgTicket: filteredOrders.length > 0 ? totalAmount / filteredOrders.length : 0
+      avgTicket: paidCount > 0 ? paidAmount / paidCount : (validCount > 0 ? validAmount / validCount : 0)
     };
   }, [filteredOrders]);
 
@@ -578,7 +580,7 @@ export default function AdminOrders() {
             <div className="flex items-center justify-between mb-2">
               <span className="text-[10px] font-black uppercase tracking-widest text-indigo-300 flex items-center gap-1.5">
                 <DollarSign size={14} className="text-indigo-400" />
-                Soma Total ({getPeriodLabel()})
+                Faturamento Válido ({getPeriodLabel()})
               </span>
               <span className="px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
                 {periodMetrics.totalCount} {periodMetrics.totalCount === 1 ? 'pedido' : 'pedidos'}
@@ -588,7 +590,7 @@ export default function AdminOrders() {
               R$ {periodMetrics.totalAmount.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </div>
             <p className="text-[11px] text-slate-400 font-medium mt-1">
-              Volume bruto total dos pedidos no período
+              Volume total de pedidos válidos (exclui cancelados)
             </p>
           </div>
 

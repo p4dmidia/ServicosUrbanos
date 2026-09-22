@@ -66,7 +66,7 @@ export default function AdminReports() {
   const completedOrders = useMemo(() => {
     return orders.filter(o => {
       const isPaid = o.status !== 'Cancelado' && 
-        (o.status === 'Pago' || o.status === 'Concluído' || o.status === 'Pago, Aguardando Retirada');
+        (o.status === 'Pago' || o.status === 'Concluído' || o.status === 'Pago, Aguardando Retirada' || o.status === 'Entregue' || o.status === 'Enviado');
       if (!isPaid) return false;
       const orderDate = (o.order_date || o.created_at || o.date || '').substring(0, 10);
       if (startDate && orderDate < startDate) return false;

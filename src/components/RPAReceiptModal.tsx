@@ -258,7 +258,7 @@ export default function RPAReceiptModal({
       doc.setFontSize(6.5);
       doc.setTextColor(71, 85, 105);
       const disclaimerLines = doc.splitTextToSize(
-        'Declaro para os devidos fins que os valores acima decorrem estritamente de serviços de intermediação e agenciamento de produtos/serviços no ecossistema Serviços Urbanos. Em virtude do enquadramento de intermediação de negócios, a plataforma transfere 100% dos repasses sem retenções na fonte, cabendo exclusivamente a mim, como prestador autônomo pessoa física, o recolhimento de minhas contribuições previdenciárias como contribuinte individual (Carnê-Leão / GPS) e demais tributos perante os órgãos competentes.',
+        'Declaro para os devidos fins que os valores acima decorrem estritamente de serviços de intermediação e agenciamento de produtos/serviços no ecossistema Serviços Urbanos. A plataforma realiza a retenção e recolhimento do IRPF na fonte conforme legislação vigente e transfere os repasses sem retenções de INSS na fonte (0%), cabendo exclusivamente a mim, como prestador autônomo pessoa física, o recolhimento de minhas contribuições previdenciárias como contribuinte individual (Carnê-Leão / GPS) e demais tributos perante os órgãos competentes.',
         178
       );
       doc.text(disclaimerLines, 16, y);
@@ -644,14 +644,21 @@ export default function RPAReceiptModal({
 
         {/* Footer com Ações */}
         <div className="p-6 md:p-8 border-t border-white/5 bg-white/[0.02] flex flex-col sm:flex-row items-center justify-between gap-4">
-          <button
-            onClick={handleDownloadPdf}
-            disabled={downloadingPdf}
-            className="w-full sm:w-auto px-5 py-3 bg-white/5 hover:bg-white/10 text-white rounded-2xl font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition-all cursor-pointer border border-white/10"
-          >
-            {downloadingPdf ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} className="text-indigo-400" />}
-            Baixar RPA Oficial (.PDF)
-          </button>
+          {rpa.status === 'quitado' ? (
+            <button
+              onClick={handleDownloadPdf}
+              disabled={downloadingPdf}
+              className="w-full sm:w-auto px-5 py-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white rounded-2xl font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition-all cursor-pointer shadow-lg shadow-emerald-600/20 border border-emerald-500/30"
+            >
+              {downloadingPdf ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
+              Baixar RPA Oficial (.PDF)
+            </button>
+          ) : (
+            <div className="text-[11px] text-slate-500 font-medium flex items-center gap-2">
+              <Lock size={14} className="text-slate-500 shrink-0" />
+              <span>Download do PDF disponível após confirmação do pagamento</span>
+            </div>
+          )}
 
           <div className="w-full sm:w-auto flex items-center gap-3">
             {isLockMode ? (

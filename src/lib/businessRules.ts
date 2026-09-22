@@ -1728,7 +1728,7 @@ export const businessRules = {
       const orderIds = transactions
         .map(t => {
           if (t.order_id) return String(t.order_id);
-          const match = t.description?.match(/Pedido #([A-Z0-9-]+)/i);
+          const match = t.description?.match(/Pedido\s*#\s*([A-Z0-9-]+)/i);
           return match ? match[1] : null;
         })
         .filter(Boolean) as string[];

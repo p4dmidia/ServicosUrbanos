@@ -169,12 +169,12 @@ export default function AffiliateWallet() {
     doc.setFontSize(9);
     doc.setFont('helvetica', 'normal');
     doc.text(`Categoria: Rede MMN (${mmnLevelFilter === 'all' ? 'G0 ao G2' : 'Nível G' + mmnLevelFilter}) | Tipo: ${activeFilter === 'all' ? 'Todos' : activeFilter === 'mensal' ? 'Mensal' : 'Anual'}`, 14, 59);
-    doc.text(`Total Valor dos Contratos: ${totalsPending.totalContratos.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`, 14, 65);
-    doc.text(`Percentual de Repasse: ${totalsPending.percentualRepasse.toFixed(2)}%`, 14, 71);
+    doc.text(`Total Valor dos Contratos: ${totalsSummary.all.totalContratos.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`, 14, 65);
+    doc.text(`Percentual de Repasse: ${totalsSummary.all.percentualRepasse.toFixed(2)}%`, 14, 71);
     
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(16, 185, 129); // Emerald
-    doc.text(`(=) Valor Bruto do Cashback: ${totalsPending.totalBruto.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`, 14, 78);
+    doc.text(`(=) Valor Bruto do Cashback: ${totalsSummary.all.totalBruto.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`, 14, 78);
 
     // Tabela
     const tableData = enrichedTransactions.map(t => [
@@ -594,19 +594,19 @@ export default function AffiliateWallet() {
                         <div className="bg-white/5 p-4 rounded-2xl border border-white/5">
                           <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Valor Total dos Contratos</p>
                           <p className="text-base lg:text-lg font-black text-white font-mono">
-                            {totalsPending.totalContratos.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                            {totalsSummary.all.totalContratos.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                           </p>
                         </div>
                         <div className="bg-white/5 p-4 rounded-2xl border border-white/5">
                           <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Percentual de Repasse</p>
                           <p className="text-base lg:text-lg font-black text-indigo-400 font-mono">
-                            {totalsPending.percentualRepasse.toFixed(2)}%
+                            {totalsSummary.all.percentualRepasse.toFixed(2)}%
                           </p>
                         </div>
                         <div className="bg-emerald-500/10 p-4 rounded-2xl border border-emerald-500/20">
                           <p className="text-[9px] font-black text-emerald-400 uppercase tracking-widest mb-1">Valor Bruto do Cashback</p>
                           <p className="text-base lg:text-lg font-black text-emerald-400 font-mono">
-                            {totalsPending.totalBruto.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                            {totalsSummary.all.totalBruto.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                           </p>
                         </div>
                       </div>

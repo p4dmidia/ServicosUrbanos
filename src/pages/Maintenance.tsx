@@ -3,7 +3,6 @@ import {
   Wrench, 
   LayoutGrid, 
   Lock,
-  ArrowRight,
   MessageSquare
 } from 'lucide-react';
 import { motion } from 'motion/react';
@@ -97,14 +96,6 @@ export default function Maintenance() {
               <MessageSquare size={20} />
               Suporte via WhatsApp
             </a>
-            
-            <Link 
-              to="/lojista/login" 
-              className="w-full sm:w-auto bg-white/5 hover:bg-white/10 text-white border border-white/10 px-6 py-4 rounded-2xl font-black transition-all backdrop-blur-md active:scale-[0.98] flex items-center justify-center gap-3"
-            >
-              <span>Área do Lojista</span>
-              <ArrowRight size={18} className="text-slate-400" />
-            </Link>
           </div>
         </motion.div>
       </main>

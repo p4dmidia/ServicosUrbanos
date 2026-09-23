@@ -46,7 +46,7 @@ import WhatsAppButton from './components/WhatsAppButton';
 import { NotificationProvider } from './contexts/NotificationContext';
 
 // Defina como true para ativar a tela de manutenção na home, ou false para desativar.
-const IS_MAINTENANCE = false;
+const IS_MAINTENANCE = true;
 
 export default function App() {
   return (

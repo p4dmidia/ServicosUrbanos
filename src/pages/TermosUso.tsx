@@ -198,15 +198,16 @@ export default function TermosUso() {
       {/* Footer */}
       <footer className="bg-midnight text-slate-500 py-12 px-6 lg:px-20 border-t border-slate-800">
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-8">
-          <div className="flex items-center gap-2 text-white">
-            <div className="size-6 bg-primary-blue rounded flex items-center justify-center">
-              <BookOpen size={14} />
-            </div>
-            <span className="text-lg font-bold">Serviços Urbanos</span>
-          </div>
+          <Link to="/" className="flex items-center gap-2">
+            <img 
+              src="/logo.png" 
+              alt="CaZa dos Sorteios" 
+              className="h-8 w-auto object-contain" 
+            />
+          </Link>
 
-          <div className="flex flex-col items-center gap-1">
-            <p className="text-[10px] uppercase tracking-widest font-bold">© 2026 Serviços Urbanos Tecnologia S.A.</p>
+          <div className="flex flex-col items-center gap-1 text-center">
+            <p className="text-[10px] uppercase tracking-widest font-bold">© 2026 SIC COMÉRCIO DE PRODUTOS ALIMENTICIOS E SERVIÇOS LTDA CNPJ nº 54.795.377/0001-03. Todos os direitos reservados. Operação: CaZa dos Sorteios.</p>
             <p className="opacity-50 text-[9px] lowercase font-medium tracking-normal">
               Desenvolvido por <a href="https://p4dmidia.com.br" target="_blank" rel="noopener noreferrer" className="hover:text-emerald-500 transition-colors">P4D Mídia</a>
             </p>

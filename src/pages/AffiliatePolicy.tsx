@@ -52,7 +52,7 @@ export default function AffiliatePolicy() {
             {/* Top Info */}
             <div className="flex justify-between items-start border-b border-white/10 pb-8">
               <div>
-                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Seguro Coletivo Serviços Urbanos</p>
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">SIC COMÉRCIO DE PRODUTOS ALIMENTICIOS E SERVIÇOS LTDA</p>
                 <h2 className="text-2xl font-black italic uppercase text-emerald-400">CERTIFICADO DE ADESÃO</h2>
               </div>
               <span className="px-4 py-2 bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 rounded-full text-[10px] font-black uppercase tracking-widest leading-none">

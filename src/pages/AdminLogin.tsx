@@ -167,7 +167,7 @@ export default function AdminLogin() {
         {/* Footer info */}
         <div className="flex flex-col items-center mt-8 gap-1">
           <p className="text-center text-[10px] font-bold text-slate-600 uppercase tracking-[0.2em]">
-            © 2026 Serviços Urbanos S.A. <br />
+            © 2026 SIC COMÉRCIO DE PRODUTOS ALIMENTICIOS E SERVIÇOS LTDA CNPJ nº 54.795.377/0001-03. Todos os direitos reservados. Operação: CaZa dos Sorteios. <br />
             SISTEMA DE MONITORAMENTO DE ALTA SEGURANÇA
           </p>
           <p className="text-[9px] text-slate-700 lowercase font-medium tracking-normal text-center opacity-40">

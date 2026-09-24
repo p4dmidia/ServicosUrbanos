@@ -156,7 +156,7 @@ export default function PaymentReceipt({ receiptData, onClose }: PaymentReceiptP
 
               {/* Bottom Border */}
               <div className="pt-8 border-t border-slate-100 flex items-center justify-between opacity-50">
-                <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Serviços Urbanos</span>
+                <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">CaZa dos Sorteios</span>
                 <ShieldCheck size={14} className="text-slate-300" />
               </div>
             </div>

@@ -312,7 +312,7 @@ export default function AffiliateLuckyNumber() {
                   NÚMERO DA SORTE
                 </h2>
                 <p className="text-slate-400 font-medium text-xs">
-                  Serviços Urbanos Intermediação & Tecnologia Ltda.
+                  SIC Comércio de Produtos Alimentícios e Serviços Ltda.
                 </p>
               </div>
 

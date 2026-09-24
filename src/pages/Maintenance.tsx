@@ -20,12 +20,11 @@ export default function Maintenance() {
       {/* Header / Logo */}
       <header className="w-full max-w-7xl mx-auto px-6 py-8 relative z-10 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="size-10 bg-primary-blue rounded-xl flex items-center justify-center shadow-lg shadow-primary-blue/20">
-            <LayoutGrid size={20} className="text-white" />
-          </div>
-          <span className="text-xl font-black tracking-tight bg-gradient-to-r from-white to-slate-400 bg-clip-text text-transparent">
-            SERVIÇOS URBANOS
-          </span>
+          <img 
+            src="/logo.png" 
+            alt="CaZa dos Sorteios" 
+            className="h-10 w-auto object-contain" 
+          />
         </div>
         
         <Link 
@@ -102,7 +101,7 @@ export default function Maintenance() {
 
       {/* Footer */}
       <footer className="w-full max-w-7xl mx-auto px-6 py-8 relative z-10 text-center text-xs font-semibold text-slate-600 tracking-wider">
-        © {new Date().getFullYear()} Serviços Urbanos. Todos os direitos reservados.
+        © 2026 SIC COMÉRCIO DE PRODUTOS ALIMENTICIOS E SERVIÇOS LTDA CNPJ nº 54.795.377/0001-03. Todos os direitos reservados. Operação: CaZa dos Sorteios.
       </footer>
     </div>
   );

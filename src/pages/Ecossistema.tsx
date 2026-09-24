@@ -347,7 +347,7 @@ export default function Ecossistema() {
 
           <div className="pt-8 border-t border-slate-900 flex flex-col md:flex-row justify-between items-center gap-4 text-[10px] uppercase tracking-widest font-bold">
             <div className="flex flex-col items-center md:items-start gap-1">
-              <p>© 2026 SERVIÇOS URBANOS TECNOLOGIA LTDA. Todos os direitos reservados. Operação: CaZa dos Sorteios.</p>
+              <p>© 2026 SIC COMÉRCIO DE PRODUTOS ALIMENTICIOS E SERVIÇOS LTDA CNPJ nº 54.795.377/0001-03. Todos os direitos reservados. Operação: CaZa dos Sorteios.</p>
               <p className="opacity-50 lowercase font-medium">Desenvolvido por <a href="https://p4dmidia.com.br" target="_blank" rel="noopener noreferrer" className="hover:text-primary-blue transition-colors">P4D Mídia</a></p>
             </div>
             <div className="flex gap-8">

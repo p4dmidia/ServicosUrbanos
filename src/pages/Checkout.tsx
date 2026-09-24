@@ -1394,7 +1394,7 @@ export default function Checkout() {
 
           <div className="pt-12 flex flex-col md:flex-row justify-between items-center gap-6 text-[9px] font-black uppercase tracking-[0.2em]">
             <div className="flex flex-col items-center md:items-start gap-1">
-              <p className="text-slate-600">© 2026 Ecossistema Serviços Urbanos Tecnologia</p>
+              <p className="text-slate-600">© 2026 SIC COMÉRCIO DE PRODUTOS ALIMENTICIOS E SERVIÇOS LTDA CNPJ nº 54.795.377/0001-03. Todos os direitos reservados. Operação: CaZa dos Sorteios.</p>
               <p className="text-slate-700 opacity-50 lowercase font-medium tracking-normal">Desenvolvido por <a href="https://p4dmidia.com.br" target="_blank" rel="noopener noreferrer" className="hover:text-primary-blue transition-colors">P4D Mídia</a> | <Link to="/termos-uso" className="hover:text-primary-blue transition-colors">Termos de Uso</Link> | <Link to="/termos-privacidade" className="hover:text-primary-blue transition-colors">Privacidade</Link> | <Link to="/politica-cookies" className="hover:text-primary-blue transition-colors">Cookies</Link></p>
             </div>
             <div className="flex gap-8">

@@ -62,7 +62,7 @@ export default function Ecossistema() {
               transition={{ delay: 0.2 }}
               className="text-slate-400 text-lg lg:text-xl max-w-3xl mx-auto font-medium leading-relaxed"
             >
-              Muito além de um simples seguro. A Serviços Urbanos desenvolveu um ecossistema inovador focado no Seguro Premiável, onde a sua proteção individual se conecta a prêmios mensais, telemedicina e ganhos recorrentes por indicações.
+              Muito além de um simples seguro. A CaZa dos Sorteios desenvolveu um ecossistema inovador focado no Seguro Premiável, onde a sua proteção individual se conecta a prêmios mensais, telemedicina e ganhos recorrentes por indicações.
             </motion.p>
 
             {/* Connection Diagram (Seguro Premiável version) */}
@@ -298,14 +298,15 @@ export default function Ecossistema() {
         <div className="max-w-7xl mx-auto">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-12 mb-16">
             <div className="col-span-1 md:col-span-1 text-left">
-              <div className="flex items-center gap-2 text-white mb-6">
-                <div className="size-6 bg-primary-blue rounded flex items-center justify-center">
-                  <LayoutGrid size={14} />
-                </div>
-                <span className="text-lg font-bold">Serviços Urbanos</span>
+              <div className="flex items-center gap-2 mb-6">
+                <img 
+                  src="/logo.png" 
+                  alt="CaZa dos Sorteios" 
+                  className="h-10 w-auto object-contain" 
+                />
               </div>
-              <p className="text-sm leading-relaxed mb-6">
-                Transformando a vida nas cidades através de tecnologia e economia compartilhada.
+              <p className="text-sm leading-relaxed mb-6 text-slate-400">
+                A união perfeita entre proteção pessoal, benefícios exclusivos e sorteios oficiais pela Loteria Federal.
               </p>
               <div className="flex gap-4">
                 <a href="#" className="hover:text-accent transition-colors"><Instagram size={20} /></a>
@@ -317,10 +318,10 @@ export default function Ecossistema() {
             <div className="text-left">
               <h4 className="text-white font-bold mb-6">Plataforma</h4>
               <ul className="flex flex-col gap-4 text-sm">
-                <li><a href="#" className="hover:text-white transition-colors">Como funciona</a></li>
+                <li><Link to="/" className="hover:text-white transition-colors">Início</Link></li>
                 <li><Link to="/ecossistema" className="hover:text-white transition-colors">Ecossistema</Link></li>
-                <li><Link to="/afiliado/renovacoes" className="hover:text-white transition-colors">Planos de Licença</Link></li>
-                <li><Link to="/cadastro" className="hover:text-white transition-colors">Seja um parceiro</Link></li>
+                <li><Link to="/ganhe-dinheiro" className="hover:text-white transition-colors">Ganhe Dinheiro</Link></li>
+                <li><Link to="/cadastro" className="hover:text-white transition-colors">Ativar Seguro</Link></li>
               </ul>
             </div>
 
@@ -346,7 +347,7 @@ export default function Ecossistema() {
 
           <div className="pt-8 border-t border-slate-900 flex flex-col md:flex-row justify-between items-center gap-4 text-[10px] uppercase tracking-widest font-bold">
             <div className="flex flex-col items-center md:items-start gap-1">
-              <p>© 2026 Serviços Urbanos Tecnologia S.A. Todos os direitos reservados.</p>
+              <p>© 2026 SERVIÇOS URBANOS TECNOLOGIA LTDA. Todos os direitos reservados. Operação: CaZa dos Sorteios.</p>
               <p className="opacity-50 lowercase font-medium">Desenvolvido por <a href="https://p4dmidia.com.br" target="_blank" rel="noopener noreferrer" className="hover:text-primary-blue transition-colors">P4D Mídia</a></p>
             </div>
             <div className="flex gap-8">

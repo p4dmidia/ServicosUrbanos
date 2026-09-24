@@ -1924,12 +1924,14 @@ export const businessRules = {
         const isOrderPaid = order?.status === 'Pago' || order?.status === 'Concluído' || order?.status === 'Pago, Aguardando Retirada';
         const isRejected = t.status === 'rejected' || desc.toLowerCase().includes('rejeitado') || desc.toLowerCase().includes('recusado');
         const isOrderCancelled = order?.status === 'Cancelado' || t.status === 'cancelled' || t.status === 'failed';
+        const tMonth = t.created_at ? t.created_at.substring(0, 7) : '';
+        const isMonthQuitado = quitadoMonths.has(tMonth);
 
         if (isRejected) {
           displayStatus = 'Recusado';
         } else if (isOrderCancelled) {
           displayStatus = 'Cancelado';
-        } else if (t.status === 'completed' || t.status === 'pago' || t.status === 'paid' || isOrderPaid) {
+        } else if (t.status === 'completed' || t.status === 'pago' || t.status === 'paid' || isMonthQuitado) {
           displayStatus = 'Pago';
         } else {
           displayStatus = 'Pendente';
@@ -4828,17 +4830,24 @@ export const businessRules = {
         }
       }
 
-      // Valida se o valor solicitado não ultrapassa o saldo líquido da competência (pós-impostos)
-      try {
+      // Valida se o valor solicitado é exatamente o saldo líquido total disponível da competência (Regra de Antecipação Integral)
+      const isPJ = profile.person_type === 'PJ' || isCnpj(profile.cpf || profile.cnpj);
+      let availableNet = 0;
+
+      if (isPJ) {
+        const summary = await businessRules.getAffiliateInvoiceSummary(userId, now.getFullYear(), now.getMonth());
+        availableNet = summary?.totalGross || summary?.monthlyGross || 0;
+      } else {
         const rpa = await businessRules.generateMonthlyRPAReceipt(userId, currentRefMonth);
-        const maxNet = rpa?.financial?.liquido_total || 0;
-        if (maxNet > 0 && amount > maxNet + 0.05) {
-          throw new Error(`O adiantamento solicitado (R$ ${amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}) excede o saldo líquido disponível pós-impostos (R$ ${maxNet.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}).`);
-        }
-      } catch (rpaErr: any) {
-        if (rpaErr?.message && rpaErr.message.includes('excede')) {
-          throw rpaErr;
-        }
+        availableNet = rpa?.financial?.liquido_total || 0;
+      }
+
+      if (availableNet <= 0) {
+        throw new Error('Não há saldo líquido disponível para adiantamento nesta competência.');
+      }
+
+      if (Math.abs(amount - availableNet) > 0.05) {
+        throw new Error(`A solicitação de adiantamento deve ser realizada pelo valor integral do saldo líquido disponível (R$ ${availableNet.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}). Não são permitidas antecipações parciais.`);
       }
 
       const advanceId = `adv_${Date.now()}_${userId.substring(0, 5)}`;
@@ -5722,24 +5731,31 @@ export const businessRules = {
       const monthCommissions = monthTransactions.filter(t => 
         t.type === 'commission' && (t.status === 'completed' || t.status === 'pago' || t.status === 'pending')
       );
-      const monthWithdrawals = monthTransactions.filter(t => 
-        t.type === 'withdrawal' && (t.status === 'completed' || t.status === 'pago')
-      );
 
-      const pendingMonthlyReseller = monthCommissions
-        .filter(t => t.description?.includes('Mensal') && (t.status === 'pending'))
-        .reduce((acc, t) => acc + Number(t.amount || 0), 0);
+      // Adiantamentos e saques concluídos do mês
+      const monthAdvances = (allTransactions || []).filter(t => {
+        const tDate = new Date(t.created_at);
+        const desc = (t.description || '').toLowerCase();
+        const isAdv = t.type === 'advance' || desc.includes('[adiantamento]') || desc.includes('adiantamento');
+        return isAdv && tDate >= startDate && tDate <= endDate && (t.status === 'completed' || t.status === 'pago');
+      });
+      const totalMonthAdvances = monthAdvances.reduce((acc, t) => acc + Math.abs(Number(t.amount || 0)), 0);
+
+      const monthWithdrawals = (allTransactions || []).filter(t => {
+        const tDate = new Date(t.created_at);
+        return t.type === 'withdrawal' && tDate >= startDate && tDate <= endDate && (t.status === 'completed' || t.status === 'pago');
+      });
 
       const monthlyEarned = monthCommissions
         .filter(t => t.description?.includes('Mensal'))
         .reduce((acc, t) => acc + Number(t.amount || 0), 0);
       
-      const monthlyPaid = monthWithdrawals
-        .filter(t => t.description?.includes('Mensal'))
-        .reduce((acc, t) => acc + Math.abs(Number(t.amount || 0)), 0);
+      const monthlyPaid = Math.max(
+        totalMonthAdvances,
+        monthWithdrawals.reduce((acc, t) => acc + Math.abs(Number(t.amount || 0)), 0)
+      );
 
-      const calculatedDiff = Math.max(0, monthlyEarned - monthlyPaid);
-      const monthlyToReceive = pendingMonthlyReseller > 0 ? pendingMonthlyReseller : calculatedDiff;
+      const monthlyToReceive = Math.max(0, monthlyEarned - monthlyPaid);
 
       const weeklyEarned = 0;
       const weeklyPaid = 0;
@@ -5891,6 +5907,15 @@ export const businessRules = {
         const amt = Number(t.amount || 0);
         const percentage = contractAmount > 0 ? (amt / contractAmount) * 100 : (t.description?.includes('Mensal') ? 5 : 2);
 
+        let itemStatus = 'PENDENTE';
+        if (t.status === 'completed' || t.status === 'pago') {
+          itemStatus = 'PAGO';
+        } else if (category.includes('MENSAL') && (monthlyPaid >= monthlyEarned || totalMonthAdvances > 0)) {
+          itemStatus = 'ADIANTADO';
+        } else if (category.includes('ANUAL')) {
+          itemStatus = 'ACUMULANDO';
+        }
+
         return {
           id: t.id,
           orderId,
@@ -5901,7 +5926,7 @@ export const businessRules = {
           amount: amt,
           contractAmount,
           percentage,
-          status: (t.status === 'completed' || t.status === 'pago') ? 'PAGO' : 'PENDENTE'
+          status: itemStatus
         };
       }).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
@@ -5919,6 +5944,7 @@ export const businessRules = {
         },
         monthlyEarned,
         monthlyPaid,
+        totalMonthAdvances,
         monthlyToReceive,
         weeklyEarned,
         weeklyPaid: totalHistoricalWeeklyPaid,
@@ -7644,6 +7670,299 @@ export const businessRules = {
     const link = document.createElement('a');
     link.href = url;
     link.setAttribute('download', `relatorio_consolidado_afiliado_revendedor_${refMonthStr}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  },
+
+  /**
+   * Relatório 1 Oficial: Pagamentos do Dia 10 (Mensal via PIX com Dedução de Adiantamentos)
+   * Formato idêntico à planilha oficial de repasse mensal do dia 10.
+   */
+  getMonthlyPayoutReport: async (refMonthStr?: string) => {
+    const now = new Date();
+    const targetRefMonth = refMonthStr || `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    const [yStr, mStr] = targetRefMonth.split('-');
+    const yearNum = parseInt(yStr, 10);
+    const monthNum = parseInt(mStr, 10);
+
+    const { data: profiles, error: pError } = await supabase
+      .from('profiles')
+      .select('id, full_name, cpf, cnpj, pix_key, pix_type, bank_name, bank_branch, bank_account, role, description');
+
+    if (pError) throw pError;
+
+    // Executa o cálculo de todos os perfis em paralelo para carregamento ultra rápido
+    const statements = await Promise.all(
+      (profiles || []).map(async (profile) => {
+        try {
+          const stmt = await businessRules.getConsolidatedFinancialStatement(profile.id, yearNum, monthNum);
+          return { profile, stmt };
+        } catch (e) {
+          console.warn(`Erro ao processar linha do relatório mensal para usuário ${profile.id}:`, e);
+          return null;
+        }
+      })
+    );
+
+    const reportRows: any[] = [];
+
+    for (const item of statements) {
+      if (!item) continue;
+      const { profile, stmt } = item;
+      const monthlyTotalBruto = (stmt.brutoMensalMmn || 0) + (stmt.brutoMensalRevendedor || 0);
+      const annualAcumulado = (stmt.acumuladoAnualMmn || 0) + (stmt.acumuladoAnualRevendedor || 0);
+      const adiantamentos = stmt.adiantamento || 0;
+
+      // Se o afiliado teve movimentação no mês ou adiantamento ou saldo acumulado
+      if (monthlyTotalBruto > 0 || adiantamentos > 0 || stmt.totalBruto > 0) {
+        const inss = stmt.inss || 0;
+        const irrf = stmt.irrf || 0;
+        const liquidoPix = Math.max(0, monthlyTotalBruto - inss - irrf - adiantamentos);
+
+        reportRows.push({
+          id: profile.id,
+          shortId: profile.id.substring(0, 6).toUpperCase(),
+          userName: profile.full_name || 'Afiliado',
+          cpfCnpj: profile.cpf || profile.cnpj || '---',
+          pixKey: profile.pix_key || profile.cpf || 'Não cadastrada',
+          bankDetails: profile.bank_name 
+            ? `${profile.bank_name} / Ag: ${profile.bank_branch || '0001'} / CC: ${profile.bank_account || '---'}` 
+            : 'Apenas PIX',
+          period: targetRefMonth,
+          paymentForecast: stmt.previsaoPagamentoStr || `10.${String(monthNum === 12 ? 1 : monthNum + 1).padStart(2, '0')}.${monthNum === 12 ? yearNum + 1 : yearNum}`,
+          cashbackMensal: monthlyTotalBruto,
+          cashbackMensalMmn: stmt.brutoMensalMmn || 0,
+          cashbackMensalRevendedor: stmt.brutoMensalRevendedor || 0,
+          cashbackAnualAcumulado: annualAcumulado,
+          totalBruto: monthlyTotalBruto,
+          inss: inss,
+          irrf: irrf,
+          adiantamentos: adiantamentos,
+          adiantamentoDate: stmt.adiantamentoDate || null,
+          liquidoPix: liquidoPix,
+          status: stmt.isPaid ? 'Pago' : 'Pendente',
+          isPJ: stmt.isPJ,
+          receiptUrl: stmt.receiptUrl || null
+        });
+      }
+    }
+
+    return reportRows;
+  },
+
+  /**
+   * Exporta Relatório Oficial de Pagamentos do Dia 10 (Folha PIX) para CSV
+   */
+  exportMonthlyPayoutReportCSV: (records: any[], refMonthStr: string) => {
+    const headers = [
+      'Nome do Afiliado',
+      'CPF/CNPJ',
+      'Chave PIX',
+      'Dados Bancarios',
+      'Periodo',
+      'Previsao Pagamento',
+      'Cashback Mensal',
+      'Cashback Anual Acumulado',
+      'Total Bruto',
+      'INSS (Retencao)',
+      'IRRF (Retencao)',
+      '(-) Adiantamentos Ja Pagos',
+      'Liquido a Pagar PIX',
+      'Status'
+    ];
+
+    const rows = records.map(r => [
+      `"${r.userName}"`,
+      `"${r.cpfCnpj}"`,
+      `"${r.pixKey}"`,
+      `"${r.bankDetails}"`,
+      `"${r.period}"`,
+      `"${r.paymentForecast}"`,
+      (r.cashbackMensal || 0).toFixed(2).replace('.', ','),
+      (r.cashbackAnualAcumulado || 0).toFixed(2).replace('.', ','),
+      (r.totalBruto || 0).toFixed(2).replace('.', ','),
+      (r.inss || 0).toFixed(2).replace('.', ','),
+      (r.irrf || 0).toFixed(2).replace('.', ','),
+      (r.adiantamentos || 0).toFixed(2).replace('.', ','),
+      (r.liquidoPix || 0).toFixed(2).replace('.', ','),
+      `"${r.status}"`
+    ]);
+
+    const csvContent = '\uFEFF' + [headers.join(';'), ...rows.map(row => row.join(';'))].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `relatorio_pagamento_pix_dia_10_${refMonthStr}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  },
+
+  /**
+   * Relatório 2 Oficial: Cashback Anual a Pagar (Período 01.11.25 a 30.11.26)
+   * Consolidado de todas as comissões anuais (2% Rede + 2% Revenda) mês a mês.
+   */
+  getAnnualCashbackReport: async (cycleStartYear: number = 2025) => {
+    const cycleStartDate = new Date(cycleStartYear, 10, 1, 0, 0, 0, 0); // 01/11/2025
+    const cycleEndDate = new Date(cycleStartYear + 1, 10, 30, 23, 59, 59, 999); // 30/11/2026
+
+    const [profilesRes, txsRes] = await Promise.all([
+      supabase.from('profiles').select('id, full_name, cpf, cnpj, pix_key, pix_type, role, description'),
+      supabase.from('transactions').select('*').eq('type', 'commission')
+    ]);
+
+    if (profilesRes.error) throw profilesRes.error;
+    if (txsRes.error) throw txsRes.error;
+
+    const profiles = profilesRes.data || [];
+    const transactions = txsRes.data || [];
+    const profileMap = new Map(profiles.map(p => [p.id, p]));
+
+    const monthNamesShort = ['jan.', 'fev.', 'mar.', 'abr.', 'mai.', 'jun.', 'jul.', 'ago.', 'set.', 'out.', 'nov.', 'dez.'];
+
+    // Filtra transações anuais dentro do ciclo
+    const annualTxs = transactions.filter(t => {
+      const desc = (t.description || '').toLowerCase();
+      if (!desc.includes('anual')) return false;
+      const d = new Date(t.created_at);
+      return d >= cycleStartDate && d <= cycleEndDate;
+    });
+
+    // Agrupa por (profile_id + YYYY-MM)
+    const grouped = new Map<string, {
+      profileId: string;
+      refMonth: string;
+      refMonthLabel: string;
+      cashAfiliado: number;
+      cashRevendedor: number;
+      txs: any[];
+    }>();
+
+    annualTxs.forEach(t => {
+      const d = new Date(t.created_at);
+      const y = d.getFullYear();
+      const m = d.getMonth(); // 0-11
+      const refMonth = `${y}-${String(m + 1).padStart(2, '0')}`;
+      const refMonthLabel = `${monthNamesShort[m]}-${String(y).slice(-2)}`;
+      const key = `${t.profile_id}_${refMonth}`;
+
+      if (!grouped.has(key)) {
+        grouped.set(key, {
+          profileId: t.profile_id,
+          refMonth,
+          refMonthLabel,
+          cashAfiliado: 0,
+          cashRevendedor: 0,
+          txs: []
+        });
+      }
+
+      const item = grouped.get(key)!;
+      item.txs.push(t);
+      const desc = (t.description || '').toLowerCase();
+      const isReseller = desc.includes('revendedor') || desc.includes('regional') || desc.includes('revenda') || desc.includes('(reg)') || t.metadata?.is_reseller;
+      const amt = Number(t.amount || 0);
+      if (isReseller) {
+        item.cashRevendedor += amt;
+      } else {
+        item.cashAfiliado += amt;
+      }
+    });
+
+    const reportRows: any[] = [];
+
+    grouped.forEach((g) => {
+      const prof = profileMap.get(g.profileId);
+      const userName = prof?.full_name || 'Afiliado';
+      const shortId = g.profileId.substring(0, 6).toUpperCase();
+      const pixKey = prof?.pix_key || prof?.cpf || 'Não cadastrada';
+      const isPJ = (prof as any)?.person_type === 'PJ' || (prof?.cnpj && prof.cnpj.replace(/\D/g, '').length === 14);
+
+      const totalBruto = parseFloat((g.cashAfiliado + g.cashRevendedor).toFixed(2));
+      const inss = 0; // 0% INSS intermediacao
+      const baseIrpf = Math.max(0, totalBruto - inss);
+
+      // Calculo do IRPF se aplicável
+      let descontoIrpf = 0;
+      if (!isPJ && baseIrpf > 2259.20) {
+        if (baseIrpf <= 2826.65) descontoIrpf = baseIrpf * 0.075 - 169.44;
+        else if (baseIrpf <= 3751.05) descontoIrpf = baseIrpf * 0.15 - 381.44;
+        else if (baseIrpf <= 4664.68) descontoIrpf = baseIrpf * 0.225 - 662.77;
+        else descontoIrpf = baseIrpf * 0.275 - 896.00;
+        descontoIrpf = Math.max(0, parseFloat(descontoIrpf.toFixed(2)));
+      }
+
+      const liquidoReceber = parseFloat((totalBruto - descontoIrpf).toFixed(2));
+
+      reportRows.push({
+        id: shortId,
+        fullId: g.profileId,
+        name: userName,
+        cashAfiliado: g.cashAfiliado,
+        cashRevendedor: g.cashRevendedor,
+        totalBruto: totalBruto,
+        baseIrpf: baseIrpf,
+        descontoIrpf: descontoIrpf,
+        liquidoReceber: liquidoReceber,
+        mesReferencia: g.refMonthLabel,
+        refMonth: g.refMonth,
+        chavePix: pixKey,
+        isPJ: isPJ
+      });
+    });
+
+    // Ordenar por Nome e depois por Mês de Referência
+    reportRows.sort((a, b) => {
+      if (a.name.localeCompare(b.name) !== 0) return a.name.localeCompare(b.name);
+      return a.refMonth.localeCompare(b.refMonth);
+    });
+
+    return reportRows;
+  },
+
+  /**
+   * Exporta Relatório Oficial de Cashback Anual para CSV
+   */
+  exportAnnualCashbackReportCSV: (records: any[], cycleLabel: string = '01.11.25 A 30.11.26') => {
+    const headers = [
+      'ID',
+      'NOME',
+      'CASH AFILIADO',
+      'CASH REVENDEDOR',
+      'TOTAL BRUTO',
+      'BASE IRPF',
+      'DESCONTO IRPF',
+      'LIQUIDO A RECEBER',
+      'MES DE REFERENCIA',
+      'CHAVE PIX'
+    ];
+
+    const rows = records.map(r => [
+      `"${r.id}"`,
+      `"${r.name}"`,
+      (r.cashAfiliado || 0).toFixed(2).replace('.', ','),
+      (r.cashRevendedor || 0).toFixed(2).replace('.', ','),
+      (r.totalBruto || 0).toFixed(2).replace('.', ','),
+      (r.baseIrpf || 0).toFixed(2).replace('.', ','),
+      (r.descontoIrpf || 0).toFixed(2).replace('.', ','),
+      (r.liquidoReceber || 0).toFixed(2).replace('.', ','),
+      `"${r.mesReferencia}"`,
+      `"${r.chavePix}"`
+    ]);
+
+    const csvContent = '\uFEFF' + [
+      `RELATORIO DE CASHBACK ANUAL A PAGAR (${cycleLabel})`,
+      headers.join(';'),
+      ...rows.map(row => row.join(';'))
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `relatorio_cashback_anual_${Date.now()}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);

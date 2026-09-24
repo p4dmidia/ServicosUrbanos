@@ -75,14 +75,15 @@ export default function AdminLogin() {
         className="max-w-md w-full relative z-10"
       >
         {/* Logo */}
-        <div className="text-center mb-10">
-          <Link to="/" className="inline-flex items-center gap-3 text-white mb-6">
-            <div className="size-14 bg-primary-blue rounded-2xl flex items-center justify-center shadow-2xl shadow-primary-blue/20 transform -rotate-6 rotate-hover:rotate-0 transition-transform">
-              <LayoutGrid size={32} />
-            </div>
+        <div className="text-center mb-10 flex flex-col items-center">
+          <Link to="/" className="inline-block mb-4">
+            <img 
+              src="/logo.png" 
+              alt="CaZa dos Sorteios" 
+              className="h-14 w-auto object-contain mx-auto" 
+            />
           </Link>
-          <h1 className="text-3xl font-black text-white tracking-tighter uppercase italic">SERVIÇOS <span className="text-primary-blue">URBANOS</span></h1>
-          <p className="text-slate-500 text-xs font-black uppercase tracking-[0.3em] mt-2">Acesso Restrito ao Ecossistema</p>
+          <p className="text-emerald-400 text-xs font-black uppercase tracking-[0.3em] mt-2">Painel Administrativo Restrito</p>
         </div>
 
         {/* Login Form Card */}

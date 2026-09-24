@@ -93,9 +93,35 @@ export default function AffiliatePolicy() {
               </div>
 
               <div>
-                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-2">Número do Certificado</p>
-                <p className="text-base font-black font-mono">SU-2026-{user?.id.substring(0, 8).toUpperCase()}</p>
-                <p className="text-xs text-slate-400 mt-1">Cód. Apólice: MA-9283-SU</p>
+                {(() => {
+                  let certNum = (profile as any)?.certificate_number || '';
+                  let policyNum = (profile as any)?.policy_number || '11-0982-000058940-0001';
+                  let luckyNum = (profile as any)?.lucky_number || '';
+
+                  if (profile?.description) {
+                    const cMatch = profile.description.match(/\[MBM_CERTIFICATE:([^\]]+)\]/);
+                    if (cMatch && cMatch[1]) certNum = cMatch[1].trim();
+                    const pMatch = profile.description.match(/\[MBM_POLICY:([^\]]+)\]/);
+                    if (pMatch && pMatch[1]) policyNum = pMatch[1].trim();
+                    const lMatch = profile.description.match(/\[MBM_LUCKY_NUMBER:([^\]]+)\]/);
+                    if (lMatch && lMatch[1]) luckyNum = lMatch[1].trim();
+                  }
+
+                  const displayCert = certNum ? `MBM-${certNum}` : `SU-2026-${user?.id.substring(0, 8).toUpperCase()}`;
+
+                  return (
+                    <>
+                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-2">Número do Certificado</p>
+                      <p className="text-base font-black font-mono text-white">{displayCert}</p>
+                      <p className="text-xs text-slate-400 mt-1 font-mono">Apólice: {policyNum}</p>
+                      {luckyNum && (
+                        <p className="text-[10px] text-amber-300 font-black uppercase mt-1 tracking-wider">
+                          Nº da Sorte: <span className="font-mono text-xs">{luckyNum}</span>
+                        </p>
+                      )}
+                    </>
+                  );
+                })()}
               </div>
 
               <div>

@@ -86,10 +86,10 @@ export default function GanheDinheiro() {
 
           <div className="max-w-7xl mx-auto px-6 lg:px-20 relative z-10 text-center space-y-6">
             <span className="inline-block bg-accent/10 border border-accent/20 text-accent px-4 py-1.5 rounded-full text-xs font-black uppercase tracking-widest">
-              Programa de Afiliados Serviços Urbanos
+              Programa de Afiliados CaZa dos Sorteios
             </span>
             <h1 className="text-4xl md:text-7xl font-extrabold text-white leading-tight max-w-5xl mx-auto">
-              Ganhe recorrente indicando o <span className="bg-gradient-to-r from-accent to-emerald-400 bg-clip-text text-transparent">Seguro Premiável.</span>
+              Ganhe recorrente indicando o <span className="bg-gradient-to-r from-accent via-emerald-400 to-teal-300 bg-clip-text text-transparent">Seguro Premiável.</span>
             </h1>
             <p className="text-lg md:text-xl text-slate-400 max-w-3xl mx-auto font-medium">
               Transforme a indicação de assinaturas em faturamento recorrente. Use o nosso simulador simplificado para ver o potencial de ganhos da sua rede e a diferença real de receber como Pessoa Física ou MEI.
@@ -367,17 +367,18 @@ export default function GanheDinheiro() {
       <footer className="bg-black text-slate-500 py-16 px-6 lg:px-20 border-t border-slate-900 mt-auto">
         <div className="max-w-7xl mx-auto">
           <div className="flex flex-col md:flex-row justify-between items-center gap-8 mb-8">
-            <div className="flex items-center gap-2 text-white">
-              <div className="size-6 bg-primary-blue rounded flex items-center justify-center">
-                <LayoutGrid size={14} />
-              </div>
-              <span className="text-lg font-bold">Serviços Urbanos</span>
+            <div className="flex items-center gap-2">
+              <img 
+                src="/logo.png" 
+                alt="CaZa dos Sorteios" 
+                className="h-10 w-auto object-contain" 
+              />
             </div>
 
             <div className="flex gap-8 items-center text-xs">
-              <Link to="/afiliado/renovacoes" className="hover:text-white transition-colors">Planos</Link>
+              <Link to="/" className="hover:text-white transition-colors">Início</Link>
               <Link to="/ecossistema" className="hover:text-white transition-colors">Ecossistema</Link>
-              <Link to="/termos-uso" className="hover:text-white transition-colors">Terms of Use</Link>
+              <Link to="/termos-uso" className="hover:text-white transition-colors">Termos de Uso</Link>
               <Link to="/termos-privacidade" className="hover:text-white transition-colors">Privacidade</Link>
               <Link to="/politica-cookies" className="hover:text-white transition-colors">Cookies</Link>
               <div className="flex gap-6 border-l border-slate-800 pl-6">
@@ -390,7 +391,7 @@ export default function GanheDinheiro() {
 
           <div className="pt-8 border-t border-slate-900 flex flex-col md:flex-row justify-between items-center gap-4 text-[10px] uppercase tracking-widest font-bold">
             <div className="flex flex-col items-center md:items-start gap-1">
-              <p>© 2026 Serviços Urbanos Tecnologia S.A. Todos os direitos reservados.</p>
+              <p>© 2026 SERVIÇOS URBANOS TECNOLOGIA LTDA. Todos os direitos reservados. Operação: CaZa dos Sorteios.</p>
               <p className="opacity-50 lowercase font-medium tracking-normal">
                 Desenvolvido por <a href="https://p4dmidia.com.br" target="_blank" rel="noopener noreferrer" className="hover:text-accent transition-colors">P4D Mídia</a> | <Link to="/termos-uso" className="hover:text-accent transition-colors">Termos de Uso</Link> | <Link to="/termos-privacidade" className="hover:text-accent transition-colors">Termos de Privacidade</Link> | <Link to="/politica-cookies" className="hover:text-accent transition-colors">Política de Cookies</Link>
               </p>

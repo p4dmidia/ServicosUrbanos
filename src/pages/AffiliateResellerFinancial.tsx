@@ -687,20 +687,73 @@ export default function AffiliateResellerFinancial() {
                               <span className={`inline-flex items-center gap-1 text-[9px] font-black px-2.5 py-1 rounded-full uppercase tracking-wider ${
                                 tx.status === 'PAGO' || tx.status === 'completed' || tx.status === 'pago'
                                   ? 'bg-emerald-100 text-emerald-800'
+                                  : tx.status === 'ADIANTADO'
+                                  ? 'bg-amber-100 text-amber-900 border border-amber-300'
+                                  : tx.status === 'ACUMULANDO'
+                                  ? 'bg-indigo-50 text-indigo-700 border border-indigo-200'
                                   : 'bg-amber-100 text-amber-800'
                               }`}>
-                                {tx.status === 'PAGO' || tx.status === 'completed' || tx.status === 'pago' ? 'Pago' : 'Pendente'}
+                                {tx.status === 'PAGO' || tx.status === 'completed' || tx.status === 'pago' 
+                                  ? 'Pago' 
+                                  : tx.status === 'ADIANTADO'
+                                  ? 'Adiantado'
+                                  : tx.status === 'ACUMULANDO'
+                                  ? 'Acumulando'
+                                  : 'Pendente'}
                               </span>
                             </td>
                           </tr>
                         ))}
                       </tbody>
                       <tfoot>
-                        <tr className="bg-slate-950 text-white font-black uppercase tracking-widest text-[10px]">
+                        {/* 1. Total Bruto Apurado no Mês */}
+                        <tr className="bg-slate-900 text-white font-black uppercase tracking-widest text-[10px] border-b border-white/10">
+                          <td colSpan={5} className="px-6 py-3 rounded-l-2xl">
+                            <div className="flex items-center gap-2 text-slate-300">
+                              <span className="size-2 rounded-full bg-slate-400" />
+                              <span>TOTAL BRUTO DE REPASSE APURADO</span>
+                            </div>
+                          </td>
+                          <td className="px-5 py-3 text-right font-mono text-xs text-slate-300">
+                            {totalsPending.totalContratos.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                          </td>
+                          <td className="px-4 py-3 text-center font-mono text-xs text-indigo-300">
+                            {totalsPending.percentualRepasse > 0 ? `${totalsPending.percentualRepasse.toFixed(2)}%` : '---'}
+                          </td>
+                          <td className="px-5 py-3 text-right font-mono text-sm text-slate-200 font-bold">
+                            {totalsPending.totalBruto.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                          </td>
+                          <td className="px-4 py-3 rounded-r-2xl text-center text-[9px] text-slate-400">BRUTO</td>
+                        </tr>
+
+                        {/* 2. (-) Adiantamento Liquidado se houver */}
+                        {(data?.totalMonthAdvances || 0) > 0 && (
+                          <tr className="bg-amber-950/80 text-amber-300 font-black uppercase tracking-widest text-[10px] border-b border-white/10">
+                            <td colSpan={7} className="px-6 py-2.5 rounded-l-2xl">
+                              <div className="flex items-center gap-2">
+                                <span className="size-2 rounded-full bg-amber-400 animate-pulse" />
+                                <span>(-) ADIANTAMENTO DE RENDIMENTOS (PAGO VIA PIX)</span>
+                              </div>
+                            </td>
+                            <td className="px-5 py-2.5 text-right font-mono text-sm text-rose-400 font-bold">
+                              - R$ {Number(data?.totalMonthAdvances || 0).toFixed(2).replace('.', ',')}
+                            </td>
+                            <td className="px-4 py-2.5 rounded-r-2xl text-center text-[9px] text-amber-300 font-bold">
+                              ADIANTADO
+                            </td>
+                          </tr>
+                        )}
+
+                        {/* 3. Saldo Mensal Restante a Receber */}
+                        <tr className="bg-slate-950 text-white font-black uppercase tracking-widest text-[10px] border-b border-white/10">
                           <td colSpan={5} className="px-6 py-4 rounded-l-2xl">
-                            <div className="flex items-center gap-2">
-                              <span className="size-2 rounded-full bg-emerald-400" />
-                              <span>TOTAIS A RECEBER (PENDENTE)</span>
+                            <div className="flex items-center gap-2 text-slate-200">
+                              <span className={`size-2 rounded-full ${(data?.monthlyToReceive || 0) > 0 ? 'bg-amber-400 animate-pulse' : 'bg-slate-400'}`} />
+                              <span>
+                                {(data?.monthlyToReceive || 0) > 0 
+                                  ? '(=) SALDO MENSAL A RECEBER (NO DIA 10)'
+                                  : '(=) SALDO MENSAL A RECEBER NO DIA 10 (QUITADO VIA ADIANTAMENTO)'}
+                              </span>
                             </div>
                           </td>
                           <td className="px-5 py-4 text-right font-mono text-xs text-slate-200">
@@ -709,11 +762,31 @@ export default function AffiliateResellerFinancial() {
                           <td className="px-4 py-4 text-center font-mono text-xs text-indigo-300">
                             {totalsPending.percentualRepasse > 0 ? `${totalsPending.percentualRepasse.toFixed(2)}%` : '---'}
                           </td>
-                          <td className="px-5 py-4 text-right font-mono text-sm text-emerald-400 font-black">
-                            {totalsPending.totalBruto.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                          <td className="px-5 py-4 text-right font-mono text-sm text-amber-400 font-black">
+                            R$ {Number(data?.monthlyToReceive || 0).toFixed(2).replace('.', ',')}
                           </td>
-                          <td className="px-4 py-4 rounded-r-2xl"></td>
+                          <td className="px-4 py-4 rounded-r-2xl text-center text-[9px] text-amber-400 font-bold">
+                            {(data?.monthlyToReceive || 0) > 0 ? 'PENDENTE' : 'QUITADO'}
+                          </td>
                         </tr>
+
+                        {/* 4. Provisão Anual Acumulada */}
+                        {(data?.annualToReceive || 0) > 0 && (
+                          <tr className="bg-indigo-950/80 text-indigo-200 font-black uppercase tracking-widest text-[10px]">
+                            <td colSpan={7} className="px-6 py-3 rounded-l-2xl">
+                              <div className="flex items-center gap-2 text-indigo-300">
+                                <span className="size-2 rounded-full bg-indigo-400" />
+                                <span>PROVISÃO ANUAL DE REVENDA (2% - ACUMULANDO PARA 10/DEZ)</span>
+                              </div>
+                            </td>
+                            <td className="px-5 py-3 text-right font-mono text-sm text-indigo-300 font-black">
+                              R$ {Number(data?.annualToReceive || 0).toFixed(2).replace('.', ',')}
+                            </td>
+                            <td className="px-4 py-3 rounded-r-2xl text-center text-[9px] text-indigo-300 font-bold">
+                              10/DEZ
+                            </td>
+                          </tr>
+                        )}
                       </tfoot>
                     </table>
                   ) : (

@@ -120,10 +120,12 @@ export default function ResetPassword() {
                         ) : !success ? (
                             <>
                                 <div className="text-center mb-10">
-                                    <div className="flex items-center justify-center gap-2 text-white mb-6">
-                                        <div className="size-12 bg-primary-blue rounded-2xl flex items-center justify-center">
-                                            <LayoutGrid size={24} className="text-white" />
-                                        </div>
+                                    <div className="flex items-center justify-center mb-6">
+                                        <img 
+                                            src="/logo.png" 
+                                            alt="CaZa dos Sorteios" 
+                                            className="h-12 w-auto object-contain" 
+                                        />
                                     </div>
                                     <h1 className="text-3xl font-black mb-2 tracking-tight">Nova Senha</h1>
                                     <p className="text-slate-400 font-medium">Crie uma senha forte para sua segurança</p>

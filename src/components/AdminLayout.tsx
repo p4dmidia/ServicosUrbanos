@@ -19,7 +19,8 @@ import {
   Clock,
   CreditCard,
   ShoppingBag,
-  Package
+  Package,
+  Ticket
 } from 'lucide-react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
@@ -122,18 +123,17 @@ export default function AdminLayout({ children, title, subtitle }: AdminLayoutPr
   const isActive = (path: string) => location.pathname === path;
 
   return (
-    <div className="min-h-screen bg-[#05070a] text-slate-300 flex font-sans">
+    <div className="min-h-screen bg-[#05070a] text-slate-300 flex font-sans print:bg-white print:text-black print:min-h-0">
       {/* Sidebar Desktop */}
-      <aside className="hidden lg:flex w-72 bg-[#0a0e17] border-r border-white/5 flex-col sticky top-0 h-screen z-40">
+      <aside className="hidden lg:flex w-72 bg-[#0a0e17] border-r border-white/5 flex-col sticky top-0 h-screen z-40 print:hidden">
         <div className="p-8 border-b border-white/5">
-          <Link to="/admin/dashboard" className="flex items-center gap-3 text-white mb-2">
-            <div className="size-10 bg-primary-blue rounded-xl flex items-center justify-center shadow-lg shadow-primary-blue/20">
-              <LayoutGrid size={22} />
-            </div>
-            <div>
-              <span className="text-xl font-black tracking-tighter uppercase italic leading-none block">SERVIÇOS <span className="text-primary-blue">URBANOS</span></span>
-              <span className="text-[9px] font-black text-primary-blue uppercase tracking-[0.2em] opacity-80">Central de Controle</span>
-            </div>
+          <Link to="/admin/dashboard" className="flex flex-col items-start gap-1">
+            <img 
+              src="/logo.png" 
+              alt="CaZa dos Sorteios" 
+              className="h-9 w-auto object-contain" 
+            />
+            <span className="text-[9px] font-black text-emerald-400 uppercase tracking-[0.2em] opacity-90 pl-1">Painel Administrativo</span>
           </Link>
         </div>
 
@@ -167,9 +167,9 @@ export default function AdminLayout({ children, title, subtitle }: AdminLayoutPr
       </aside>
 
       {/* Main Content */}
-      <div className="flex-1 flex flex-col min-w-0 bg-[radial-gradient(circle_at_top_right,_var(--tw-gradient-stops))] from-indigo-500/5 via-transparent to-transparent">
+      <div className="flex-1 flex flex-col min-w-0 bg-[radial-gradient(circle_at_top_right,_var(--tw-gradient-stops))] from-indigo-500/5 via-transparent to-transparent print:bg-none print:p-0">
         {/* Top Header */}
-        <header className="bg-[#0a0e17]/80 backdrop-blur-xl border-b border-white/5 py-6 px-6 lg:px-12 flex items-center justify-between sticky top-0 z-30">
+        <header className="bg-[#0a0e17]/80 backdrop-blur-xl border-b border-white/5 py-6 px-6 lg:px-12 flex items-center justify-between sticky top-0 z-30 print:hidden">
           <div className="flex items-center gap-4">
             <button 
               onClick={() => setIsMobileMenuOpen(true)}
@@ -343,13 +343,12 @@ export default function AdminLayout({ children, title, subtitle }: AdminLayoutPr
               transition={{ type: 'spring', damping: 25, stiffness: 200 }}
               className="fixed top-0 left-0 h-full w-72 bg-[#0a0e17] z-[110] flex flex-col lg:hidden"
             >
-              <div className="p-8 border-b border-white/5 flex items-center justify-between">
-                <div className="flex items-center gap-3 text-white">
-                  <div className="size-8 bg-primary-blue rounded-lg flex items-center justify-center">
-                    <LayoutGrid size={16} />
-                  </div>
-                  <span className="font-black uppercase tracking-tighter italic text-sm">SERVIÇOS <span className="text-primary-blue">URBANOS</span></span>
-                </div>
+              <div className="p-6 border-b border-white/5 flex items-center justify-between">
+                <img 
+                  src="/logo.png" 
+                  alt="CaZa dos Sorteios" 
+                  className="h-8 w-auto object-contain" 
+                />
                 <button 
                   onClick={() => setIsMobileMenuOpen(false)}
                   className="text-white/60 hover:text-white"

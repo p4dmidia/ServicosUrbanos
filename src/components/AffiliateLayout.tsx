@@ -145,19 +145,20 @@ export default function AffiliateLayout({ children, title, customBalance, custom
           isSidebarOpen ? 'w-72' : 'w-24'
         }`}
       >
-        <div className="p-8 flex items-center gap-3 shrink-0">
-          <div className="size-10 bg-primary-blue rounded-2xl flex items-center justify-center text-white shadow-lg shadow-primary-blue/20 shrink-0">
-            <LayoutGrid size={24} />
-          </div>
-          {isSidebarOpen && (
-            <motion.span 
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              className="font-black text-xl tracking-tighter uppercase italic"
-            >
-              SERVIÇOS <span className="text-primary-blue">URBANOS</span>
-            </motion.span>
-          )}
+        <div className="p-6 flex items-center justify-center shrink-0">
+          <Link to="/afiliado/dashboard" className="flex items-center">
+            {isSidebarOpen ? (
+              <img 
+                src="/logo-dark.png" 
+                alt="CaZa dos Sorteios" 
+                className="h-10 w-auto object-contain" 
+              />
+            ) : (
+              <div className="size-10 bg-primary-blue rounded-2xl flex items-center justify-center text-white shadow-lg shadow-primary-blue/20 shrink-0">
+                <LayoutGrid size={24} />
+              </div>
+            )}
+          </Link>
         </div>
 
         <nav className="flex-1 px-4 py-4 space-y-2 overflow-y-auto custom-scrollbar">
@@ -436,13 +437,12 @@ export default function AffiliateLayout({ children, title, customBalance, custom
               exit={{ x: '-100%' }}
               className="fixed inset-y-0 left-0 w-80 bg-white z-[101] lg:hidden p-8 flex flex-col shadow-2xl"
             >
-               <div className="flex items-center justify-between mb-12">
-                  <div className="flex items-center gap-3">
-                    <div className="size-10 bg-primary-blue rounded-xl flex items-center justify-center text-white">
-                      <LayoutGrid size={24} />
-                    </div>
-                    <span className="font-black text-xl tracking-tighter uppercase italic">SERVIÇOS <span className="text-primary-blue">URBANOS</span></span>
-                  </div>
+               <div className="flex items-center justify-between mb-8">
+                  <img 
+                    src="/logo-dark.png" 
+                    alt="CaZa dos Sorteios" 
+                    className="h-9 w-auto object-contain" 
+                  />
                   <button onClick={() => setIsMobileMenuOpen(false)} className="text-slate-400"><X size={24} /></button>
                </div>
                

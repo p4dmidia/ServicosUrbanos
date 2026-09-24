@@ -28,11 +28,26 @@ import {
   Wallet,
   ArrowDownRight,
   Landmark,
-  Loader2
+  Loader2,
+  Ticket,
+  UploadCloud,
+  RefreshCw,
+  Save,
+  Check,
+  Search,
+  AlertTriangle,
+  FileSpreadsheet
 } from 'lucide-react';
-import { motion } from 'motion/react';
+import { motion, AnimatePresence } from 'motion/react';
 import AdminLayout from '../components/AdminLayout';
 import { supabase } from '../lib/supabase';
+import { 
+  extractMBMCertificatesFromPdf, 
+  MBMCertificateItem, 
+  sanitizeCpf, 
+  formatCpf,
+  normalizeString
+} from '../lib/mbmPdfParser';
 import { businessRules, calculateTaxDeductions, calculateSubscriptionRepasseCycle } from '../lib/businessRules';
 import { useAuth } from '../contexts/AuthContext';
 import { toast } from 'react-hot-toast';
@@ -113,6 +128,287 @@ export default function AdminFinancials() {
   }, [plans]);
 
   const [fiscalFilterType, setFiscalFilterType] = useState<'all' | 'period'>('all');
+
+  // Sub-aba dentro de Seguro de Vida MBM ('export' = gerar XLSX remessa, 'import' = importar PDF certificados)
+  const [insuranceSubTab, setInsuranceSubTab] = useState<'export' | 'import'>('export');
+  const [extractedCertificates, setExtractedCertificates] = useState<MBMCertificateItem[]>([]);
+  const [isParsingPdf, setIsParsingPdf] = useState(false);
+  const [pdfParseProgress, setPdfParseProgress] = useState({ current: 0, total: 0 });
+  const [uploadedPdfFileName, setUploadedPdfFileName] = useState<string | null>(null);
+  const [selectedPdfIndices, setSelectedPdfIndices] = useState<Set<number>>(new Set());
+  const [isSavingPdf, setIsSavingPdf] = useState(false);
+  const [pdfSearchFilter, setPdfSearchFilter] = useState('');
+  const [pdfStatusFilter, setPdfStatusFilter] = useState<'all' | 'matched' | 'pj_matched' | 'not_found'>('all');
+  const [allProfilesForMatching, setAllProfilesForMatching] = useState<any[]>([]);
+  const fileInputPdfRef = React.useRef<HTMLInputElement>(null);
+
+  // Carrega lista de perfis para matching do PDF
+  const loadProfilesForMatching = async () => {
+    try {
+      const { data } = await supabase.from('profiles').select('*');
+      setAllProfilesForMatching(data || []);
+    } catch (e) {
+      console.error('Erro ao carregar perfis para matching:', e);
+    }
+  };
+
+  useEffect(() => {
+    loadProfilesForMatching();
+  }, []);
+
+  // Mapas de matching por CPF e Nome
+  const { pdfCpfMap, pdfNameMap } = useMemo(() => {
+    const cpfMap = new Map<string, any>();
+    const nameMap = new Map<string, any>();
+
+    allProfilesForMatching.forEach(p => {
+      if (p.cpf) {
+        const clean = sanitizeCpf(p.cpf);
+        if (clean) cpfMap.set(clean, p);
+      }
+      if (p.description) {
+        const cpfMatch = p.description.match(/CPF Segurado:\s*([0-9.\-]+)/i);
+        if (cpfMatch && cpfMatch[1]) {
+          const cleanPjCpf = sanitizeCpf(cpfMatch[1]);
+          if (cleanPjCpf) cpfMap.set(cleanPjCpf, p);
+        }
+      }
+      if (p.full_name) {
+        const norm = p.full_name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+        nameMap.set(norm, p);
+      }
+    });
+
+    return { pdfCpfMap: cpfMap, pdfNameMap: nameMap };
+  }, [allProfilesForMatching]);
+
+  // Algoritmo Inteligente Multi-Camadas de Matching 100% Automático
+  const findBestProfileMatch = (cert: MBMCertificateItem, profilesPool: any[]) => {
+    const rawCpf = cert.cpf || '';
+    const cleanCpf = sanitizeCpf(rawCpf);
+    const matricula = cert.matricula ? sanitizeCpf(cert.matricula) : '';
+    const normPdfName = normalizeString(cert.fullName);
+    const pdfTokens = normPdfName.split(' ').filter(t => t.length > 2);
+
+    for (const p of profilesPool) {
+      const pCleanCpf = sanitizeCpf(p.cpf || '');
+      const pCleanPix = sanitizeCpf(p.pix_key || '');
+      const normPName = normalizeString(p.full_name || '');
+      const pTokens = normPName.split(' ').filter(t => t.length > 2);
+
+      // 1. Match por CPF Exato (11 dígitos ou matrícula)
+      if (cleanCpf && pCleanCpf && cleanCpf === pCleanCpf) return p;
+      if (matricula && pCleanCpf && matricula === pCleanCpf) return p;
+
+      // 2. Match por CPF na Chave Pix ou na Descrição PJ
+      if (cleanCpf && pCleanPix && cleanCpf === pCleanPix) return p;
+      if (p.description) {
+        const pjCpfMatch = p.description.match(/CPF Segurado:\s*([0-9.\-]+)/i);
+        if (pjCpfMatch && sanitizeCpf(pjCpfMatch[1]) === cleanCpf) return p;
+      }
+
+      // 3. Match por CPF com ou sem zero inicial (ex: 15141286916 vs 015141286916)
+      if (cleanCpf && pCleanCpf) {
+        const c1 = cleanCpf.replace(/^0+/, '');
+        const c2 = pCleanCpf.replace(/^0+/, '');
+        if (c1 && c2 && (c1 === c2 || c1.includes(c2) || c2.includes(c1))) return p;
+      }
+
+      // 4. Match por Nome Exato Normalizado
+      if (normPdfName && normPName && normPdfName === normPName) return p;
+
+      // 5. Match por Substring de Nome (quando um contém o outro)
+      if (normPdfName && normPName) {
+        if (normPdfName.includes(normPName) || normPName.includes(normPdfName)) {
+          if (normPName.length > 4) return p;
+        }
+      }
+
+      // 6. Match por Tokens Significativos (Primeiro + Último Nome ou 2+ tokens do nome)
+      if (pdfTokens.length >= 2 && pTokens.length >= 2) {
+        const firstMatches = pdfTokens[0] === pTokens[0];
+        const lastMatches = pdfTokens[pdfTokens.length - 1] === pTokens[pTokens.length - 1];
+        if (firstMatches && lastMatches) return p;
+
+        const commonTokens = pdfTokens.filter(t => pTokens.includes(t));
+        if (commonTokens.length >= 2) return p;
+      }
+    }
+
+    return null;
+  };
+
+  // Cruzamento do PDF com o banco
+  const matchPdfCertificates = (items: MBMCertificateItem[], profilesPool?: any[]) => {
+    const pool = profilesPool || allProfilesForMatching;
+    const updated = items.map(cert => {
+      const cleanCpf = sanitizeCpf(cert.cpf || cert.matricula || '');
+      const matched = findBestProfileMatch(cert, pool);
+
+      if (matched) {
+        const isPj = !!matched.cnpj || !!matched.description?.includes('[PJ]');
+        return {
+          ...cert,
+          cleanCpf: cleanCpf || sanitizeCpf(matched.cpf || ''),
+          matchedProfileId: matched.id,
+          matchedProfileName: matched.full_name,
+          matchedProfileEmail: matched.email,
+          matchedProfileRole: matched.role,
+          status: isPj ? ('pj_matched' as const) : ('matched' as const)
+        };
+      }
+
+      return {
+        ...cert,
+        cleanCpf,
+        status: 'not_found' as const
+      };
+    });
+
+    setExtractedCertificates(updated);
+
+    const validIndices = new Set<number>();
+    updated.forEach((item, index) => {
+      if (item.status === 'matched' || item.status === 'pj_matched') {
+        validIndices.add(index);
+      }
+    });
+    setSelectedPdfIndices(validIndices);
+  };
+
+  // Upload do PDF
+  const handlePdfFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.type !== 'application/pdf' && !file.name.endsWith('.pdf')) {
+      toast.error('Por favor, selecione um arquivo no formato PDF (.pdf).');
+      return;
+    }
+
+    setUploadedPdfFileName(file.name);
+    setIsParsingPdf(true);
+    setPdfParseProgress({ current: 0, total: 0 });
+
+    try {
+      // 1. Busca lista atualizada de perfis do Supabase antes de cruzar
+      let currentProfiles = allProfilesForMatching;
+      try {
+        const { data: freshProfiles } = await supabase.from('profiles').select('*');
+        if (freshProfiles && freshProfiles.length > 0) {
+          currentProfiles = freshProfiles;
+          setAllProfilesForMatching(freshProfiles);
+        }
+      } catch (profErr) {
+        console.warn('Erro ao atualizar perfis para matching:', profErr);
+      }
+
+      const toastId = toast.loading('Lendo certificados do PDF da MBM...');
+      const items = await extractMBMCertificatesFromPdf(file, (current, total) => {
+        setPdfParseProgress({ current, total });
+      });
+
+      toast.dismiss(toastId);
+
+      if (items.length === 0) {
+        toast.error('Nenhum certificado identificado no PDF.');
+        return;
+      }
+
+      matchPdfCertificates(items, currentProfiles);
+      toast.success(`${items.length} certificados extraídos e identificados com sucesso!`);
+    } catch (err: any) {
+      console.error('Erro ao ler PDF:', err);
+      toast.error('Falha ao processar PDF: ' + (err.message || 'Verifique o arquivo'));
+    } finally {
+      setIsParsingPdf(false);
+    }
+  };
+
+  // Gravar números da sorte e certificados no banco
+  const handleSavePdfSync = async () => {
+    if (selectedPdfIndices.size === 0) {
+      toast.error('Selecione ao menos um certificado para vincular.');
+      return;
+    }
+
+    setIsSavingPdf(true);
+    let successCount = 0;
+    let failCount = 0;
+    const toastId = toast.loading(`Vinculando ${selectedPdfIndices.size} certificados aos afiliados...`);
+
+    try {
+      for (const index of Array.from(selectedPdfIndices)) {
+        const item = extractedCertificates[index];
+        if (!item || !item.matchedProfileId || !item.luckyNumber) continue;
+
+        const userId = item.matchedProfileId;
+
+        try {
+          await supabase
+            .from('profiles')
+            .update({
+              lucky_number: item.luckyNumber,
+              certificate_number: item.certificateNumber,
+              policy_number: item.policyNumber,
+            })
+            .eq('id', userId);
+        } catch (colErr) {
+          console.warn('Atualização de coluna profiles em fallback:', colErr);
+        }
+
+        try {
+          const { data: p } = await supabase.from('profiles').select('description').eq('id', userId).single();
+          let desc = p?.description || '';
+          
+          desc = desc.replace(/\[MBM_LUCKY_NUMBER:[^\]]*\]/g, '');
+          desc = desc.replace(/\[MBM_CERTIFICATE:[^\]]*\]/g, '');
+          desc = desc.replace(/\[MBM_POLICY:[^\]]*\]/g, '');
+          desc = desc.replace(/\[MBM_VALIDITY:[^\]]*\]/g, '');
+          desc = desc.replace(/\[MBM_SYNCED_AT:[^\]]*\]/g, '');
+
+          const tags = `[MBM_LUCKY_NUMBER:${item.luckyNumber}] [MBM_CERTIFICATE:${item.certificateNumber}] [MBM_POLICY:${item.policyNumber}] [MBM_VALIDITY:${item.validityStart || '31/08/2026'}-${item.validityEnd || '31/08/2027'}] [MBM_SYNCED_AT:${new Date().toISOString()}]`;
+          desc = `${desc.trim()} ${tags}`.trim();
+
+          await supabase.from('profiles').update({ description: desc }).eq('id', userId);
+          successCount++;
+        } catch (descErr) {
+          console.error(`Erro ao salvar tags no perfil ${userId}:`, descErr);
+          failCount++;
+        }
+      }
+
+      toast.dismiss(toastId);
+
+      if (successCount > 0) {
+        toast.success(`🎉 ${successCount} Números da Sorte vinculados com sucesso ao Escritório Virtual!`);
+        await loadProfilesForMatching();
+      }
+      if (failCount > 0) {
+        toast.error(`${failCount} certificados falharam.`);
+      }
+    } catch (err: any) {
+      toast.dismiss(toastId);
+      toast.error('Erro na sincronização: ' + err.message);
+    } finally {
+      setIsSavingPdf(false);
+    }
+  };
+
+  const filteredExtractedCertificates = useMemo(() => {
+    return extractedCertificates.filter(item => {
+      if (pdfStatusFilter !== 'all' && item.status !== pdfStatusFilter) return false;
+      if (pdfSearchFilter) {
+        const q = pdfSearchFilter.toLowerCase();
+        const matchesName = item.fullName.toLowerCase().includes(q);
+        const matchesCpf = item.cleanCpf.includes(q) || item.cpf.includes(q);
+        const matchesLucky = item.luckyNumber.includes(q);
+        const matchesMatched = item.matchedProfileName?.toLowerCase().includes(q);
+        return matchesName || matchesCpf || matchesLucky || matchesMatched;
+      }
+      return true;
+    });
+  }, [extractedCertificates, pdfStatusFilter, pdfSearchFilter]);
 
   useEffect(() => {
     loadFiscalData();
@@ -2023,98 +2319,425 @@ export default function AdminFinancials() {
         {/* CONTEÚDO 2: SEGURO DE VIDA MBM (100% DARK GLASS)             */}
         {/* ============================================================ */}
         {viewType === 'insurance' && (
-          <div className="bg-[#0a0e17] rounded-[3rem] p-8 lg:p-12 shadow-2xl border border-white/5 space-y-8">
-            <div className="max-w-3xl mx-auto space-y-4 text-center">
-              <div className="size-16 bg-blue-500/10 text-blue-400 rounded-3xl flex items-center justify-center mx-auto border border-blue-500/20 shadow-lg">
-                <ShieldCheck size={32} />
-              </div>
-              <div className="space-y-2">
-                <h3 className="text-2xl font-black text-white uppercase tracking-tight italic">
-                  Relatório Mensal de Seguro - MBM
-                </h3>
-                <p className="text-xs text-slate-400 font-medium leading-relaxed max-w-xl mx-auto">
-                  Gere a planilha de movimentação mensal com os segurados ativos e adimplentes para envio direto à seguradora MBM.
-                </p>
+          <div className="space-y-8">
+            {/* Seletor de Sub-Abas MBM */}
+            <div className="flex items-center justify-center">
+              <div className="bg-[#0a0e17] p-1.5 rounded-2xl border border-white/5 flex items-center gap-2 shadow-xl">
+                <button
+                  type="button"
+                  onClick={() => setInsuranceSubTab('export')}
+                  className={`flex items-center gap-2.5 px-6 py-3 rounded-xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer ${
+                    insuranceSubTab === 'export'
+                      ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg shadow-blue-600/25'
+                      : 'text-slate-400 hover:text-white hover:bg-white/5'
+                  }`}
+                >
+                  <FileSpreadsheet size={16} />
+                  1. Remessa Mensal (.XLSX / Dia 20)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setInsuranceSubTab('import')}
+                  className={`flex items-center gap-2.5 px-6 py-3 rounded-xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer ${
+                    insuranceSubTab === 'import'
+                      ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-lg shadow-indigo-600/25'
+                      : 'text-slate-400 hover:text-white hover:bg-white/5'
+                  }`}
+                >
+                  <Ticket size={16} />
+                  2. Retorno MBM (Importar PDF & Números da Sorte)
+                </button>
               </div>
             </div>
 
-            <div className="max-w-md mx-auto bg-white/5 rounded-[2.5rem] p-8 border border-white/5 space-y-6">
-              <div className="flex flex-col gap-2">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
-                  Mês de Referência (Competência)
-                </label>
-                <div className="flex items-center gap-3 bg-[#0a0e17] px-4 py-3 rounded-2xl border border-white/10">
-                  <Clock size={18} className="text-indigo-400" />
-                  <input 
-                    type="month" 
-                    value={dateRange.start.substring(0, 7)}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      setDateRange({ 
-                        start: `${val}-01`, 
-                        end: `${val}-28`
-                      });
-                    }}
-                    className="bg-transparent text-xs font-bold text-white outline-none w-full cursor-pointer [color-scheme:dark]"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="flex flex-col gap-2">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
-                    Nº da Apólice MBM
-                  </label>
-                  <div className="flex items-center gap-2 bg-[#0a0e17] px-4 py-3 rounded-2xl border border-white/10">
-                    <ShieldCheck size={16} className="text-indigo-400" />
-                    <input 
-                      type="text" 
-                      placeholder="58940"
-                      value={mbmPolicyNumber}
-                      onChange={(e) => {
-                        setMbmPolicyNumber(e.target.value);
-                        localStorage.setItem('mbm_policy_number', e.target.value);
-                      }}
-                      className="bg-transparent text-xs font-bold text-white outline-none w-full"
-                    />
+            {/* SUB-ABA 1: REMESSA MENSAL (GERAR XLSX) */}
+            {insuranceSubTab === 'export' && (
+              <div className="bg-[#0a0e17] rounded-[3rem] p-8 lg:p-12 shadow-2xl border border-white/5 space-y-8">
+                <div className="max-w-3xl mx-auto space-y-4 text-center">
+                  <div className="size-16 bg-blue-500/10 text-blue-400 rounded-3xl flex items-center justify-center mx-auto border border-blue-500/20 shadow-lg">
+                    <ShieldCheck size={32} />
+                  </div>
+                  <div className="space-y-2">
+                    <h3 className="text-2xl font-black text-white uppercase tracking-tight italic">
+                      Relatório Mensal de Seguro - MBM (Remessa do Dia 20)
+                    </h3>
+                    <p className="text-xs text-slate-400 font-medium leading-relaxed max-w-xl mx-auto">
+                      Gere a planilha de movimentação mensal com os segurados ativos e adimplentes para envio direto à seguradora MBM.
+                    </p>
                   </div>
                 </div>
 
-                <div className="flex flex-col gap-2">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
-                    Subgrupo
-                  </label>
-                  <div className="flex items-center gap-2 bg-[#0a0e17] px-4 py-3 rounded-2xl border border-white/10">
-                    <span className="text-xs font-bold text-indigo-400">Sub</span>
-                    <input 
-                      type="text" 
-                      placeholder="1"
-                      value={mbmSubGroup}
-                      onChange={(e) => {
-                        setMbmSubGroup(e.target.value);
-                        localStorage.setItem('mbm_sub_group', e.target.value);
-                      }}
-                      className="bg-transparent text-xs font-bold text-white outline-none w-full"
-                    />
+                <div className="max-w-md mx-auto bg-white/5 rounded-[2.5rem] p-8 border border-white/5 space-y-6">
+                  <div className="flex flex-col gap-2">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
+                      Mês de Referência (Competência)
+                    </label>
+                    <div className="flex items-center gap-3 bg-[#0a0e17] px-4 py-3 rounded-2xl border border-white/10">
+                      <Clock size={18} className="text-indigo-400" />
+                      <input 
+                        type="month" 
+                        value={dateRange.start.substring(0, 7)}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setDateRange({ 
+                            start: `${val}-01`, 
+                            end: `${val}-28`
+                          });
+                        }}
+                        className="bg-transparent text-xs font-bold text-white outline-none w-full cursor-pointer [color-scheme:dark]"
+                      />
+                    </div>
                   </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="flex flex-col gap-2">
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
+                        Nº da Apólice MBM
+                      </label>
+                      <div className="flex items-center gap-2 bg-[#0a0e17] px-4 py-3 rounded-2xl border border-white/10">
+                        <ShieldCheck size={16} className="text-indigo-400" />
+                        <input 
+                          type="text" 
+                          placeholder="58940"
+                          value={mbmPolicyNumber}
+                          onChange={(e) => {
+                            setMbmPolicyNumber(e.target.value);
+                            localStorage.setItem('mbm_policy_number', e.target.value);
+                          }}
+                          className="bg-transparent text-xs font-bold text-white outline-none w-full"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col gap-2">
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
+                        Subgrupo
+                      </label>
+                      <div className="flex items-center gap-2 bg-[#0a0e17] px-4 py-3 rounded-2xl border border-white/10">
+                        <span className="text-xs font-bold text-indigo-400">Sub</span>
+                        <input 
+                          type="text" 
+                          placeholder="1"
+                          value={mbmSubGroup}
+                          onChange={(e) => {
+                            setMbmSubGroup(e.target.value);
+                            localStorage.setItem('mbm_sub_group', e.target.value);
+                          }}
+                          className="bg-transparent text-xs font-bold text-white outline-none w-full"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="p-4 bg-indigo-500/10 rounded-2xl border border-indigo-500/20 flex gap-3 items-start">
+                    <Info size={16} className="text-indigo-400 shrink-0 mt-0.5" />
+                    <p className="text-[10px] text-indigo-300 font-bold uppercase leading-normal">
+                      * Apenas associados com assinaturas ativas no período são incluídos na apuração da apólice coletiva MBM.
+                    </p>
+                  </div>
+
+                  <button
+                    onClick={handleExportMBM}
+                    className="w-full py-4 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white rounded-2xl font-black text-[11px] uppercase tracking-widest flex items-center justify-center gap-2 shadow-xl shadow-indigo-600/30 transition-all cursor-pointer"
+                  >
+                    <Download size={18} />
+                    Gerar Planilha Oficial (.XLSX)
+                  </button>
                 </div>
               </div>
+            )}
 
-              <div className="p-4 bg-indigo-500/10 rounded-2xl border border-indigo-500/20 flex gap-3 items-start">
-                <Info size={16} className="text-indigo-400 shrink-0 mt-0.5" />
-                <p className="text-[10px] text-indigo-300 font-bold uppercase leading-normal">
-                  * Apenas associados com assinaturas ativas no período são incluídos na apuração da apólice coletiva MBM.
-                </p>
+            {/* SUB-ABA 2: RETORNO MBM (IMPORTAR PDF E NÚMEROS DA SORTE) */}
+            {insuranceSubTab === 'import' && (
+              <div className="space-y-8">
+                {/* Zona de Upload */}
+                <div className="bg-gradient-to-br from-[#0c1222] to-[#0a0e17] border border-indigo-500/20 rounded-[2.5rem] p-8 lg:p-10 shadow-2xl relative overflow-hidden">
+                  <div className="max-w-3xl mx-auto text-center space-y-6">
+                    <div className="size-16 bg-indigo-600/20 text-indigo-400 border border-indigo-500/30 rounded-3xl flex items-center justify-center mx-auto shadow-inner">
+                      <UploadCloud size={32} />
+                    </div>
+
+                    <div>
+                      <h2 className="text-2xl font-black text-white uppercase italic tracking-tight">
+                        Importar Apólices e Certificados da MBM (.PDF)
+                      </h2>
+                      <p className="text-slate-400 text-xs max-w-xl mx-auto mt-2 leading-relaxed">
+                        Faça upload do arquivo PDF retornado pela MBM com as páginas dos certificados individuais. O sistema extrairá automaticamente o <strong>Nome do Segurado</strong>, <strong>CPF</strong>, <strong>Nº do Certificado</strong> e <strong>Nº da Sorte</strong> de cada afiliado.
+                      </p>
+                    </div>
+
+                    <input
+                      ref={fileInputPdfRef}
+                      type="file"
+                      accept=".pdf,application/pdf"
+                      onChange={handlePdfFileUpload}
+                      className="hidden"
+                    />
+
+                    <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-2">
+                      <button
+                        type="button"
+                        onClick={() => fileInputPdfRef.current?.click()}
+                        disabled={isParsingPdf}
+                        className="px-8 py-4 bg-gradient-to-r from-indigo-600 via-indigo-500 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-black text-xs uppercase tracking-widest rounded-2xl shadow-xl shadow-indigo-600/30 transition-all flex items-center gap-3 disabled:opacity-50 group cursor-pointer"
+                      >
+                        {isParsingPdf ? (
+                          <>
+                            <RefreshCw size={18} className="animate-spin" />
+                            Lendo Páginas do PDF ({pdfParseProgress.current} / {pdfParseProgress.total})...
+                          </>
+                        ) : (
+                          <>
+                            <UploadCloud size={18} className="group-hover:-translate-y-0.5 transition-transform" />
+                            Selecionar Arquivo PDF da MBM
+                          </>
+                        )}
+                      </button>
+
+                      {uploadedPdfFileName && (
+                        <div className="flex items-center gap-2 px-4 py-3 bg-white/5 border border-white/10 rounded-2xl text-xs text-slate-300 font-mono">
+                          <FileText size={15} className="text-indigo-400" />
+                          <span className="truncate max-w-[200px]">{uploadedPdfFileName}</span>
+                        </div>
+                      )}
+                    </div>
+
+                    {isParsingPdf && pdfParseProgress.total > 0 && (
+                      <div className="space-y-2 max-w-md mx-auto pt-4">
+                        <div className="flex justify-between text-[10px] font-mono text-slate-400 font-bold uppercase">
+                          <span>Processando páginas...</span>
+                          <span>{Math.round((pdfParseProgress.current / pdfParseProgress.total) * 100)}%</span>
+                        </div>
+                        <div className="w-full h-2.5 bg-white/5 rounded-full overflow-hidden p-0.5 border border-white/10">
+                          <motion.div 
+                            className="h-full bg-gradient-to-r from-indigo-500 to-emerald-400 rounded-full"
+                            initial={{ width: 0 }}
+                            animate={{ width: `${(pdfParseProgress.current / pdfParseProgress.total) * 100}%` }}
+                            transition={{ duration: 0.2 }}
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Tabela de Resultados Extraídos */}
+                {extractedCertificates.length > 0 && (
+                  <div className="space-y-6">
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-[#0a0e17] border border-white/5 p-6 rounded-3xl">
+                      <div>
+                        <h3 className="text-lg font-black text-white uppercase italic tracking-tight flex items-center gap-2.5">
+                          <CheckCircle2 className="text-emerald-400" size={20} />
+                          Certificados Identificados ({extractedCertificates.length} páginas)
+                        </h3>
+                        <p className="text-xs text-slate-400 mt-0.5">
+                          Confira a correspondência de CPF antes de sincronizar com os Escritórios Virtuais.
+                        </p>
+                      </div>
+
+                      <div className="flex flex-wrap items-center gap-3">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const next = new Set<number>();
+                            filteredExtractedCertificates.forEach((item) => {
+                              const orig = extractedCertificates.indexOf(item);
+                              if (item.status === 'matched' || item.status === 'pj_matched') next.add(orig);
+                            });
+                            setSelectedPdfIndices(next);
+                          }}
+                          className="px-4 py-2.5 bg-white/5 hover:bg-white/10 text-slate-300 rounded-xl text-xs font-bold transition-all border border-white/10 cursor-pointer"
+                        >
+                          Selecionar Válidos
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setSelectedPdfIndices(new Set())}
+                          className="px-4 py-2.5 bg-white/5 hover:bg-white/10 text-slate-400 rounded-xl text-xs font-bold transition-all border border-white/10 cursor-pointer"
+                        >
+                          Desmarcar Todos
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleSavePdfSync}
+                          disabled={isSavingPdf || selectedPdfIndices.size === 0}
+                          className="px-6 py-3 bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-white font-black text-xs uppercase tracking-widest rounded-2xl shadow-xl shadow-emerald-600/25 transition-all flex items-center gap-2.5 disabled:opacity-50 cursor-pointer"
+                        >
+                          {isSavingPdf ? (
+                            <>
+                              <RefreshCw size={16} className="animate-spin" />
+                              Gravando...
+                            </>
+                          ) : (
+                            <>
+                              <Save size={16} />
+                              Vincular {selectedPdfIndices.size} Selecionados ao Painel
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Filtros */}
+                    <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+                      <div className="flex items-center gap-2 p-1.5 bg-[#0a0e17] border border-white/5 rounded-2xl w-full sm:w-auto overflow-x-auto">
+                        <button
+                          onClick={() => setPdfStatusFilter('all')}
+                          className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer ${
+                            pdfStatusFilter === 'all' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-500 hover:text-white'
+                          }`}
+                        >
+                          Todos ({extractedCertificates.length})
+                        </button>
+                        <button
+                          onClick={() => setPdfStatusFilter('matched')}
+                          className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center gap-1.5 cursor-pointer ${
+                            pdfStatusFilter === 'matched' ? 'bg-emerald-600 text-white shadow-md' : 'text-slate-500 hover:text-white'
+                          }`}
+                        >
+                          <span className="size-2 rounded-full bg-emerald-400"></span>
+                          Identificados ({extractedCertificates.filter(c => c.status === 'matched').length})
+                        </button>
+                        <button
+                          onClick={() => setPdfStatusFilter('pj_matched')}
+                          className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center gap-1.5 cursor-pointer ${
+                            pdfStatusFilter === 'pj_matched' ? 'bg-purple-600 text-white shadow-md' : 'text-slate-500 hover:text-white'
+                          }`}
+                        >
+                          <span className="size-2 rounded-full bg-purple-400"></span>
+                          Titular PJ ({extractedCertificates.filter(c => c.status === 'pj_matched').length})
+                        </button>
+                        <button
+                          onClick={() => setPdfStatusFilter('not_found')}
+                          className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center gap-1.5 cursor-pointer ${
+                            pdfStatusFilter === 'not_found' ? 'bg-amber-600 text-white shadow-md' : 'text-slate-500 hover:text-white'
+                          }`}
+                        >
+                          <span className="size-2 rounded-full bg-amber-400"></span>
+                          Não Localizados ({extractedCertificates.filter(c => c.status === 'not_found').length})
+                        </button>
+                      </div>
+
+                      <div className="relative w-full sm:w-80">
+                        <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" />
+                        <input
+                          type="text"
+                          placeholder="Buscar por Nome, CPF ou Nº da Sorte..."
+                          value={pdfSearchFilter}
+                          onChange={(e) => setPdfSearchFilter(e.target.value)}
+                          className="w-full bg-[#0a0e17] border border-white/10 rounded-2xl pl-11 pr-4 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition-all"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Tabela */}
+                    <div className="bg-[#0a0e17] border border-white/5 rounded-3xl overflow-hidden shadow-2xl">
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-left border-collapse">
+                          <thead>
+                            <tr className="border-b border-white/5 bg-white/[0.02] text-[10px] font-black uppercase tracking-widest text-slate-500">
+                              <th className="p-5 w-12 text-center">Sel.</th>
+                              <th className="p-5">Pág.</th>
+                              <th className="p-5">Segurado no PDF</th>
+                              <th className="p-5">CPF Extraído</th>
+                              <th className="p-5">Nº da Sorte MBM</th>
+                              <th className="p-5">Certificado</th>
+                              <th className="p-5">Correspondência no Sistema</th>
+                              <th className="p-5">Status</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-white/5 text-xs">
+                            {filteredExtractedCertificates.map((item) => {
+                              const origIndex = extractedCertificates.indexOf(item);
+                              const isSelected = selectedPdfIndices.has(origIndex);
+
+                              return (
+                                <tr 
+                                  key={origIndex}
+                                  className={`hover:bg-white/[0.02] transition-colors ${
+                                    isSelected ? 'bg-indigo-950/20' : ''
+                                  }`}
+                                >
+                                  <td className="p-5 text-center">
+                                    <input
+                                      type="checkbox"
+                                      checked={isSelected}
+                                      onChange={() => {
+                                        const next = new Set(selectedPdfIndices);
+                                        if (next.has(origIndex)) next.delete(origIndex);
+                                        else next.add(origIndex);
+                                        setSelectedPdfIndices(next);
+                                      }}
+                                      disabled={item.status === 'not_found' || !item.luckyNumber}
+                                      className="size-4 rounded accent-indigo-600 bg-white/5 border-white/20 cursor-pointer disabled:opacity-30"
+                                    />
+                                  </td>
+
+                                  <td className="p-5 font-mono text-slate-400">
+                                    #{item.pageNumber}
+                                  </td>
+
+                                  <td className="p-5">
+                                    <p className="font-bold text-white uppercase tracking-tight">{item.fullName || '---'}</p>
+                                    <p className="text-[10px] text-slate-500 font-mono mt-0.5">
+                                      {item.birthDate ? `Nasc: ${item.birthDate}` : ''} {item.matricula ? `• Matr: ${item.matricula}` : ''}
+                                    </p>
+                                  </td>
+
+                                  <td className="p-5 font-mono font-medium text-slate-300">
+                                    {formatCpf(item.cpf || item.matricula || '')}
+                                  </td>
+
+                                  <td className="p-5">
+                                    <span className="px-3 py-1.5 bg-amber-500/10 text-amber-300 border border-amber-500/30 rounded-xl font-mono font-black text-sm tracking-widest">
+                                      {item.luckyNumber || 'NÃO IDENTIFICADO'}
+                                    </span>
+                                  </td>
+
+                                  <td className="p-5">
+                                    <p className="font-mono font-bold text-slate-200">Cert: #{item.certificateNumber || '---'}</p>
+                                    <p className="text-[10px] font-mono text-slate-500">Apólice: {item.policyNumber}</p>
+                                  </td>
+
+                                  <td className="p-5">
+                                    {item.matchedProfileName ? (
+                                      <div>
+                                        <p className="font-bold text-emerald-400">{item.matchedProfileName}</p>
+                                        <p className="text-[10px] text-slate-400 font-mono truncate max-w-[220px]">{item.matchedProfileEmail}</p>
+                                      </div>
+                                    ) : (
+                                      <span className="text-slate-500 italic text-[11px]">Nenhum usuário correspondente no sistema</span>
+                                    )}
+                                  </td>
+
+                                  <td className="p-5">
+                                    {item.status === 'matched' && (
+                                      <span className="px-3 py-1 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-full text-[10px] font-black uppercase tracking-wider inline-flex items-center gap-1">
+                                        <Check size={11} /> Pronto
+                                      </span>
+                                    )}
+                                    {item.status === 'pj_matched' && (
+                                      <span className="px-3 py-1 bg-purple-500/10 text-purple-400 border border-purple-500/20 rounded-full text-[10px] font-black uppercase tracking-wider inline-flex items-center gap-1">
+                                        <Sparkles size={11} /> Titular PJ
+                                      </span>
+                                    )}
+                                    {item.status === 'not_found' && (
+                                      <span className="px-3 py-1 bg-amber-500/10 text-amber-400 border border-amber-500/20 rounded-full text-[10px] font-black uppercase tracking-wider inline-flex items-center gap-1">
+                                        <AlertTriangle size={11} /> Não Localizado
+                                      </span>
+                                    )}
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
-
-              <button
-                onClick={handleExportMBM}
-                className="w-full py-4 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white rounded-2xl font-black text-[11px] uppercase tracking-widest flex items-center justify-center gap-2 shadow-xl shadow-indigo-600/30 transition-all cursor-pointer"
-              >
-                <Download size={18} />
-                Gerar Planilha Oficial (.XLSX)
-              </button>
-            </div>
+            )}
           </div>
         )}
 

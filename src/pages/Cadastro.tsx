@@ -774,12 +774,12 @@ export default function Cadastro() {
                                     <TrendingUp size={28} />
                                 </div>
                                 <div>
-                                    <p className="text-[10px] text-slate-400 uppercase font-black tracking-[0.2em] mb-1">Passaporte Urba</p>
+                                    <p className="text-[10px] text-slate-400 uppercase font-black tracking-[0.2em] mb-1">CaZa dos Sorteios</p>
                                     <p className="font-black text-white text-lg leading-none uppercase italic">Cashback Ativo</p>
                                 </div>
                             </div>
                             <p className="text-sm text-slate-400 leading-relaxed relative z-10 font-bold">
-                                Cada indicação e cada uso gera bônus reais. O ecossistema que valoriza quem faz a cidade girar.
+                                Cada indicação e cada assinatura gera bônus reais. O ecossistema com prêmios e proteção para você.
                             </p>
                         </div>
                     </motion.div>
@@ -794,9 +794,9 @@ export default function Cadastro() {
                         className="max-w-xl mx-auto w-full"
                     >
                         <div className="mb-12">
-                            <span className="text-[10px] font-black text-emerald-500 uppercase tracking-[0.3em] mb-3 block">Welcome to Urba</span>
+                            <span className="text-[10px] font-black text-emerald-500 uppercase tracking-[0.3em] mb-3 block">Bem-vindo à CaZa dos Sorteios</span>
                             <h1 className="text-4xl lg:text-5xl font-black text-midnight mb-3 tracking-tighter uppercase italic leading-none">Crie sua Conta</h1>
-                            <p className="text-slate-500 font-bold uppercase text-[10px] tracking-widest">Acesso Unificado para todo o Ecossistema Urbano</p>
+                            <p className="text-slate-500 font-bold uppercase text-[10px] tracking-widest">Acesso Unificado para todo o Ecossistema CaZa dos Sorteios</p>
                         </div>
 
                         <form className="space-y-12 pb-20" onSubmit={handleSubmit}>

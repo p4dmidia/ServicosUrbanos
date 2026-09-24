@@ -37,19 +37,41 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 import AdminLayout from '../components/AdminLayout';
 import { businessRules } from '../lib/businessRules';
+import { 
+  exportMonthlyPixExcel, 
+  exportAnnualCashbackExcel, 
+  exportBalancesExcel, 
+  exportAdvancesExcel, 
+  exportHistoryExcel, 
+  exportMonthlyFolderExcel 
+} from '../lib/excelExport';
 import { toast } from 'react-hot-toast';
 import PaymentModal from '../components/PaymentModal';
 
 export default function AdminWithdrawals() {
   const [loading, setLoading] = useState(true);
   const [payableBalances, setPayableBalances] = useState<any[]>([]);
-  const [viewTab, setViewTab] = useState<'network' | 'reseller' | 'advances' | 'history' | 'monthly_folder'>('network');
+  const [viewTab, setViewTab] = useState<'network' | 'reseller' | 'advances' | 'monthly_pix' | 'annual_cashback' | 'history' | 'monthly_folder'>('network');
   const [cycleFilter, setCycleFilter] = useState<'all' | 'monthly' | 'annual'>('all');
   const [searchTerm, setSearchTerm] = useState('');
 
   // Advances State
   const [advanceRequestsList, setAdvanceRequestsList] = useState<any[]>([]);
   const [loadingAdvances, setLoadingAdvances] = useState(false);
+
+  // Relatório 1: Folha Mensal Dia 10 State
+  const [monthlyPixList, setMonthlyPixList] = useState<any[]>([]);
+  const [loadingMonthlyPix, setLoadingMonthlyPix] = useState(false);
+  const [selectedMonthlyPixMonth, setSelectedMonthlyPixMonth] = useState<string>(() => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  });
+
+  // Relatório 2: Cashback Anual State
+  const [annualCashbackList, setAnnualCashbackList] = useState<any[]>([]);
+  const [loadingAnnualCashback, setLoadingAnnualCashback] = useState(false);
+  const [selectedAnnualCycleYear, setSelectedAnnualCycleYear] = useState<number>(2025);
+  const [annualMonthFilter, setAnnualMonthFilter] = useState<string>('all');
 
   // Tranca inteligente de data: Pagamento Anual é liberado exclusivamente em 10 de Dezembro
   const isDecemberAnnualWindow = useMemo(() => {
@@ -148,6 +170,34 @@ export default function AdminWithdrawals() {
       toast.error('Erro ao carregar pasta de pagamentos.');
     } finally {
       setLoadingArchives(false);
+    }
+  };
+
+  const loadMonthlyPix = async (targetMonth?: string) => {
+    try {
+      setLoadingMonthlyPix(true);
+      const month = targetMonth || selectedMonthlyPixMonth;
+      const data = await businessRules.getMonthlyPayoutReport(month);
+      setMonthlyPixList(data);
+    } catch (e) {
+      console.error('Erro ao carregar folha mensal PIX:', e);
+      toast.error('Erro ao carregar folha de pagamento do dia 10.');
+    } finally {
+      setLoadingMonthlyPix(false);
+    }
+  };
+
+  const loadAnnualCashback = async (cycleYear?: number) => {
+    try {
+      setLoadingAnnualCashback(true);
+      const yr = cycleYear !== undefined ? cycleYear : selectedAnnualCycleYear;
+      const data = await businessRules.getAnnualCashbackReport(yr);
+      setAnnualCashbackList(data);
+    } catch (e) {
+      console.error('Erro ao carregar relatório anual:', e);
+      toast.error('Erro ao carregar relatório de cashback anual.');
+    } finally {
+      setLoadingAnnualCashback(false);
     }
   };
 
@@ -289,11 +339,15 @@ export default function AdminWithdrawals() {
       loadArchives(selectedArchiveMonth);
     } else if (viewTab === 'advances') {
       loadAdvances();
+    } else if (viewTab === 'monthly_pix') {
+      loadMonthlyPix(selectedMonthlyPixMonth);
+    } else if (viewTab === 'annual_cashback') {
+      loadAnnualCashback(selectedAnnualCycleYear);
     } else {
       loadBalances(viewTab);
     }
     setCurrentPage(1);
-  }, [viewTab, selectedArchiveMonth]);
+  }, [viewTab, selectedArchiveMonth, selectedMonthlyPixMonth, selectedAnnualCycleYear]);
 
   const copyToClipboard = (text: string, label: string) => {
     navigator.clipboard.writeText(text);
@@ -506,6 +560,10 @@ export default function AdminWithdrawals() {
 
       if (viewTab === 'monthly_folder') {
         await loadArchives(selectedArchiveMonth);
+      } else if (viewTab === 'monthly_pix') {
+        await loadMonthlyPix(selectedMonthlyPixMonth);
+      } else if (viewTab === 'annual_cashback') {
+        await loadAnnualCashback(selectedAnnualCycleYear);
       } else if (viewTab !== 'history') {
         await loadBalances(viewTab);
       }
@@ -569,6 +627,50 @@ export default function AdminWithdrawals() {
     });
   }, [monthlyArchives, searchTerm]);
 
+  // Filtragem de Relatório 1: Folha Mensal Dia 10
+  const filteredMonthlyPix = useMemo(() => {
+    return monthlyPixList.filter(item => {
+      const q = searchTerm.toLowerCase();
+      return (
+        !searchTerm ||
+        item.userName?.toLowerCase().includes(q) ||
+        item.cpfCnpj?.toLowerCase().includes(q) ||
+        item.pixKey?.toLowerCase().includes(q) ||
+        item.bankDetails?.toLowerCase().includes(q)
+      );
+    });
+  }, [monthlyPixList, searchTerm]);
+
+  // Filtragem de Relatório 2: Cashback Anual
+  const filteredAnnualCashback = useMemo(() => {
+    return annualCashbackList.filter(item => {
+      const q = searchTerm.toLowerCase();
+      const matchesSearch = 
+        !searchTerm ||
+        item.name?.toLowerCase().includes(q) ||
+        item.id?.toLowerCase().includes(q) ||
+        item.chavePix?.toLowerCase().includes(q);
+
+      const matchesMonth = 
+        annualMonthFilter === 'all' ||
+        item.refMonth === annualMonthFilter ||
+        item.mesReferencia?.toLowerCase().includes(annualMonthFilter.toLowerCase());
+
+      return matchesSearch && matchesMonth;
+    });
+  }, [annualCashbackList, searchTerm, annualMonthFilter]);
+
+  // Lista de meses únicos para o filtro do relatório anual
+  const availableAnnualMonths = useMemo(() => {
+    const map = new Map<string, string>();
+    annualCashbackList.forEach(item => {
+      if (item.refMonth && item.mesReferencia) {
+        map.set(item.refMonth, item.mesReferencia);
+      }
+    });
+    return Array.from(map.entries()).sort((a, b) => a[0].localeCompare(b[0]));
+  }, [annualCashbackList]);
+
   // Totais Gerais dos Pendentes
   const totalMonthlyPending = payableBalances.reduce((acc, curr) => acc + (curr.monthlyLiquid !== undefined ? curr.monthlyLiquid : (curr.monthlyPending || 0)), 0);
   const totalAnnualPending = payableBalances.reduce((acc, curr) => acc + (curr.annualPending || 0), 0);
@@ -587,8 +689,115 @@ export default function AdminWithdrawals() {
   const totalArchiveIrrf = filteredArchives.reduce((acc, curr) => acc + (curr.irrf || 0), 0);
   const totalArchiveLiquido = filteredArchives.reduce((acc, curr) => acc + (curr.liquido || 0), 0);
 
-  // Exportar CSV de Pendentes, Histórico e Pasta Mensal
+  // Totais de Relatório 1: Folha Mensal Dia 10
+  const totalMonthlyPixCashback = filteredMonthlyPix.reduce((acc, curr) => acc + (curr.cashbackMensal || 0), 0);
+  const totalMonthlyPixAnualAcum = filteredMonthlyPix.reduce((acc, curr) => acc + (curr.cashbackAnualAcumulado || 0), 0);
+  const totalMonthlyPixBruto = filteredMonthlyPix.reduce((acc, curr) => acc + (curr.totalBruto || 0), 0);
+  const totalMonthlyPixInss = filteredMonthlyPix.reduce((acc, curr) => acc + (curr.inss || 0), 0);
+  const totalMonthlyPixIrrf = filteredMonthlyPix.reduce((acc, curr) => acc + (curr.irrf || 0), 0);
+  const totalMonthlyPixAdiantamentos = filteredMonthlyPix.reduce((acc, curr) => acc + (curr.adiantamentos || 0), 0);
+  const totalMonthlyPixLiquido = filteredMonthlyPix.reduce((acc, curr) => acc + (curr.liquidoPix || 0), 0);
+
+  // Totais de Relatório 2: Cashback Anual
+  const totalAnnualCashAfiliado = filteredAnnualCashback.reduce((acc, curr) => acc + (curr.cashAfiliado || 0), 0);
+  const totalAnnualCashRevendedor = filteredAnnualCashback.reduce((acc, curr) => acc + (curr.cashRevendedor || 0), 0);
+  const totalAnnualBruto = filteredAnnualCashback.reduce((acc, curr) => acc + (curr.totalBruto || 0), 0);
+  const totalAnnualBaseIrpf = filteredAnnualCashback.reduce((acc, curr) => acc + (curr.baseIrpf || 0), 0);
+  const totalAnnualDescontoIrpf = filteredAnnualCashback.reduce((acc, curr) => acc + (curr.descontoIrpf || 0), 0);
+  const totalAnnualLiquidoReceber = filteredAnnualCashback.reduce((acc, curr) => acc + (curr.liquidoReceber || 0), 0);
+
+  // Exportar Excel Formatado (.xlsx) com Design Profissional
+  const handleExportExcel = async () => {
+    try {
+      if (viewTab === 'monthly_pix') {
+        if (filteredMonthlyPix.length === 0) {
+          toast.error('Nenhum registro encontrado para exportar.');
+          return;
+        }
+        await exportMonthlyPixExcel(filteredMonthlyPix, selectedMonthlyPixMonth);
+        toast.success('Planilha Excel Oficial de Pagamento PIX gerada com sucesso!');
+        return;
+      }
+
+      if (viewTab === 'annual_cashback') {
+        if (filteredAnnualCashback.length === 0) {
+          toast.error('Nenhum registro encontrado para exportar.');
+          return;
+        }
+        const label = selectedAnnualCycleYear === 2025 ? '01.11.25 A 30.11.26' : `01.11.${selectedAnnualCycleYear} A 30.11.${selectedAnnualCycleYear + 1}`;
+        await exportAnnualCashbackExcel(filteredAnnualCashback, label);
+        toast.success('Planilha Excel Oficial de Cashback Anual gerada com sucesso!');
+        return;
+      }
+
+      if (viewTab === 'network' || viewTab === 'reseller') {
+        if (filteredBalances.length === 0) {
+          toast.error('Nenhum saldo pendente para exportar.');
+          return;
+        }
+        await exportBalancesExcel(filteredBalances, viewTab);
+        toast.success(`Planilha Excel de ${viewTab === 'reseller' ? 'Revendedores' : 'Afiliados'} gerada com sucesso!`);
+        return;
+      }
+
+      if (viewTab === 'advances') {
+        if (advanceRequestsList.length === 0) {
+          toast.error('Nenhuma solicitação de adiantamento para exportar.');
+          return;
+        }
+        await exportAdvancesExcel(advanceRequestsList);
+        toast.success('Planilha Excel de Adiantamentos gerada com sucesso!');
+        return;
+      }
+
+      if (viewTab === 'history') {
+        if (filteredHistory.length === 0) {
+          toast.error('Nenhum histórico para exportar.');
+          return;
+        }
+        await exportHistoryExcel(filteredHistory);
+        toast.success('Planilha Excel de Auditoria Fiscal gerada com sucesso!');
+        return;
+      }
+
+      if (viewTab === 'monthly_folder') {
+        if (filteredArchives.length === 0) {
+          toast.error('Nenhum pagamento arquivado para exportar neste mês.');
+          return;
+        }
+        await exportMonthlyFolderExcel(filteredArchives, selectedArchiveMonth);
+        toast.success('Pasta de Pagamentos Mensais (Excel) gerada com sucesso!');
+        return;
+      }
+    } catch (err) {
+      console.error('Erro ao exportar Excel:', err);
+      toast.error('Erro ao gerar planilha Excel formatada.');
+    }
+  };
+
+  // Exportar CSV
   const handleExportCSV = () => {
+    if (viewTab === 'monthly_pix') {
+      if (filteredMonthlyPix.length === 0) {
+        toast.error('Nenhum registro encontrado para exportar.');
+        return;
+      }
+      businessRules.exportMonthlyPayoutReportCSV(filteredMonthlyPix, selectedMonthlyPixMonth);
+      toast.success('Relatório Oficial de Pagamento PIX Dia 10 exportado com sucesso!');
+      return;
+    }
+
+    if (viewTab === 'annual_cashback') {
+      if (filteredAnnualCashback.length === 0) {
+        toast.error('Nenhum registro encontrado para exportar.');
+        return;
+      }
+      const label = selectedAnnualCycleYear === 2025 ? '01.11.25 A 30.11.26' : `01.11.${selectedAnnualCycleYear} A 30.11.${selectedAnnualCycleYear + 1}`;
+      businessRules.exportAnnualCashbackReportCSV(filteredAnnualCashback, label);
+      toast.success('Relatório Oficial de Cashback Anual exportado com sucesso!');
+      return;
+    }
+
     const csvContent: string[] = [];
     const reportTitle = viewTab === 'history' 
       ? 'Relatorio de Historico de Pagamentos Liquidados'
@@ -672,12 +881,38 @@ export default function AdminWithdrawals() {
     window.print();
   };
 
+  const getReportTitleForPrint = () => {
+    switch (viewTab) {
+      case 'monthly_pix': return `Folha Oficial de Pagamentos PIX — Dia 10 (Competência ${selectedMonthlyPixMonth})`;
+      case 'annual_cashback': return `Relatório de Cashback Anual a Pagar (Ciclo ${selectedAnnualCycleYear === 2025 ? '01/11/2025 a 30/11/2026' : `${selectedAnnualCycleYear} a ${selectedAnnualCycleYear + 1}`})`;
+      case 'network': return 'Relatório de Comissões de Rede MMN';
+      case 'reseller': return 'Relatório de Repasses de Revendedores Regionais';
+      case 'advances': return 'Solicitações de Adiantamento Mensal de Rendimentos';
+      case 'history': return 'Histórico Oficial de Pagamentos Liquidados (Auditoria Fiscal)';
+      case 'monthly_folder': return `Pasta de Pagamentos Mensais Arquivados — Mês ${selectedArchiveMonth}`;
+      default: return 'Relatório Financeiro de Pagamentos';
+    }
+  };
+
+  const getReportPeriodForPrint = () => {
+    switch (viewTab) {
+      case 'monthly_pix': return `Competência ${selectedMonthlyPixMonth}`;
+      case 'annual_cashback': return selectedAnnualCycleYear === 2025 ? '01/11/2025 a 30/11/2026' : `01/11/${selectedAnnualCycleYear} a 30/11/${selectedAnnualCycleYear + 1}`;
+      case 'monthly_folder': return selectedArchiveMonth;
+      default: return new Date().toLocaleDateString('pt-BR');
+    }
+  };
+
   // Paginação
   const currentList = viewTab === 'history' 
     ? filteredHistory 
     : viewTab === 'monthly_folder'
       ? filteredArchives
-      : filteredBalances;
+      : viewTab === 'monthly_pix'
+        ? filteredMonthlyPix
+        : viewTab === 'annual_cashback'
+          ? filteredAnnualCashback
+          : filteredBalances;
   const startIndex = (currentPage - 1) * itemsPerPage;
   const paginatedList = currentList.slice(startIndex, startIndex + itemsPerPage);
   const totalPages = Math.ceil(currentList.length / itemsPerPage);
@@ -685,39 +920,117 @@ export default function AdminWithdrawals() {
   return (
     <AdminLayout 
       title="Gestão de Pagamentos" 
-      subtitle="Central de pagamentos de comissões, repasses e auditoria fiscal com QR Code PIX"
+      subtitle="Central de pagamentos de comissões, repasses e relatórios oficiais PIX e Cashback Anual"
     >
-      <div className="p-6 md:p-10 lg:p-12 space-y-8">
+      {/* Estilos Globais de Impressão Exclusivos para a Página */}
+      <style>{`
+        @media print {
+          @page {
+            size: A4 landscape;
+            margin: 8mm 8mm;
+          }
+          body {
+            background: white !important;
+            color: #0f172a !important;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
+          .no-print {
+            display: none !important;
+          }
+          .print-full-table {
+            display: table !important;
+            width: 100% !important;
+          }
+          .print-paginated-hide {
+            display: none !important;
+          }
+          table {
+            border-collapse: collapse !important;
+            width: 100% !important;
+            font-size: 8.5pt !important;
+          }
+          thead {
+            display: table-header-group !important;
+          }
+          tr {
+            page-break-inside: avoid !important;
+          }
+          th, td {
+            border: 1px solid #cbd5e1 !important;
+            padding: 4px 6px !important;
+            color: #0f172a !important;
+          }
+          th {
+            background-color: #f1f5f9 !important;
+            font-weight: 800 !important;
+            color: #0f172a !important;
+          }
+          tfoot tr {
+            background-color: #e2e8f0 !important;
+            font-weight: 900 !important;
+          }
+        }
+      `}</style>
+
+      <div className="p-6 md:p-10 lg:p-12 space-y-8 print:p-0 print:space-y-4">
         
-        {/* Toggle das 4 Abas Principais */}
-        <div className="flex flex-wrap bg-[#0a0e17] p-2 rounded-[2rem] border border-white/5 shadow-2xl w-full max-w-5xl gap-2">
+        {/* TIMBRE OFICIAL DE IMPRESSÃO (Visível exclusivamente ao Imprimir / Salvar PDF) */}
+        <div className="hidden print:block border-b-2 border-slate-900 pb-3 mb-4 text-slate-900">
+          <div className="flex justify-between items-start">
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-base font-black uppercase tracking-tight text-slate-950">
+                  SERVIÇOS URBANOS TECNOLOGIA E ECONOMIA LTDA
+                </span>
+                <span className="text-[9px] font-mono font-bold text-slate-600 bg-slate-100 px-2 py-0.5 rounded border border-slate-300">
+                  CNPJ: 54.795.377/0001-00
+                </span>
+              </div>
+              <p className="text-xs font-black uppercase text-indigo-900 mt-1">
+                {getReportTitleForPrint()}
+              </p>
+              <p className="text-[10px] text-slate-600 mt-0.5">
+                Central de Controle Financeiro • Sistema Integrado de Repasses e Auditoria Fiscal
+              </p>
+            </div>
+            <div className="text-right text-[10px] space-y-0.5">
+              <p className="font-bold text-slate-900">Período: <span className="font-mono">{getReportPeriodForPrint()}</span></p>
+              <p className="text-slate-600">Emissão: <span className="font-mono">{new Date().toLocaleString('pt-BR')}</span></p>
+              <p className="text-emerald-700 font-bold uppercase">Status: Relatório Oficial Consolidado</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Toggle das Abas Principais (Oculto na Impressão) */}
+        <div className="flex flex-wrap bg-[#0a0e17] p-2 rounded-[2rem] border border-white/5 shadow-2xl w-full gap-2 no-print">
           <button
             onClick={() => setViewTab('network')}
-            className={`flex-1 min-w-[180px] py-3.5 px-4 rounded-2xl text-xs font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 cursor-pointer ${
+            className={`flex-1 min-w-[150px] py-3.5 px-4 rounded-2xl text-xs font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 cursor-pointer ${
               viewTab === 'network'
                 ? 'bg-gradient-to-r from-indigo-600 to-indigo-700 text-white shadow-lg shadow-indigo-600/30'
                 : 'text-slate-400 hover:text-white'
             }`}
           >
             <Users size={16} />
-            Afiliados (Rede MMN)
+            Afiliados (MMN)
           </button>
           
           <button
             onClick={() => setViewTab('reseller')}
-            className={`flex-1 min-w-[180px] py-3.5 px-4 rounded-2xl text-xs font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 cursor-pointer ${
+            className={`flex-1 min-w-[150px] py-3.5 px-4 rounded-2xl text-xs font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 cursor-pointer ${
               viewTab === 'reseller'
                 ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-lg shadow-purple-600/30'
                 : 'text-slate-400 hover:text-white'
             }`}
           >
             <Building2 size={16} />
-            Revendedores Regionais
+            Revendedores
           </button>
 
           <button
             onClick={() => setViewTab('advances')}
-            className={`flex-1 min-w-[180px] py-3.5 px-4 rounded-2xl text-xs font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 cursor-pointer ${
+            className={`flex-1 min-w-[150px] py-3.5 px-4 rounded-2xl text-xs font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 cursor-pointer ${
               viewTab === 'advances'
                 ? 'bg-gradient-to-r from-amber-500 to-orange-600 text-white shadow-lg shadow-amber-500/30'
                 : 'text-slate-400 hover:text-white'
@@ -727,11 +1040,37 @@ export default function AdminWithdrawals() {
             Adiantamentos ({advanceRequestsList.filter(a => a.status === 'pending').length})
           </button>
 
+          {/* NOVO: Relatório 1 - Pagamentos do Dia 10 (Folha PIX) */}
+          <button
+            onClick={() => setViewTab('monthly_pix')}
+            className={`flex-1 min-w-[180px] py-3.5 px-4 rounded-2xl text-xs font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 cursor-pointer ${
+              viewTab === 'monthly_pix'
+                ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-lg shadow-emerald-600/30'
+                : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            <FileSpreadsheet size={16} />
+            Pagamentos Dia 10 (PIX)
+          </button>
+
+          {/* NOVO: Relatório 2 - Cashback Anual (10/Dez) */}
+          <button
+            onClick={() => setViewTab('annual_cashback')}
+            className={`flex-1 min-w-[170px] py-3.5 px-4 rounded-2xl text-xs font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 cursor-pointer ${
+              viewTab === 'annual_cashback'
+                ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg shadow-blue-600/30'
+                : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            <ShieldCheck size={16} />
+            Cashback Anual (10/Dez)
+          </button>
+
           <button
             onClick={() => setViewTab('history')}
-            className={`flex-1 min-w-[180px] py-3.5 px-4 rounded-2xl text-xs font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 cursor-pointer ${
+            className={`flex-1 min-w-[150px] py-3.5 px-4 rounded-2xl text-xs font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 cursor-pointer ${
               viewTab === 'history'
-                ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-lg shadow-emerald-600/30'
+                ? 'bg-gradient-to-r from-teal-600 to-cyan-600 text-white shadow-lg shadow-teal-600/30'
                 : 'text-slate-400 hover:text-white'
             }`}
           >
@@ -741,20 +1080,20 @@ export default function AdminWithdrawals() {
 
           <button
             onClick={() => setViewTab('monthly_folder')}
-            className={`flex-1 min-w-[200px] py-3.5 px-4 rounded-2xl text-xs font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 cursor-pointer ${
+            className={`flex-1 min-w-[170px] py-3.5 px-4 rounded-2xl text-xs font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 cursor-pointer ${
               viewTab === 'monthly_folder'
                 ? 'bg-gradient-to-r from-amber-600 to-orange-600 text-white shadow-lg shadow-amber-600/30'
                 : 'text-slate-400 hover:text-white'
             }`}
           >
             <FolderArchive size={16} />
-            Pasta Pagamentos Mensais
+            Pasta Pagamentos
           </button>
         </div>
 
         {/* Bloco de Métricas (Aparece para Afiliados e Revendedores) */}
         {(viewTab === 'network' || viewTab === 'reseller') && (
-          <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-3 gap-6 no-print">
             <div className="flex items-center gap-5 bg-[#0a0e17] p-6 rounded-3xl border border-white/5 shadow-xl">
               <div className="size-14 bg-indigo-500/20 text-indigo-400 rounded-2xl flex items-center justify-center shrink-0">
                 <DollarSign size={28} />
@@ -800,15 +1139,19 @@ export default function AdminWithdrawals() {
           </div>
         )}
 
-        {/* Barra de Filtros, Busca e Ações de Exportação */}
-        <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
+        {/* Barra de Filtros, Busca e Ações de Exportação (Oculta na Impressão) */}
+        <div className="flex flex-col md:flex-row gap-4 items-center justify-between no-print">
           <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
             {/* Campo de Busca */}
             <div className="relative w-full md:w-80">
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
               <input 
                 type="text"
-                placeholder="Buscar por nome, CPF, e-mail ou chave PIX..."
+                placeholder={
+                  viewTab === 'annual_cashback'
+                    ? "Buscar por Nome, ID ou Chave PIX..."
+                    : "Buscar por nome, CPF, e-mail ou chave PIX..."
+                }
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="w-full bg-[#0a0e17] border border-white/5 rounded-2xl pl-12 pr-4 py-3 text-xs text-white placeholder:text-slate-500 focus:outline-none focus:border-indigo-500/40"
@@ -875,6 +1218,54 @@ export default function AdminWithdrawals() {
               </div>
             )}
 
+            {/* Subfiltro de Mês para Pagamentos Dia 10 (PIX) */}
+            {viewTab === 'monthly_pix' && (
+              <div className="flex items-center gap-2 bg-[#0a0e17] px-3 py-2 rounded-2xl border border-white/5">
+                <span className="text-[10px] font-black uppercase tracking-wider text-emerald-400">Competência:</span>
+                <input
+                  type="month"
+                  value={selectedMonthlyPixMonth}
+                  onChange={(e) => {
+                    setSelectedMonthlyPixMonth(e.target.value);
+                    loadMonthlyPix(e.target.value);
+                  }}
+                  className="bg-slate-900 text-white border border-white/10 rounded-xl px-2.5 py-1 text-xs font-mono font-bold focus:outline-none focus:border-emerald-500/50"
+                />
+              </div>
+            )}
+
+            {/* Subfiltros para Cashback Anual (Ciclo e Mês de Referência) */}
+            {viewTab === 'annual_cashback' && (
+              <div className="flex flex-wrap items-center gap-2 bg-[#0a0e17] px-3 py-2 rounded-2xl border border-white/5">
+                <span className="text-[10px] font-black uppercase tracking-wider text-blue-400">Ciclo Anual:</span>
+                <select
+                  value={selectedAnnualCycleYear}
+                  onChange={(e) => {
+                    const yr = parseInt(e.target.value, 10);
+                    setSelectedAnnualCycleYear(yr);
+                    loadAnnualCashback(yr);
+                  }}
+                  className="bg-slate-900 text-white border border-white/10 rounded-xl px-2.5 py-1 text-xs font-bold focus:outline-none focus:border-blue-500/50 cursor-pointer"
+                >
+                  <option value={2025}>01/11/2025 a 30/11/2026 (Ciclo Atual)</option>
+                  <option value={2024}>01/11/2024 a 30/11/2025</option>
+                  <option value={2026}>01/11/2026 a 30/11/2027</option>
+                </select>
+
+                <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 ml-2">Mês:</span>
+                <select
+                  value={annualMonthFilter}
+                  onChange={(e) => setAnnualMonthFilter(e.target.value)}
+                  className="bg-slate-900 text-white border border-white/10 rounded-xl px-2.5 py-1 text-xs font-bold focus:outline-none focus:border-blue-500/50 cursor-pointer"
+                >
+                  <option value="all">Todos os Meses</option>
+                  {availableAnnualMonths.map(([ym, label]) => (
+                    <option key={ym} value={ym}>{label} ({ym})</option>
+                  ))}
+                </select>
+              </div>
+            )}
+
             {/* Subfiltro de Mês para Pasta de Pagamentos Mensais */}
             {viewTab === 'monthly_folder' && (
               <div className="flex items-center gap-2 bg-[#0a0e17] px-3 py-2 rounded-2xl border border-white/5">
@@ -892,39 +1283,30 @@ export default function AdminWithdrawals() {
             )}
           </div>
 
-          {/* Botões de Ação: Programação Pix Dia 10, Exportar CSV e Imprimir */}
+          {/* Botões de Ação: Exportar Excel (.xlsx), CSV e Imprimir */}
           <div className="flex flex-wrap items-center gap-3 w-full md:w-auto justify-end">
-            {(viewTab === 'network' || viewTab === 'reseller') && (
-              <>
-                <button
-                  onClick={handleExportScheduledPixCSV}
-                  className="px-4 py-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 border border-emerald-500/30 text-white rounded-2xl text-xs font-black uppercase tracking-wider flex items-center gap-2 transition-all cursor-pointer shadow-lg shadow-emerald-600/20"
-                  title="Exportar CSV com chave PIX e valor líquido para programar pagamento do dia 10"
-                >
-                  <FileSpreadsheet size={15} />
-                  Programação PIX Dia 10
-                </button>
-                <button
-                  onClick={handleExportConsolidatedCSV}
-                  className="px-4 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 border border-indigo-500/30 text-white rounded-2xl text-xs font-black uppercase tracking-wider flex items-center gap-2 transition-all cursor-pointer shadow-lg shadow-indigo-600/20"
-                  title="Exportar CSV Consolidado (Rede MMN + Revendedor) para programação bancária do dia 10"
-                >
-                  <FileSpreadsheet size={15} />
-                  Resumo Consolidado (CSV)
-                </button>
-              </>
-            )}
+            <button
+              onClick={handleExportExcel}
+              className="px-4 py-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 border border-emerald-500/30 text-white rounded-2xl text-xs font-black uppercase tracking-wider flex items-center gap-2 transition-all cursor-pointer shadow-lg shadow-emerald-600/20"
+              title="Exportar Planilha Excel (.xlsx) com Design Profissional, Cores e Formatação de Moeda"
+            >
+              <FileSpreadsheet size={16} />
+              Exportar Excel (.xlsx)
+            </button>
 
             <button
               onClick={handleExportCSV}
-              className="px-4 py-3 bg-[#0a0e17] hover:bg-white/5 border border-white/10 text-white rounded-2xl text-xs font-black uppercase tracking-wider flex items-center gap-2 transition-all cursor-pointer"
+              className="px-3.5 py-3 bg-[#0a0e17] hover:bg-white/5 border border-white/10 text-white rounded-2xl text-xs font-black uppercase tracking-wider flex items-center gap-1.5 transition-all cursor-pointer"
+              title="Exportar dados brutos em CSV"
             >
-              <Download size={15} />
-              Exportar CSV
+              <Download size={14} />
+              CSV
             </button>
+
             <button
               onClick={handlePrint}
-              className="px-4 py-3 bg-white/5 hover:bg-white/10 border border-white/10 text-white rounded-2xl text-xs font-black uppercase tracking-wider flex items-center gap-2 transition-all cursor-pointer"
+              className="px-4 py-3 bg-indigo-600/20 hover:bg-indigo-600/30 border border-indigo-500/30 text-indigo-300 hover:text-white rounded-2xl text-xs font-black uppercase tracking-wider flex items-center gap-2 transition-all cursor-pointer"
+              title="Imprimir Relatório Oficial Formatado"
             >
               <Printer size={15} />
               Imprimir
@@ -949,8 +1331,10 @@ export default function AdminWithdrawals() {
                 </p>
               </div>
             ) : (
-              <div className="space-y-4">
-                {paginatedList.map((w: any) => (
+              <>
+                {/* Visualização em Cards para Tela */}
+                <div className="space-y-4 no-print">
+                  {paginatedList.map((w: any) => (
                   <div 
                     key={w.profileId}
                     className="bg-[#0a0e17] p-6 lg:p-8 rounded-[2rem] border border-white/5 shadow-xl hover:border-white/10 transition-all flex flex-col xl:flex-row items-start xl:items-center justify-between gap-6"
@@ -1216,6 +1600,52 @@ export default function AdminWithdrawals() {
                   </div>
                 ))}
               </div>
+
+                {/* Tabela de Impressão Oficial para Afiliados e Revendedores */}
+                <div className="hidden print:block">
+                  <table className="w-full text-left border-collapse text-xs">
+                    <thead>
+                      <tr className="bg-slate-100 text-slate-900 font-bold uppercase text-[9px]">
+                        <th className="py-2 px-2 text-center">Nível</th>
+                        <th className="py-2 px-2">Nome do Beneficiário</th>
+                        <th className="py-2 px-2">CPF/CNPJ</th>
+                        <th className="py-2 px-2 text-center">Tipo</th>
+                        <th className="py-2 px-2">Chave PIX</th>
+                        <th className="py-2 px-2">Banco</th>
+                        <th className="py-2 px-2 text-right">Mensal Líquido</th>
+                        <th className="py-2 px-2 text-right">Anual Provisão</th>
+                        <th className="py-2 px-2 text-right">Total a Pagar</th>
+                        <th className="py-2 px-2 text-center">Situação Fiscal</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredBalances.map((w: any) => (
+                        <tr key={w.profileId}>
+                          <td className="py-1.5 px-2 text-center font-bold">{w.level}</td>
+                          <td className="py-1.5 px-2 font-bold uppercase">{w.userName}</td>
+                          <td className="py-1.5 px-2 font-mono">{w.cpf}</td>
+                          <td className="py-1.5 px-2 text-center">{w.isPJ ? 'PJ' : 'PF'}</td>
+                          <td className="py-1.5 px-2 font-mono">{w.pixKey}</td>
+                          <td className="py-1.5 px-2 text-[10px]">{w.bankDetails}</td>
+                          <td className="py-1.5 px-2 text-right font-mono font-bold">R$ {(w.monthlyLiquid || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+                          <td className="py-1.5 px-2 text-right font-mono">R$ {(w.annualPending || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+                          <td className="py-1.5 px-2 text-right font-mono font-black text-slate-900">R$ {(w.totalLiquid || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+                          <td className="py-1.5 px-2 text-center text-[9px]">{w.isPJ ? (w.hasInvoice ? 'NF Conferida' : 'PJ - Aguardando NF') : 'RPA (0% INSS)'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot>
+                      <tr className="bg-slate-200 font-black text-xs">
+                        <td colSpan={6} className="py-2 px-2 uppercase">TOTAL GERAL ({filteredBalances.length} BENEFICIÁRIOS)</td>
+                        <td className="py-2 px-2 text-right font-mono">R$ {totalMonthlyPending.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+                        <td className="py-2 px-2 text-right font-mono">R$ {totalAnnualPending.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+                        <td className="py-2 px-2 text-right font-mono font-black">R$ {totalPending.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+                        <td></td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              </>
             )}
           </div>
         )}
@@ -1224,7 +1654,7 @@ export default function AdminWithdrawals() {
         {viewTab === 'history' && (
           <div className="space-y-6">
             {/* Cards de Resumo Fiscal da Auditoria */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 no-print">
               <div className="flex items-center gap-5 bg-[#0a0e17] p-6 rounded-3xl border border-white/5 shadow-xl">
                 <div className="size-14 bg-white/10 text-white rounded-2xl flex items-center justify-center shrink-0 font-bold text-xl">
                   Σ
@@ -1274,8 +1704,8 @@ export default function AdminWithdrawals() {
               </div>
             </div>
 
-            <div className="bg-[#0a0e17] rounded-[2rem] border border-white/5 p-6 lg:p-8 shadow-2xl space-y-6">
-              <div className="flex flex-wrap items-center justify-between gap-4 pb-6 border-b border-white/5">
+            <div className="bg-[#0a0e17] rounded-[2rem] border border-white/5 p-6 lg:p-8 shadow-2xl space-y-6 print:bg-transparent print:border-none print:p-0 print:shadow-none">
+              <div className="flex flex-wrap items-center justify-between gap-4 pb-6 border-b border-white/5 no-print">
                 <div>
                   <h3 className="text-lg font-black text-white uppercase tracking-tight">
                     Auditoria de Pagamentos Liquidados
@@ -1303,98 +1733,162 @@ export default function AdminWithdrawals() {
                   </p>
                 </div>
               ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left border-collapse text-xs">
-                    <thead>
-                      <tr className="border-b border-white/10 text-slate-400 text-[10px] font-black uppercase tracking-widest">
-                        <th className="py-4 px-3">Data / Hora</th>
-                        <th className="py-4 px-3">Beneficiário</th>
-                        <th className="py-4 px-3 text-center">Tipo</th>
-                        <th className="py-4 px-3">Categoria</th>
-                        <th className="py-4 px-3">Ciclo</th>
-                        <th className="py-4 px-3 text-right">Rendimento Bruto</th>
-                        <th className="py-4 px-3 text-right">INSS (0%)</th>
-                        <th className="py-4 px-3 text-right">Imposto Retido</th>
-                        <th className="py-4 px-3 text-right">Valor Líquido</th>
-                        <th className="py-4 px-3">Chave PIX</th>
-                        <th className="py-4 px-3 text-center">Comprovante</th>
-                        <th className="py-4 px-3 text-center">Status</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-white/5">
-                      {paginatedList.map((h: any) => (
-                        <tr key={h.id} className="hover:bg-white/5 transition-colors">
-                          <td className="py-4 px-3 text-slate-400 font-mono whitespace-nowrap">
-                            {new Date(h.date).toLocaleDateString('pt-BR')} às {new Date(h.date).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
-                          </td>
-                          <td className="py-4 px-3">
-                            <div className="flex flex-col">
-                              <span className="font-bold text-white uppercase">{h.userName}</span>
-                              <span className="text-[10px] text-slate-500 font-mono">CPF: {h.cpf}</span>
-                            </div>
-                          </td>
-                          <td className="py-4 px-3 text-center whitespace-nowrap">
-                            {h.isPJ ? (
-                              <span className="px-2 py-0.5 rounded text-[9px] font-black uppercase bg-purple-500/10 text-purple-300 border border-purple-500/20">
-                                PJ
-                              </span>
-                            ) : (
-                              <span className="px-2 py-0.5 rounded text-[9px] font-black uppercase bg-amber-500/10 text-amber-300 border border-amber-500/20">
-                                PF
-                              </span>
-                            )}
-                          </td>
-                          <td className="py-4 px-3 whitespace-nowrap">
-                            <span className={`px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-wider ${
-                              h.categoryLabel === 'Revendedor Regional' 
-                                ? 'bg-purple-500/20 text-purple-300' 
-                                : 'bg-indigo-500/20 text-indigo-300'
-                            }`}>
-                              {h.categoryLabel}
-                            </span>
-                          </td>
-                          <td className="py-4 px-3 font-bold text-slate-300 whitespace-nowrap">
-                            {h.cycleLabel}
-                          </td>
-                          <td className="py-4 px-3 text-right font-mono font-bold text-white whitespace-nowrap">
-                            R$ {(h.bruto || h.amount || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                          </td>
-                          <td className="py-4 px-3 text-right font-mono font-bold text-amber-400 whitespace-nowrap">
-                            {(h.inss || 0) > 0 ? `- R$ ${(h.inss).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : 'R$ 0,00'}
-                          </td>
-                          <td className="py-4 px-3 text-right font-mono font-bold text-rose-400 whitespace-nowrap">
-                            {(h.irrf || 0) > 0 ? `- R$ ${(h.irrf).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : 'R$ 0,00'}
-                          </td>
-                          <td className="py-4 px-3 text-right font-mono font-black text-emerald-400 text-sm whitespace-nowrap">
-                            R$ {(h.liquido !== undefined ? h.liquido : (h.amount || 0)).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                          </td>
-                          <td className="py-4 px-3 font-mono text-slate-400 text-[11px] whitespace-nowrap">
-                            {h.pixKey}
-                          </td>
-                          <td className="py-4 px-3 text-center whitespace-nowrap">
-                            {h.receiptUrl ? (
-                              <a 
-                                href={h.receiptUrl} 
-                                target="_blank" 
-                                rel="noreferrer" 
-                                className="inline-flex items-center gap-1 px-3 py-1 rounded-xl bg-indigo-500/20 hover:bg-indigo-500/30 text-indigo-300 font-black text-[9px] uppercase tracking-wider transition-colors"
-                              >
-                                <FileText size={12} /> Ver Recibo
-                              </a>
-                            ) : (
-                              <span className="text-[9px] text-slate-600 font-bold uppercase">---</span>
-                            )}
-                          </td>
-                          <td className="py-4 px-3 text-center whitespace-nowrap">
-                            <span className="inline-flex items-center gap-1 text-[9px] font-black px-2.5 py-1 rounded-full bg-emerald-500/20 text-emerald-400 uppercase tracking-wider">
-                              <CheckCircle2 size={11} /> Liquidado
-                            </span>
-                          </td>
+                <>
+                  {/* Tabela de Tela (Paginada) */}
+                  <div className="overflow-x-auto no-print">
+                    <table className="w-full text-left border-collapse text-xs">
+                      <thead>
+                        <tr className="border-b border-white/10 text-slate-400 text-[10px] font-black uppercase tracking-widest">
+                          <th className="py-4 px-3">Data / Hora</th>
+                          <th className="py-4 px-3">Beneficiário</th>
+                          <th className="py-4 px-3 text-center">Tipo</th>
+                          <th className="py-4 px-3">Categoria</th>
+                          <th className="py-4 px-3">Ciclo</th>
+                          <th className="py-4 px-3 text-right">Rendimento Bruto</th>
+                          <th className="py-4 px-3 text-right">INSS (0%)</th>
+                          <th className="py-4 px-3 text-right">Imposto Retido</th>
+                          <th className="py-4 px-3 text-right">Valor Líquido</th>
+                          <th className="py-4 px-3">Chave PIX</th>
+                          <th className="py-4 px-3 text-center">Comprovante</th>
+                          <th className="py-4 px-3 text-center">Status</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                      </thead>
+                      <tbody className="divide-y divide-white/5">
+                        {paginatedList.map((h: any) => (
+                          <tr key={h.id} className="hover:bg-white/5 transition-colors">
+                            <td className="py-4 px-3 text-slate-400 font-mono whitespace-nowrap">
+                              {new Date(h.date).toLocaleDateString('pt-BR')} às {new Date(h.date).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                            </td>
+                            <td className="py-4 px-3">
+                              <div className="flex flex-col">
+                                <span className="font-bold text-white uppercase">{h.userName}</span>
+                                <span className="text-[10px] text-slate-500 font-mono">CPF: {h.cpf}</span>
+                              </div>
+                            </td>
+                            <td className="py-4 px-3 text-center whitespace-nowrap">
+                              {h.isPJ ? (
+                                <span className="px-2 py-0.5 rounded text-[9px] font-black uppercase bg-purple-500/10 text-purple-300 border border-purple-500/20">
+                                  PJ
+                                </span>
+                              ) : (
+                                <span className="px-2 py-0.5 rounded text-[9px] font-black uppercase bg-amber-500/10 text-amber-300 border border-amber-500/20">
+                                  PF
+                                </span>
+                              )}
+                            </td>
+                            <td className="py-4 px-3 whitespace-nowrap">
+                              <span className={`px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-wider ${
+                                h.categoryLabel === 'Revendedor Regional' 
+                                  ? 'bg-purple-500/20 text-purple-300' 
+                                  : 'bg-indigo-500/20 text-indigo-300'
+                              }`}>
+                                {h.categoryLabel}
+                              </span>
+                            </td>
+                            <td className="py-4 px-3 font-bold text-slate-300 whitespace-nowrap">
+                              {h.cycleLabel}
+                            </td>
+                            <td className="py-4 px-3 text-right font-mono font-bold text-white whitespace-nowrap">
+                              R$ {(h.bruto || h.amount || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                            </td>
+                            <td className="py-4 px-3 text-right font-mono font-bold text-amber-400 whitespace-nowrap">
+                              {(h.inss || 0) > 0 ? `- R$ ${(h.inss).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : 'R$ 0,00'}
+                            </td>
+                            <td className="py-4 px-3 text-right font-mono font-bold text-rose-400 whitespace-nowrap">
+                              {(h.irrf || 0) > 0 ? `- R$ ${(h.irrf).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : 'R$ 0,00'}
+                            </td>
+                            <td className="py-4 px-3 text-right font-mono font-black text-emerald-400 text-sm whitespace-nowrap">
+                              R$ {(h.liquido !== undefined ? h.liquido : (h.amount || 0)).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                            </td>
+                            <td className="py-4 px-3 font-mono text-slate-400 text-[11px] whitespace-nowrap">
+                              {h.pixKey}
+                            </td>
+                            <td className="py-4 px-3 text-center whitespace-nowrap">
+                              {h.receiptUrl ? (
+                                <a 
+                                  href={h.receiptUrl} 
+                                  target="_blank" 
+                                  rel="noreferrer" 
+                                  className="inline-flex items-center gap-1 px-3 py-1 rounded-xl bg-indigo-500/20 hover:bg-indigo-500/30 text-indigo-300 font-black text-[9px] uppercase tracking-wider transition-colors"
+                                >
+                                  <FileText size={12} /> Ver Recibo
+                                </a>
+                              ) : (
+                                <span className="text-[9px] text-slate-600 font-bold uppercase">---</span>
+                              )}
+                            </td>
+                            <td className="py-4 px-3 text-center whitespace-nowrap">
+                              <span className="inline-flex items-center gap-1 text-[9px] font-black px-2.5 py-1 rounded-full bg-emerald-500/20 text-emerald-400 uppercase tracking-wider">
+                                <CheckCircle2 size={11} /> Liquidado
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Tabela de Impressão Oficial Completa (Todos os Registros) */}
+                  <div className="hidden print:block">
+                    <table className="w-full text-left border-collapse text-xs">
+                      <thead>
+                        <tr className="bg-slate-100 text-slate-900 font-bold uppercase text-[9px]">
+                          <th className="py-2 px-2">Data / Hora</th>
+                          <th className="py-2 px-2">Beneficiário</th>
+                          <th className="py-2 px-2 text-center">Tipo</th>
+                          <th className="py-2 px-2">Categoria</th>
+                          <th className="py-2 px-2">Ciclo</th>
+                          <th className="py-2 px-2 text-right">Rendimento Bruto</th>
+                          <th className="py-2 px-2 text-right">INSS (0%)</th>
+                          <th className="py-2 px-2 text-right">Imposto Retido</th>
+                          <th className="py-2 px-2 text-right">Valor Líquido</th>
+                          <th className="py-2 px-2">Chave PIX</th>
+                          <th className="py-2 px-2 text-center">Status</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filteredHistory.map((h: any) => (
+                          <tr key={h.id}>
+                            <td className="py-1.5 px-2 font-mono whitespace-nowrap">
+                              {new Date(h.date).toLocaleDateString('pt-BR')} {new Date(h.date).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                            </td>
+                            <td className="py-1.5 px-2">
+                              <div className="font-bold uppercase text-slate-900">{h.userName}</div>
+                              <div className="text-[8.5px] font-mono text-slate-600">CPF: {h.cpf}</div>
+                            </td>
+                            <td className="py-1.5 px-2 text-center font-bold">{h.isPJ ? 'PJ' : 'PF'}</td>
+                            <td className="py-1.5 px-2">{h.categoryLabel}</td>
+                            <td className="py-1.5 px-2 font-bold">{h.cycleLabel}</td>
+                            <td className="py-1.5 px-2 text-right font-mono font-bold">
+                              R$ {(h.bruto || h.amount || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                            </td>
+                            <td className="py-1.5 px-2 text-right font-mono">
+                              {(h.inss || 0) > 0 ? `- R$ ${(h.inss).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : 'R$ 0,00'}
+                            </td>
+                            <td className="py-1.5 px-2 text-right font-mono">
+                              {(h.irrf || 0) > 0 ? `- R$ ${(h.irrf).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : 'R$ 0,00'}
+                            </td>
+                            <td className="py-1.5 px-2 text-right font-mono font-black text-slate-900">
+                              R$ {(h.liquido !== undefined ? h.liquido : (h.amount || 0)).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                            </td>
+                            <td className="py-1.5 px-2 font-mono text-[9px]">{h.pixKey}</td>
+                            <td className="py-1.5 px-2 text-center font-bold text-emerald-800 uppercase text-[8.5px]">Liquidado</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                      <tfoot>
+                        <tr className="bg-slate-200 font-black text-xs">
+                          <td colSpan={5} className="py-2 px-2 uppercase">TOTAL GERAL ({filteredHistory.length} LANÇAMENTOS)</td>
+                          <td className="py-2 px-2 text-right font-mono">R$ {totalHistoryBruto.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+                          <td className="py-2 px-2 text-right font-mono">R$ {totalHistoryInss.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+                          <td className="py-2 px-2 text-right font-mono">- R$ {totalHistoryIrrf.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+                          <td className="py-2 px-2 text-right font-mono font-black">R$ {totalHistoryLiquido.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+                          <td colSpan={2}></td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                </>
               )}
             </div>
           </div>
@@ -1404,7 +1898,7 @@ export default function AdminWithdrawals() {
         {viewTab === 'monthly_folder' && (
           <div className="space-y-6">
             {/* Cards de Métricas do Mês Selecionado */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 no-print">
               <div className="flex items-center gap-5 bg-[#0a0e17] p-6 rounded-3xl border border-white/5 shadow-xl">
                 <div className="size-14 bg-amber-500/10 text-amber-400 rounded-2xl flex items-center justify-center shrink-0 font-bold text-xl">
                   Σ
@@ -1454,8 +1948,8 @@ export default function AdminWithdrawals() {
               </div>
             </div>
 
-            <div className="bg-[#0a0e17] rounded-[2rem] border border-white/5 p-6 lg:p-8 shadow-2xl space-y-6">
-              <div className="flex flex-wrap items-center justify-between gap-4 pb-6 border-b border-white/5">
+            <div className="bg-[#0a0e17] rounded-[2rem] border border-white/5 p-6 lg:p-8 shadow-2xl space-y-6 print:bg-transparent print:border-none print:p-0 print:shadow-none">
+              <div className="flex flex-wrap items-center justify-between gap-4 pb-6 border-b border-white/5 no-print">
                 <div>
                   <h3 className="text-lg font-black text-white uppercase tracking-tight flex items-center gap-2">
                     <FolderArchive size={20} className="text-amber-400" />
@@ -1486,90 +1980,150 @@ export default function AdminWithdrawals() {
                   </p>
                 </div>
               ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left border-collapse text-xs">
-                    <thead>
-                      <tr className="border-b border-white/10 text-slate-400 text-[10px] font-black uppercase tracking-widest">
-                        <th className="py-4 px-3">Período / Previsão</th>
-                        <th className="py-4 px-3">Beneficiário</th>
-                        <th className="py-4 px-3 text-center">Tipo</th>
-                        <th className="py-4 px-3 text-right">Rendimento Bruto</th>
-                        <th className="py-4 px-3 text-right">INSS (0%)</th>
-                        <th className="py-4 px-3 text-right">IRRF Retido</th>
-                        <th className="py-4 px-3 text-right">Valor Líquido</th>
-                        <th className="py-4 px-3">Chave PIX</th>
-                        <th className="py-4 px-3 text-center">Comprovante</th>
-                        <th className="py-4 px-3 text-center">Demonstrativo</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-white/5">
-                      {paginatedList.map((a: any) => (
-                        <tr key={a.id} className="hover:bg-white/5 transition-colors">
-                          <td className="py-4 px-3 whitespace-nowrap">
-                            <div className="flex flex-col">
-                              <span className="font-bold text-slate-300 font-mono text-[11px]">{a.periodLabel}</span>
-                              <span className="text-[10px] text-amber-400 font-mono">Pgto: {a.paymentDateLabel}</span>
-                            </div>
-                          </td>
-                          <td className="py-4 px-3">
-                            <div className="flex flex-col">
-                              <span className="font-bold text-white uppercase">{a.userName}</span>
-                              <span className="text-[10px] text-slate-500 font-mono">CPF: {a.userCpf}</span>
-                            </div>
-                          </td>
-                          <td className="py-4 px-3 text-center whitespace-nowrap">
-                            {a.isPJ ? (
-                              <span className="px-2 py-0.5 rounded text-[9px] font-black uppercase bg-purple-500/10 text-purple-300 border border-purple-500/20">
-                                PJ
-                              </span>
-                            ) : (
-                              <span className="px-2 py-0.5 rounded text-[9px] font-black uppercase bg-amber-500/10 text-amber-300 border border-amber-500/20">
-                                PF
-                              </span>
-                            )}
-                          </td>
-                          <td className="py-4 px-3 text-right font-mono font-bold text-white whitespace-nowrap">
-                            R$ {(a.totalBruto || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                          </td>
-                          <td className="py-4 px-3 text-right font-mono font-bold text-amber-400 whitespace-nowrap">
-                            {(a.inss || 0) > 0 ? `- R$ ${(a.inss).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : 'R$ 0,00'}
-                          </td>
-                          <td className="py-4 px-3 text-right font-mono font-bold text-rose-400 whitespace-nowrap">
-                            {(a.irrf || 0) > 0 ? `- R$ ${(a.irrf).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : 'R$ 0,00'}
-                          </td>
-                          <td className="py-4 px-3 text-right font-mono font-black text-emerald-400 text-sm whitespace-nowrap">
-                            R$ {(a.liquido || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                          </td>
-                          <td className="py-4 px-3 font-mono text-slate-400 text-[11px] whitespace-nowrap">
-                            {a.userPixKey}
-                          </td>
-                          <td className="py-4 px-3 text-center whitespace-nowrap">
-                            {a.receiptUrl ? (
-                              <a 
-                                href={a.receiptUrl} 
-                                target="_blank" 
-                                rel="noreferrer" 
-                                className="inline-flex items-center gap-1 px-3 py-1 rounded-xl bg-indigo-500/20 hover:bg-indigo-500/30 text-indigo-300 font-black text-[9px] uppercase tracking-wider transition-colors"
-                              >
-                                <FileText size={12} /> Recibo PIX
-                              </a>
-                            ) : (
-                              <span className="text-[9px] text-slate-600 font-bold uppercase">---</span>
-                            )}
-                          </td>
-                          <td className="py-4 px-3 text-center whitespace-nowrap">
-                            <button
-                              onClick={() => handleOpenArchivedStatementModal(a)}
-                              className="inline-flex items-center gap-1 px-3 py-1 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 font-black text-[9px] uppercase tracking-wider transition-colors cursor-pointer"
-                            >
-                              <FileSpreadsheet size={12} /> Ver Informativo
-                            </button>
-                          </td>
+                <>
+                  {/* Tabela de Tela (Paginada) */}
+                  <div className="overflow-x-auto no-print">
+                    <table className="w-full text-left border-collapse text-xs">
+                      <thead>
+                        <tr className="border-b border-white/10 text-slate-400 text-[10px] font-black uppercase tracking-widest">
+                          <th className="py-4 px-3">Período / Previsão</th>
+                          <th className="py-4 px-3">Beneficiário</th>
+                          <th className="py-4 px-3 text-center">Tipo</th>
+                          <th className="py-4 px-3 text-right">Rendimento Bruto</th>
+                          <th className="py-4 px-3 text-right">INSS (0%)</th>
+                          <th className="py-4 px-3 text-right">IRRF Retido</th>
+                          <th className="py-4 px-3 text-right">Valor Líquido</th>
+                          <th className="py-4 px-3">Chave PIX</th>
+                          <th className="py-4 px-3 text-center">Comprovante</th>
+                          <th className="py-4 px-3 text-center">Demonstrativo</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                      </thead>
+                      <tbody className="divide-y divide-white/5">
+                        {paginatedList.map((a: any) => (
+                          <tr key={a.id} className="hover:bg-white/5 transition-colors">
+                            <td className="py-4 px-3 whitespace-nowrap">
+                              <div className="flex flex-col">
+                                <span className="font-bold text-slate-300 font-mono text-[11px]">{a.periodLabel}</span>
+                                <span className="text-[10px] text-amber-400 font-mono">Pgto: {a.paymentDateLabel}</span>
+                              </div>
+                            </td>
+                            <td className="py-4 px-3">
+                              <div className="flex flex-col">
+                                <span className="font-bold text-white uppercase">{a.userName}</span>
+                                <span className="text-[10px] text-slate-500 font-mono">CPF: {a.userCpf}</span>
+                              </div>
+                            </td>
+                            <td className="py-4 px-3 text-center whitespace-nowrap">
+                              {a.isPJ ? (
+                                <span className="px-2 py-0.5 rounded text-[9px] font-black uppercase bg-purple-500/10 text-purple-300 border border-purple-500/20">
+                                  PJ
+                                </span>
+                              ) : (
+                                <span className="px-2 py-0.5 rounded text-[9px] font-black uppercase bg-amber-500/10 text-amber-300 border border-amber-500/20">
+                                  PF
+                                </span>
+                              )}
+                            </td>
+                            <td className="py-4 px-3 text-right font-mono font-bold text-white whitespace-nowrap">
+                              R$ {(a.totalBruto || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                            </td>
+                            <td className="py-4 px-3 text-right font-mono font-bold text-amber-400 whitespace-nowrap">
+                              {(a.inss || 0) > 0 ? `- R$ ${(a.inss).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : 'R$ 0,00'}
+                            </td>
+                            <td className="py-4 px-3 text-right font-mono font-bold text-rose-400 whitespace-nowrap">
+                              {(a.irrf || 0) > 0 ? `- R$ ${(a.irrf).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : 'R$ 0,00'}
+                            </td>
+                            <td className="py-4 px-3 text-right font-mono font-black text-emerald-400 text-sm whitespace-nowrap">
+                              R$ {(a.liquido || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                            </td>
+                            <td className="py-4 px-3 font-mono text-slate-400 text-[11px] whitespace-nowrap">
+                              {a.userPixKey}
+                            </td>
+                            <td className="py-4 px-3 text-center whitespace-nowrap">
+                              {a.receiptUrl ? (
+                                <a 
+                                  href={a.receiptUrl} 
+                                  target="_blank" 
+                                  rel="noreferrer" 
+                                  className="inline-flex items-center gap-1 px-3 py-1 rounded-xl bg-indigo-500/20 hover:bg-indigo-500/30 text-indigo-300 font-black text-[9px] uppercase tracking-wider transition-colors"
+                                >
+                                  <FileText size={12} /> Recibo PIX
+                                </a>
+                              ) : (
+                                <span className="text-[9px] text-slate-600 font-bold uppercase">---</span>
+                              )}
+                            </td>
+                            <td className="py-4 px-3 text-center whitespace-nowrap">
+                              <button
+                                onClick={() => handleOpenArchivedStatementModal(a)}
+                                className="inline-flex items-center gap-1 px-3 py-1 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 font-black text-[9px] uppercase tracking-wider transition-colors cursor-pointer"
+                              >
+                                <FileSpreadsheet size={12} /> Ver Informativo
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Tabela de Impressão Oficial Completa (Todos os Arquivados) */}
+                  <div className="hidden print:block">
+                    <table className="w-full text-left border-collapse text-xs">
+                      <thead>
+                        <tr className="bg-slate-100 text-slate-900 font-bold uppercase text-[9px]">
+                          <th className="py-2 px-2">Período</th>
+                          <th className="py-2 px-2">Data Pagamento</th>
+                          <th className="py-2 px-2">Beneficiário</th>
+                          <th className="py-2 px-2 text-center">Tipo</th>
+                          <th className="py-2 px-2">Chave PIX</th>
+                          <th className="py-2 px-2 text-right">Total Bruto</th>
+                          <th className="py-2 px-2 text-right">INSS Retido</th>
+                          <th className="py-2 px-2 text-right">IRRF Retido</th>
+                          <th className="py-2 px-2 text-right">Valor Líquido</th>
+                          <th className="py-2 px-2 text-center">Status</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filteredArchives.map((a: any) => (
+                          <tr key={a.id}>
+                            <td className="py-1.5 px-2 font-mono">{a.periodLabel}</td>
+                            <td className="py-1.5 px-2 font-mono">{a.paymentDateLabel}</td>
+                            <td className="py-1.5 px-2">
+                              <div className="font-bold uppercase text-slate-900">{a.userName}</div>
+                              <div className="text-[8.5px] font-mono text-slate-600">CPF: {a.userCpf}</div>
+                            </td>
+                            <td className="py-1.5 px-2 text-center font-bold">{a.isPJ ? 'PJ' : 'PF'}</td>
+                            <td className="py-1.5 px-2 font-mono text-[9px]">{a.userPixKey}</td>
+                            <td className="py-1.5 px-2 text-right font-mono font-bold">
+                              R$ {(a.totalBruto || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                            </td>
+                            <td className="py-1.5 px-2 text-right font-mono">
+                              {(a.inss || 0) > 0 ? `- R$ ${(a.inss).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : 'R$ 0,00'}
+                            </td>
+                            <td className="py-1.5 px-2 text-right font-mono">
+                              {(a.irrf || 0) > 0 ? `- R$ ${(a.irrf).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : 'R$ 0,00'}
+                            </td>
+                            <td className="py-1.5 px-2 text-right font-mono font-black text-slate-900">
+                              R$ {(a.liquido || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                            </td>
+                            <td className="py-1.5 px-2 text-center font-bold text-emerald-800 uppercase text-[8.5px]">Liquidado</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                      <tfoot>
+                        <tr className="bg-slate-200 font-black text-xs">
+                          <td colSpan={5} className="py-2 px-2 uppercase">TOTAL GERAL ({filteredArchives.length} REGISTROS)</td>
+                          <td className="py-2 px-2 text-right font-mono">R$ {totalArchiveBruto.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+                          <td className="py-2 px-2 text-right font-mono">- R$ {totalArchiveInss.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+                          <td className="py-2 px-2 text-right font-mono">- R$ {totalArchiveIrrf.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+                          <td className="py-2 px-2 text-right font-mono font-black">R$ {totalArchiveLiquido.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+                          <td></td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                </>
               )}
             </div>
           </div>
@@ -1578,8 +2132,8 @@ export default function AdminWithdrawals() {
         {/* TAB 5: ADIANTAMENTOS MENSAIS SOLICITADOS */}
         {viewTab === 'advances' && (
           <div className="space-y-6">
-            <div className="bg-[#0a0e17] p-6 md:p-8 rounded-[2.5rem] border border-white/5 shadow-2xl space-y-6">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-white/5">
+            <div className="bg-[#0a0e17] p-6 md:p-8 rounded-[2.5rem] border border-white/5 shadow-2xl space-y-6 print:bg-transparent print:border-none print:p-0 print:shadow-none">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-white/5 no-print">
                 <div>
                   <h3 className="text-lg font-black text-white uppercase tracking-tight flex items-center gap-2">
                     <DollarSign className="text-amber-400" size={20} />
@@ -1611,90 +2165,705 @@ export default function AdminWithdrawals() {
                   </p>
                 </div>
               ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left border-collapse text-xs">
-                    <thead>
-                      <tr className="border-b border-white/10 text-slate-400 text-[10px] font-black uppercase tracking-widest">
-                        <th className="py-4 px-3">Data Solicitação</th>
-                        <th className="py-4 px-3">Afiliado / Beneficiário</th>
-                        <th className="py-4 px-3">Competência</th>
-                        <th className="py-4 px-3 text-right">Valor Solicitado</th>
-                        <th className="py-4 px-3">Chave PIX</th>
-                        <th className="py-4 px-3 text-center">Status</th>
-                        <th className="py-4 px-3 text-center">Ações</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-white/5">
-                      {advanceRequestsList.map((adv: any) => (
-                        <tr key={adv.id} className="hover:bg-white/5 transition-colors">
-                          <td className="py-4 px-3 whitespace-nowrap text-slate-400 font-mono">
-                            {new Date(adv.created_at).toLocaleDateString('pt-BR')}
-                          </td>
-                          <td className="py-4 px-3">
-                            <div className="flex flex-col">
-                              <span className="font-bold text-white uppercase">{adv.user_name}</span>
-                              <span className="text-[10px] text-slate-500 font-mono">CPF: {adv.cpf}</span>
-                            </div>
-                          </td>
-                          <td className="py-4 px-3 whitespace-nowrap font-mono text-slate-300">
-                            {adv.ref_month}
-                          </td>
-                          <td className="py-4 px-3 text-right font-mono font-black text-amber-300 text-sm whitespace-nowrap">
-                            R$ {(adv.amount || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                          </td>
-                          <td className="py-4 px-3 font-mono text-emerald-400 text-[11px] whitespace-nowrap">
-                            {adv.pix_key} ({adv.pix_type})
-                          </td>
-                          <td className="py-4 px-3 text-center whitespace-nowrap">
-                            {adv.status === 'paid' ? (
-                              <span className="px-2.5 py-1 rounded-full text-[9px] font-black uppercase bg-emerald-500/10 text-emerald-300 border border-emerald-500/20">
-                                Pago ({adv.paid_at})
-                              </span>
-                            ) : adv.status === 'rejected' ? (
-                              <span className="px-2.5 py-1 rounded-full text-[9px] font-black uppercase bg-rose-500/10 text-rose-300 border border-rose-500/20">
-                                Recusado
-                              </span>
-                            ) : (
-                              <span className="px-2.5 py-1 rounded-full text-[9px] font-black uppercase bg-amber-500/10 text-amber-300 border border-amber-500/20 animate-pulse">
-                                Pendente Análise
-                              </span>
-                            )}
-                          </td>
-                          <td className="py-4 px-3 text-center whitespace-nowrap">
-                            {adv.status === 'pending' ? (
-                              <div className="flex items-center justify-center gap-2">
-                                <button
-                                  onClick={() => handleOpenAdvancePaymentModal(adv)}
-                                  className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black text-[10px] uppercase tracking-wider flex items-center gap-1.5 transition-all shadow-md shadow-emerald-600/20 cursor-pointer"
+                <>
+                  {/* Tabela de Tela com Botões de Ação */}
+                  <div className="overflow-x-auto no-print">
+                    <table className="w-full text-left border-collapse text-xs">
+                      <thead>
+                        <tr className="border-b border-white/10 text-slate-400 text-[10px] font-black uppercase tracking-widest">
+                          <th className="py-4 px-3">Data Solicitação</th>
+                          <th className="py-4 px-3">Afiliado / Beneficiário</th>
+                          <th className="py-4 px-3">Competência</th>
+                          <th className="py-4 px-3 text-right">Valor Solicitado</th>
+                          <th className="py-4 px-3">Chave PIX</th>
+                          <th className="py-4 px-3 text-center">Status</th>
+                          <th className="py-4 px-3 text-center">Ações</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-white/5">
+                        {advanceRequestsList.map((adv: any) => (
+                          <tr key={adv.id} className="hover:bg-white/5 transition-colors">
+                            <td className="py-4 px-3 whitespace-nowrap text-slate-400 font-mono">
+                              {new Date(adv.created_at).toLocaleDateString('pt-BR')}
+                            </td>
+                            <td className="py-4 px-3">
+                              <div className="flex flex-col">
+                                <span className="font-bold text-white uppercase">{adv.user_name}</span>
+                                <span className="text-[10px] text-slate-500 font-mono">CPF: {adv.cpf}</span>
+                              </div>
+                            </td>
+                            <td className="py-4 px-3 whitespace-nowrap font-mono text-slate-300">
+                              {adv.ref_month}
+                            </td>
+                            <td className="py-4 px-3 text-right font-mono font-black text-amber-300 text-sm whitespace-nowrap">
+                              R$ {(adv.amount || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                            </td>
+                            <td className="py-4 px-3 font-mono text-emerald-400 text-[11px] whitespace-nowrap">
+                              {adv.pix_key} ({adv.pix_type})
+                            </td>
+                            <td className="py-4 px-3 text-center whitespace-nowrap">
+                              {adv.status === 'paid' ? (
+                                <span className="px-2.5 py-1 rounded-full text-[9px] font-black uppercase bg-emerald-500/10 text-emerald-300 border border-emerald-500/20">
+                                  Pago ({adv.paid_at})
+                                </span>
+                              ) : adv.status === 'rejected' ? (
+                                <span className="px-2.5 py-1 rounded-full text-[9px] font-black uppercase bg-rose-500/10 text-rose-300 border border-rose-500/20">
+                                  Recusado
+                                </span>
+                              ) : (
+                                <span className="px-2.5 py-1 rounded-full text-[9px] font-black uppercase bg-amber-500/10 text-amber-300 border border-amber-500/20 animate-pulse">
+                                  Pendente Análise
+                                </span>
+                              )}
+                            </td>
+                            <td className="py-4 px-3 text-center whitespace-nowrap">
+                              {adv.status === 'pending' ? (
+                                <div className="flex items-center justify-center gap-2">
+                                  <button
+                                    onClick={() => handleOpenAdvancePaymentModal(adv)}
+                                    className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black text-[10px] uppercase tracking-wider flex items-center gap-1.5 transition-all shadow-md shadow-emerald-600/20 cursor-pointer"
+                                  >
+                                    <Check size={12} /> Pagar PIX
+                                  </button>
+                                  <button
+                                    onClick={() => handleRejectAdvance(adv.id)}
+                                    className="px-2.5 py-1.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border border-rose-500/20 font-bold text-[10px] uppercase transition-all cursor-pointer"
+                                    title="Recusar Adiantamento"
+                                  >
+                                    <X size={12} />
+                                  </button>
+                                </div>
+                              ) : adv.receipt_url ? (
+                                <a
+                                  href={adv.receipt_url}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="inline-flex items-center gap-1 px-3 py-1 rounded-xl bg-indigo-500/20 hover:bg-indigo-500/30 text-indigo-300 font-black text-[9px] uppercase tracking-wider transition-colors"
                                 >
-                                  <Check size={12} /> Pagar PIX
-                                </button>
+                                  <FileText size={12} /> Comprovante PIX
+                                </a>
+                              ) : (
+                                <span className="text-[10px] text-slate-500 font-bold">---</span>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Tabela de Impressão Oficial Completa */}
+                  <div className="hidden print:block">
+                    <table className="w-full text-left border-collapse text-xs">
+                      <thead>
+                        <tr className="bg-slate-100 text-slate-900 font-bold uppercase text-[9px]">
+                          <th className="py-2 px-2">Data Solicitação</th>
+                          <th className="py-2 px-2">Beneficiário</th>
+                          <th className="py-2 px-2">CPF</th>
+                          <th className="py-2 px-2 text-center">Competência</th>
+                          <th className="py-2 px-2 text-right">Valor Solicitado</th>
+                          <th className="py-2 px-2">Chave PIX</th>
+                          <th className="py-2 px-2 text-center">Status</th>
+                          <th className="py-2 px-2 text-center">Data Baixa</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {advanceRequestsList.map((adv: any) => (
+                          <tr key={adv.id}>
+                            <td className="py-1.5 px-2 font-mono whitespace-nowrap">
+                              {new Date(adv.created_at).toLocaleDateString('pt-BR')}
+                            </td>
+                            <td className="py-1.5 px-2 font-bold uppercase text-slate-900">{adv.user_name}</td>
+                            <td className="py-1.5 px-2 font-mono text-[9px]">{adv.cpf}</td>
+                            <td className="py-1.5 px-2 text-center font-mono">{adv.ref_month}</td>
+                            <td className="py-1.5 px-2 text-right font-mono font-bold text-slate-900">
+                              R$ {(adv.amount || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                            </td>
+                            <td className="py-1.5 px-2 font-mono text-[9px]">{adv.pix_key}</td>
+                            <td className="py-1.5 px-2 text-center font-bold text-[8.5px] uppercase">
+                              {adv.status === 'paid' ? 'Pago' : adv.status === 'rejected' ? 'Recusado' : 'Pendente'}
+                            </td>
+                            <td className="py-1.5 px-2 text-center font-mono text-[9px]">{adv.paid_at || '---'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                      <tfoot>
+                        <tr className="bg-slate-200 font-black text-xs">
+                          <td colSpan={4} className="py-2 px-2 uppercase">TOTAL SOLICITADO ({advanceRequestsList.length} PEDIDOS)</td>
+                          <td className="py-2 px-2 text-right font-mono font-black">
+                            R$ {advanceRequestsList.reduce((acc, c) => acc + (c.amount || 0), 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                          </td>
+                          <td colSpan={3}></td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* TAB 4: RELATÓRIO 1 OFICIAL - FOLHA DE PAGAMENTOS DIA 10 (PIX) */}
+        {viewTab === 'monthly_pix' && (
+          <div className="space-y-6">
+            {/* Cards de Métricas da Folha Mensal */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 no-print">
+              <div className="flex items-center gap-5 bg-[#0a0e17] p-6 rounded-3xl border border-white/5 shadow-xl">
+                <div className="size-14 bg-emerald-500/20 text-emerald-400 rounded-2xl flex items-center justify-center shrink-0 font-bold text-xl">
+                  <Calendar size={28} />
+                </div>
+                <div>
+                  <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Cashback Mensal Total</p>
+                  <h3 className="text-2xl font-black text-white font-mono tracking-tight">
+                    R$ {totalMonthlyPixCashback.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                  </h3>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-5 bg-[#0a0e17] p-6 rounded-3xl border border-white/5 shadow-xl">
+                <div className="size-14 bg-rose-500/20 text-rose-400 rounded-2xl flex items-center justify-center shrink-0">
+                  <FileText size={26} />
+                </div>
+                <div>
+                  <p className="text-[10px] font-black text-rose-400 uppercase tracking-widest mb-1">Retenção IRRF</p>
+                  <h3 className="text-2xl font-black text-rose-400 font-mono tracking-tight">
+                    - R$ {totalMonthlyPixIrrf.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                  </h3>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-5 bg-[#0a0e17] p-6 rounded-3xl border border-white/5 shadow-xl">
+                <div className="size-14 bg-amber-500/20 text-amber-400 rounded-2xl flex items-center justify-center shrink-0">
+                  <DollarSign size={26} />
+                </div>
+                <div>
+                  <p className="text-[10px] font-black text-amber-400 uppercase tracking-widest mb-1">(-) Adiantamentos Pagos</p>
+                  <h3 className="text-2xl font-black text-amber-400 font-mono tracking-tight">
+                    - R$ {totalMonthlyPixAdiantamentos.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                  </h3>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-5 bg-[#0a0e17] p-6 rounded-3xl border border-white/5 shadow-xl">
+                <div className="size-14 bg-emerald-500/20 text-emerald-400 rounded-2xl flex items-center justify-center shrink-0">
+                  <CheckCircle2 size={28} />
+                </div>
+                <div>
+                  <p className="text-[10px] font-black text-emerald-400 uppercase tracking-widest mb-1">(=) Líquido a Pagar PIX</p>
+                  <h3 className="text-2xl font-black text-emerald-400 font-mono tracking-tight">
+                    R$ {totalMonthlyPixLiquido.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                  </h3>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-[#0a0e17] rounded-[2rem] border border-white/5 p-6 lg:p-8 shadow-2xl space-y-6 print:bg-transparent print:border-none print:p-0 print:shadow-none">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-white/5 no-print">
+                <div>
+                  <h3 className="text-lg font-black text-white uppercase tracking-tight flex items-center gap-2">
+                    <FileSpreadsheet className="text-emerald-400" size={20} />
+                    Folha Oficial de Pagamentos PIX - Dia 10 (Competência {selectedMonthlyPixMonth})
+                  </h3>
+                  <p className="text-xs text-slate-400 mt-1">
+                    Relatório oficial para emissão de PIX em lote com deduções fiscais e abatimento integral de adiantamentos já quitados.
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <span className="text-xs font-mono font-bold text-emerald-400 bg-emerald-500/10 px-3 py-1.5 rounded-xl border border-emerald-500/20">
+                    Total Beneficiários: {filteredMonthlyPix.length}
+                  </span>
+                </div>
+              </div>
+
+              {loadingMonthlyPix ? (
+                <div className="py-20 text-center">
+                  <Loader2 size={36} className="animate-spin text-emerald-500 mx-auto mb-4" />
+                  <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Carregando folha de pagamentos...</p>
+                </div>
+              ) : filteredMonthlyPix.length === 0 ? (
+                <div className="py-20 text-center">
+                  <FileSpreadsheet size={48} className="text-slate-600 mx-auto mb-4 opacity-40" />
+                  <h4 className="text-base font-black text-white uppercase tracking-tight">Nenhum pagamento apurado na competência {selectedMonthlyPixMonth}</h4>
+                  <p className="text-xs text-slate-500 mt-1">
+                    Não foram encontradas comissões ou repasses pendentes para o mês selecionado.
+                  </p>
+                </div>
+              ) : (
+                <>
+                  {/* Tabela de Tela (Paginada) */}
+                  <div className="overflow-x-auto no-print">
+                    <table className="w-full text-left border-collapse text-xs">
+                      <thead>
+                        <tr className="border-b border-white/10 text-slate-400 text-[10px] font-black uppercase tracking-widest">
+                          <th className="py-4 px-3">Nome do Afiliado</th>
+                          <th className="py-4 px-3">CPF/CNPJ</th>
+                          <th className="py-4 px-3">Chave PIX</th>
+                          <th className="py-4 px-3">Dados Bancários</th>
+                          <th className="py-4 px-3 text-center">Período</th>
+                          <th className="py-4 px-3 text-center">Previsão Pgto</th>
+                          <th className="py-4 px-3 text-right">Cashback Mensal</th>
+                          <th className="py-4 px-3 text-right">Cashback Anual Acum.</th>
+                          <th className="py-4 px-3 text-right">Total Bruto</th>
+                          <th className="py-4 px-3 text-right">INSS (0%)</th>
+                          <th className="py-4 px-3 text-right">IRRF Retido</th>
+                          <th className="py-4 px-3 text-right text-amber-400">(-) Adiantamentos</th>
+                          <th className="py-4 px-3 text-right text-emerald-400">Líquido a Pagar PIX</th>
+                          <th className="py-4 px-3 text-center">Status</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-white/5 font-mono">
+                        {paginatedList.map((r: any) => (
+                          <tr key={r.id} className="hover:bg-white/5 transition-colors">
+                            <td className="py-4 px-3 font-sans font-bold text-white uppercase whitespace-nowrap">
+                              {r.userName}
+                            </td>
+                            <td className="py-4 px-3 text-slate-400 whitespace-nowrap">
+                              {r.cpfCnpj}
+                            </td>
+                            <td className="py-4 px-3 text-emerald-300 font-bold whitespace-nowrap">
+                              <div className="flex items-center gap-1.5">
+                                <span>{r.pixKey}</span>
                                 <button
-                                  onClick={() => handleRejectAdvance(adv.id)}
-                                  className="px-2.5 py-1.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border border-rose-500/20 font-bold text-[10px] uppercase transition-all cursor-pointer"
-                                  title="Recusar Adiantamento"
+                                  onClick={() => copyToClipboard(r.pixKey, 'Chave PIX')}
+                                  className="p-1 hover:text-white transition-colors cursor-pointer"
+                                  title="Copiar PIX"
                                 >
-                                  <X size={12} />
+                                  <Copy size={12} />
                                 </button>
                               </div>
-                            ) : adv.receipt_url ? (
-                              <a
-                                href={adv.receipt_url}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="inline-flex items-center gap-1 px-3 py-1 rounded-xl bg-indigo-500/20 hover:bg-indigo-500/30 text-indigo-300 font-black text-[9px] uppercase tracking-wider transition-colors"
-                              >
-                                <FileText size={12} /> Comprovante PIX
-                              </a>
-                            ) : (
-                              <span className="text-[10px] text-slate-500 font-bold">---</span>
-                            )}
+                            </td>
+                            <td className="py-4 px-3 text-slate-400 text-[11px] whitespace-nowrap">
+                              {r.bankDetails}
+                            </td>
+                            <td className="py-4 px-3 text-center text-slate-300 whitespace-nowrap">
+                              {r.period}
+                            </td>
+                            <td className="py-4 px-3 text-center text-slate-300 whitespace-nowrap">
+                              {r.paymentForecast}
+                            </td>
+                            <td className="py-4 px-3 text-right text-white font-bold whitespace-nowrap">
+                              R$ {(r.cashbackMensal || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                            </td>
+                            <td className="py-4 px-3 text-right text-blue-400 whitespace-nowrap">
+                              R$ {(r.cashbackAnualAcumulado || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                            </td>
+                            <td className="py-4 px-3 text-right text-white font-bold whitespace-nowrap">
+                              R$ {(r.totalBruto || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                            </td>
+                            <td className="py-4 px-3 text-right text-slate-400 whitespace-nowrap">
+                              {(r.inss || 0) > 0 ? `R$ ${(r.inss).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : 'R$ -'}
+                            </td>
+                            <td className="py-4 px-3 text-right text-rose-400 font-bold whitespace-nowrap">
+                              {(r.irrf || 0) > 0 ? `R$ ${(r.irrf).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : 'R$ -'}
+                            </td>
+                            <td className="py-4 px-3 text-right text-amber-400 font-bold whitespace-nowrap">
+                              {(r.adiantamentos || 0) > 0 ? (
+                                <div className="flex flex-col items-end">
+                                  <span>- R$ {(r.adiantamentos).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                                  {r.adiantamentoDate && (
+                                    <span className="text-[9px] text-amber-500/80 font-sans">Pago {r.adiantamentoDate}</span>
+                                  )}
+                                </div>
+                              ) : (
+                                'R$ -'
+                              )}
+                            </td>
+                            <td className="py-4 px-3 text-right font-black text-emerald-400 text-sm whitespace-nowrap">
+                              R$ {(r.liquidoPix || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                            </td>
+                            <td className="py-4 px-3 text-center whitespace-nowrap font-sans">
+                              {r.status === 'Pago' ? (
+                                <span className="inline-flex items-center gap-1 text-[9px] font-black px-2.5 py-1 rounded-full bg-emerald-500/20 text-emerald-400 uppercase tracking-wider">
+                                  <CheckCircle2 size={11} /> Pago
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 text-[9px] font-black px-2.5 py-1 rounded-full bg-amber-500/20 text-amber-400 uppercase tracking-wider">
+                                  <Clock size={11} /> Pendente
+                                </span>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                      <tfoot>
+                        <tr className="border-t-2 border-white/20 font-mono font-black text-xs bg-white/5">
+                          <td className="py-4 px-3 font-sans uppercase text-white font-black">
+                            TOTAL
                           </td>
+                          <td className="py-4 px-3"></td>
+                          <td className="py-4 px-3"></td>
+                          <td className="py-4 px-3"></td>
+                          <td className="py-4 px-3"></td>
+                          <td className="py-4 px-3"></td>
+                          <td className="py-4 px-3 text-right text-white">
+                            R$ {totalMonthlyPixCashback.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                          </td>
+                          <td className="py-4 px-3 text-right text-blue-400">
+                            R$ {totalMonthlyPixAnualAcum.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                          </td>
+                          <td className="py-4 px-3 text-right text-white">
+                            R$ {totalMonthlyPixBruto.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                          </td>
+                          <td className="py-4 px-3 text-right text-slate-400">
+                            {totalMonthlyPixInss > 0 ? `R$ ${totalMonthlyPixInss.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : 'R$ -'}
+                          </td>
+                          <td className="py-4 px-3 text-right text-rose-400">
+                            {totalMonthlyPixIrrf > 0 ? `R$ ${totalMonthlyPixIrrf.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : 'R$ -'}
+                          </td>
+                          <td className="py-4 px-3 text-right text-amber-400">
+                            {totalMonthlyPixAdiantamentos > 0 ? `- R$ ${totalMonthlyPixAdiantamentos.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : 'R$ -'}
+                          </td>
+                          <td className="py-4 px-3 text-right text-emerald-400 text-sm">
+                            R$ {totalMonthlyPixLiquido.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                          </td>
+                          <td className="py-4 px-3"></td>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                      </tfoot>
+                    </table>
+                  </div>
+
+                  {/* Tabela de Impressão Oficial Completa (Folha PIX 100% dos Registros) */}
+                  <div className="hidden print:block">
+                    <table className="w-full text-left border-collapse text-xs">
+                      <thead>
+                        <tr className="bg-slate-100 text-slate-900 font-bold uppercase text-[9px]">
+                          <th className="py-2 px-1">Afiliado</th>
+                          <th className="py-2 px-1">CPF/CNPJ</th>
+                          <th className="py-2 px-1">Chave PIX</th>
+                          <th className="py-2 px-1">Banco / Agência</th>
+                          <th className="py-2 px-1 text-center">Período</th>
+                          <th className="py-2 px-1 text-center">Previsão</th>
+                          <th className="py-2 px-1 text-right">Cash Mensal</th>
+                          <th className="py-2 px-1 text-right">Cash Anual</th>
+                          <th className="py-2 px-1 text-right">Total Bruto</th>
+                          <th className="py-2 px-1 text-right">INSS (0%)</th>
+                          <th className="py-2 px-1 text-right">IRRF Ret.</th>
+                          <th className="py-2 px-1 text-right">(-) Adiant.</th>
+                          <th className="py-2 px-1 text-right">Líquido PIX</th>
+                          <th className="py-2 px-1 text-center">Status</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filteredMonthlyPix.map((r: any) => (
+                          <tr key={r.id}>
+                            <td className="py-1.5 px-1 font-bold uppercase text-slate-900">{r.userName}</td>
+                            <td className="py-1.5 px-1 font-mono text-[9px]">{r.cpfCnpj}</td>
+                            <td className="py-1.5 px-1 font-mono text-[9px]">{r.pixKey}</td>
+                            <td className="py-1.5 px-1 text-[8.5px]">{r.bankDetails}</td>
+                            <td className="py-1.5 px-1 text-center font-mono">{r.period}</td>
+                            <td className="py-1.5 px-1 text-center font-mono">{r.paymentForecast}</td>
+                            <td className="py-1.5 px-1 text-right font-mono font-bold">
+                              R$ {(r.cashbackMensal || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                            </td>
+                            <td className="py-1.5 px-1 text-right font-mono">
+                              R$ {(r.cashbackAnualAcumulado || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                            </td>
+                            <td className="py-1.5 px-1 text-right font-mono font-bold">
+                              R$ {(r.totalBruto || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                            </td>
+                            <td className="py-1.5 px-1 text-right font-mono">
+                              {(r.inss || 0) > 0 ? `R$ ${(r.inss).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : 'R$ 0,00'}
+                            </td>
+                            <td className="py-1.5 px-1 text-right font-mono">
+                              {(r.irrf || 0) > 0 ? `- R$ ${(r.irrf).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : 'R$ 0,00'}
+                            </td>
+                            <td className="py-1.5 px-1 text-right font-mono">
+                              {(r.adiantamentos || 0) > 0 ? `- R$ ${(r.adiantamentos).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : 'R$ 0,00'}
+                            </td>
+                            <td className="py-1.5 px-1 text-right font-mono font-black text-slate-900">
+                              R$ {(r.liquidoPix || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                            </td>
+                            <td className="py-1.5 px-1 text-center font-bold text-[8.5px] uppercase">
+                              {r.status || 'Pendente'}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                      <tfoot>
+                        <tr className="bg-slate-200 font-black text-xs">
+                          <td colSpan={6} className="py-2 px-1 uppercase">TOTAL GERAL ({filteredMonthlyPix.length} BENEFICIÁRIOS)</td>
+                          <td className="py-2 px-1 text-right font-mono">R$ {totalMonthlyPixCashback.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+                          <td className="py-2 px-1 text-right font-mono">R$ {totalMonthlyPixAnualAcum.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+                          <td className="py-2 px-1 text-right font-mono">R$ {totalMonthlyPixBruto.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+                          <td className="py-2 px-1 text-right font-mono">R$ 0,00</td>
+                          <td className="py-2 px-1 text-right font-mono">- R$ {totalMonthlyPixIrrf.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+                          <td className="py-2 px-1 text-right font-mono">- R$ {totalMonthlyPixAdiantamentos.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+                          <td className="py-2 px-1 text-right font-mono font-black">R$ {totalMonthlyPixLiquido.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+                          <td></td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* TAB 5: RELATÓRIO 2 OFICIAL - CASHBACK ANUAL A PAGAR (01/11 A 30/11) */}
+        {viewTab === 'annual_cashback' && (
+          <div className="space-y-6">
+            {/* Banner Informativo do Ciclo Anual */}
+            <div className="p-4 rounded-2xl bg-gradient-to-r from-blue-500/10 via-indigo-500/10 to-blue-500/10 border border-blue-500/30 flex flex-col sm:flex-row items-center justify-between gap-3 text-center sm:text-left shadow-lg shadow-blue-950/20 no-print">
+              <div className="flex items-center gap-3">
+                <div className="size-9 rounded-xl bg-blue-500/20 text-blue-400 flex items-center justify-center shrink-0">
+                  <Calendar size={18} />
                 </div>
+                <div>
+                  <p className="text-xs font-black text-white uppercase tracking-wider">
+                    Ciclo Anual Vigente: 01/11/2025 a 30/11/2026
+                  </p>
+                  <p className="text-[11px] text-slate-400 font-medium">
+                    Relatório consolidado de 12 meses para apuração oficial e esclarecimento de divergências.
+                  </p>
+                </div>
+              </div>
+              <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-[11px] font-black uppercase tracking-wider shrink-0">
+                <Clock size={12} />
+                Pagamento Oficial: 10 de Dezembro
+              </div>
+            </div>
+
+            {/* Cards de Resumo Anual */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 no-print">
+              <div className="flex items-center gap-5 bg-[#0a0e17] p-6 rounded-3xl border border-white/5 shadow-xl">
+                <div className="size-14 bg-blue-500/20 text-blue-400 rounded-2xl flex items-center justify-center shrink-0 font-bold text-xl">
+                  <Users size={28} />
+                </div>
+                <div>
+                  <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest mb-1">Cash Afiliado (MMN)</p>
+                  <h3 className="text-2xl font-black text-white font-mono tracking-tight">
+                    R$ {totalAnnualCashAfiliado.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                  </h3>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-5 bg-[#0a0e17] p-6 rounded-3xl border border-white/5 shadow-xl">
+                <div className="size-14 bg-purple-500/20 text-purple-400 rounded-2xl flex items-center justify-center shrink-0">
+                  <Building2 size={26} />
+                </div>
+                <div>
+                  <p className="text-[10px] font-black text-purple-400 uppercase tracking-widest mb-1">Cash Revendedor</p>
+                  <h3 className="text-2xl font-black text-purple-400 font-mono tracking-tight">
+                    R$ {totalAnnualCashRevendedor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                  </h3>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-5 bg-[#0a0e17] p-6 rounded-3xl border border-white/5 shadow-xl">
+                <div className="size-14 bg-white/10 text-white rounded-2xl flex items-center justify-center shrink-0">
+                  <ShieldCheck size={26} />
+                </div>
+                <div>
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Total Bruto Anual</p>
+                  <h3 className="text-2xl font-black text-white font-mono tracking-tight">
+                    R$ {totalAnnualBruto.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                  </h3>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-5 bg-[#0a0e17] p-6 rounded-3xl border border-white/5 shadow-xl">
+                <div className="size-14 bg-emerald-500/20 text-emerald-400 rounded-2xl flex items-center justify-center shrink-0">
+                  <DollarSign size={28} />
+                </div>
+                <div>
+                  <p className="text-[10px] font-black text-emerald-400 uppercase tracking-widest mb-1">Líquido a Receber</p>
+                  <h3 className="text-2xl font-black text-emerald-400 font-mono tracking-tight">
+                    R$ {totalAnnualLiquidoReceber.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                  </h3>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-[#0a0e17] rounded-[2rem] border border-white/5 p-6 lg:p-8 shadow-2xl space-y-6 print:bg-transparent print:border-none print:p-0 print:shadow-none">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-white/5 no-print">
+                <div>
+                  <h3 className="text-lg font-black text-white uppercase tracking-tight flex items-center gap-2">
+                    <ShieldCheck className="text-blue-400" size={20} />
+                    CASHBACK ANUAL A PAGAR (Ciclo {selectedAnnualCycleYear === 2025 ? '01/11/2025 a 30/11/2026' : `${selectedAnnualCycleYear} a ${selectedAnnualCycleYear + 1}`})
+                  </h3>
+                  <p className="text-xs text-slate-400 mt-1">
+                    Apuração de 2% de Rede MMN e 2% de Revendedor Regional acumulados mês a mês para pagamento anual em 10 de Dezembro.
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <span className="text-xs font-mono font-bold text-blue-400 bg-blue-500/10 px-3 py-1.5 rounded-xl border border-blue-500/20">
+                    Total Lançamentos: {filteredAnnualCashback.length}
+                  </span>
+                </div>
+              </div>
+
+              {loadingAnnualCashback ? (
+                <div className="py-20 text-center">
+                  <Loader2 size={36} className="animate-spin text-blue-500 mx-auto mb-4" />
+                  <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Carregando relatório anual...</p>
+                </div>
+              ) : filteredAnnualCashback.length === 0 ? (
+                <div className="py-20 text-center">
+                  <ShieldCheck size={48} className="text-slate-600 mx-auto mb-4 opacity-40" />
+                  <h4 className="text-base font-black text-white uppercase tracking-tight">Nenhum cashback anual encontrado para os filtros selecionados</h4>
+                  <p className="text-xs text-slate-500 mt-1">
+                    Verifique o ciclo anual ou o filtro por mês/nome.
+                  </p>
+                </div>
+              ) : (
+                <>
+                  {/* Tabela de Tela (Paginada) */}
+                  <div className="overflow-x-auto no-print">
+                    <table className="w-full text-left border-collapse text-xs">
+                      <thead>
+                        <tr className="border-b border-white/10 text-slate-400 text-[10px] font-black uppercase tracking-widest">
+                          <th className="py-4 px-3">ID</th>
+                          <th className="py-4 px-3">NOME</th>
+                          <th className="py-4 px-3 text-right">CASH AFILIADO</th>
+                          <th className="py-4 px-3 text-right">CASH REVENDEDOR</th>
+                          <th className="py-4 px-3 text-right">TOTAL BRUTO</th>
+                          <th className="py-4 px-3 text-right">BASE IRPF</th>
+                          <th className="py-4 px-3 text-right">DESCONTO IRPF</th>
+                          <th className="py-4 px-3 text-right text-emerald-400">LÍQUIDO A RECEBER</th>
+                          <th className="py-4 px-3 text-center">MÊS DE REFERÊNCIA</th>
+                          <th className="py-4 px-3">CHAVE PIX</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-white/5 font-mono">
+                        {paginatedList.map((r: any, idx: number) => (
+                          <tr key={`${r.fullId}_${r.refMonth}_${idx}`} className="hover:bg-white/5 transition-colors">
+                            <td className="py-4 px-3 text-indigo-400 font-bold whitespace-nowrap">
+                              {r.id}
+                            </td>
+                            <td className="py-4 px-3 font-sans font-bold text-white uppercase whitespace-nowrap">
+                              {r.name}
+                            </td>
+                            <td className="py-4 px-3 text-right text-blue-300 font-bold whitespace-nowrap">
+                              R$ {(r.cashAfiliado || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                            </td>
+                            <td className="py-4 px-3 text-right text-purple-300 font-bold whitespace-nowrap">
+                              R$ {(r.cashRevendedor || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                            </td>
+                            <td className="py-4 px-3 text-right text-white font-bold whitespace-nowrap">
+                              R$ {(r.totalBruto || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                            </td>
+                            <td className="py-4 px-3 text-right text-slate-300 whitespace-nowrap">
+                              R$ {(r.baseIrpf || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                            </td>
+                            <td className="py-4 px-3 text-right text-rose-400 whitespace-nowrap">
+                              {(r.descontoIrpf || 0) > 0 ? `R$ ${(r.descontoIrpf).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : 'R$ -'}
+                            </td>
+                            <td className="py-4 px-3 text-right font-black text-emerald-400 text-sm whitespace-nowrap">
+                              R$ {(r.liquidoReceber || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                            </td>
+                            <td className="py-4 px-3 text-center text-amber-300 font-bold whitespace-nowrap">
+                              {r.mesReferencia}
+                            </td>
+                            <td className="py-4 px-3 text-slate-300 whitespace-nowrap">
+                              <div className="flex items-center gap-1.5">
+                                <span>{r.chavePix}</span>
+                                <button
+                                  onClick={() => copyToClipboard(r.chavePix, 'Chave PIX')}
+                                  className="p-1 hover:text-white transition-colors cursor-pointer"
+                                  title="Copiar PIX"
+                                >
+                                  <Copy size={12} />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                      <tfoot>
+                        <tr className="border-t-2 border-white/20 font-mono font-black text-xs bg-white/5">
+                          <td className="py-4 px-3 font-sans uppercase text-white font-black">
+                            TOTAL
+                          </td>
+                          <td className="py-4 px-3"></td>
+                          <td className="py-4 px-3 text-right text-blue-300">
+                            R$ {totalAnnualCashAfiliado.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                          </td>
+                          <td className="py-4 px-3 text-right text-purple-300">
+                            R$ {totalAnnualCashRevendedor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                          </td>
+                          <td className="py-4 px-3 text-right text-white">
+                            R$ {totalAnnualBruto.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                          </td>
+                          <td className="py-4 px-3 text-right text-slate-300">
+                            R$ {totalAnnualBaseIrpf.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                          </td>
+                          <td className="py-4 px-3 text-right text-rose-400">
+                            {totalAnnualDescontoIrpf > 0 ? `R$ ${totalAnnualDescontoIrpf.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : 'R$ -'}
+                          </td>
+                          <td className="py-4 px-3 text-right text-emerald-400 text-sm">
+                            R$ {totalAnnualLiquidoReceber.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                          </td>
+                          <td className="py-4 px-3"></td>
+                          <td className="py-4 px-3"></td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+
+                  {/* Tabela de Impressão Oficial Completa (Todos os Lançamentos Anuais) */}
+                  <div className="hidden print:block">
+                    <table className="w-full text-left border-collapse text-xs">
+                      <thead>
+                        <tr className="bg-slate-100 text-slate-900 font-bold uppercase text-[9px]">
+                          <th className="py-2 px-1 text-center">ID</th>
+                          <th className="py-2 px-2">NOME</th>
+                          <th className="py-2 px-2 text-right">CASH AFILIADO</th>
+                          <th className="py-2 px-2 text-right">CASH REVENDEDOR</th>
+                          <th className="py-2 px-2 text-right">TOTAL BRUTO</th>
+                          <th className="py-2 px-2 text-right">BASE IRPF</th>
+                          <th className="py-2 px-2 text-right">DESCONTO IRPF</th>
+                          <th className="py-2 px-2 text-right">LÍQUIDO A RECEBER</th>
+                          <th className="py-2 px-2 text-center">MÊS DE REFERÊNCIA</th>
+                          <th className="py-2 px-2">CHAVE PIX</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filteredAnnualCashback.map((r: any, idx: number) => (
+                          <tr key={`print_${r.fullId}_${r.refMonth}_${idx}`}>
+                            <td className="py-1.5 px-1 text-center font-mono font-bold text-slate-800">{r.id}</td>
+                            <td className="py-1.5 px-2 font-bold uppercase text-slate-900">{r.name}</td>
+                            <td className="py-1.5 px-2 text-right font-mono font-bold">
+                              R$ {(r.cashAfiliado || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                            </td>
+                            <td className="py-1.5 px-2 text-right font-mono font-bold">
+                              R$ {(r.cashRevendedor || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                            </td>
+                            <td className="py-1.5 px-2 text-right font-mono font-bold">
+                              R$ {(r.totalBruto || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                            </td>
+                            <td className="py-1.5 px-2 text-right font-mono">
+                              R$ {(r.baseIrpf || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                            </td>
+                            <td className="py-1.5 px-2 text-right font-mono">
+                              {(r.descontoIrpf || 0) > 0 ? `- R$ ${(r.descontoIrpf).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : 'R$ 0,00'}
+                            </td>
+                            <td className="py-1.5 px-2 text-right font-mono font-black text-slate-900">
+                              R$ {(r.liquidoReceber || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                            </td>
+                            <td className="py-1.5 px-2 text-center font-mono text-[9px] font-bold">{r.mesReferencia}</td>
+                            <td className="py-1.5 px-2 font-mono text-[9px]">{r.chavePix}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                      <tfoot>
+                        <tr className="bg-slate-200 font-black text-xs">
+                          <td colSpan={2} className="py-2 px-2 uppercase">TOTAL GERAL ({filteredAnnualCashback.length} REGISTROS)</td>
+                          <td className="py-2 px-2 text-right font-mono">R$ {totalAnnualCashAfiliado.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+                          <td className="py-2 px-2 text-right font-mono">R$ {totalAnnualCashRevendedor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+                          <td className="py-2 px-2 text-right font-mono">R$ {totalAnnualBruto.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+                          <td className="py-2 px-2 text-right font-mono">R$ {totalAnnualBaseIrpf.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+                          <td className="py-2 px-2 text-right font-mono">- R$ {totalAnnualDescontoIrpf.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+                          <td className="py-2 px-2 text-right font-mono font-black">R$ {totalAnnualLiquidoReceber.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+                          <td colSpan={2}></td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                </>
               )}
             </div>
           </div>
@@ -2227,7 +3396,7 @@ export default function AdminWithdrawals() {
 
         {/* Controles de Paginação */}
         {totalPages > 1 && (
-          <div className="flex items-center justify-between pt-6 border-t border-white/5">
+          <div className="flex items-center justify-between pt-6 border-t border-white/5 no-print">
             <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">
               Mostrando {startIndex + 1} a {Math.min(startIndex + itemsPerPage, currentList.length)} de {currentList.length} registros
             </p>
@@ -2252,6 +3421,18 @@ export default function AdminWithdrawals() {
             </div>
           </div>
         )}
+
+        {/* ASSINATURAS OFICIAIS DE HOMOLOGAÇÃO (Exclusivo na Impressão / PDF) */}
+        <div className="hidden print:flex justify-between items-end pt-16 mt-8 text-xs text-slate-800">
+          <div className="text-center w-72 border-t border-slate-900 pt-2 font-bold">
+            <p className="font-black uppercase text-[10px] text-slate-900">Emissão / Diretoria Financeira</p>
+            <p className="text-[9px] text-slate-600 mt-0.5">Serviços Urbanos Tecnologia e Economia LTDA</p>
+          </div>
+          <div className="text-center w-72 border-t border-slate-900 pt-2 font-bold">
+            <p className="font-black uppercase text-[10px] text-slate-900">Auditoria & Conformidade Fiscal</p>
+            <p className="text-[9px] text-slate-600 mt-0.5">Homologação de Repasses e Retenções</p>
+          </div>
+        </div>
 
         {/* PaymentModal com QR Code PIX e Baixa */}
         {isPaymentModalOpen && (

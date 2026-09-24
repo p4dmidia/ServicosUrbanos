@@ -167,14 +167,16 @@ export default function Login() {
                     {/* Login Card */}
                     <div className="bg-white/5 backdrop-blur-2xl p-8 lg:p-12 rounded-[2.5rem] border border-white/10 shadow-2xl relative overflow-hidden">
                         {/* Top Branding Section */}
-                        <div className="text-center mb-10">
-                            <div className="flex items-center justify-center gap-2 text-white mb-6">
-                                <div className="size-12 bg-primary-blue rounded-2xl flex items-center justify-center">
-                                    <LayoutGrid size={24} className="text-white" />
-                                </div>
+                        <div className="text-center mb-8">
+                            <div className="flex items-center justify-center mb-6">
+                                <img 
+                                    src="/logo.png" 
+                                    alt="CaZa dos Sorteios" 
+                                    className="h-14 w-auto object-contain" 
+                                />
                             </div>
-                            <h1 className="text-3xl font-black mb-2 tracking-tight">Bem-vindo de volta</h1>
-                            <p className="text-slate-400 font-medium">Acesse sua conta para continuar</p>
+                            <h1 className="text-2xl lg:text-3xl font-black mb-2 tracking-tight">Bem-vindo de volta</h1>
+                            <p className="text-slate-400 text-sm font-medium">Acesse sua conta para continuar</p>
                         </div>
 
                         <form className="space-y-6" onSubmit={handleSubmit} noValidate>

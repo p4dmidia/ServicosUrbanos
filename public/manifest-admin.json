@@ -1,12 +1,12 @@
 {
-  "name": "Serviços Urbanos Admin",
-  "short_name": "SU Admin",
-  "description": "Painel Administrativo do Ecossistema Serviços Urbanos.",
+  "name": "CaZa dos Sorteios Admin",
+  "short_name": "CaZa Admin",
+  "description": "Painel Administrativo da CaZa dos Sorteios.",
   "start_url": "/admin/login?utm_source=pwa_admin",
   "scope": "/",
   "display": "standalone",
-  "background_color": "#05070a",
-  "theme_color": "#4f46e5",
+  "background_color": "#060e22",
+  "theme_color": "#0756DB",
   "icons": [
     {
       "src": "/icon-192.png",

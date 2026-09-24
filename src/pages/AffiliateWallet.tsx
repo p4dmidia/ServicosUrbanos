@@ -108,6 +108,12 @@ export default function AffiliateWallet() {
     const pendingList = enrichedTransactions.filter(t => t.status === 'Pendente');
     const paidList = enrichedTransactions.filter(t => t.status === 'Pago');
 
+    const advances = enrichedTransactions.filter(t => 
+      (t.originalType === 'advance' || t.cashbackType?.includes('Adiantamento') || t.category === 'withdrawal') &&
+      Number(t.amount || 0) < 0
+    );
+    const totalAdiantamentos = advances.reduce((acc, t) => acc + Math.abs(Number(t.amount || 0)), 0);
+
     const calcGroup = (list: any[]) => {
       // Filtrar apenas comissões ativas/reais geradas por contratos (sem saques/resgates negativos e sem cancelamentos/recusas)
       const commissionItems = list.filter(t => 
@@ -131,14 +137,31 @@ export default function AffiliateWallet() {
       });
       const totalContratos = Array.from(uniqueOrders.values()).reduce((acc, v) => acc + v, 0);
       const totalBruto = commissionItems.reduce((acc, t) => acc + Number(t.bruto || t.amount || 0), 0);
+      const totalMensal = commissionItems
+        .filter(t => t.cashbackType?.includes('Mensal'))
+        .reduce((acc, t) => acc + Number(t.bruto || t.amount || 0), 0);
+      const totalAnual = commissionItems
+        .filter(t => t.cashbackType?.includes('Anual'))
+        .reduce((acc, t) => acc + Number(t.bruto || t.amount || 0), 0);
+
       const percentualRepasse = totalContratos > 0 ? (totalBruto / totalContratos) * 100 : 0;
-      return { totalContratos, percentualRepasse, totalBruto, count: commissionItems.length };
+      return { totalContratos, percentualRepasse, totalBruto, totalMensal, totalAnual, count: commissionItems.length };
     };
 
+    const pending = calcGroup(pendingList);
+    const paid = calcGroup(paidList);
+    const all = calcGroup(enrichedTransactions);
+
+    // Saldo mensal disponível para saque/pagamento após abater adiantamentos
+    const saldoMensalAReceber = Math.max(0, pending.totalMensal - totalAdiantamentos);
+
     return {
-      pending: calcGroup(pendingList),
-      paid: calcGroup(paidList),
-      all: calcGroup(enrichedTransactions)
+      pending,
+      paid,
+      all,
+      totalAdiantamentos,
+      saldoMensalAReceber,
+      poupancaAnualAcumulada: all.totalAnual
     };
   }, [enrichedTransactions]);
 
@@ -724,15 +747,25 @@ export default function AffiliateWallet() {
                                     ? 'bg-rose-50 text-rose-600 border border-rose-200' 
                                     : t.status === 'Pago'
                                       ? 'bg-emerald-50 text-emerald-600 border border-emerald-100'
-                                      : 'bg-amber-50 text-amber-700 border border-amber-200'
+                                      : t.cashbackType?.includes('Mensal') && totalsSummary.totalAdiantamentos >= totalsSummary.all.totalMensal && totalsSummary.totalAdiantamentos > 0
+                                        ? 'bg-amber-100 text-amber-900 border border-amber-300'
+                                        : t.cashbackType?.includes('Anual')
+                                          ? 'bg-indigo-50 text-indigo-700 border border-indigo-200'
+                                          : 'bg-amber-50 text-amber-700 border border-amber-200'
                                 }`}>
-                                  {t.status === 'Recusado' ? 'Recusado' : t.status === 'Cancelado' ? 'Cancelado' : t.status === 'Pago' ? 'Pago' : 'Pendente'}
+                                  {t.status === 'Recusado' ? 'Recusado' : 
+                                   t.status === 'Cancelado' ? 'Cancelado' : 
+                                   t.status === 'Pago' ? 'Pago' : 
+                                   t.cashbackType?.includes('Mensal') && totalsSummary.totalAdiantamentos >= totalsSummary.all.totalMensal && totalsSummary.totalAdiantamentos > 0 ? 'Adiantado' :
+                                   t.cashbackType?.includes('Anual') ? 'Acumulando' :
+                                   'Pendente'}
                                 </span>
                               </td>
                             </motion.tr>
                           ))}
                         </tbody>
                         <tfoot>
+                          {/* 1. Lançamentos Quitados/Pagos se houver */}
                           {totalsSummary.paid.count > 0 && (
                             <tr className="bg-emerald-950 text-white font-black uppercase tracking-widest text-[10px] border-b border-emerald-900/50">
                               <td colSpan={5} className="px-6 py-3.5 rounded-l-2xl">
@@ -750,28 +783,69 @@ export default function AffiliateWallet() {
                               <td className="px-5 py-3.5 text-right font-mono text-sm text-emerald-300 font-black">
                                 {totalsSummary.paid.totalBruto.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                               </td>
-                              <td className="px-4 py-3.5 rounded-r-2xl"></td>
+                              <td className="px-4 py-3.5 rounded-r-2xl text-center text-[9px] text-emerald-400">PAGO</td>
                             </tr>
                           )}
 
-                          {totalsSummary.pending.count > 0 && (
-                            <tr className="bg-slate-950 text-white font-black uppercase tracking-widest text-[10px]">
-                              <td colSpan={5} className="px-6 py-4 rounded-l-2xl">
-                                <div className="flex items-center gap-2 text-amber-300">
-                                  <span className="size-2 rounded-full bg-amber-400" />
-                                  <span>TOTAIS A RECEBER (POUPANÇA ANUAL / PENDENTE)</span>
+                          {/* 2. Total Adiantamentos Pagos se houver */}
+                          {totalsSummary.totalAdiantamentos > 0 && (
+                            <tr className="bg-amber-950/80 text-amber-300 font-black uppercase tracking-widest text-[10px] border-b border-white/10">
+                              <td colSpan={7} className="px-6 py-3 rounded-l-2xl">
+                                <div className="flex items-center gap-2">
+                                  <span className="size-2 rounded-full bg-amber-400 animate-pulse" />
+                                  <span>(-) ADIANTAMENTO DE RENDIMENTOS (PAGO VIA PIX)</span>
                                 </div>
                               </td>
-                              <td className="px-5 py-4 text-right font-mono text-xs text-slate-200">
-                                {totalsSummary.pending.totalContratos.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                              <td className="px-5 py-3 text-right font-mono text-sm text-rose-400 font-bold">
+                                - {totalsSummary.totalAdiantamentos.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                               </td>
-                              <td className="px-4 py-4 text-center font-mono text-xs text-indigo-300">
-                                {totalsSummary.pending.percentualRepasse > 0 ? `${totalsSummary.pending.percentualRepasse.toFixed(2)}%` : '---'}
+                              <td className="px-4 py-3 rounded-r-2xl text-center text-[9px] text-amber-300 font-bold">
+                                ADIANTADO
                               </td>
-                              <td className="px-5 py-4 text-right font-mono text-sm text-amber-400 font-black">
-                                {totalsSummary.pending.totalBruto.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                            </tr>
+                          )}
+
+                          {/* 3. Saldo Mensal Restante */}
+                          <tr className="bg-slate-950 text-white font-black uppercase tracking-widest text-[10px] border-b border-white/10">
+                            <td colSpan={5} className="px-6 py-4 rounded-l-2xl">
+                              <div className="flex items-center gap-2 text-slate-200">
+                                <span className={`size-2 rounded-full ${totalsSummary.saldoMensalAReceber > 0 ? 'bg-amber-400 animate-pulse' : 'bg-slate-400'}`} />
+                                <span>
+                                  {totalsSummary.saldoMensalAReceber > 0 
+                                    ? '(=) SALDO MENSAL A RECEBER (NO DIA 10)'
+                                    : '(=) SALDO MENSAL A RECEBER NO DIA 10 (QUITADO VIA ADIANTAMENTO)'}
+                                </span>
+                              </div>
+                            </td>
+                            <td className="px-5 py-4 text-right font-mono text-xs text-slate-200">
+                              {totalsSummary.pending.totalContratos.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                            </td>
+                            <td className="px-4 py-4 text-center font-mono text-xs text-indigo-300">
+                              {totalsSummary.pending.percentualRepasse > 0 ? `${totalsSummary.pending.percentualRepasse.toFixed(2)}%` : '---'}
+                            </td>
+                            <td className="px-5 py-4 text-right font-mono text-sm text-amber-400 font-black">
+                              {totalsSummary.saldoMensalAReceber.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                            </td>
+                            <td className="px-4 py-4 rounded-r-2xl text-center text-[9px] text-amber-400 font-bold">
+                              {totalsSummary.saldoMensalAReceber > 0 ? 'PENDENTE' : 'QUITADO'}
+                            </td>
+                          </tr>
+
+                          {/* 4. Poupança Anual Acumulada */}
+                          {totalsSummary.poupancaAnualAcumulada > 0 && (
+                            <tr className="bg-indigo-950/80 text-indigo-200 font-black uppercase tracking-widest text-[10px]">
+                              <td colSpan={7} className="px-6 py-3 rounded-l-2xl">
+                                <div className="flex items-center gap-2 text-indigo-300">
+                                  <span className="size-2 rounded-full bg-indigo-400" />
+                                  <span>PROVISÃO / POUPANÇA ANUAL (2% - ACUMULANDO PARA 10/DEZ)</span>
+                                </div>
                               </td>
-                              <td className="px-4 py-4 rounded-r-2xl"></td>
+                              <td className="px-5 py-3 text-right font-mono text-sm text-indigo-300 font-black">
+                                {totalsSummary.poupancaAnualAcumulada.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                              </td>
+                              <td className="px-4 py-3 rounded-r-2xl text-center text-[9px] text-indigo-300 font-bold">
+                                10/DEZ
+                              </td>
                             </tr>
                           )}
                         </tfoot>

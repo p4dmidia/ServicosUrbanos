@@ -221,8 +221,13 @@ export default function AffiliateInvoice() {
             ? rpaReceipt.financial.liquido_total 
             : (rpaReceipt?.financial?.bruto_total || 0));
 
-      if (cleanVal > availableNet && availableNet > 0) {
-        toast.error(`O valor solicitado (R$ ${cleanVal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}) não pode ultrapassar o saldo disponível da competência (R$ ${availableNet.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}).`);
+      if (availableNet <= 0) {
+        toast.error('Não há saldo líquido disponível para adiantamento.');
+        return;
+      }
+
+      if (Math.abs(cleanVal - availableNet) > 0.05) {
+        toast.error(`A solicitação de adiantamento deve ser no valor integral disponível de R$ ${availableNet.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}. Não são permitidas antecipações parciais.`);
         return;
       }
 
@@ -450,16 +455,19 @@ export default function AffiliateInvoice() {
                 <DollarSign size={24} />
               </div>
               <div className="space-y-1">
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <h4 className="text-sm font-black text-midnight uppercase tracking-tight">
                     Adiantamento Mensal de Rendimentos
                   </h4>
                   <span className="px-2.5 py-0.5 rounded-full bg-amber-200/70 text-amber-900 text-[9px] font-black uppercase tracking-wider">
                     1 Solicitação por Mês
                   </span>
+                  <span className="px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-900 border border-emerald-300 text-[9px] font-black uppercase tracking-wider flex items-center gap-1">
+                    <Clock size={11} /> Recebimento no Dia Útil Seguinte
+                  </span>
                 </div>
                 <p className="text-xs text-slate-600 max-w-2xl leading-relaxed">
-                  Todo afiliado tem direito a solicitar a antecipação de seus rendimentos apurados no mês. O valor antecipado é transferido para sua chave PIX e <strong>descontado automaticamente no acerto do dia 10</strong>.
+                  Todo afiliado tem direito a solicitar a antecipação de seus rendimentos apurados no mês. O valor antecipado é transferido para sua chave PIX <strong>no dia útil seguinte</strong> e <strong>descontado automaticamente no acerto do dia 10</strong>.
                 </p>
                 {advanceRequests && advanceRequests.length > 0 && (
                   <div className="pt-2 flex flex-wrap items-center gap-2">
@@ -814,9 +822,15 @@ export default function AffiliateInvoice() {
                           <span className={`inline-flex items-center gap-1 text-[9px] font-black px-2.5 py-1 rounded-full uppercase tracking-wider ${
                             order.status === 'Pago' || order.status === 'completed' || order.status === 'pago' || order.status === 'Concluído'
                               ? 'bg-emerald-100 text-emerald-800'
+                              : (rpaReceipt?.financial.adiantamentos_total || 0) >= (rpaReceipt?.financial.bruto_total || 0) && (rpaReceipt?.financial.bruto_total || 0) > 0
+                              ? 'bg-amber-100 text-amber-900 border border-amber-300'
                               : 'bg-amber-100 text-amber-800'
                           }`}>
-                            {order.status === 'Pago' || order.status === 'completed' || order.status === 'pago' || order.status === 'Concluído' ? 'Pago' : 'Pendente'}
+                            {order.status === 'Pago' || order.status === 'completed' || order.status === 'pago' || order.status === 'Concluído'
+                              ? 'Pago'
+                              : (rpaReceipt?.financial.adiantamentos_total || 0) >= (rpaReceipt?.financial.bruto_total || 0) && (rpaReceipt?.financial.bruto_total || 0) > 0
+                              ? 'Adiantado'
+                              : 'Pendente'}
                           </span>
                         </td>
                       </tr>
@@ -830,24 +844,63 @@ export default function AffiliateInvoice() {
                   )}
                 </tbody>
                 <tfoot>
-                  <tr className="bg-slate-950 text-white font-black uppercase tracking-widest text-[10px]">
-                    <td colSpan={5} className="px-6 py-4 rounded-l-2xl">
-                      <div className="flex items-center gap-2">
-                        <span className="size-2 rounded-full bg-emerald-400 animate-pulse" />
-                        <span>TOTAIS A RECEBER (PENDENTE)</span>
+                  {/* Linha 1: Total Bruto Apurado */}
+                  <tr className="bg-slate-900 text-white font-black uppercase tracking-widest text-[10px] border-b border-white/10">
+                    <td colSpan={5} className="px-6 py-3 rounded-l-2xl">
+                      <div className="flex items-center gap-2 text-slate-300">
+                        <span className="size-2 rounded-full bg-slate-400" />
+                        <span>TOTAL BRUTO MENSAL APURADO</span>
                       </div>
                     </td>
-                    <td className="px-5 py-4 text-right font-mono text-xs text-slate-200">
+                    <td className="px-5 py-3 text-right font-mono text-xs text-slate-300">
                       R$ {totalContratosUnicos.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                     </td>
-                    <td className="px-4 py-4 text-center font-mono text-xs text-indigo-300">
+                    <td className="px-4 py-3 text-center font-mono text-xs text-indigo-300">
                       {mediaPercentual > 0 ? `${mediaPercentual.toFixed(2)}%` : '—'}
                     </td>
+                    <td className="px-5 py-3 text-right font-mono text-sm text-slate-200 font-bold">
+                      R$ {(rpaReceipt?.financial.bruto_total || totalComissaoCalculada || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                    </td>
+                    <td className="px-4 py-3 text-center rounded-r-2xl text-[9px] text-slate-400 font-bold">
+                      BRUTO
+                    </td>
+                  </tr>
+
+                  {/* Linha 2: (-) Adiantamento de Rendimentos se houver */}
+                  {(rpaReceipt?.financial.adiantamentos_total || 0) > 0 && (
+                    <tr className="bg-amber-950/80 text-amber-300 font-black uppercase tracking-widest text-[10px] border-b border-white/10">
+                      <td colSpan={7} className="px-6 py-2.5 rounded-l-2xl">
+                        <div className="flex items-center gap-2">
+                          <span className="size-2 rounded-full bg-amber-400 animate-pulse" />
+                          <span>(-) ADIANTAMENTO DE RENDIMENTOS (PAGO VIA PIX)</span>
+                        </div>
+                      </td>
+                      <td className="px-5 py-2.5 text-right font-mono text-sm text-rose-400 font-bold">
+                        - R$ {(rpaReceipt?.financial.adiantamentos_total || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                      </td>
+                      <td className="px-4 py-2.5 text-center rounded-r-2xl text-[9px] text-amber-300 font-bold">
+                        ADIANTADO
+                      </td>
+                    </tr>
+                  )}
+
+                  {/* Linha 3: Total Líquido a Receber via PIX */}
+                  <tr className="bg-slate-950 text-white font-black uppercase tracking-widest text-[10px]">
+                    <td colSpan={7} className="px-6 py-4 rounded-l-2xl">
+                      <div className="flex items-center gap-2">
+                        <span className={`size-2 rounded-full ${(rpaReceipt?.financial.liquido_total || 0) > 0 ? 'bg-emerald-400 animate-pulse' : 'bg-slate-400'}`} />
+                        <span>
+                          {(rpaReceipt?.financial.liquido_total || 0) > 0 
+                            ? '(=) SALDO RESTANTE A RECEBER VIA PIX (NO DIA 10)'
+                            : '(=) SALDO RESTANTE A RECEBER NO DIA 10 (TOTALMENTE QUITADO VIA ADIANTAMENTO)'}
+                        </span>
+                      </div>
+                    </td>
                     <td className="px-5 py-4 text-right font-mono text-sm text-emerald-400 font-black">
-                      R$ {(rpaReceipt?.financial.liquido_total || totalComissaoCalculada || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                      R$ {(rpaReceipt?.financial.liquido_total || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                     </td>
                     <td className="px-4 py-4 text-center rounded-r-2xl text-[9px] text-emerald-400 font-bold">
-                      100% REPASSE
+                      {(rpaReceipt?.financial.liquido_total || 0) > 0 ? 'A RECEBER' : 'QUITADO'}
                     </td>
                   </tr>
                 </tfoot>
@@ -927,27 +980,33 @@ export default function AffiliateInvoice() {
                       </div>
                     </div>
                     <p className="text-[10px] text-amber-200/70 mt-1">
-                      O valor do adiantamento é limitado ao saldo líquido após o desconto do IRPF. O adiantamento será transferido via PIX e abatido na liquidação do dia 10.
+                      O adiantamento é sempre pelo valor integral do saldo líquido disponível. O valor será transferido para sua chave PIX <strong>no dia útil seguinte</strong> e abatido na liquidação do dia 10.
                     </p>
                   </div>
 
                   <div className="space-y-2">
-                    <label className="text-xs font-bold text-slate-300 uppercase tracking-wider block">
-                      Valor a Antecipar (R$):
-                    </label>
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-bold text-slate-300 uppercase tracking-wider block">
+                        Valor Integral a Antecipar:
+                      </label>
+                      <span className="text-[10px] font-black uppercase text-amber-400 bg-amber-500/20 px-2.5 py-0.5 rounded-md border border-amber-500/30">
+                        100% do Saldo Líquido
+                      </span>
+                    </div>
                     <div className="relative">
                       <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-sm">
                         R$
                       </span>
                       <input 
                         type="text"
-                        required
+                        readOnly
                         value={advanceAmountInput}
-                        onChange={(e) => setAdvanceAmountInput(e.target.value)}
-                        placeholder="0,00"
-                        className="w-full pl-12 pr-4 py-3.5 bg-slate-800/80 border border-slate-700 rounded-2xl text-white font-mono font-bold text-lg focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-all"
+                        className="w-full pl-12 pr-4 py-3.5 bg-slate-800/90 border border-amber-500/40 rounded-2xl text-amber-300 font-mono font-black text-xl cursor-not-allowed select-all"
                       />
                     </div>
+                    <p className="text-[11px] text-slate-400">
+                      🔒 <strong>Regra de Antecipação Integral:</strong> O adiantamento é sempre pelo valor total líquido disponível naquele momento. Não são permitidos valores picados.
+                    </p>
                   </div>
 
                   <div className="bg-slate-800/60 p-4 rounded-2xl border border-slate-700/60 space-y-1">
@@ -1088,16 +1147,19 @@ export default function AffiliateInvoice() {
               <DollarSign size={24} />
             </div>
             <div>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <h4 className="text-sm font-black text-midnight uppercase tracking-tight">
                   Adiantamento / Solicitação de Saque PJ
                 </h4>
                 <span className="text-[10px] bg-amber-100 text-amber-800 border border-amber-300 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">
                   1 por mês
                 </span>
+                <span className="px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-900 border border-emerald-300 text-[9px] font-black uppercase tracking-wider flex items-center gap-1">
+                  <Clock size={11} /> Recebimento no Dia Útil Seguinte
+                </span>
               </div>
               <p className="text-xs text-slate-500 mt-0.5">
-                Você pode solicitar até 1 adiantamento por competência do seu faturamento acumulado via PIX.
+                Você pode solicitar até 1 adiantamento por competência do seu faturamento acumulado via PIX, com <strong>pagamento no dia útil seguinte</strong>.
               </p>
               {advanceRequests && advanceRequests.length > 0 && (
                 <div className="mt-2 flex flex-wrap gap-2">
@@ -1760,22 +1822,28 @@ export default function AffiliateInvoice() {
                 </div>
 
                 <div className="space-y-2">
-                  <label className="text-xs font-bold text-slate-300 uppercase tracking-wider block">
-                    Valor a Antecipar (R$):
-                  </label>
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-bold text-slate-300 uppercase tracking-wider block">
+                      Valor Integral a Antecipar:
+                    </label>
+                    <span className="text-[10px] font-black uppercase text-amber-400 bg-amber-500/20 px-2.5 py-0.5 rounded-md border border-amber-500/30">
+                      100% do Saldo Disponível
+                    </span>
+                  </div>
                   <div className="relative">
                     <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-sm">
                       R$
                     </span>
                     <input 
                       type="text"
-                      required
+                      readOnly
                       value={advanceAmountInput}
-                      onChange={(e) => setAdvanceAmountInput(e.target.value)}
-                      placeholder="0,00"
-                      className="w-full pl-12 pr-4 py-3.5 bg-slate-800/80 border border-slate-700 rounded-2xl text-white font-mono font-bold text-lg focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-all"
+                      className="w-full pl-12 pr-4 py-3.5 bg-slate-800/90 border border-amber-500/40 rounded-2xl text-amber-300 font-mono font-black text-xl cursor-not-allowed select-all"
                     />
                   </div>
+                  <p className="text-[11px] text-slate-400">
+                    🔒 <strong>Regra de Antecipação Integral:</strong> O adiantamento é sempre pelo valor total disponível da empresa naquele momento. Não são permitidos valores picados.
+                  </p>
                 </div>
 
                 <div className="bg-slate-800/60 p-4 rounded-2xl border border-slate-700/60 space-y-1">

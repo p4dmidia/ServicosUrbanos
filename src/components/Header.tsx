@@ -21,25 +21,12 @@ export default function Header() {
                     >
                         <Menu size={20} />
                     </button>
-                    <Link to="/" className="flex items-center gap-2">
-                        {location.pathname.startsWith('/marketplace') || 
-                         location.pathname.startsWith('/produto') || 
-                         location.pathname.startsWith('/loja') || 
-                         location.pathname.startsWith('/checkout') ? (
-                            <>
-                                <div className="size-8 bg-primary-blue rounded flex items-center justify-center">
-                                    <LayoutGrid size={18} />
-                                </div>
-                                <span className="text-xl font-black tracking-tighter uppercase italic">URBA<span className="text-primary-blue">SHOP</span></span>
-                            </>
-                        ) : (
-                            <>
-                                 <div className="size-8 bg-primary-blue rounded flex items-center justify-center">
-                                    <LayoutGrid size={18} />
-                                </div>
-                                <span className="text-xl font-black tracking-tighter uppercase italic">SERVIÇOS <span className="text-primary-blue">URBANOS</span></span>
-                            </>
-                        )}
+                    <Link to="/" className="flex items-center gap-3 group">
+                        <img 
+                            src="/logo.png" 
+                            alt="CaZa dos Sorteios" 
+                            className="h-9 sm:h-11 w-auto object-contain transition-transform group-hover:scale-105" 
+                        />
                     </Link>
                 </div>
 
@@ -180,24 +167,11 @@ export default function Header() {
                         >
                             <div className="flex items-center justify-between mb-12">
                                 <Link to="/" onClick={() => setIsMobileMenuOpen(false)} className="flex items-center gap-2">
-                                    {location.pathname.startsWith('/marketplace') || 
-                                     location.pathname.startsWith('/produto') || 
-                                     location.pathname.startsWith('/loja') || 
-                                     location.pathname.startsWith('/checkout') ? (
-                                        <>
-                                            <div className="size-8 bg-primary-blue rounded flex items-center justify-center">
-                                                <LayoutGrid size={18} />
-                                            </div>
-                                            <span className="text-xl font-black tracking-tighter uppercase italic">URBA<span className="text-primary-blue">SHOP</span></span>
-                                        </>
-                                    ) : (
-                                        <>
-                                             <div className="size-8 bg-primary-blue rounded flex items-center justify-center">
-                                                <LayoutGrid size={18} />
-                                            </div>
-                                            <span className="text-xl font-black tracking-tighter uppercase italic">SERVIÇOS <span className="text-primary-blue">URBANOS</span></span>
-                                        </>
-                                    )}
+                                    <img 
+                                        src="/logo.png" 
+                                        alt="CaZa dos Sorteios" 
+                                        className="h-9 w-auto object-contain" 
+                                    />
                                 </Link>
                                 <button onClick={() => setIsMobileMenuOpen(false)} className="text-slate-400 hover:text-white transition-colors">
                                     <X size={24} />

@@ -31,7 +31,27 @@ export default function AffiliateLuckyNumber() {
   const { user, profile } = useAuth();
 
   // O número da sorte oficial é definido e emitido diretamente pela MBM Seguradora.
-  const luckyNumber = (profile as any)?.lucky_number || null;
+  const luckyNumber = useMemo(() => {
+    if ((profile as any)?.lucky_number) return (profile as any).lucky_number;
+    if (profile?.description) {
+      const match = profile.description.match(/\[MBM_LUCKY_NUMBER:([^\]]+)\]/);
+      if (match && match[1]) return match[1].trim();
+    }
+    return null;
+  }, [profile]);
+
+  // Certificado e Apólice da MBM
+  const mbmCertificate = useMemo(() => {
+    let cert = (profile as any)?.certificate_number || null;
+    let policy = (profile as any)?.policy_number || '11-0982-000058940-0001';
+    if (profile?.description) {
+      const certMatch = profile.description.match(/\[MBM_CERTIFICATE:([^\]]+)\]/);
+      if (certMatch && certMatch[1]) cert = certMatch[1].trim();
+      const policyMatch = profile.description.match(/\[MBM_POLICY:([^\]]+)\]/);
+      if (policyMatch && policyMatch[1]) policy = policyMatch[1].trim();
+    }
+    return { cert, policy };
+  }, [profile]);
 
   // Data de adesão / início da assinatura do segurado
   const userJoinDate = useMemo(() => {
@@ -284,7 +304,7 @@ export default function AffiliateLuckyNumber() {
                     {luckyNumber ? 'Bilhete Ativo na Seguradora' : 'Aguardando Emissão MBM'}
                   </span>
                   <span className="text-[10px] font-mono text-slate-400">
-                    Apólice Vida Light MBM
+                    Apólice: {mbmCertificate.policy} {mbmCertificate.cert ? `• Certificado #${mbmCertificate.cert}` : ''}
                   </span>
                 </div>
 

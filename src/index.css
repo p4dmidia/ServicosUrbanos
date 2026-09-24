@@ -1,12 +1,17 @@
-@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800;900&family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&display=swap');
 @import "tailwindcss";
 
 @theme {
-  --font-sans: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Plus Jakarta Sans", "Montserrat", ui-sans-serif, system-ui, sans-serif;
   
-  --color-midnight: #0a0e17;
-  --color-accent: #50C878;
-  --color-primary-blue: #0f49bd;
+  --color-midnight: #060e22;
+  --color-midnight-dark: #040916;
+  --color-midnight-card: #0c1836;
+  --color-accent: #19CB85;
+  --color-accent-light: #5BE0A9;
+  --color-primary-blue: #0756DB;
+  --color-blue-deep: #073BBC;
+  --color-blue-tint: #EDF5FF;
 }
 
 @layer base {

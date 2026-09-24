@@ -17,7 +17,10 @@ import {
   Award,
   CheckCircle2,
   Lock,
-  ArrowUpRight
+  ArrowUpRight,
+  Ticket,
+  PiggyBank,
+  Star
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { Link } from 'react-router-dom';
@@ -50,133 +53,210 @@ export default function Home() {
       <PWAInstallPrompt />
 
       <main className="flex-grow">
-        {/* HERO SECTION */}
-        <section className="relative w-full py-24 lg:py-36 overflow-hidden border-b border-white/5">
-          {/* Ambient Glows */}
-          <div className="absolute inset-0 opacity-25 pointer-events-none">
-            <div className="absolute -top-40 left-1/4 w-[500px] h-[500px] bg-primary-blue rounded-full blur-[150px] animate-pulse"></div>
-            <div className="absolute bottom-10 right-1/4 w-[600px] h-[600px] bg-accent rounded-full blur-[180px] animate-pulse" style={{ animationDuration: '8s' }}></div>
+        {/* HERO SECTION - Balanced Reference Banner Layout */}
+        <section className="relative w-full overflow-hidden bg-gradient-to-b from-[#061e5e] via-[#051747] to-midnight pt-8 pb-0 sm:pt-12 sm:pb-0 lg:py-16 border-b border-white/10">
+          {/* Ambient Glows & Circular Orbs (matching brand identity) */}
+          <div className="absolute inset-0 pointer-events-none overflow-hidden">
+            <div className="absolute -top-24 left-1/3 size-[500px] bg-primary-blue/30 rounded-full blur-[140px]"></div>
+            <div className="absolute top-1/3 -right-20 size-[450px] bg-accent/20 rounded-full blur-[130px]"></div>
+            <div className="absolute -bottom-20 left-10 size-[400px] bg-[#0756DB]/25 rounded-full blur-[120px]"></div>
           </div>
 
-          <div className="max-w-7xl mx-auto px-6 lg:px-20 relative z-10">
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-16 items-center">
+          <div className="max-w-7xl mx-auto px-6 lg:px-16 relative z-10">
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-8 items-end lg:items-center lg:min-h-[580px]">
+              
+              {/* Left Column - Perfectly Proportioned Copy & CTAs */}
               <motion.div
-                initial={{ opacity: 0, x: -40 }}
+                initial={{ opacity: 0, x: -30 }}
                 animate={{ opacity: 1, x: 0 }}
-                transition={{ duration: 0.8, type: 'spring' }}
-                className="lg:col-span-7 flex flex-col gap-8 text-left"
+                transition={{ duration: 0.7, ease: "easeOut" }}
+                className="lg:col-span-6 flex flex-col gap-5 text-left z-20 pt-2 pb-4 lg:py-4"
               >
-                <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/5 border border-white/10 text-accent text-xs font-bold uppercase tracking-wider w-fit">
-                  <Award size={14} className="animate-bounce" />
-                  Programa Exclusivo
+                {/* Brand Badge */}
+                <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-accent/15 border border-accent/30 text-accent text-xs font-bold uppercase tracking-wider w-fit">
+                  <Award size={14} className="text-accent" />
+                  <span>CaZa dos Sorteios</span>
                 </div>
 
-                <h1 className="text-4xl md:text-6xl lg:text-7xl font-extrabold text-white leading-[1.05] tracking-tight">
-                  Serviços Urbanos <br />
-                  <span className="bg-gradient-to-r from-accent to-emerald-400 bg-clip-text text-transparent">
-                    Seguro Premiável
-                  </span>
+                {/* Main Headline */}
+                <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-[2.9rem] font-black text-white leading-[1.12] tracking-tight">
+                  Concorra a <br />
+                  <span className="text-accent drop-shadow-[0_0_20px_rgba(25,203,133,0.4)]">
+                    prêmios incríveis
+                  </span> <br />
+                  e aproveite diversos benefícios!
                 </h1>
 
-                <p className="text-lg md:text-xl text-slate-400 max-w-2xl leading-relaxed font-medium">
-                  A união perfeita entre proteção pessoal e oportunidades reais de ganho. Proteja quem você ama, participe de sorteios pela Loteria Federal, acesse telemedicina 24/7 e construa uma renda recorrente indicando amigos.
+                {/* Subtitle / Description */}
+                <p className="text-sm sm:text-base text-slate-200 max-w-lg leading-relaxed font-medium">
+                  A união perfeita entre proteção pessoal, sorteios oficiais pela Loteria Federal, telemedicina 24/7 e construção de renda recorrente com indicação.
                 </p>
 
-                <div className="flex flex-wrap gap-4 pt-2">
+                {/* 5 Icons Row from Reference */}
+                <div className="flex items-center gap-3 sm:gap-5 py-2">
+                  <div className="flex flex-col items-center gap-1">
+                    <div className="size-10 rounded-xl bg-white/10 border border-white/10 flex items-center justify-center text-white shadow-sm">
+                      <Ticket size={18} className="text-accent" />
+                    </div>
+                    <span className="text-[10px] text-slate-200 font-bold tracking-tight">Sorteios</span>
+                  </div>
+
+                  <div className="flex flex-col items-center gap-1">
+                    <div className="size-10 rounded-xl bg-white/10 border border-white/10 flex items-center justify-center text-white shadow-sm">
+                      <ShieldCheck size={18} className="text-accent" />
+                    </div>
+                    <span className="text-[10px] text-slate-200 font-bold tracking-tight">Proteção</span>
+                  </div>
+
+                  <div className="flex flex-col items-center gap-1">
+                    <div className="size-10 rounded-xl bg-white/10 border border-white/10 flex items-center justify-center text-white shadow-sm">
+                      <Heart size={18} className="text-accent" />
+                    </div>
+                    <span className="text-[10px] text-slate-200 font-bold tracking-tight">Saúde</span>
+                  </div>
+
+                  <div className="flex flex-col items-center gap-1">
+                    <div className="size-10 rounded-xl bg-white/10 border border-white/10 flex items-center justify-center text-white shadow-sm">
+                      <PiggyBank size={18} className="text-accent" />
+                    </div>
+                    <span className="text-[10px] text-slate-200 font-bold tracking-tight">Benefícios</span>
+                  </div>
+
+                  <div className="flex flex-col items-center gap-1">
+                    <div className="size-10 rounded-xl bg-white/10 border border-white/10 flex items-center justify-center text-white shadow-sm">
+                      <Star size={18} className="text-accent" />
+                    </div>
+                    <span className="text-[10px] text-slate-200 font-bold tracking-tight">Oportunidades</span>
+                  </div>
+                </div>
+
+                {/* CTA Buttons */}
+                <div className="flex flex-wrap items-center gap-4 pt-2">
                   <Link
                     to="/cadastro"
-                    className="bg-accent hover:bg-emerald-500 text-midnight px-10 py-4.5 rounded-2xl text-lg font-black transition-all hover:scale-105 active:scale-95 shadow-xl shadow-accent/20 flex items-center gap-2 group"
+                    className="bg-accent hover:bg-emerald-400 text-midnight px-8 py-4 rounded-2xl text-base sm:text-lg font-black transition-all hover:scale-105 active:scale-95 shadow-xl shadow-accent/30 flex items-center gap-2 group"
                   >
-                    Ativar sua proteção agora
+                    <span>Participe agora!</span>
                     <ChevronRight size={20} className="group-hover:translate-x-1 transition-transform" />
                   </Link>
+
                   <a
                     href="#detalhes"
-                    className="bg-white/5 hover:bg-white/10 text-white px-10 py-4.5 rounded-2xl text-lg font-bold transition-all border border-white/10 hover:border-white/20 flex items-center gap-2"
+                    className="bg-white/10 hover:bg-white/15 text-white px-7 py-4 rounded-2xl text-base font-bold transition-all border border-white/10 hover:border-white/25 flex items-center gap-2"
                   >
                     Conhecer Benefícios
                   </a>
                 </div>
-
-                {/* Micro Metrics */}
-                <div className="grid grid-cols-3 gap-6 pt-6 border-t border-white/5 max-w-lg">
-                  <div>
-                    <p className="text-2xl font-extrabold text-white">R$ 5.000</p>
-                    <p className="text-xs text-slate-400 font-bold uppercase tracking-wider mt-1">Sorteios Semanais</p>
-                  </div>
-                  <div>
-                    <p className="text-2xl font-extrabold text-white">24/7</p>
-                    <p className="text-xs text-slate-400 font-bold uppercase tracking-wider mt-1">Telemedicina</p>
-                  </div>
-                  <div>
-                    <p className="text-2xl font-extrabold text-white">100%</p>
-                    <p className="text-xs text-slate-400 font-bold uppercase tracking-wider mt-1">Sem Carência</p>
-                  </div>
-                </div>
               </motion.div>
 
-              {/* Visual Interactive Column */}
+              {/* Right Column - Gentleman Visual Image in Harmony with Background */}
               <motion.div
-                initial={{ opacity: 0, scale: 0.9, y: 30 }}
-                animate={{ opacity: 1, scale: 1, y: 0 }}
-                transition={{ duration: 0.8, delay: 0.2 }}
-                className="lg:col-span-5 flex justify-center lg:justify-end"
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ duration: 0.8, delay: 0.15 }}
+                className="lg:col-span-6 relative flex items-end justify-center lg:justify-end self-stretch mt-6 sm:mt-8 lg:mt-0 -mx-2 sm:mx-0 overflow-visible"
               >
-                {/* Premium Ticket Card Mockup */}
-                <div className="relative w-full max-w-[420px] aspect-[4/5] bg-gradient-to-br from-slate-900 via-slate-900 to-slate-950 rounded-[2.5rem] border border-white/10 p-8 shadow-2xl flex flex-col justify-between overflow-hidden group">
-                  {/* Internal Glow */}
-                  <div className="absolute top-0 right-0 w-32 h-32 bg-accent/10 rounded-full blur-2xl pointer-events-none group-hover:bg-accent/20 transition-all"></div>
+                {/* Background aura behind the man */}
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                  <div className="size-[340px] sm:size-[480px] lg:size-[680px] bg-gradient-to-tr from-primary-blue/50 via-accent/25 to-transparent rounded-full blur-[90px] sm:blur-[110px]"></div>
+                </div>
 
-                  <div className="flex justify-between items-start z-10">
-                    <div className="flex items-center gap-2">
-                      <div className="size-10 rounded-xl bg-accent/10 border border-accent/20 flex items-center justify-center text-accent">
-                        <ShieldCheck size={22} />
-                      </div>
-                      <div>
-                        <p className="text-xs text-slate-400 font-bold uppercase tracking-wider">Serviços Urbanos</p>
-                        <p className="text-sm font-black text-white uppercase tracking-tight">Seguro Ativo</p>
-                      </div>
-                    </div>
-                    <div className="px-3.5 py-1.5 rounded-full bg-accent/15 border border-accent/30 text-accent text-[10px] font-black uppercase tracking-wider">
-                      Titular
-                    </div>
+                {/* Slogan Badge Callout next to image */}
+                <motion.div
+                  animate={{ y: [0, -6, 0] }}
+                  transition={{ repeat: Infinity, duration: 4, ease: "easeInOut" }}
+                  className="hidden md:flex flex-col absolute top-0 left-0 lg:-left-6 z-30 bg-midnight/85 backdrop-blur-md border border-white/15 px-4 py-2.5 rounded-2xl shadow-xl transform -rotate-3"
+                >
+                  <p className="font-extrabold italic text-sm text-white">
+                    Aqui você ganha <br />
+                    <span className="text-accent">toda hora!</span>
+                  </p>
+                </motion.div>
+
+                {/* Sorteio Badge */}
+                <motion.div
+                  animate={{ y: [0, 6, 0] }}
+                  transition={{ repeat: Infinity, duration: 5, ease: "easeInOut" }}
+                  className="hidden sm:flex items-center gap-2.5 absolute bottom-2 left-0 lg:-left-2 z-30 bg-midnight/85 backdrop-blur-md border border-accent/30 px-3.5 py-2 rounded-2xl shadow-xl"
+                >
+                  <div className="size-7 rounded-lg bg-accent/20 flex items-center justify-center text-accent">
+                    <Gift size={14} />
                   </div>
-
-                  {/* Mid Mockup Detail */}
-                  <div className="my-auto py-8 space-y-6 z-10">
-                    <div className="p-5 rounded-2xl bg-white/5 border border-white/5 space-y-3">
-                      <div className="flex justify-between items-center text-xs text-slate-400 font-bold">
-                        <span>COBERTURA TOTAL</span>
-                        <span className="text-white">R$ 5.000,00</span>
-                      </div>
-                      <div className="w-full h-1.5 bg-white/10 rounded-full overflow-hidden">
-                        <div className="w-full h-full bg-accent rounded-full"></div>
-                      </div>
-                      <p className="text-[10px] text-slate-400 font-medium leading-relaxed">
-                        Proteção contra morte acidental e invalidez permanente (total/parcial) sem análise prévia de saúde.
-                      </p>
-                    </div>
-
-                    <div className="p-5 rounded-2xl bg-white/5 border border-white/5 flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <div className="size-8 rounded-lg bg-primary-blue/20 flex items-center justify-center text-primary-blue">
-                          <Gift size={16} />
-                        </div>
-                        <div>
-                          <p className="text-xs font-bold text-white">Loteria Federal</p>
-                           <p className="text-[10px] text-slate-400 font-medium">Sorteios semanais de R$ 5.000</p>
-                        </div>
-                      </div>
-                       <span className="text-[10px] bg-white/10 px-2 py-1 rounded text-slate-300 font-bold uppercase">Chances Semanais</span>
-                    </div>
+                  <div>
+                    <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">Loteria Federal</p>
+                    <p className="text-xs font-black text-white">R$ 5.000 / semana</p>
                   </div>
+                </motion.div>
 
-                  <div className="flex items-center justify-between pt-6 border-t border-white/5 text-xs text-slate-500 font-bold tracking-wider z-10">
-                    <span className="flex items-center gap-1.5 uppercase"><Lock size={12} className="text-accent" /> TLS Seguro</span>
-                    <span>SU-2026</span>
-                  </div>
+                {/* Hero Illustration - Optically centered on mobile and expanded on desktop */}
+                <div className="relative z-10 w-full flex justify-center lg:justify-end items-end overflow-visible">
+                  <img
+                    src="/hero-person.png"
+                    alt="CaZa dos Sorteios"
+                    className="w-[125%] sm:w-[110%] max-w-[500px] sm:max-w-[540px] lg:max-w-none lg:w-[138%] xl:w-[148%] 2xl:w-[155%] h-auto object-contain object-bottom drop-shadow-[0_20px_50px_rgba(3,29,110,0.65)] transform -translate-x-6 sm:-translate-x-4 lg:translate-x-8 lg:-translate-y-2 block"
+                  />
                 </div>
               </motion.div>
+
+            </div>
+          </div>
+        </section>
+
+        {/* 5-PILLARS BRAND ECOSYSTEM BAR (Anexo 2) */}
+        <section className="py-14 bg-midnight-card/50 border-y border-white/5 relative z-10 backdrop-blur-md">
+          <div className="max-w-7xl mx-auto px-6 lg:px-20">
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
+              <div className="lg:col-span-3 text-left">
+                <h3 className="text-xl md:text-2xl font-black text-white leading-tight tracking-tight">
+                  Mais do que sorteios, um <span className="text-accent">ecossistema de benefícios.</span>
+                </h3>
+              </div>
+              <div className="lg:col-span-9 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4">
+                {/* 1. Sorteios */}
+                <div className="flex flex-col items-center text-center p-3 rounded-2xl bg-white/[0.03] border border-white/5 hover:border-accent/30 transition-all group">
+                  <div className="size-11 rounded-xl bg-accent/10 border border-accent/20 flex items-center justify-center text-accent mb-2 group-hover:scale-110 transition-transform">
+                    <Ticket size={22} />
+                  </div>
+                  <span className="text-xs font-black text-white uppercase tracking-wider mb-0.5">Sorteios</span>
+                  <span className="text-[10px] text-slate-400 font-medium leading-tight">Concorra a prêmios incríveis.</span>
+                </div>
+
+                {/* 2. Proteção */}
+                <div className="flex flex-col items-center text-center p-3 rounded-2xl bg-white/[0.03] border border-white/5 hover:border-accent/30 transition-all group">
+                  <div className="size-11 rounded-xl bg-accent/10 border border-accent/20 flex items-center justify-center text-accent mb-2 group-hover:scale-110 transition-transform">
+                    <ShieldCheck size={22} />
+                  </div>
+                  <span className="text-xs font-black text-white uppercase tracking-wider mb-0.5">Proteção</span>
+                  <span className="text-[10px] text-slate-400 font-medium leading-tight">Mais segurança para você e sua família.</span>
+                </div>
+
+                {/* 3. Saúde */}
+                <div className="flex flex-col items-center text-center p-3 rounded-2xl bg-white/[0.03] border border-white/5 hover:border-accent/30 transition-all group">
+                  <div className="size-11 rounded-xl bg-accent/10 border border-accent/20 flex items-center justify-center text-accent mb-2 group-hover:scale-110 transition-transform">
+                    <Heart size={22} />
+                  </div>
+                  <span className="text-xs font-black text-white uppercase tracking-wider mb-0.5">Saúde</span>
+                  <span className="text-[10px] text-slate-400 font-medium leading-tight">Bem-estar no seu dia a dia.</span>
+                </div>
+
+                {/* 4. Benefícios */}
+                <div className="flex flex-col items-center text-center p-3 rounded-2xl bg-white/[0.03] border border-white/5 hover:border-accent/30 transition-all group">
+                  <div className="size-11 rounded-xl bg-accent/10 border border-accent/20 flex items-center justify-center text-accent mb-2 group-hover:scale-110 transition-transform">
+                    <PiggyBank size={22} />
+                  </div>
+                  <span className="text-xs font-black text-white uppercase tracking-wider mb-0.5">Benefícios</span>
+                  <span className="text-[10px] text-slate-400 font-medium leading-tight">Descontos e vantagens exclusivas.</span>
+                </div>
+
+                {/* 5. Oportunidades */}
+                <div className="flex flex-col items-center text-center p-3 rounded-2xl bg-white/[0.03] border border-white/5 hover:border-accent/30 transition-all group col-span-2 sm:col-span-1">
+                  <div className="size-11 rounded-xl bg-accent/10 border border-accent/20 flex items-center justify-center text-accent mb-2 group-hover:scale-110 transition-transform">
+                    <Star size={22} />
+                  </div>
+                  <span className="text-xs font-black text-white uppercase tracking-wider mb-0.5">Oportunidades</span>
+                  <span className="text-[10px] text-slate-400 font-medium leading-tight">Mais chances de conquistar seus sonhos.</span>
+                </div>
+              </div>
             </div>
           </div>
         </section>
@@ -184,33 +264,29 @@ export default function Home() {
         {/* PILLARS SECTIONS */}
         <div id="detalhes" className="py-12 bg-midnight">
           {/* SECTION 1: Seguro de Acidentes Pessoais */}
-          <section className="py-20 lg:py-28">
+          <section className="py-14 sm:py-20 lg:py-28">
             <div className="max-w-7xl mx-auto px-6 lg:px-20">
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
-                {/* Visual block */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 lg:gap-16 items-center">
+                {/* Visual block - Free-standing Family Protection Illustration */}
                 <motion.div
-                  initial={{ opacity: 0, x: -30 }}
-                  whileInView={{ opacity: 1, x: 0 }}
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  whileInView={{ opacity: 1, scale: 1 }}
                   viewport={{ once: true, margin: '-100px' }}
-                  transition={{ duration: 0.6 }}
-                  className="flex justify-center lg:justify-start order-2 lg:order-1"
+                  transition={{ duration: 0.7 }}
+                  className="relative flex items-center justify-center lg:justify-start order-2 lg:order-1 overflow-visible mt-6 lg:mt-0"
                 >
-                  <div className="relative w-full max-w-[440px] aspect-square rounded-[3rem] bg-gradient-to-br from-primary-blue/20 to-accent/5 p-8 border border-white/10 flex flex-col justify-between shadow-2xl relative overflow-hidden group">
-                    <div className="absolute inset-0 opacity-10 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-accent via-transparent to-transparent pointer-events-none"></div>
-                    <div className="size-16 rounded-3xl bg-accent/10 border border-accent/20 flex items-center justify-center text-accent mb-8 shadow-inner">
-                      <ShieldCheck size={36} />
-                    </div>
-                    <div>
-                      <span className="text-xs text-accent font-black uppercase tracking-widest">Garantia Seguradora MBM</span>
-                      <h3 className="text-2xl md:text-3xl font-black text-white mt-2 mb-4 leading-tight">Apólice Individual Simplificada</h3>
-                      <p className="text-sm text-slate-400 font-medium leading-relaxed">
-                        Adesão automatizada direto no painel com ativação imediata. Cobertura nacional completa com segurança jurídica respaldada pela MBM Seguradora.
-                      </p>
-                    </div>
-                    <div className="pt-6 border-t border-white/5 flex items-center justify-between text-xs text-slate-500 font-bold uppercase tracking-widest mt-6">
-                      <span>Sem Burocracia</span>
-                      <span className="text-accent flex items-center gap-1">Adesão Rápida <ArrowUpRight size={14} /></span>
-                    </div>
+                  {/* Background Aura */}
+                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                    <div className="size-[260px] sm:size-[380px] lg:size-[560px] bg-gradient-to-tr from-primary-blue/40 via-accent/25 to-transparent rounded-full blur-[80px] sm:blur-[100px]"></div>
+                  </div>
+
+                  {/* Free-standing Transparent PNG - Mobile centered and desktop offset */}
+                  <div className="relative z-10 w-full flex justify-center lg:justify-start items-center">
+                    <img
+                      src="/seguro-protecao-familia.png"
+                      alt="Seguro de Acidentes Pessoais e Proteção Familiar CaZa dos Sorteios"
+                      className="w-full max-w-[310px] sm:max-w-[400px] lg:max-w-none lg:w-[106%] xl:w-[112%] h-auto object-contain drop-shadow-[0_20px_50px_rgba(3,29,110,0.65)] transform translate-x-0 lg:-translate-x-12 xl:-translate-x-16"
+                    />
                   </div>
                 </motion.div>
 
@@ -271,12 +347,12 @@ export default function Home() {
           </section>
 
           {/* SECTION 2: Sorteios pela Loteria Federal */}
-          <section className="py-20 lg:py-28 border-y border-white/5 relative">
+          <section className="py-14 sm:py-20 lg:py-28 border-y border-white/5 relative">
             {/* Ambient Background Glow */}
             <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-primary-blue/5 rounded-full blur-[150px] pointer-events-none"></div>
 
             <div className="max-w-7xl mx-auto px-6 lg:px-20">
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 lg:gap-16 items-center">
                 {/* Copy block */}
                 <motion.div
                   initial={{ opacity: 0, x: -30 }}
@@ -330,80 +406,26 @@ export default function Home() {
                   </div>
                 </motion.div>
 
-                {/* Visual block */}
+                {/* Visual block - Free-standing Illustration with Transparent Background */}
                 <motion.div
-                  initial={{ opacity: 0, x: 30 }}
-                  whileInView={{ opacity: 1, x: 0 }}
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  whileInView={{ opacity: 1, scale: 1 }}
                   viewport={{ once: true, margin: '-100px' }}
-                  transition={{ duration: 0.6 }}
-                  className="flex justify-center lg:justify-end"
+                  transition={{ duration: 0.7 }}
+                  className="relative flex items-center justify-center lg:justify-end overflow-visible mt-6 lg:mt-0"
                 >
-                  {/* Virtual Lotto ticket mockup */}
-                  <div className="relative w-full max-w-[440px] rounded-[2.5rem] bg-slate-900 border border-white/10 p-8 shadow-2xl overflow-hidden flex flex-col justify-between group">
-                    <div className="absolute -top-16 -right-16 size-40 bg-accent/10 rounded-full blur-2xl group-hover:scale-125 transition-transform"></div>
-                    
-                    <div className="flex justify-between items-center border-b border-white/5 pb-4">
-                      <div className="flex items-center gap-2">
-                        <Gift size={20} className="text-accent" />
-                        <span className="text-xs font-black text-white uppercase tracking-wider">Loteria Federal</span>
-                      </div>
-                      <span className="text-[10px] text-slate-500 font-black uppercase">Extração Semanal</span>
-                    </div>
+                  {/* Background Aura */}
+                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                    <div className="size-[260px] sm:size-[380px] lg:size-[560px] bg-gradient-to-tr from-primary-blue/40 via-accent/25 to-transparent rounded-full blur-[80px] sm:blur-[100px]"></div>
+                  </div>
 
-                    <div className="py-4 flex flex-col gap-3">
-                      <p className="text-[9px] text-slate-400 font-black uppercase tracking-widest">Como funciona o Sorteio (Regra Oficial)</p>
-                      
-                      {/* Extraction Table */}
-                      <div className="bg-white/5 border border-white/5 rounded-2xl p-4 space-y-2 text-xs">
-                        <div className="flex justify-between items-center text-slate-400">
-                          <span>1º Prêmio</span>
-                          <span className="font-mono text-sm text-slate-500">
-                            15.9<strong className="text-accent underline font-extrabold decoration-2">45</strong>
-                          </span>
-                        </div>
-                        <div className="flex justify-between items-center text-slate-400">
-                          <span>2º Prêmio</span>
-                          <span className="font-mono text-sm text-slate-500">
-                            46.72<strong className="text-accent underline font-extrabold decoration-2">9</strong>
-                          </span>
-                        </div>
-                        <div className="flex justify-between items-center text-slate-400">
-                          <span>3º Prêmio</span>
-                          <span className="font-mono text-sm text-slate-500">
-                            53.00<strong className="text-accent underline font-extrabold decoration-2">8</strong>
-                          </span>
-                        </div>
-                        <div className="flex justify-between items-center text-slate-400">
-                          <span>4º Prêmio</span>
-                          <span className="font-mono text-sm text-slate-500">
-                            40.14<strong className="text-accent underline font-extrabold decoration-2">3</strong>
-                          </span>
-                        </div>
-                        <div className="flex justify-between items-center text-slate-400">
-                          <span>5º Prêmio</span>
-                          <span className="font-mono text-sm text-slate-500">
-                            30.12<strong className="text-accent underline font-extrabold decoration-2">3</strong>
-                          </span>
-                        </div>
-                      </div>
-
-                      {/* Resulting Digital Ticket */}
-                      <div className="space-y-2">
-                        <p className="text-[9px] text-slate-500 font-black uppercase tracking-widest">Número Sorteado Exemplo</p>
-                        <div className="grid grid-cols-6 gap-1.5">
-                          {['4', '5', '9', '8', '3', '3'].map((digit, i) => (
-                            <div key={i} className="aspect-square rounded-xl bg-accent/15 border border-accent/30 flex items-center justify-center text-xl font-black text-accent shadow-inner shadow-accent/5">
-                              {digit}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="pt-4 border-t border-white/5 flex items-center justify-between text-[9px] text-slate-500 font-bold uppercase tracking-widest">
-                      <span>Início: 2º Domingo Subsequente</span>
-                      <span>Sorteios Oficiais</span>
-                    </div>
+                  {/* Illustration - Shifted right on desktop, centered on mobile */}
+                  <div className="relative z-10 w-full flex justify-center lg:justify-end items-center">
+                    <img
+                      src="/sorteio-ganhadora.png"
+                      alt="Sorteios Loteria Federal CaZa dos Sorteios"
+                      className="w-full max-w-[310px] sm:max-w-[400px] lg:max-w-none lg:w-[120%] xl:w-[128%] h-auto object-contain drop-shadow-[0_20px_50px_rgba(3,29,110,0.65)] transform translate-x-0 lg:translate-x-14 xl:translate-x-16"
+                    />
                   </div>
                 </motion.div>
               </div>
@@ -411,47 +433,29 @@ export default function Home() {
           </section>
 
           {/* SECTION 3: Telemedicina 24/7 */}
-          <section className="py-20 lg:py-28">
+          <section className="py-14 sm:py-20 lg:py-28">
             <div className="max-w-7xl mx-auto px-6 lg:px-20">
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
-                {/* Visual block */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 lg:gap-16 items-center">
+                {/* Visual block - Free-standing Telemedicine Consultation Illustration */}
                 <motion.div
-                  initial={{ opacity: 0, x: -30 }}
-                  whileInView={{ opacity: 1, x: 0 }}
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  whileInView={{ opacity: 1, scale: 1 }}
                   viewport={{ once: true, margin: '-100px' }}
-                  transition={{ duration: 0.6 }}
-                  className="flex justify-center lg:justify-start order-2 lg:order-1"
+                  transition={{ duration: 0.7 }}
+                  className="relative flex items-center justify-center lg:justify-start order-2 lg:order-1 overflow-visible mt-6 lg:mt-0"
                 >
-                  {/* Telemedicine call screen mockup */}
-                  <div className="relative w-full max-w-[440px] aspect-[1.1] rounded-[2.5rem] bg-gradient-to-br from-slate-900 via-slate-950 to-slate-900 border border-white/10 p-8 shadow-2xl overflow-hidden flex flex-col justify-between group">
-                    <div className="absolute top-0 left-0 w-32 h-32 bg-primary-blue/10 rounded-full blur-2xl pointer-events-none"></div>
-                    
-                    <div className="flex justify-between items-center border-b border-white/5 pb-4 z-10">
-                      <div className="flex items-center gap-2">
-                        <Activity size={18} className="text-accent" />
-                        <span className="text-xs font-black text-white uppercase tracking-wider">Telemedicina Online</span>
-                      </div>
-                      <div className="flex items-center gap-1.5">
-                        <span className="size-2 rounded-full bg-emerald-500 animate-ping"></span>
-                        <span className="text-[10px] text-emerald-500 font-black uppercase">Médico Online</span>
-                      </div>
-                    </div>
+                  {/* Background Aura */}
+                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                    <div className="size-[260px] sm:size-[380px] lg:size-[560px] bg-gradient-to-tr from-primary-blue/40 via-accent/25 to-transparent rounded-full blur-[80px] sm:blur-[100px]"></div>
+                  </div>
 
-                    <div className="py-8 text-center flex flex-col items-center justify-center gap-4 z-10">
-                      <div className="size-20 rounded-full bg-accent/10 border border-accent/20 flex items-center justify-center text-accent relative">
-                        <Heart size={36} className="animate-pulse text-accent" />
-                        <div className="absolute inset-0 rounded-full border border-accent/30 animate-ping opacity-75"></div>
-                      </div>
-                      <div>
-                        <h4 className="text-lg font-black text-white">Clínico Geral & Especialidades</h4>
-                        <p className="text-xs text-slate-400 mt-1 font-medium">Conectando você a médicos credenciados em segundos</p>
-                      </div>
-                    </div>
-
-                    <div className="pt-4 border-t border-white/5 flex items-center justify-between text-[9px] text-slate-500 font-bold uppercase tracking-widest z-10">
-                      <span>Clínico Geral 24/7</span>
-                      <span>Especialistas c/ Hora Marcada</span>
-                    </div>
+                  {/* Free-standing Transparent PNG - Shifted left on desktop, centered on mobile */}
+                  <div className="relative z-10 w-full flex justify-center lg:justify-start items-center">
+                    <img
+                      src="/telemedicina-consulta.png"
+                      alt="Telemedicina 24/7 e Consultas Online CaZa dos Sorteios"
+                      className="w-full max-w-[310px] sm:max-w-[400px] lg:max-w-none lg:w-[108%] xl:w-[115%] h-auto object-contain drop-shadow-[0_20px_50px_rgba(3,29,110,0.65)] transform translate-x-0 lg:-translate-x-16 xl:-translate-x-20"
+                    />
                   </div>
                 </motion.div>
 
@@ -520,9 +524,9 @@ export default function Home() {
           </section>
 
           {/* SECTION 4: Ganhos Financeiros – Indique e Ganhe */}
-          <section className="py-20 lg:py-28 border-t border-white/5 bg-slate-950/20">
+          <section className="py-14 sm:py-20 lg:py-28 border-t border-white/5 bg-slate-950/20">
             <div className="max-w-7xl mx-auto px-6 lg:px-20">
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 lg:gap-16 items-center">
                 {/* Copy block */}
                 <motion.div
                   initial={{ opacity: 0, x: -30 }}
@@ -584,62 +588,26 @@ export default function Home() {
                   </div>
                 </motion.div>
 
-                {/* Visual block */}
+                {/* Visual block - Free-standing Affiliate & Network Earnings Illustration */}
                 <motion.div
-                  initial={{ opacity: 0, x: 30 }}
-                  whileInView={{ opacity: 1, x: 0 }}
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  whileInView={{ opacity: 1, scale: 1 }}
                   viewport={{ once: true, margin: '-100px' }}
-                  transition={{ duration: 0.6 }}
-                  className="flex justify-center lg:justify-end"
+                  transition={{ duration: 0.7 }}
+                  className="relative flex items-center justify-center lg:justify-end overflow-visible mt-6 lg:mt-0"
                 >
-                  {/* Referral Network Visualization */}
-                  <div className="relative w-full max-w-[440px] aspect-[1.1] rounded-[2.5rem] bg-slate-900 border border-white/10 p-8 shadow-2xl overflow-hidden flex flex-col justify-between group">
-                    <div className="absolute top-0 right-0 w-32 h-32 bg-accent/5 rounded-full blur-2xl pointer-events-none"></div>
+                  {/* Background Aura */}
+                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                    <div className="size-[260px] sm:size-[380px] lg:size-[560px] bg-gradient-to-tr from-primary-blue/40 via-accent/25 to-transparent rounded-full blur-[80px] sm:blur-[100px]"></div>
+                  </div>
 
-                    <div className="flex justify-between items-center border-b border-white/5 pb-4">
-                      <div className="flex items-center gap-2">
-                        <Users2 size={20} className="text-accent" />
-                        <span className="text-xs font-black text-white uppercase tracking-wider">Sua Rede de Indicações</span>
-                      </div>
-                      <span className="text-[10px] text-accent font-black uppercase">Recorrente vitalício</span>
-                    </div>
-
-                    {/* Network Nodes Mockup */}
-                    <div className="py-6 flex flex-col items-center justify-center gap-4 relative my-auto">
-                      {/* Central Node (You) */}
-                      <div className="size-16 rounded-full bg-accent/20 border border-accent/40 flex flex-col items-center justify-center text-white relative z-10">
-                        <span className="text-xs font-black uppercase">Você</span>
-                        <span className="text-[9px] text-accent font-bold mt-0.5">G0</span>
-                      </div>
-
-                      {/* Connecting lines SVG */}
-                      <svg className="absolute inset-0 w-full h-full pointer-events-none stroke-accent/20 stroke-2" fill="none">
-                        <line x1="50%" y1="50%" x2="25%" y2="78%" />
-                        <line x1="50%" y1="50%" x2="50%" y2="82%" />
-                        <line x1="50%" y1="50%" x2="75%" y2="78%" />
-                      </svg>
-
-                      {/* Level 1 Nodes */}
-                      <div className="flex justify-between w-full px-6 mt-4 relative z-10">
-                        <div className="size-12 rounded-full bg-slate-800 border border-white/10 flex flex-col items-center justify-center">
-                          <span className="text-[10px] font-bold text-slate-300">Amigo A</span>
-                          <span className="text-[8px] text-slate-500 font-bold">G1</span>
-                        </div>
-                        <div className="size-12 rounded-full bg-slate-800 border border-white/10 flex flex-col items-center justify-center">
-                          <span className="text-[10px] font-bold text-slate-300">Amigo B</span>
-                          <span className="text-[8px] text-slate-500 font-bold">G1</span>
-                        </div>
-                        <div className="size-12 rounded-full bg-slate-800 border border-white/10 flex flex-col items-center justify-center">
-                          <span className="text-[10px] font-bold text-slate-300">Amigo C</span>
-                          <span className="text-[8px] text-slate-500 font-bold">G1</span>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="p-4 rounded-xl bg-white/5 border border-white/5 flex items-center justify-between text-xs font-bold text-slate-400">
-                      <span>Sua Rede Ativa</span>
-                      <span className="text-white flex items-center gap-1">Acessar Painel <ArrowUpRight size={14} /></span>
-                    </div>
+                  {/* Free-standing Transparent PNG - Shifted right on desktop, centered on mobile */}
+                  <div className="relative z-10 w-full flex justify-center lg:justify-end items-center">
+                    <img
+                      src="/indique-ganhe-rede.png"
+                      alt="Ganhos Financeiros e Indique e Ganhe CaZa dos Sorteios"
+                      className="w-full max-w-[310px] sm:max-w-[400px] lg:max-w-none lg:w-[114%] xl:w-[122%] h-auto object-contain drop-shadow-[0_20px_50px_rgba(3,29,110,0.65)] transform translate-x-0 lg:translate-x-14 xl:translate-x-18"
+                    />
                   </div>
                 </motion.div>
               </div>
@@ -688,14 +656,15 @@ export default function Home() {
         <div className="max-w-7xl mx-auto">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-12 mb-16">
             <div className="col-span-1 md:col-span-1">
-              <div className="flex items-center gap-2 text-white mb-6">
-                <div className="size-6 bg-primary-blue rounded flex items-center justify-center">
-                  <LayoutGrid size={14} />
-                </div>
-                <span className="text-lg font-bold">Serviços Urbanos</span>
+              <div className="flex items-center gap-2 mb-6">
+                <img 
+                  src="/logo.png" 
+                  alt="CaZa dos Sorteios" 
+                  className="h-10 w-auto object-contain" 
+                />
               </div>
-              <p className="text-sm leading-relaxed mb-6">
-                Transformando a vida nas cidades através de tecnologia e economia compartilhada.
+              <p className="text-sm leading-relaxed mb-6 text-slate-400">
+                A união perfeita entre proteção pessoal, benefícios exclusivos e sorteios oficiais pela Loteria Federal.
               </p>
               <div className="flex gap-4">
                 <a href="#" className="hover:text-accent transition-colors"><Instagram size={20} /></a>
@@ -707,10 +676,10 @@ export default function Home() {
             <div>
               <h4 className="text-white font-bold mb-6">Plataforma</h4>
               <ul className="flex flex-col gap-4 text-sm">
-                <li><a href="#" className="hover:text-white transition-colors">Como funciona</a></li>
+                <li><a href="#detalhes" className="hover:text-white transition-colors">Como funciona</a></li>
                 <li><Link to="/ecossistema" className="hover:text-white transition-colors">Ecossistema</Link></li>
-                <li><Link to="/afiliado/renovacoes" className="hover:text-white transition-colors">Planos de Licença</Link></li>
-                <li><Link to="/cadastro" className="hover:text-white transition-colors">Seja um parceiro</Link></li>
+                <li><Link to="/ganhe-dinheiro" className="hover:text-white transition-colors">Ganhe Dinheiro</Link></li>
+                <li><Link to="/cadastro" className="hover:text-white transition-colors">Ativar Seguro</Link></li>
               </ul>
             </div>
 
@@ -736,7 +705,7 @@ export default function Home() {
 
           <div className="pt-8 border-t border-slate-900 flex flex-col md:flex-row justify-between items-center gap-4 text-[10px] uppercase tracking-widest font-bold">
             <div className="flex flex-col items-center md:items-start gap-1">
-              <p>© 2026 Serviços Urbanos Tecnologia S.A. Todos os direitos reservados.</p>
+              <p>© 2026 SERVIÇOS URBANOS TECNOLOGIA LTDA. Todos os direitos reservados. Operação: CaZa dos Sorteios.</p>
               <p className="opacity-50 lowercase font-medium">Desenvolvido por <a href="https://p4dmidia.com.br" target="_blank" rel="noopener noreferrer" className="hover:text-primary-blue transition-colors">P4D Mídia</a></p>
             </div>
             <div className="flex gap-8">

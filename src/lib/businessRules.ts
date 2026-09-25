@@ -148,7 +148,7 @@ export interface RPAReceipt {
   reference_month: string; // "YYYY-MM"
   month_label: string;
   created_at: string;
-  status: 'pendente_previsao' | 'ciente_previsao' | 'pago_aguardando_quitacao' | 'quitado';
+  status: 'pendente_previsao' | 'ciente_previsao' | 'pago_aguardando_quitacao' | 'quitado' | 'sem_movimentacao';
   previsao_accepted_at?: string | null;
   quitacao_accepted_at?: string | null;
   
@@ -226,13 +226,11 @@ export interface RPAReceipt {
  * Apuração Fiscal Oficial de RPA (Recibo de Pagamento a Autônomo) - Pessoa Física e PJ:
  * 1. INSS: 0% de retenção na fonte (recolhimento individual por conta própria do autônomo).
  * 2. Base de Cálculo IRPF = Valor Bruto.
- * 3. Tabela Progressiva Mensal do IRPF:
- *    - Até R$ 2.428,80: Isento (0,0% | Parcela a deduzir: R$ 0,00)
- *    - De R$ 2.428,81 até R$ 2.826,65: 7,5% | Parcela a deduzir: R$ 182,16
- *    - De R$ 2.826,66 até R$ 3.751,05: 15,0% | Parcela a deduzir: R$ 394,16
- *    - De R$ 3.751,06 até R$ 4.664,68: 22,5% | Parcela a deduzir: R$ 675,49
- *    - Acima de R$ 4.664,68: 27,5% | Parcela a deduzir: R$ 908,73
- * 4. Pessoa Jurídica (PJ/MEI com NF): Isenção de retenção na fonte (0% INSS e 0% IRRF).
+ * 3. Tabela Progressiva do IRPF (Isenção até R$ 5.000,00):
+ *    - Até R$ 5.000,00: Isento (0,0% | R$ 0,00)
+ *    - De R$ 5.000,01 até R$ 7.500,00: 15,0% sobre o excedente de R$ 5.000,00
+ *    - Acima de R$ 7.500,00: 27,5% sobre o excedente de R$ 7.500,00 + parcela da faixa anterior
+ * 4. Pessoa Jurídica (PJ/MEI com NF): Isenção total de retenção na fonte (0% INSS e 0% IRRF).
  */
 export function calculateCumulativeTaxDeductions({
   payoutBruto,
@@ -262,22 +260,17 @@ export function calculateCumulativeTaxDeductions({
   // 1. INSS na Fonte (0% - não é cobrado/retido do Afiliado)
   const inss = 0;
 
-  // 2. Base de Cálculo do IRPF: Deduz o valor de 11% do INSS da base para enquadramento na tabela progressiva
-  const inssDeductionForIrBase = safeBruto * 0.11;
-  const irrfBase = Math.max(0, safeBruto - inssDeductionForIrBase);
+  // 2. Base de Cálculo do IRPF: Valor Bruto Total
+  const irrfBase = safeBruto;
 
-  // 3. Tabela Progressiva Mensal do IRPF
+  // 3. Tabela Progressiva do IRPF (Isento até R$ 5.000,00)
   let irrfCalculated = 0;
-  if (irrfBase <= 2428.80) {
+  if (irrfBase <= 5000.00) {
     irrfCalculated = 0;
-  } else if (irrfBase <= 2826.65) {
-    irrfCalculated = (irrfBase * 0.075) - 182.16;
-  } else if (irrfBase <= 3751.05) {
-    irrfCalculated = (irrfBase * 0.15) - 394.16;
-  } else if (irrfBase <= 4664.68) {
-    irrfCalculated = (irrfBase * 0.225) - 675.49;
+  } else if (irrfBase <= 7500.00) {
+    irrfCalculated = (irrfBase - 5000.00) * 0.15;
   } else {
-    irrfCalculated = (irrfBase * 0.275) - 908.73;
+    irrfCalculated = ((7500.00 - 5000.00) * 0.15) + ((irrfBase - 7500.00) * 0.275);
   }
 
   const irrf = Math.max(0, parseFloat(irrfCalculated.toFixed(2)));
@@ -1395,16 +1388,27 @@ export const businessRules = {
                 (t.status === 'completed' || t.status === 'pago' || t.status === 'pending'))
         .reduce((acc, t) => acc + Number(t.amount || 0), 0);
 
-      // Pagamentos mensais já realizados
+      // Pagamentos mensais já realizados (saques e adiantamentos)
       const monthlyPaid = transactions
-        .filter(t => t.type === 'withdrawal' && 
+        .filter(t => (t.type === 'withdrawal' || t.type === 'advance') && 
                  !isResellerTx(t) &&
-                 t.description?.includes('Mensal') && 
+                 (!t.description?.includes('Anual')) && 
                  (t.status === 'completed' || t.status === 'pago'))
         .reduce((acc, t) => acc + Math.abs(Number(t.amount)), 0);
 
+      let localPaidAdvances = 0;
+      try {
+        if (typeof localStorage !== 'undefined') {
+          const allAdv = JSON.parse(localStorage.getItem('affiliate_advance_requests') || '[]');
+          const userPaidAdv = allAdv.filter((a: any) => a.profile_id === userId && a.status === 'paid');
+          localPaidAdvances = userPaidAdv.reduce((acc: number, a: any) => acc + Math.abs(Number(a.amount || 0)), 0);
+        }
+      } catch (e) {}
+
+      const totalMonthlySettled = Math.max(monthlyPaid, localPaidAdvances);
+
       // O Saldo Disponível agora é o saldo Mensal (liberado dia 10 com NF)
-      const availableBalance = Math.max(0, monthlyBonus - monthlyPaid);
+      const availableBalance = Math.max(0, monthlyBonus - totalMonthlySettled);
       const walletBonus = 0; // Ciclo semanal zerado e excluído
       const totalEarnings = monthlyBonus + annualBonus;
 
@@ -1859,6 +1863,39 @@ export const businessRules = {
         console.error("Erro ao carregar competências quitadas:", e);
       }
 
+      // 4. Buscar adiantamentos pagos para o usuário (banco de dados e localStorage)
+      let paidAdvancesTotal = 0;
+      try {
+        const advTxns = transactions.filter(t => 
+          (t.type === 'advance' || t.description?.toLowerCase().includes('adiantamento'))
+        );
+        advTxns.forEach(t => {
+          const amt = Math.abs(Number(t.amount || 0));
+          if (t.status === 'completed' || t.status === 'pago' || t.status === 'paid') {
+            paidAdvancesTotal += amt;
+          }
+        });
+
+        if (typeof window !== 'undefined' && window.localStorage) {
+          const raw = localStorage.getItem('affiliate_advance_requests');
+          if (raw) {
+            const parsed = JSON.parse(raw);
+            if (Array.isArray(parsed)) {
+              parsed.forEach((req: any) => {
+                if (req.profile_id === userId) {
+                  const amt = Number(req.net_amount || req.gross_amount || 0);
+                  if (req.status === 'paid' || req.status === 'completed' || req.status === 'pago') {
+                    paidAdvancesTotal = Math.max(paidAdvancesTotal, amt);
+                  }
+                }
+              });
+            }
+          }
+        }
+      } catch (err) {
+        console.error("Erro ao carregar adiantamentos em getEcosystemActivity:", err);
+      }
+
       const activity = transactions.map(t => {
         const orderMatch = t.description?.match(/Pedido\s*#\s*([A-Z0-9-]+)/i);
         const orderId = t.order_id ? String(t.order_id) : (orderMatch ? orderMatch[1].trim() : null);
@@ -1933,6 +1970,12 @@ export const businessRules = {
           displayStatus = 'Cancelado';
         } else if (t.status === 'completed' || t.status === 'pago' || t.status === 'paid' || isMonthQuitado) {
           displayStatus = 'Pago';
+        } else if (isAdvance) {
+          displayStatus = t.status === 'pending' ? 'Pendente' : 'Pago';
+        } else if (cashbackType?.includes('Mensal') && paidAdvancesTotal > 0) {
+          displayStatus = 'Adiantado';
+        } else if (cashbackType?.includes('Anual')) {
+          displayStatus = 'Acumulando';
         } else {
           displayStatus = 'Pendente';
         }
@@ -3639,20 +3682,57 @@ export const businessRules = {
 
       const walletBonus = 0; // Semanal excluído
 
-      // Subtrair pagamentos já realizados
-      const monthlyPaid = userTransactions
-        .filter(t => t.type === 'withdrawal' && t.description?.includes('Mensal') && (t.status === 'completed' || t.status === 'pago'))
-        .reduce((acc, t) => acc + Math.abs(Number(t.amount || 0)), 0);
+      // 1. Apuração de adiantamentos pagos e pendentes
+      const advanceTxs = userTransactions.filter(t => {
+        const desc = (t.description || '').toLowerCase();
+        return t.type === 'advance' || desc.includes('[adiantamento]') || desc.includes('adiantamento');
+      });
+
+      const paidAdvanceTxs = advanceTxs.filter(t => t.status === 'completed' || t.status === 'pago');
+      const pendingAdvanceTxs = advanceTxs.filter(t => t.status === 'pending');
+
+      let paidAdvancesTotal = paidAdvanceTxs.reduce((acc, t) => acc + Math.abs(Number(t.amount || 0)), 0);
+      let pendingAdvancesTotal = pendingAdvanceTxs.reduce((acc, t) => acc + Math.abs(Number(t.amount || 0)), 0);
+
+      // Checar se há registros no localStorage de adiantamentos
+      try {
+        if (typeof localStorage !== 'undefined') {
+          const allAdv = JSON.parse(localStorage.getItem('affiliate_advance_requests') || '[]');
+          const localUserAdv = allAdv.filter((a: any) => a.profile_id === profile.id);
+          const localPaid = localUserAdv.filter((a: any) => a.status === 'paid');
+          const localPending = localUserAdv.filter((a: any) => a.status === 'pending');
+
+          if (localPaid.length > 0) {
+            const sumPaid = localPaid.reduce((acc: number, a: any) => acc + Math.abs(Number(a.amount || 0)), 0);
+            paidAdvancesTotal = Math.max(paidAdvancesTotal, sumPaid);
+          }
+          if (localPending.length > 0) {
+            const sumPending = localPending.reduce((acc: number, a: any) => acc + Math.abs(Number(a.amount || 0)), 0);
+            pendingAdvancesTotal = Math.max(pendingAdvancesTotal, sumPending);
+          }
+        }
+      } catch (e) {}
+
+      // 2. Apuração de saques normais já realizados (excluindo anuais e adiantamentos)
+      const normalMonthlyWithdrawals = userTransactions.filter(t => {
+        if (t.status !== 'completed' && t.status !== 'pago') return false;
+        if (t.type !== 'withdrawal') return false;
+        const desc = (t.description || '').toLowerCase();
+        if (desc.includes('anual')) return false;
+        if (desc.includes('adiantamento') || desc.includes('[adiantamento]')) return false;
+        return true;
+      });
+      const normalMonthlyPaid = normalMonthlyWithdrawals.reduce((acc, t) => acc + Math.abs(Number(t.amount || 0)), 0);
 
       const annualPaid = userTransactions
         .filter(t => t.type === 'withdrawal' && t.description?.includes('Anual') && (t.status === 'completed' || t.status === 'pago'))
         .reduce((acc, t) => acc + Math.abs(Number(t.amount || 0)), 0);
 
-      const monthlyPending = Math.max(0, monthlyBonus - monthlyPaid);
+      const rawMonthlyGross = Math.max(0, monthlyBonus - normalMonthlyPaid);
       const annualPending = Math.max(0, annualBonus - annualPaid);
       const digitalPending = 0;
 
-      // 1. Apuração dos saques já realizados dentro do mês civil atual
+      // 3. Apuração dos saques já realizados dentro do mês civil atual
       const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
       const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
 
@@ -3678,6 +3758,50 @@ export const businessRules = {
                    Boolean((profile as any).description?.includes('[PJ]')) || 
                    false;
 
+      // 4. Apuração dos impostos do Mensal (Dia 10) e Provisão Anual
+      let taxMonthly = calculateCumulativeTaxDeductions({
+        payoutBruto: rawMonthlyGross,
+        alreadyPaidBrutoInMonth: alreadyPaidBrutoMonth,
+        alreadyRetainedInssInMonth: alreadyRetainedInssMonth,
+        alreadyRetainedIrrfInMonth: alreadyRetainedIrrfMonth,
+        isPjUser: isPJ
+      });
+
+      // Deduz adiantamentos pagos do saldo líquido disponível do mês
+      const totalAdvanceDeduction = paidAdvancesTotal;
+      let remainingMonthlyLiquid = Math.max(0, parseFloat((taxMonthly.liquido - totalAdvanceDeduction).toFixed(2)));
+      let remainingMonthlyGross = rawMonthlyGross;
+
+      if (totalAdvanceDeduction > 0) {
+        if (remainingMonthlyLiquid <= 0.01) {
+          // Totalmente adiantado/quitado
+          remainingMonthlyLiquid = 0;
+          remainingMonthlyGross = 0;
+          taxMonthly = {
+            bruto: 0,
+            inss: 0,
+            irrf: 0,
+            liquido: 0,
+            patronal: 0,
+            isPJ,
+            totalMonthBruto: alreadyPaidBrutoMonth,
+            totalMonthInss: alreadyRetainedInssMonth,
+            totalMonthIrrf: alreadyRetainedIrrfMonth,
+            irrfBase: 0
+          };
+        } else if (taxMonthly.liquido > 0) {
+          // Parcialmente adiantado
+          const ratio = remainingMonthlyLiquid / taxMonthly.liquido;
+          remainingMonthlyGross = parseFloat((rawMonthlyGross * ratio).toFixed(2));
+          taxMonthly.liquido = remainingMonthlyLiquid;
+          taxMonthly.bruto = remainingMonthlyGross;
+          taxMonthly.inss = parseFloat((taxMonthly.inss * ratio).toFixed(2));
+          taxMonthly.irrf = parseFloat((taxMonthly.irrf * ratio).toFixed(2));
+        }
+      }
+
+      const monthlyPending = remainingMonthlyGross;
+
       // Nota Fiscal Info (Exclusivo PJ) vs Recibo RPA (PF)
       const userInvoice = invoiceMap.get(profile.id);
       const hasInvoice = !!userInvoice;
@@ -3686,19 +3810,6 @@ export const businessRules = {
         Math.abs(invoiceGross - monthlyPending) < 0.05
       );
       const canPayMonthly = isEligible;
-
-      // 2. Apuração dos impostos do Mensal (Dia 10) e Provisão Anual
-      // A) Semanal (zerado)
-      const taxDigital = { bruto: 0, inss: 0, irrf: 0, liquido: 0 };
-
-      // B) Mensal
-      const taxMonthly = calculateCumulativeTaxDeductions({
-        payoutBruto: monthlyPending,
-        alreadyPaidBrutoInMonth: alreadyPaidBrutoMonth,
-        alreadyRetainedInssInMonth: alreadyRetainedInssMonth,
-        alreadyRetainedIrrfInMonth: alreadyRetainedIrrfMonth,
-        isPjUser: isPJ
-      });
 
       // C) Anual (referência de provisão anual)
       const taxAnnual = calculateCumulativeTaxDeductions({
@@ -3770,6 +3881,8 @@ export const businessRules = {
         alreadyRetainedInssMonth,
         alreadyRetainedIrrfMonth,
 
+        hasPendingAdvance: pendingAdvancesTotal > 0,
+        paidAdvancesTotal: paidAdvancesTotal,
         role: profile.role,
         isEligible,
         statusLabel: isEligible ? 'Adimplente / Ativo' : 'Inadimplente',
@@ -7145,6 +7258,15 @@ export const businessRules = {
       const targetUserId = typeof filter === 'object' ? filter?.userId : undefined;
       const archiveMap = new Map<string, any>();
 
+      // Buscar perfis para enriquecer nomes, CPFs e chaves PIX
+      const { data: allProfiles } = await supabase
+        .from('profiles')
+        .select('id, full_name, cpf, cnpj, pix_key, pix_type, description, person_type');
+      
+      const profilesMap = new Map<string, any>(
+        (allProfiles || []).map(p => [p.id, p])
+      );
+
       // 1. Coleta itens arquivados do localStorage
       const allMonths: string[] = JSON.parse(localStorage.getItem('monthly_payout_archived_months') || '[]');
       for (const m of allMonths) {
@@ -7154,10 +7276,34 @@ export const businessRules = {
           const uId = item.userId || item.profile_id;
           const refM = item.refMonth || m;
           if (uId && refM) {
+            const prof = profilesMap.get(uId);
+            const userName = item.userName || item.affiliateName || prof?.full_name || 'Afiliado Autônomo';
+            const userCpf = item.userCpf || item.cpfCnpj || prof?.cpf || prof?.cnpj || '';
+            const userPixKey = item.userPixKey || item.pixKey || prof?.pix_key || '';
+            const isPJ = item.isPJ ?? (prof?.person_type === 'PJ' || (prof?.cnpj && prof.cnpj.replace(/\D/g, '').length === 14) || (prof?.description && prof.description.includes('[PJ]')) || prof?.pix_type === 'CNPJ');
+            const absBruto = Math.abs(Number(item.totalBruto || item.mensalBruto || item.liquido || 0));
+            const absLiq = Math.abs(Number(item.liquido !== undefined ? item.liquido : absBruto));
+
             archiveMap.set(`${uId}_${refM}`, {
               ...item,
+              id: item.id || `arch-${uId}-${refM}`,
               userId: uId,
+              userName,
+              affiliateName: userName,
+              beneficiaryName: userName,
+              userCpf,
+              cpfCnpj: userCpf,
+              userPixKey,
+              pixKey: userPixKey,
+              isPJ,
               refMonth: refM,
+              periodLabel: item.periodLabel || item.periodoStr || `01.${refM.split('-')[1]} a 30.${refM.split('-')[1]}.${refM.split('-')[0]}`,
+              paymentDateLabel: item.paymentDateLabel || item.previsaoPagamentoStr || `10.${String(Number(refM.split('-')[1]) === 12 ? 1 : Number(refM.split('-')[1]) + 1).padStart(2, '0')}.${Number(refM.split('-')[1]) === 12 ? Number(refM.split('-')[0]) + 1 : refM.split('-')[0]}`,
+              totalBruto: absBruto,
+              mensalBruto: absBruto,
+              liquido: absLiq,
+              inss: Math.abs(Number(item.inss || 0)),
+              irrf: Math.abs(Number(item.irrf || 0)),
               paidAt: item.paidAt || new Date().toISOString()
             });
           }
@@ -7166,11 +7312,8 @@ export const businessRules = {
 
       // 2. Coleta RPAs quitados de profiles.description
       try {
-        let profQuery = supabase.from('profiles').select('id, full_name, cpf, cnpj, pix_key, pix_type, description');
-        if (targetUserId) profQuery = profQuery.eq('id', targetUserId);
-        const { data: profs } = await profQuery;
-
-        (profs || []).forEach((p: any) => {
+        (allProfiles || []).forEach((p: any) => {
+          if (targetUserId && p.id !== targetUserId) return;
           const desc = p.description || '';
           const quitadoMatches = desc.matchAll(/\[RPA_QUITADO:([0-9]{4}-[0-9]{2})(?::([^\]]*))?\]/g);
           for (const match of quitadoMatches) {
@@ -7178,21 +7321,36 @@ export const businessRules = {
             const paidAt = match[2] || new Date().toISOString();
             if (!targetMonth || targetMonth === refM) {
               const key = `${p.id}_${refM}`;
+              const isPJ = p.person_type === 'PJ' || (p.cnpj && p.cnpj.replace(/\D/g, '').length === 14) || (p.description && p.description.includes('[PJ]')) || p.pix_type === 'CNPJ';
+              const userCpf = p.cpf || p.cnpj || '';
+              const userPixKey = p.pix_key || '';
+              const userName = p.full_name || 'Afiliado Autônomo';
+
               if (!archiveMap.has(key)) {
                 archiveMap.set(key, {
+                  id: `rpa-arch-${p.id}-${refM}`,
                   userId: p.id,
-                  affiliateName: p.full_name || 'Afiliado Autônomo',
-                  userName: p.full_name || 'Afiliado Autônomo',
-                  cpfCnpj: p.cpf || p.cnpj || '',
-                  pixKey: p.pix_key || '',
+                  affiliateName: userName,
+                  userName: userName,
+                  beneficiaryName: userName,
+                  userCpf: userCpf,
+                  cpfCnpj: userCpf,
+                  userPixKey: userPixKey,
+                  pixKey: userPixKey,
+                  isPJ: isPJ,
                   refMonth: refM,
+                  periodLabel: `01.${refM.split('-')[1]} a 30.${refM.split('-')[1]}.${refM.split('-')[0]}`,
+                  paymentDateLabel: `10.${String(Number(refM.split('-')[1]) === 12 ? 1 : Number(refM.split('-')[1]) + 1).padStart(2, '0')}.${Number(refM.split('-')[1]) === 12 ? Number(refM.split('-')[0]) + 1 : refM.split('-')[0]}`,
                   periodoStr: `01.${refM.split('-')[1]} a 30.${refM.split('-')[1]}.${refM.split('-')[0]}`,
                   previsaoPagamentoStr: `10.${String(Number(refM.split('-')[1]) === 12 ? 1 : Number(refM.split('-')[1]) + 1).padStart(2, '0')}.${Number(refM.split('-')[1]) === 12 ? Number(refM.split('-')[0]) + 1 : refM.split('-')[0]}`,
                   paidAt: paidAt,
-                  rpaNumber: `RPA Nº ${refM.replace('-', '')}-${(p.cpf ? p.cpf.replace(/\D/g, '').slice(-4) : p.id.slice(0, 4)).toUpperCase()}`,
+                  rpaNumber: `RPA Nº ${refM.replace('-', '')}-${(userCpf ? userCpf.replace(/\D/g, '').slice(-4) : p.id.slice(0, 4)).toUpperCase()}`,
                   status: 'Pago',
                   totalBruto: 0,
-                  liquido: 0
+                  mensalBruto: 0,
+                  liquido: 0,
+                  inss: 0,
+                  irrf: 0
                 });
               }
             }
@@ -7202,9 +7360,9 @@ export const businessRules = {
         console.warn('Erro ao ler perfis para arquivos:', e);
       }
 
-      // 3. Coleta transações de saque/payout concluídas
+      // 3. Coleta transações de saque/payout/advance concluídas
       try {
-        let txQuery = supabase.from('transactions').select('*').in('type', ['withdrawal', 'payout']).in('status', ['completed', 'pago']);
+        let txQuery = supabase.from('transactions').select('*').in('type', ['withdrawal', 'payout', 'advance']).in('status', ['completed', 'pago', 'paid']);
         if (targetUserId) txQuery = txQuery.eq('profile_id', targetUserId);
         const { data: paidTxs } = await txQuery;
 
@@ -7213,22 +7371,59 @@ export const businessRules = {
                              (tx.created_at ? tx.created_at.slice(0, 7) : '');
           if (txRefMonth && (!targetMonth || targetMonth === txRefMonth)) {
             const key = `${tx.profile_id}_${txRefMonth}`;
+            const prof = profilesMap.get(tx.profile_id);
+            const userName = prof?.full_name || 'Afiliado Autônomo';
+            const userCpf = prof?.cpf || prof?.cnpj || '';
+            const userPixKey = prof?.pix_key || '';
+            const isPJ = prof?.person_type === 'PJ' || (prof?.cnpj && prof.cnpj.replace(/\D/g, '').length === 14) || (prof?.description && prof.description.includes('[PJ]')) || prof?.pix_type === 'CNPJ';
+            const absAmt = Math.abs(Number(tx.amount || 0));
+
+            const mNum = Number(txRefMonth.split('-')[1]) || 1;
+            const yNum = Number(txRefMonth.split('-')[0]) || new Date().getFullYear();
+            const periodLabel = `01.${String(mNum).padStart(2, '0')} a 30.${String(mNum).padStart(2, '0')}.${yNum}`;
+            const paymentDateLabel = `10.${String(mNum === 12 ? 1 : mNum + 1).padStart(2, '0')}.${mNum === 12 ? yNum + 1 : yNum}`;
+
             const existing = archiveMap.get(key);
             if (existing) {
-              if (!existing.liquido || existing.liquido <= 0) existing.liquido = Number(tx.amount || 0);
-              if (!existing.totalBruto || existing.totalBruto <= 0) existing.totalBruto = Number(tx.amount || 0);
+              if (!existing.userName || existing.userName === 'Afiliado' || existing.userName === 'Afiliado Autônomo') existing.userName = userName;
+              if (!existing.affiliateName || existing.affiliateName === 'Afiliado') existing.affiliateName = userName;
+              if (!existing.beneficiaryName) existing.beneficiaryName = userName;
+              if (!existing.userCpf) existing.userCpf = userCpf;
+              if (!existing.cpfCnpj) existing.cpfCnpj = userCpf;
+              if (!existing.userPixKey) existing.userPixKey = userPixKey;
+              if (!existing.pixKey) existing.pixKey = userPixKey;
+              if (existing.isPJ === undefined) existing.isPJ = isPJ;
+              if (!existing.periodLabel) existing.periodLabel = periodLabel;
+              if (!existing.paymentDateLabel) existing.paymentDateLabel = paymentDateLabel;
+              if (!existing.liquido || existing.liquido <= 0) existing.liquido = absAmt;
+              if (!existing.totalBruto || existing.totalBruto <= 0) existing.totalBruto = absAmt;
               existing.receiptUrl = tx.receipt_url || existing.receiptUrl;
             } else {
               archiveMap.set(key, {
+                id: `tx-arch-${tx.id || key}`,
                 userId: tx.profile_id,
-                affiliateName: 'Afiliado',
-                userName: 'Afiliado',
+                userName: userName,
+                affiliateName: userName,
+                beneficiaryName: userName,
+                userCpf: userCpf,
+                cpfCnpj: userCpf,
+                userPixKey: userPixKey,
+                pixKey: userPixKey,
+                isPJ: isPJ,
                 refMonth: txRefMonth,
+                periodLabel: periodLabel,
+                paymentDateLabel: paymentDateLabel,
+                periodoStr: periodLabel,
+                previsaoPagamentoStr: paymentDateLabel,
                 paidAt: tx.created_at,
-                liquido: Number(tx.amount || 0),
-                totalBruto: Number(tx.amount || 0),
+                liquido: absAmt,
+                totalBruto: absAmt,
+                mensalBruto: absAmt,
+                inss: 0,
+                irrf: 0,
                 status: 'Pago',
-                receiptUrl: tx.receipt_url || null
+                receiptUrl: tx.receipt_url || null,
+                rpaNumber: `RPA Nº ${txRefMonth.replace('-', '')}-${(userCpf ? userCpf.replace(/\D/g, '').slice(-4) : tx.profile_id.slice(0, 4)).toUpperCase()}`
               });
             }
           }
@@ -7884,13 +8079,14 @@ export const businessRules = {
       const inss = 0; // 0% INSS intermediacao
       const baseIrpf = Math.max(0, totalBruto - inss);
 
-      // Calculo do IRPF se aplicável
+      // Calculo do IRPF conforme regra de contabilidade (Isenção até R$ 5.000,00)
       let descontoIrpf = 0;
-      if (!isPJ && baseIrpf > 2259.20) {
-        if (baseIrpf <= 2826.65) descontoIrpf = baseIrpf * 0.075 - 169.44;
-        else if (baseIrpf <= 3751.05) descontoIrpf = baseIrpf * 0.15 - 381.44;
-        else if (baseIrpf <= 4664.68) descontoIrpf = baseIrpf * 0.225 - 662.77;
-        else descontoIrpf = baseIrpf * 0.275 - 896.00;
+      if (!isPJ && baseIrpf > 5000.00) {
+        if (baseIrpf <= 7500.00) {
+          descontoIrpf = (baseIrpf - 5000.00) * 0.15;
+        } else {
+          descontoIrpf = ((7500.00 - 5000.00) * 0.15) + ((baseIrpf - 7500.00) * 0.275);
+        }
         descontoIrpf = Math.max(0, parseFloat(descontoIrpf.toFixed(2)));
       }
 

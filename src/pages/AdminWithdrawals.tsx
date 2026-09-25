@@ -32,6 +32,7 @@ import {
   FolderArchive,
   FileSpreadsheet,
   BarChart3,
+  QrCode,
   X
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
@@ -267,34 +268,96 @@ export default function AdminWithdrawals() {
     }
   };
 
-  const handleOpenArchivedStatementModal = (archivedRecord: any) => {
-    // Monta o objeto de demonstrativo a partir do registro arquivado
-    setStatementData({
-      refMonth: archivedRecord.refMonth,
-      periodLabel: archivedRecord.periodLabel,
-      paymentDateLabel: archivedRecord.paymentDateLabel,
-      user: {
-        id: archivedRecord.userId,
-        name: archivedRecord.userName,
-        cpf: archivedRecord.userCpf,
-        pixKey: archivedRecord.userPixKey,
-        isPJ: archivedRecord.isPJ
-      },
-      g0Value: archivedRecord.g0Value,
-      g1Value: archivedRecord.g1Value,
-      g2Value: archivedRecord.g2Value,
-      mensalBruto: archivedRecord.mensalBruto,
-      anualBruto: archivedRecord.anualBruto,
-      isAnnualPaymentCycle: (archivedRecord.anualBruto || 0) > 0,
-      totalBruto: archivedRecord.totalBruto,
-      inss: archivedRecord.inss,
-      baseIRPF: Math.max(0, archivedRecord.totalBruto - archivedRecord.inss),
-      irrf: archivedRecord.irrf,
-      liquido: archivedRecord.liquido,
-      receiptUrl: archivedRecord.receiptUrl,
-      status: archivedRecord.status
-    });
-    setIsStatementModalOpen(true);
+  const handleOpenArchivedStatementModal = async (archivedRecord: any) => {
+    try {
+      setLoadingStatement(true);
+      setIsStatementModalOpen(true);
+      const uid = archivedRecord.userId || archivedRecord.profileId || archivedRecord.profile_id;
+      const refM = archivedRecord.refMonth || selectedArchiveMonth;
+      const [yStr, mStr] = (refM || '').split('-');
+      const yNum = parseInt(yStr, 10) || new Date().getFullYear();
+      const mNum = parseInt(mStr, 10) || (new Date().getMonth() + 1);
+
+      const statement = await businessRules.getConsolidatedFinancialStatement(uid, yNum, mNum);
+      if (statement && (statement.beneficiaryName || statement.totalBruto > 0 || statement.liquido > 0)) {
+        setStatementData({
+          ...statement,
+          refMonth: statement.refMonth || refM,
+          periodLabel: `PERÍODO DE ${statement.periodoStr || archivedRecord.periodLabel || ''}`,
+          paymentDateLabel: statement.previsaoPagamentoStr || archivedRecord.paymentDateLabel || '',
+          user: {
+            id: statement.userId || uid,
+            name: statement.beneficiaryName || archivedRecord.userName || 'Afiliado Autônomo',
+            cpf: statement.cpfCnpj || archivedRecord.userCpf || '',
+            pixKey: statement.pixKey || archivedRecord.userPixKey || '',
+            isPJ: statement.isPJ ?? archivedRecord.isPJ ?? false
+          },
+          mensalMmnBruto: statement.brutoMensalMmn || 0,
+          mensalRevendedorBruto: statement.brutoMensalRevendedor || 0,
+          anualMmnBruto: statement.brutoAnualMmn || 0,
+          anualRevendedorBruto: statement.brutoAnualRevendedor || 0,
+          mensalBruto: (statement.brutoMensalMmn || 0) + (statement.brutoMensalRevendedor || 0) || Math.abs(archivedRecord.mensalBruto || archivedRecord.totalBruto || 0),
+          anualBruto: (statement.brutoAnualMmn || 0) + (statement.brutoAnualRevendedor || 0),
+          totalBruto: statement.totalBruto || Math.abs(archivedRecord.totalBruto || 0),
+          inss: statement.inss || archivedRecord.inss || 0,
+          baseIRPF: statement.baseIrrf || Math.max(0, (statement.totalBruto || 0) - (statement.inss || 0)),
+          irrf: statement.irrf || archivedRecord.irrf || 0,
+          liquido: statement.liquido || Math.abs(archivedRecord.liquido || 0),
+          adiantamento: Math.abs(statement.adiantamento || archivedRecord.adiantamento || 0),
+          receiptUrl: archivedRecord.receiptUrl || statement.receiptUrl || null,
+          status: 'Pago'
+        });
+      } else {
+        // Fallback usando o próprio registro arquivado com valores absolutos e formatados
+        const absBruto = Math.abs(archivedRecord.totalBruto || archivedRecord.mensalBruto || archivedRecord.liquido || 0);
+        const absLiq = Math.abs(archivedRecord.liquido !== undefined ? archivedRecord.liquido : absBruto);
+        setStatementData({
+          refMonth: refM,
+          periodLabel: archivedRecord.periodLabel || `PERÍODO DE 01.${mStr} a 30.${mStr}.${yStr}`,
+          paymentDateLabel: archivedRecord.paymentDateLabel || `10.${String(mNum === 12 ? 1 : mNum + 1).padStart(2, '0')}.${mNum === 12 ? yNum + 1 : yNum}`,
+          user: {
+            id: uid,
+            name: archivedRecord.userName || archivedRecord.affiliateName || 'Afiliado Autônomo',
+            cpf: archivedRecord.userCpf || archivedRecord.cpfCnpj || '',
+            pixKey: archivedRecord.userPixKey || archivedRecord.pixKey || '',
+            isPJ: archivedRecord.isPJ ?? false
+          },
+          mensalBruto: absBruto,
+          totalBruto: absBruto,
+          inss: Math.abs(archivedRecord.inss || 0),
+          baseIRPF: Math.max(0, absBruto - Math.abs(archivedRecord.inss || 0)),
+          irrf: Math.abs(archivedRecord.irrf || 0),
+          liquido: absLiq,
+          receiptUrl: archivedRecord.receiptUrl || null,
+          status: 'Pago'
+        });
+      }
+    } catch (e) {
+      console.error("Erro ao carregar demonstrativo arquivado:", e);
+      const absBruto = Math.abs(archivedRecord.totalBruto || archivedRecord.liquido || 0);
+      setStatementData({
+        refMonth: archivedRecord.refMonth || selectedArchiveMonth,
+        periodLabel: archivedRecord.periodLabel || 'Demonstrativo Mensal',
+        paymentDateLabel: archivedRecord.paymentDateLabel || '10/00',
+        user: {
+          id: archivedRecord.userId,
+          name: archivedRecord.userName || archivedRecord.affiliateName || 'Afiliado Autônomo',
+          cpf: archivedRecord.userCpf || '',
+          pixKey: archivedRecord.userPixKey || '',
+          isPJ: archivedRecord.isPJ ?? false
+        },
+        mensalBruto: absBruto,
+        totalBruto: absBruto,
+        inss: 0,
+        baseIRPF: absBruto,
+        irrf: 0,
+        liquido: Math.abs(archivedRecord.liquido || absBruto),
+        receiptUrl: archivedRecord.receiptUrl || null,
+        status: 'Pago'
+      });
+    } finally {
+      setLoadingStatement(false);
+    }
   };
 
   const handleExportScheduledPixCSV = () => {
@@ -415,6 +478,14 @@ export default function AdminWithdrawals() {
     let splitDetails: any = null;
 
     if (payoutType === 'mensal') {
+      if ((userItem.monthlyLiquid || 0) <= 0 || (userItem.monthlyPending || 0) <= 0) {
+        toast.error('Este repasse mensal já foi quitado/adiantado e não possui saldo pendente.');
+        return;
+      }
+      if (userItem.hasPendingAdvance) {
+        toast.error('Este usuário possui uma solicitação de adiantamento pendente. Processe-a na aba Adiantamentos.');
+        return;
+      }
       amountToPay = userItem.monthlyLiquid !== undefined ? userItem.monthlyLiquid : userItem.monthlyPending;
       grossAmount = userItem.monthlyPending;
       inssAmount = userItem.monthlyInss || 0;
@@ -478,6 +549,43 @@ export default function AdminWithdrawals() {
     setIsPaymentModalOpen(true);
   };
 
+  // Abrir PaymentModal para pagamento individual de item do Relatório de Cashback Anual
+  const handleOpenAnnualPaymentModal = (annualItem: any) => {
+    const amountToPay = Number(annualItem.liquidoReceber || annualItem.totalBruto || 0);
+    if (amountToPay <= 0) {
+      toast.error('Valor líquido de pagamento zerado.');
+      return;
+    }
+
+    const record = {
+      payeeId: annualItem.fullId,
+      payeeName: annualItem.name,
+      payeeCpf: annualItem.chavePix?.includes('@') ? '' : annualItem.chavePix,
+      payeePixKey: annualItem.chavePix,
+      payeeWhatsapp: '',
+      orderId: `ANUAL-${annualItem.refMonth}-${annualItem.id}`,
+      repasse: amountToPay,
+      bruto: Number(annualItem.totalBruto || 0),
+      inss: 0,
+      irrf: Number(annualItem.descontoIrpf || 0),
+      is_pj: annualItem.isPJ,
+      payoutType: 'anual',
+      viewCategory: 'network',
+      descLabel: `Cashback Anual (${annualItem.mesReferencia})`,
+      splitDetails: {
+        annual: {
+          bruto: Number(annualItem.totalBruto || 0),
+          inss: 0,
+          irrf: Number(annualItem.descontoIrpf || 0),
+          liquido: amountToPay
+        }
+      }
+    };
+
+    setSelectedForPayment([record]);
+    setIsPaymentModalOpen(true);
+  };
+
   // Confirmação vinda da PaymentModal
   const handleConfirmPaymentFromModal = async (payeeGroup: any) => {
     try {
@@ -493,6 +601,7 @@ export default function AdminWithdrawals() {
         toast.success(`Adiantamento de R$ ${record.repasse.toFixed(2).replace('.', ',')} liquidado com sucesso!`);
         setIsPaymentModalOpen(false);
         await loadAdvances();
+        await loadBalances(viewTab);
         return;
       }
 
@@ -1464,21 +1573,25 @@ export default function AdminWithdrawals() {
                           </span>
                         )}
                         <button
-                          disabled={!w.isEligible || (w.monthlyLiquid || 0) <= 0 || !isMonthlyPayoutWindow}
+                          disabled={!w.isEligible || (w.monthlyLiquid || 0) <= 0 || !isMonthlyPayoutWindow || w.hasPendingAdvance}
                           onClick={() => handleOpenPaymentModal(w, 'mensal')}
                           title={
                             !isMonthlyPayoutWindow
                               ? 'Bloqueado: Liberado a partir do dia 10 de cada mês (antes disso apenas via Adiantamento)'
-                              : (w.monthlyLiquid || 0) <= 0
-                                ? 'Saldo mensal quitado / sem pendência'
-                                : 'Pagar Repasse Mensal'
+                              : w.hasPendingAdvance
+                                ? 'Há uma solicitação de adiantamento pendente na aba Adiantamentos'
+                                : (w.monthlyLiquid || 0) <= 0
+                                  ? 'Saldo mensal quitado / adiantado'
+                                  : 'Pagar Repasse Mensal'
                           }
                           className={`mt-2 w-full py-1.5 px-3 rounded-xl text-[9px] font-black uppercase tracking-wider transition-all cursor-pointer flex items-center justify-center gap-1 ${
                             !isMonthlyPayoutWindow
                               ? 'bg-slate-800/90 text-slate-400 border border-slate-700/60 cursor-not-allowed opacity-75'
                               : (w.monthlyLiquid || 0) <= 0
                                 ? 'bg-slate-800/60 text-slate-500 cursor-not-allowed opacity-50'
-                                : 'bg-emerald-600 hover:bg-emerald-500 text-white disabled:opacity-30 disabled:pointer-events-none shadow-sm'
+                                : w.hasPendingAdvance
+                                  ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30 cursor-not-allowed'
+                                  : 'bg-emerald-600 hover:bg-emerald-500 text-white disabled:opacity-30 disabled:pointer-events-none shadow-sm'
                           }`}
                         >
                           {!isMonthlyPayoutWindow ? (
@@ -1487,6 +1600,8 @@ export default function AdminWithdrawals() {
                             </>
                           ) : (w.monthlyLiquid || 0) <= 0 ? (
                             'Quitado'
+                          ) : w.hasPendingAdvance ? (
+                            'Adiant. Pendente'
                           ) : (
                             'Pagar Mensal'
                           )}
@@ -1999,70 +2114,84 @@ export default function AdminWithdrawals() {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-white/5">
-                        {paginatedList.map((a: any) => (
-                          <tr key={a.id} className="hover:bg-white/5 transition-colors">
-                            <td className="py-4 px-3 whitespace-nowrap">
-                              <div className="flex flex-col">
-                                <span className="font-bold text-slate-300 font-mono text-[11px]">{a.periodLabel}</span>
-                                <span className="text-[10px] text-amber-400 font-mono">Pgto: {a.paymentDateLabel}</span>
-                              </div>
-                            </td>
-                            <td className="py-4 px-3">
-                              <div className="flex flex-col">
-                                <span className="font-bold text-white uppercase">{a.userName}</span>
-                                <span className="text-[10px] text-slate-500 font-mono">CPF: {a.userCpf}</span>
-                              </div>
-                            </td>
-                            <td className="py-4 px-3 text-center whitespace-nowrap">
-                              {a.isPJ ? (
-                                <span className="px-2 py-0.5 rounded text-[9px] font-black uppercase bg-purple-500/10 text-purple-300 border border-purple-500/20">
-                                  PJ
-                                </span>
-                              ) : (
-                                <span className="px-2 py-0.5 rounded text-[9px] font-black uppercase bg-amber-500/10 text-amber-300 border border-amber-500/20">
-                                  PF
-                                </span>
-                              )}
-                            </td>
-                            <td className="py-4 px-3 text-right font-mono font-bold text-white whitespace-nowrap">
-                              R$ {(a.totalBruto || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                            </td>
-                            <td className="py-4 px-3 text-right font-mono font-bold text-amber-400 whitespace-nowrap">
-                              {(a.inss || 0) > 0 ? `- R$ ${(a.inss).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : 'R$ 0,00'}
-                            </td>
-                            <td className="py-4 px-3 text-right font-mono font-bold text-rose-400 whitespace-nowrap">
-                              {(a.irrf || 0) > 0 ? `- R$ ${(a.irrf).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : 'R$ 0,00'}
-                            </td>
-                            <td className="py-4 px-3 text-right font-mono font-black text-emerald-400 text-sm whitespace-nowrap">
-                              R$ {(a.liquido || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                            </td>
-                            <td className="py-4 px-3 font-mono text-slate-400 text-[11px] whitespace-nowrap">
-                              {a.userPixKey}
-                            </td>
-                            <td className="py-4 px-3 text-center whitespace-nowrap">
-                              {a.receiptUrl ? (
-                                <a 
-                                  href={a.receiptUrl} 
-                                  target="_blank" 
-                                  rel="noreferrer" 
-                                  className="inline-flex items-center gap-1 px-3 py-1 rounded-xl bg-indigo-500/20 hover:bg-indigo-500/30 text-indigo-300 font-black text-[9px] uppercase tracking-wider transition-colors"
+                        {paginatedList.map((a: any) => {
+                          const userName = a.userName || a.affiliateName || a.beneficiaryName || 'Afiliado Autônomo';
+                          const userCpf = a.userCpf || a.cpfCnpj || a.cpf || '---';
+                          const userPixKey = a.userPixKey || a.pixKey || '---';
+                          const bruto = Math.abs(Number(a.totalBruto || a.mensalBruto || a.liquido || 0));
+                          const inss = Math.abs(Number(a.inss || 0));
+                          const irrf = Math.abs(Number(a.irrf || 0));
+                          const liquido = Math.abs(Number(a.liquido !== undefined ? a.liquido : bruto));
+                          const periodLabel = a.periodLabel || a.periodoStr || `01.${selectedArchiveMonth.split('-')[1]} a 30.${selectedArchiveMonth.split('-')[1]}.${selectedArchiveMonth.split('-')[0]}`;
+                          const mNum = Number(selectedArchiveMonth.split('-')[1]) || 1;
+                          const yNum = Number(selectedArchiveMonth.split('-')[0]) || new Date().getFullYear();
+                          const paymentDateLabel = a.paymentDateLabel || a.previsaoPagamentoStr || `10.${String(mNum === 12 ? 1 : mNum + 1).padStart(2, '0')}.${mNum === 12 ? yNum + 1 : yNum}`;
+
+                          return (
+                            <tr key={a.id || a.userId} className="hover:bg-white/5 transition-colors">
+                              <td className="py-4 px-3 whitespace-nowrap">
+                                <div className="flex flex-col">
+                                  <span className="font-bold text-slate-300 font-mono text-[11px]">{periodLabel}</span>
+                                  <span className="text-[10px] text-amber-400 font-mono">Pgto: {paymentDateLabel}</span>
+                                </div>
+                              </td>
+                              <td className="py-4 px-3">
+                                <div className="flex flex-col">
+                                  <span className="font-bold text-white uppercase">{userName}</span>
+                                  <span className="text-[10px] text-slate-500 font-mono">CPF: {userCpf}</span>
+                                </div>
+                              </td>
+                              <td className="py-4 px-3 text-center whitespace-nowrap">
+                                {a.isPJ ? (
+                                  <span className="px-2 py-0.5 rounded text-[9px] font-black uppercase bg-purple-500/10 text-purple-300 border border-purple-500/20">
+                                    PJ
+                                  </span>
+                                ) : (
+                                  <span className="px-2 py-0.5 rounded text-[9px] font-black uppercase bg-amber-500/10 text-amber-300 border border-amber-500/20">
+                                    PF
+                                  </span>
+                                )}
+                              </td>
+                              <td className="py-4 px-3 text-right font-mono font-bold text-white whitespace-nowrap">
+                                R$ {bruto.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                              </td>
+                              <td className="py-4 px-3 text-right font-mono font-bold text-amber-400 whitespace-nowrap">
+                                {inss > 0 ? `- R$ ${inss.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : 'R$ 0,00'}
+                              </td>
+                              <td className="py-4 px-3 text-right font-mono font-bold text-rose-400 whitespace-nowrap">
+                                {irrf > 0 ? `- R$ ${irrf.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : 'R$ 0,00'}
+                              </td>
+                              <td className="py-4 px-3 text-right font-mono font-black text-emerald-400 text-sm whitespace-nowrap">
+                                R$ {liquido.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                              </td>
+                              <td className="py-4 px-3 font-mono text-slate-400 text-[11px] whitespace-nowrap">
+                                {userPixKey}
+                              </td>
+                              <td className="py-4 px-3 text-center whitespace-nowrap">
+                                {a.receiptUrl ? (
+                                  <a 
+                                    href={a.receiptUrl} 
+                                    target="_blank" 
+                                    rel="noreferrer" 
+                                    className="inline-flex items-center gap-1 px-3 py-1 rounded-xl bg-indigo-500/20 hover:bg-indigo-500/30 text-indigo-300 font-black text-[9px] uppercase tracking-wider transition-colors"
+                                  >
+                                    <FileText size={12} /> Recibo PIX
+                                  </a>
+                                ) : (
+                                  <span className="text-[9px] text-slate-600 font-bold uppercase">---</span>
+                                )}
+                              </td>
+                              <td className="py-4 px-3 text-center whitespace-nowrap">
+                                <button
+                                  onClick={() => handleOpenArchivedStatementModal(a)}
+                                  className="inline-flex items-center gap-1 px-3 py-1 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 font-black text-[9px] uppercase tracking-wider transition-colors cursor-pointer"
                                 >
-                                  <FileText size={12} /> Recibo PIX
-                                </a>
-                              ) : (
-                                <span className="text-[9px] text-slate-600 font-bold uppercase">---</span>
-                              )}
-                            </td>
-                            <td className="py-4 px-3 text-center whitespace-nowrap">
-                              <button
-                                onClick={() => handleOpenArchivedStatementModal(a)}
-                                className="inline-flex items-center gap-1 px-3 py-1 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 font-black text-[9px] uppercase tracking-wider transition-colors cursor-pointer"
-                              >
-                                <FileSpreadsheet size={12} /> Ver Informativo
-                              </button>
-                            </td>
-                          </tr>
-                        ))}
+                                  <FileSpreadsheet size={12} /> Ver Informativo
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })}
                       </tbody>
                     </table>
                   </div>
@@ -2725,7 +2854,7 @@ export default function AdminWithdrawals() {
                           <th className="py-4 px-3 text-right">DESCONTO IRPF</th>
                           <th className="py-4 px-3 text-right text-emerald-400">LÍQUIDO A RECEBER</th>
                           <th className="py-4 px-3 text-center">MÊS DE REFERÊNCIA</th>
-                          <th className="py-4 px-3">CHAVE PIX</th>
+                          <th className="py-4 px-3 text-center">PAGAMENTO PIX</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-white/5 font-mono">
@@ -2758,17 +2887,15 @@ export default function AdminWithdrawals() {
                             <td className="py-4 px-3 text-center text-amber-300 font-bold whitespace-nowrap">
                               {r.mesReferencia}
                             </td>
-                            <td className="py-4 px-3 text-slate-300 whitespace-nowrap">
-                              <div className="flex items-center gap-1.5">
-                                <span>{r.chavePix}</span>
-                                <button
-                                  onClick={() => copyToClipboard(r.chavePix, 'Chave PIX')}
-                                  className="p-1 hover:text-white transition-colors cursor-pointer"
-                                  title="Copiar PIX"
-                                >
-                                  <Copy size={12} />
-                                </button>
-                              </div>
+                            <td className="py-4 px-3 text-center whitespace-nowrap">
+                              <button
+                                onClick={() => handleOpenAnnualPaymentModal(r)}
+                                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 hover:text-emerald-200 border border-emerald-500/30 font-black text-[10px] uppercase tracking-wider transition-all cursor-pointer shadow-sm hover:shadow-md active:scale-95"
+                                title={`Gerar QR Code PIX para ${r.name}`}
+                              >
+                                <QrCode size={13} className="text-emerald-400" />
+                                <span>Gerar QR Code PIX</span>
+                              </button>
                             </td>
                           </tr>
                         ))}
@@ -2871,14 +2998,14 @@ export default function AdminWithdrawals() {
 
         {/* MODAL DE DEMONSTRATIVO OFICIAL: VALOR LÍQUIDO IDÊNTICO À PLANILHA */}
         {isStatementModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm overflow-y-auto">
-            <div className="bg-[#0f1523] border border-amber-500/30 w-full max-w-4xl rounded-[2.5rem] p-6 md:p-8 shadow-2xl relative space-y-6 my-8">
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 md:p-6 bg-black/85 backdrop-blur-md overflow-y-auto">
+            <div className="bg-[#0f1523] border border-amber-500/30 w-full max-w-4xl max-h-[90vh] overflow-y-auto custom-scrollbar rounded-3xl md:rounded-[2.5rem] p-5 sm:p-6 md:p-8 shadow-2xl relative space-y-6 my-auto">
               <button
                 onClick={() => {
                   setIsStatementModalOpen(false);
                   setStatementData(null);
                 }}
-                className="absolute top-6 right-6 p-2 rounded-2xl bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white transition-all cursor-pointer"
+                className="absolute top-5 right-5 p-2 rounded-2xl bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white transition-all cursor-pointer z-10"
               >
                 <X size={20} />
               </button>

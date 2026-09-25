@@ -104,15 +104,20 @@ export default function AffiliateWallet() {
     });
   }, [filteredTransactions]);
 
-  const totalsSummary = useMemo(() => {
-    const pendingList = enrichedTransactions.filter(t => t.status === 'Pendente');
-    const paidList = enrichedTransactions.filter(t => t.status === 'Pago');
-
-    const advances = enrichedTransactions.filter(t => 
-      (t.originalType === 'advance' || t.cashbackType?.includes('Adiantamento') || t.category === 'withdrawal') &&
+  const globalAdvances = useMemo(() => {
+    return transactions.filter(t => 
+      (t.originalType === 'advance' || t.cashbackType?.includes('Adiantamento') || t.category === 'withdrawal' || t.description?.toLowerCase().includes('adiantamento')) &&
       Number(t.amount || 0) < 0
     );
-    const totalAdiantamentos = advances.reduce((acc, t) => acc + Math.abs(Number(t.amount || 0)), 0);
+  }, [transactions]);
+
+  const globalTotalAdiantamentos = useMemo(() => {
+    return globalAdvances.reduce((acc, t) => acc + Math.abs(Number(t.amount || 0)), 0);
+  }, [globalAdvances]);
+
+  const totalsSummary = useMemo(() => {
+    const pendingList = enrichedTransactions.filter(t => t.status === 'Pendente' || (t.status !== 'Pago' && t.status !== 'Cancelado' && t.status !== 'Recusado'));
+    const paidList = enrichedTransactions.filter(t => t.status === 'Pago' || t.status === 'completed');
 
     const calcGroup = (list: any[]) => {
       // Filtrar apenas comissões ativas/reais geradas por contratos (sem saques/resgates negativos e sem cancelamentos/recusas)
@@ -152,18 +157,18 @@ export default function AffiliateWallet() {
     const paid = calcGroup(paidList);
     const all = calcGroup(enrichedTransactions);
 
-    // Saldo mensal disponível para saque/pagamento após abater adiantamentos
-    const saldoMensalAReceber = Math.max(0, pending.totalMensal - totalAdiantamentos);
+    // Saldo mensal disponível para saque/pagamento após abater adiantamentos globais
+    const saldoMensalAReceber = Math.max(0, all.totalMensal - globalTotalAdiantamentos);
 
     return {
       pending,
       paid,
       all,
-      totalAdiantamentos,
+      totalAdiantamentos: globalTotalAdiantamentos,
       saldoMensalAReceber,
       poupancaAnualAcumulada: all.totalAnual
     };
-  }, [enrichedTransactions]);
+  }, [enrichedTransactions, globalTotalAdiantamentos]);
 
   const totalsPending = totalsSummary.pending;
 
@@ -747,7 +752,7 @@ export default function AffiliateWallet() {
                                     ? 'bg-rose-50 text-rose-600 border border-rose-200' 
                                     : t.status === 'Pago'
                                       ? 'bg-emerald-50 text-emerald-600 border border-emerald-100'
-                                      : t.cashbackType?.includes('Mensal') && totalsSummary.totalAdiantamentos >= totalsSummary.all.totalMensal && totalsSummary.totalAdiantamentos > 0
+                                      : (t.status === 'Adiantado' || t.status === 'ADIANTADO' || (t.cashbackType?.includes('Mensal') && globalTotalAdiantamentos > 0))
                                         ? 'bg-amber-100 text-amber-900 border border-amber-300'
                                         : t.cashbackType?.includes('Anual')
                                           ? 'bg-indigo-50 text-indigo-700 border border-indigo-200'
@@ -756,7 +761,7 @@ export default function AffiliateWallet() {
                                   {t.status === 'Recusado' ? 'Recusado' : 
                                    t.status === 'Cancelado' ? 'Cancelado' : 
                                    t.status === 'Pago' ? 'Pago' : 
-                                   t.cashbackType?.includes('Mensal') && totalsSummary.totalAdiantamentos >= totalsSummary.all.totalMensal && totalsSummary.totalAdiantamentos > 0 ? 'Adiantado' :
+                                   (t.status === 'Adiantado' || t.status === 'ADIANTADO' || (t.cashbackType?.includes('Mensal') && globalTotalAdiantamentos > 0)) ? 'Adiantado' :
                                    t.cashbackType?.includes('Anual') ? 'Acumulando' :
                                    'Pendente'}
                                 </span>
@@ -818,10 +823,10 @@ export default function AffiliateWallet() {
                               </div>
                             </td>
                             <td className="px-5 py-4 text-right font-mono text-xs text-slate-200">
-                              {totalsSummary.pending.totalContratos.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                              {totalsSummary.all.totalContratos.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                             </td>
                             <td className="px-4 py-4 text-center font-mono text-xs text-indigo-300">
-                              {totalsSummary.pending.percentualRepasse > 0 ? `${totalsSummary.pending.percentualRepasse.toFixed(2)}%` : '---'}
+                              {totalsSummary.all.percentualRepasse > 0 ? `${totalsSummary.all.percentualRepasse.toFixed(2)}%` : '---'}
                             </td>
                             <td className="px-5 py-4 text-right font-mono text-sm text-amber-400 font-black">
                               {totalsSummary.saldoMensalAReceber.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}

@@ -15,7 +15,9 @@ import {
   Building2,
   FileText,
   Lock,
-  Sparkles
+  Sparkles,
+  Gift,
+  ArrowRight
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { Link, useNavigate } from 'react-router-dom';
@@ -292,74 +294,48 @@ export default function AffiliateDashboard() {
           </motion.div>
         </div>
 
-        {/* Action & Links Section */}
+        {/* Banner Ganha & Ganha + Desempenho da Rede */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           
-          {/* Referral Links Card */}
-          <div className="lg:col-span-2 bg-white rounded-[2.5rem] border border-slate-100 shadow-sm p-10 relative overflow-hidden group">
-            <div className="absolute top-0 right-0 p-12 opacity-[0.03] group-hover:scale-110 transition-transform duration-700 pointer-events-none">
-               <Target size={240} className="text-midnight" />
+          {/* Card Promocional Ganha & Ganha */}
+          <div className="lg:col-span-2 bg-gradient-to-br from-[#0B1528] via-[#0F224A] to-[#0A3275] rounded-[2.5rem] p-8 md:p-10 text-white shadow-xl flex flex-col justify-between relative overflow-hidden border border-blue-900/30">
+            <div className="absolute top-0 right-0 w-80 h-80 bg-primary-blue/20 rounded-full blur-[80px] pointer-events-none" />
+            <div className="absolute -bottom-6 -right-6 opacity-5 pointer-events-none">
+              <Gift size={240} />
             </div>
 
-            <div className="relative z-10 space-y-8">
+            <div className="relative z-10 space-y-6">
+              <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-400/30 text-emerald-400 text-xs font-black uppercase tracking-widest">
+                <Sparkles size={14} className="animate-pulse" />
+                Programa Oficial
+              </div>
+
               <div>
-                <h2 className="text-2xl font-black text-midnight tracking-tight mb-2 italic uppercase">Indique e Ganhe</h2>
-                <p className="text-slate-500 font-medium">
-                  Indique uma vez, ganhe sempre. <br />
-                  Receba Cashback mensal e anual recorrentes sobre todas as compras que seus indicados fizerem.
+                <h2 className="text-2xl md:text-3xl font-black tracking-tight italic uppercase">
+                  Código <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-sky-300">Ganha & Ganha</span>
+                </h2>
+                <p className="text-slate-300 text-sm font-medium mt-2 max-w-xl leading-relaxed">
+                  Divulgue seu link e código oficial Ganha & Ganha para expandir sua rede. Receba Cashback mensal e anual recorrentes sobre todas as adesões do ecossistema.
                 </p>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {links.map((link: any) => (
-                  <div key={link.id} className="bg-white p-6 rounded-3xl border border-slate-200 group/link hover:border-primary-blue hover:shadow-xl hover:shadow-primary-blue/10 transition-all flex flex-col justify-between">
-                    <div>
-                      <p className="text-[10px] font-black text-primary-blue uppercase tracking-widest mb-2">{link.name}</p>
-                      <p className="text-xs text-slate-600 font-bold mb-4">{link.description}</p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                       <div className="flex-1 bg-slate-50 border border-slate-100 px-4 py-3 rounded-xl font-mono text-[10px] text-slate-500 overflow-hidden truncate">
-                          {link.url}
-                       </div>
-                       <button 
-                         onClick={() => copyToClipboard(link.url, 'Link')}
-                         title="Copiar Link"
-                         className="p-3 bg-white border border-slate-200 rounded-xl hover:border-primary-blue hover:text-primary-blue transition-all"
-                        >
-                         <Copy size={18} />
-                       </button>
-                    </div>
-                  </div>
-                ))}
-
-                {/* Card do Código de Indicação com opção de copiar */}
-                <div className="bg-white p-6 rounded-3xl border border-slate-200 group/code hover:border-emerald-500 hover:shadow-xl hover:shadow-emerald-500/10 transition-all flex flex-col justify-between">
-                  <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <p className="text-[10px] font-black text-emerald-600 uppercase tracking-widest">Código de Indicação</p>
-                      <span className="text-[9px] font-black text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-lg uppercase">Seu Código G1</span>
-                    </div>
-                    <p className="text-xs text-slate-600 font-bold mb-4">Compartilhe para preenchimento direto no cadastro</p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="flex-1 bg-emerald-50/60 border border-emerald-100 px-4 py-3 rounded-xl font-mono text-sm font-black text-emerald-700 tracking-wider overflow-hidden truncate">
-                      {profile?.referral_code || (user?.id ? user.id.substring(0, 6).toUpperCase() : '---')}
-                    </div>
-                    <button 
-                      onClick={() => copyToClipboard(profile?.referral_code || user?.id || '', 'Código')}
-                      title="Copiar Código de Indicação"
-                      className="p-3 bg-white border border-slate-200 rounded-xl hover:border-emerald-500 hover:text-emerald-600 hover:bg-emerald-50 transition-all text-slate-500 shrink-0"
-                    >
-                      <Copy size={18} />
-                    </button>
-                  </div>
+              <div className="flex flex-wrap items-center gap-4 pt-2">
+                <div className="bg-white/10 border border-white/15 px-5 py-3 rounded-2xl flex items-center gap-3 backdrop-blur-md">
+                  <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest">Seu Código G1:</span>
+                  <span className="font-mono text-base font-black text-emerald-400 tracking-wider">
+                    {profile?.referral_code || (user?.id ? user.id.substring(0, 6).toUpperCase() : '---')}
+                  </span>
                 </div>
-              </div>
 
-              <button className="flex items-center gap-3 text-sm font-black text-primary-blue bg-primary-blue/5 px-8 py-4 rounded-2xl hover:bg-primary-blue hover:text-white transition-all">
-                Ver Todos os Links de Indicação
-                <Share2 size={18} />
-              </button>
+                <Link
+                  to="/afiliado/codigo-ganha-ganha"
+                  className="inline-flex items-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-slate-950 px-6 py-3.5 rounded-2xl font-black text-xs uppercase tracking-widest transition-all shadow-lg shadow-emerald-500/20 active:scale-95"
+                >
+                  <Gift size={16} />
+                  Acessar Aba Ganha & Ganha
+                  <ArrowRight size={14} />
+                </Link>
+              </div>
             </div>
           </div>
 
@@ -394,7 +370,7 @@ export default function AffiliateDashboard() {
                </div>
              </div>
 
-             <div className="relative z-10 mt-12 bg-white/5 border border-white/10 rounded-3xl p-6">
+             <div className="relative z-10 mt-8 bg-white/5 border border-white/10 rounded-3xl p-5">
                 <div className="flex items-center gap-4">
                    <div className="size-10 rounded-2xl bg-primary-blue flex items-center justify-center text-white">
                      <Users size={20} />

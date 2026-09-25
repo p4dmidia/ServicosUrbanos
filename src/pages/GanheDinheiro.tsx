@@ -121,7 +121,7 @@ export default function GanheDinheiro() {
                 </div>
                 <h3 className="text-xl font-bold mb-3 text-white">1. Selecione um Plano</h3>
                 <p className="text-slate-400 leading-relaxed text-sm font-medium">
-                  Adira a um dos planos de licenciamento ativos para garantir sua proteção e liberar seu link de indicação.
+                  Adira a um dos planos de licenciamento ativos para garantir sua proteção e liberar seu Código Ganha & Ganha.
                 </p>
               </div>
 
@@ -129,9 +129,9 @@ export default function GanheDinheiro() {
                 <div className="size-16 bg-accent/10 border border-accent/20 rounded-2xl flex items-center justify-center text-accent mb-6">
                   <Users size={32} />
                 </div>
-                <h3 className="text-xl font-bold mb-3 text-white">2. Indique Amigos</h3>
+                <h3 className="text-xl font-bold mb-3 text-white">2. Ganha & Ganha</h3>
                 <p className="text-slate-400 leading-relaxed text-sm font-medium">
-                  Divulgue seu link exclusivo. Todos que aderirem terão os mesmos benefícios de proteção, sorteios e afiliação.
+                  Divulgue seu código ou link exclusivo. Todos que aderirem terão os mesmos benefícios de proteção, sorteios e afiliação.
                 </p>
               </div>
 
@@ -153,7 +153,7 @@ export default function GanheDinheiro() {
           <div className="max-w-7xl mx-auto px-6 lg:px-20 space-y-16">
             <div className="text-center max-w-3xl mx-auto space-y-4">
               <h2 className="text-3xl md:text-5xl font-black uppercase tracking-tighter">
-                Calculadora de Ganhos Simplificada
+                Calculadora Ganha & Ganha
               </h2>
               <p className="text-slate-400 font-medium">
                 Arraste os seletores abaixo ou digite os valores para projetar os repasses de rede imediatos e comparar a diferença tributária entre Pessoa Física e MEI.
@@ -167,13 +167,13 @@ export default function GanheDinheiro() {
                   <div className="size-10 rounded-xl bg-accent/10 border border-accent/20 flex items-center justify-center text-accent">
                     <Calculator size={20} />
                   </div>
-                  <h3 className="text-lg font-black text-white uppercase tracking-tight">Configurações da Rede</h3>
+                  <h3 className="text-lg font-black text-white uppercase tracking-tight">Configurações Ganha & Ganha</h3>
                 </div>
 
                 {/* Total Membros Input & Slider */}
                 <div className="space-y-4">
                   <div className="flex justify-between items-center">
-                    <label className="text-xs font-black text-slate-400 uppercase tracking-wider">Total de Membros (G0 a G2)</label>
+                    <label className="text-xs font-black text-slate-400 uppercase tracking-wider">Equipe Ganha & Ganha (G0 a G2)</label>
                     <input
                       type="text"
                       inputMode="numeric"
@@ -242,7 +242,7 @@ export default function GanheDinheiro() {
                   <div className="bg-white/5 border border-white/10 px-6 py-3 rounded-2xl flex items-center gap-3">
                     <Users size={20} className="text-accent" />
                     <div>
-                      <p className="text-[9px] text-slate-500 font-black uppercase tracking-wider">Tamanho da Rede</p>
+                      <p className="text-[9px] text-slate-500 font-black uppercase tracking-wider">Equipe Ganha & Ganha</p>
                       <p className="text-sm font-black text-white">{totalMembros.toLocaleString('pt-BR')} Parceiros</p>
                     </div>
                   </div>
@@ -357,7 +357,7 @@ export default function GanheDinheiro() {
               to="/cadastro"
               className="bg-accent hover:bg-emerald-500 text-midnight px-16 py-6 rounded-2xl text-2xl font-black transition-all hover:scale-105 active:scale-95 shadow-2xl shadow-accent/20 uppercase tracking-tighter inline-block"
             >
-              Cadastre-se e Pegue seu Link
+              Cadastre-se e Ative seu Código Ganha & Ganha
             </Link>
           </div>
         </section>

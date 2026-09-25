@@ -727,10 +727,10 @@ export default function AffiliateProfile() {
                 </select>
               </div>
 
-              {/* Código de Indicação (Readonly) */}
+              {/* Código Ganha & Ganha (Readonly) */}
               <div className="space-y-1.5">
                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
-                  Seu Link de Indicação
+                  Seu Código Ganha & Ganha
                 </label>
                 <div className="relative">
                   <TrendingUp className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300" size={18} />

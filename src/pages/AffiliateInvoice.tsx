@@ -1112,7 +1112,7 @@ export default function AffiliateInvoice() {
           <div className="flex items-center gap-2.5 self-stretch sm:self-auto justify-between sm:justify-end">
             {!isDefaultCompetence && (
               <button
-                onClick={handleResetToCurrentMonth}
+                onClick={handleResetToCurrent}
                 className="px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-[10px] uppercase tracking-wider transition-all cursor-pointer"
               >
                 Mês Atual

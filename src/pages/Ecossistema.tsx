@@ -113,7 +113,7 @@ export default function Ecossistema() {
                   <motion.div whileHover={{ scale: 1.1 }} className="size-16 lg:size-20 bg-slate-900 shadow-2xl rounded-3xl flex items-center justify-center text-accent border border-white/10">
                     <TrendingUp size={32} />
                   </motion.div>
-                  <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Indique & Ganhe</span>
+                  <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Código Ganha & Ganha</span>
                 </div>
               </div>
             </div>
@@ -189,7 +189,7 @@ export default function Ecossistema() {
                 </div>
               </motion.div>
 
-              {/* Card 4: Ganhos Financeiros – Indique e Ganhe */}
+              {/* Card 4: Ganhos Financeiros – Código Ganha & Ganha */}
               <motion.div
                 whileHover={{ y: -6 }}
                 className="bg-slate-900/50 border border-white/10 rounded-[2rem] p-8 shadow-2xl flex flex-col justify-between h-full group"
@@ -198,9 +198,9 @@ export default function Ecossistema() {
                   <div className="size-12 rounded-2xl bg-accent/10 border border-accent/20 flex items-center justify-center text-accent mb-6">
                     <TrendingUp size={24} />
                   </div>
-                  <h3 className="text-xl font-bold text-white mb-3">4. Indique e Ganhe</h3>
+                  <h3 className="text-xl font-bold text-white mb-3">4. Código Ganha & Ganha</h3>
                   <p className="text-slate-400 text-sm leading-relaxed font-medium">
-                    Convide novos segurados através de seu link exclusivo de afiliado. Cada nova adesão expande sua rede de indicações, gerando bonificações financeiras recorrentes e vitalícias pagas diretamente na sua conta.
+                    Convide novos segurados através de seu link ou código exclusivo Ganha & Ganha. Cada nova adesão expande sua rede, gerando bonificações financeiras recorrentes e vitalícias pagas diretamente na sua conta.
                   </p>
                 </div>
                 <div className="pt-6 border-t border-white/5 mt-6 text-xs text-slate-500 font-bold uppercase flex justify-between">

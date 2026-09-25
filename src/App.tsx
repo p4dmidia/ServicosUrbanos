@@ -18,6 +18,7 @@ import AdminFinancials from './pages/AdminFinancials';
 import AdminProducts from './pages/AdminProducts';
 import AdminOrders from './pages/AdminOrders';
 import AffiliateDashboard from './pages/AffiliateDashboard';
+import AffiliateGanhaGanha from './pages/AffiliateGanhaGanha';
 import AffiliateResellerDashboard from './pages/AffiliateResellerDashboard';
 import AffiliateNetwork from './pages/AffiliateNetwork';
 import AffiliateWallet from './pages/AffiliateWallet';
@@ -114,6 +115,14 @@ export default function App() {
             <Route 
               path="/afiliado/dashboard" 
               element={<ProtectedRoute allowedRoles={['affiliate', 'owner', 'manager', 'admin', 'regional_reseller']}><AffiliateDashboard /></ProtectedRoute>} 
+            />
+            <Route 
+              path="/afiliado/codigo-ganha-ganha" 
+              element={<ProtectedRoute allowedRoles={['affiliate', 'owner', 'manager', 'admin', 'regional_reseller']}><AffiliateGanhaGanha /></ProtectedRoute>} 
+            />
+            <Route 
+              path="/afiliado/ganha-ganha" 
+              element={<ProtectedRoute allowedRoles={['affiliate', 'owner', 'manager', 'admin', 'regional_reseller']}><AffiliateGanhaGanha /></ProtectedRoute>} 
             />
             <Route 
               path="/afiliado/revendedor" 

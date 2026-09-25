@@ -1383,12 +1383,12 @@ export default function Cadastro() {
                                 </div>
                             </div>
 
-                            {/* Seção 5: Indicações e Liderança Regional (visível apenas quando há indicação ativa via link) */}
+                            {/* Seção 5: Código Ganha & Ganha e Liderança Regional (visível apenas quando há indicação ativa via link) */}
                             {isIndicatedViaLink && referrerName && (
                                 <div className="pt-4 space-y-6">
                                     <div className="flex items-center gap-3 mb-2">
                                         <div className="size-1.5 rounded-full bg-emerald-500" />
-                                        <h3 className="text-[11px] font-black uppercase tracking-widest text-midnight">05. Indicação e Liderança Regional</h3>
+                                        <h3 className="text-[11px] font-black uppercase tracking-widest text-midnight">05. Código Ganha & Ganha e Liderança Regional</h3>
                                     </div>
 
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -1399,12 +1399,12 @@ export default function Cadastro() {
                                             </div>
                                             <div className="min-w-0">
                                                 <div className="flex items-center gap-2 mb-0.5">
-                                                    <span className="text-[8px] font-black text-emerald-600 uppercase tracking-widest leading-none">Indicador Confirmado</span>
+                                                    <span className="text-[8px] font-black text-emerald-600 uppercase tracking-widest leading-none">Código Ganha & Ganha Ativo</span>
                                                     <span className="text-[7px] bg-emerald-500/10 text-emerald-700 px-1.5 py-0.5 rounded font-black uppercase">Verificado</span>
                                                 </div>
                                                 <p className="text-sm font-black text-midnight uppercase truncate">{referrerName}</p>
                                                 {referralCode && (
-                                                    <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Cód: {referralCode}</p>
+                                                    <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Cód Ganha & Ganha: {referralCode}</p>
                                                 )}
                                             </div>
                                         </div>

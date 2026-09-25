@@ -523,7 +523,7 @@ export default function Home() {
             </div>
           </section>
 
-          {/* SECTION 4: Ganhos Financeiros – Indique e Ganhe */}
+          {/* SECTION 4: Ganhos Financeiros – Código Ganha & Ganha */}
           <section className="py-14 sm:py-20 lg:py-28 border-t border-white/5 bg-slate-950/20">
             <div className="max-w-7xl mx-auto px-6 lg:px-20">
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 lg:gap-16 items-center">
@@ -535,7 +535,7 @@ export default function Home() {
                   transition={{ duration: 0.6 }}
                   className="flex flex-col gap-6 text-left"
                 >
-                  <span className="text-accent font-black uppercase text-sm tracking-widest">04. Ganhos Financeiros – Indique e Ganhe</span>
+                  <span className="text-accent font-black uppercase text-sm tracking-widest">04. Ganhos Financeiros – Código Ganha & Ganha</span>
                   <h2 className="text-3xl md:text-5xl font-extrabold text-white leading-tight">
                     “Ganhe protegendo e convidando.”
                   </h2>
@@ -605,7 +605,7 @@ export default function Home() {
                   <div className="relative z-10 w-full flex justify-center lg:justify-end items-center">
                     <img
                       src="/indique-ganhe-rede.png"
-                      alt="Ganhos Financeiros e Indique e Ganhe CaZa dos Sorteios"
+                      alt="Ganhos Financeiros e Código Ganha & Ganha CaZa dos Sorteios"
                       className="w-full max-w-[310px] sm:max-w-[400px] lg:max-w-none lg:w-[114%] xl:w-[122%] h-auto object-contain drop-shadow-[0_20px_50px_rgba(3,29,110,0.65)] transform translate-x-0 lg:translate-x-14 xl:translate-x-18"
                     />
                   </div>

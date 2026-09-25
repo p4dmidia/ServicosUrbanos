@@ -845,11 +845,11 @@ export default function Cadastro() {
                                             <span className={`text-[9px] font-black uppercase px-2.5 py-1 rounded-lg ${
                                                 personType === 'PF' ? 'bg-emerald-500 text-white shadow-sm' : 'bg-slate-200 text-slate-600'
                                             }`}>
-                                                Recibo RPA (0%)
+                                                Recibo RPA (PF)
                                             </span>
                                         </div>
                                         <p className="text-[11px] text-slate-500 font-medium leading-relaxed">
-                                            Emissão digital automática de Recibo RPA com 0% de retenção na fonte (intermediação de negócios). Seguro Vida Light MBM é emitido em seu próprio nome.
+                                            Emissão digital automática de Recibo RPA com apuração de INSS (11%) e IRRF na fonte conforme tabela 2026. Seguro Vida Light MBM é emitido em seu próprio nome.
                                         </p>
                                     </button>
 

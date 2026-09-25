@@ -201,12 +201,18 @@ export default function AffiliateResellerFinancial() {
     doc.setTextColor(217, 119, 6); // Amber
     doc.text(`REPASSE MENSAL BRUTO A RECEBER: R$ ${data.tax.bruto.toFixed(2).replace('.', ',')}`, 120, 66);
     if (!data.isPJ) {
-      doc.setTextColor(16, 185, 129); // Emerald
-      doc.text(`Dedução INSS (0% Intermediação): R$ 0,00`, 120, 72);
+      if (data.tax.inss > 0) {
+        doc.setTextColor(220, 38, 38); // Red
+        doc.text(`Dedução INSS (11%): - R$ ${data.tax.inss.toFixed(2).replace('.', ',')}`, 120, 72);
+      }
+      if (data.tax.irrf > 0) {
+        doc.setTextColor(220, 38, 38); // Red
+        doc.text(`Dedução IRRF (Progressivo): - R$ ${data.tax.irrf.toFixed(2).replace('.', ',')}`, 120, 78);
+      }
     }
     doc.setTextColor(16, 185, 129); // Emerald
     doc.setFontSize(11);
-    doc.text(`VALOR LÍQUIDO A RECEBER NO DIA 10: R$ ${data.tax.liquido.toFixed(2).replace('.', ',')}`, 120, 80);
+    doc.text(`VALOR LÍQUIDO A RECEBER NO DIA 10: R$ ${data.tax.liquido.toFixed(2).replace('.', ',')}`, 120, 84);
 
     // Tabela de Pedidos
     const tableData = filteredSales.map((s: any) => [

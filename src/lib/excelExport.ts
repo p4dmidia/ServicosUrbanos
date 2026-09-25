@@ -283,6 +283,7 @@ export async function exportAnnualCashbackExcel(records: any[], cycleLabel: stri
   const totAfiliado = records.reduce((acc, c) => acc + (c.cashAfiliado || 0), 0);
   const totRevendedor = records.reduce((acc, c) => acc + (c.cashRevendedor || 0), 0);
   const totBruto = records.reduce((acc, c) => acc + (c.totalBruto || 0), 0);
+  const totInss = records.reduce((acc, c) => acc + (c.inss || 0), 0);
   const totBaseIrpf = records.reduce((acc, c) => acc + (c.baseIrpf || 0), 0);
   const totDescontoIrpf = records.reduce((acc, c) => acc + (c.descontoIrpf || 0), 0);
   const totLiquido = records.reduce((acc, c) => acc + (c.liquidoReceber || 0), 0);
@@ -305,6 +306,7 @@ export async function exportAnnualCashbackExcel(records: any[], cycleLabel: stri
       { header: 'CASH AFILIADO', key: 'cashAfiliado', width: 16, isCurrency: true },
       { header: 'CASH REVENDEDOR', key: 'cashRevendedor', width: 16, isCurrency: true },
       { header: 'TOTAL BRUTO', key: 'totalBruto', width: 16, isCurrency: true },
+      { header: 'INSS (11%)', key: 'inss', width: 14, isCurrency: true },
       { header: 'BASE IRPF', key: 'baseIrpf', width: 16, isCurrency: true },
       { header: 'DESCONTO IRPF', key: 'descontoIrpf', width: 16, isCurrency: true },
       { header: 'LÍQUIDO A RECEBER', key: 'liquidoReceber', width: 18, isCurrency: true },
@@ -317,6 +319,7 @@ export async function exportAnnualCashbackExcel(records: any[], cycleLabel: stri
       cashAfiliado: totAfiliado,
       cashRevendedor: totRevendedor,
       totalBruto: totBruto,
+      inss: totInss,
       baseIrpf: totBaseIrpf,
       descontoIrpf: totDescontoIrpf,
       liquidoReceber: totLiquido

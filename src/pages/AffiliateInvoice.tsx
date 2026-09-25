@@ -376,7 +376,7 @@ export default function AffiliateInvoice() {
                   Regra Oficial de Repasse Autônomo (RPA)
                 </h4>
                 <p className="text-xs text-slate-500 mt-0.5">
-                  Como empresa de intermediação de negócios, a plataforma transfere seus repasses com a dedução do <strong>IRPF na Fonte (conforme tabela progressiva)</strong> e sem retenções na fonte de INSS (0%). O recolhimento de suas contribuições previdenciárias é individual por conta própria.
+                  Repasses a autônomos (Pessoa Física) processados com retenção de <strong>INSS (11%)</strong> e <strong>IRPF na Fonte (conforme tabela progressiva e Lei 15.270)</strong>. Pessoas Jurídicas (PJ) recebem sem retenções mediante Nota Fiscal.
                 </p>
               </div>
             </div>
@@ -618,9 +618,11 @@ export default function AffiliateInvoice() {
                   </div>
 
                   <div className="flex justify-between items-center text-slate-600">
-                    <span>Desconto de INSS na Fonte (0%):</span>
-                    <span className="font-mono font-bold text-emerald-600">
-                      R$ 0,00 (Isento na Fonte)
+                    <span>Desconto de INSS na Fonte (11%):</span>
+                    <span className={`font-mono font-bold ${(rpaReceipt?.financial?.deducao_inss || 0) > 0 ? 'text-indigo-600' : 'text-emerald-600'}`}>
+                      {(rpaReceipt?.financial?.deducao_inss || 0) > 0
+                        ? `- R$ ${(rpaReceipt?.financial?.deducao_inss || 0).toFixed(2).replace('.', ',')}`
+                        : 'R$ 0,00 (Isento / PJ)'}
                     </span>
                   </div>
 

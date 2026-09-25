@@ -126,6 +126,8 @@ export interface CumulativeTaxInput {
   alreadyRetainedInssInMonth?: number;
   alreadyRetainedIrrfInMonth?: number;
   isPjUser?: boolean;
+  dependentsCount?: number;
+  alimonyAmount?: number;
 }
 
 export interface CumulativeTaxResult {
@@ -139,6 +141,11 @@ export interface CumulativeTaxResult {
   totalMonthInss: number;
   totalMonthIrrf: number;
   irrfBase: number;
+  deducaoAplicada?: number;
+  impostoTabela?: number;
+  redutorLei?: number;
+  aliquotaFaixa?: number;
+  parcelaDeduzirFaixa?: number;
 }
 
 export interface RPAReceipt {
@@ -188,8 +195,8 @@ export interface RPAReceipt {
     annual_cycle_period?: string; // "01/12/2025 a 30/11/2026"
     annual_cycle_payout_date?: string; // "10/12/2026"
     bruto_total: number;
-    deducao_inss: number; // 0.00 (Intermediação)
-    deducao_irrf: number; // 0.00
+    deducao_inss: number; // INSS 11% Autônomo PF
+    deducao_irrf: number; // IRRF Tabela Progressiva
     adiantamento?: number; // Valor de adiantamento descontado
     adiantamento_date?: string; // Data em que o adiantamento foi pago (DD/MM/AAAA)
     adiantamento_status?: 'none' | 'pending' | 'approved' | 'paid' | 'rejected';
@@ -222,26 +229,73 @@ export interface RPAReceipt {
   }>;
 }
 
+// Parâmetros Oficiais do Contador — 2026 (Cálculo de IRRF e INSS sobre nota de autônomo / RPA)
+export const TAX_CONSTANTS_2026 = {
+  INSS_ALIQUOTA: 0.11, // 11,0% Contribuinte Individual
+  INSS_TETO: 8157.41, // Teto do salário de contribuição (R$)
+  DESCONTO_SIMPLIFICADO: 607.20, // Desconto simplificado mensal (R$)
+  DEDUCAO_DEPENDENTE: 189.59, // Dedução por dependente (R$)
+  REDUTOR_PARCELA_FIXA: 978.62, // Redutor — parcela fixa (R$)
+  REDUTOR_COEFICIENTE: 0.133145, // Redutor — coeficiente
+  LIMITE_ISENCAO_TOTAL: 5000.00, // Limite de isenção total (R$)
+  LIMITE_SUPERIOR_REDUCAO: 7350.00, // Limite superior da redução (R$)
+  PROGRESSIVE_TABLE: [
+    { limit: 2428.80, rate: 0.0, deduction: 0.0 },
+    { limit: 2826.65, rate: 0.075, deduction: 182.16 },
+    { limit: 3751.05, rate: 0.15, deduction: 394.16 },
+    { limit: 4664.68, rate: 0.225, deduction: 675.49 },
+    { limit: Infinity, rate: 0.275, deduction: 908.73 }
+  ]
+};
+
+export function calculateProgressiveIRRF(baseCalculoIR: number): { imposto: number; rate: number; deduction: number } {
+  if (baseCalculoIR <= 0) return { imposto: 0, rate: 0, deduction: 0 };
+  for (const tier of TAX_CONSTANTS_2026.PROGRESSIVE_TABLE) {
+    if (baseCalculoIR <= tier.limit) {
+      const imposto = Math.max(0, (baseCalculoIR * tier.rate) - tier.deduction);
+      return { imposto, rate: tier.rate, deduction: tier.deduction };
+    }
+  }
+  const lastTier = TAX_CONSTANTS_2026.PROGRESSIVE_TABLE[TAX_CONSTANTS_2026.PROGRESSIVE_TABLE.length - 1];
+  const imposto = Math.max(0, (baseCalculoIR * lastTier.rate) - lastTier.deduction);
+  return { imposto, rate: lastTier.rate, deduction: lastTier.deduction };
+}
+
+export function calculateRedutorLei15270(valorBruto: number, impostoTabela: number): number {
+  if (valorBruto <= 0 || impostoTabela <= 0) return 0;
+  if (valorBruto <= TAX_CONSTANTS_2026.LIMITE_ISENCAO_TOTAL) {
+    return impostoTabela; // Isenção total até R$ 5.000,00 (zera o imposto)
+  }
+  if (valorBruto <= TAX_CONSTANTS_2026.LIMITE_SUPERIOR_REDUCAO) {
+    const redutorCalc = TAX_CONSTANTS_2026.REDUTOR_PARCELA_FIXA - (TAX_CONSTANTS_2026.REDUTOR_COEFICIENTE * valorBruto);
+    return Math.min(impostoTabela, Math.max(0, redutorCalc));
+  }
+  return 0; // Acima de R$ 7.350,00 não há redutor
+}
+
 /**
- * Apuração Fiscal Oficial de RPA (Recibo de Pagamento a Autônomo) - Pessoa Física e PJ:
- * 1. INSS: 0% de retenção na fonte (recolhimento individual por conta própria do autônomo).
- * 2. Base de Cálculo IRPF = Valor Bruto.
- * 3. Tabela Progressiva do IRPF (Isenção até R$ 5.000,00):
- *    - Até R$ 5.000,00: Isento (0,0% | R$ 0,00)
- *    - De R$ 5.000,01 até R$ 7.500,00: 15,0% sobre o excedente de R$ 5.000,00
- *    - Acima de R$ 7.500,00: 27,5% sobre o excedente de R$ 7.500,00 + parcela da faixa anterior
- * 4. Pessoa Jurídica (PJ/MEI com NF): Isenção total de retenção na fonte (0% INSS e 0% IRRF).
+ * Apuração Fiscal Oficial de RPA (Recibo de Pagamento a Autônomo) - Conforme Tabela do Contador 2026 / Lei 15.270:
+ * 1. INSS: 11% sobre o valor bruto (respeitando o teto de R$ 8.157,41).
+ * 2. Dedução Aplicada: Maior valor entre (INSS + dependentes + pensão) e o Desconto Simplificado (R$ 607,20).
+ * 3. Base de Cálculo do IR = Valor Bruto - Dedução Aplicada.
+ * 4. Imposto pela Tabela Progressiva Mensal (Alíquotas de 0% a 27,5% com parcelas a deduzir).
+ * 5. Redutor Lei 15.270 (Isenção até R$ 5.000,00 e redução gradual até R$ 7.350,00).
+ * 6. IR Retido Final = max(0, Imposto pela Tabela - Redutor).
+ * 7. Líquido ao Autônomo = Valor Bruto - INSS - IRRF Retido.
+ * 8. Pessoa Jurídica (PJ/MEI com NFS-e): Isenção total de retenção na fonte (0% INSS e 0% IRRF).
  */
 export function calculateCumulativeTaxDeductions({
   payoutBruto,
   alreadyPaidBrutoInMonth = 0,
   alreadyRetainedInssInMonth = 0,
   alreadyRetainedIrrfInMonth = 0,
-  isPjUser = false
+  isPjUser = false,
+  dependentsCount = 0,
+  alimonyAmount = 0
 }: CumulativeTaxInput): CumulativeTaxResult {
   const safeBruto = Math.max(0, Number(payoutBruto) || 0);
 
-  // PJ / MEI: Isenção de retenção na fonte (recolhe via DAS / tributação própria)
+  // PJ / MEI: Isenção total de retenção na fonte (recolhe via DAS / tributação própria)
   if (isPjUser) {
     return {
       bruto: parseFloat(safeBruto.toFixed(2)),
@@ -253,42 +307,80 @@ export function calculateCumulativeTaxDeductions({
       totalMonthBruto: parseFloat((alreadyPaidBrutoInMonth + safeBruto).toFixed(2)),
       totalMonthInss: 0,
       totalMonthIrrf: 0,
-      irrfBase: 0
+      irrfBase: 0,
+      deducaoAplicada: 0,
+      impostoTabela: 0,
+      redutorLei: 0,
+      aliquotaFaixa: 0,
+      parcelaDeduzirFaixa: 0
     };
   }
 
-  // 1. INSS na Fonte (0% - não é cobrado/retido do Afiliado)
-  const inss = 0;
-
-  // 2. Base de Cálculo do IRPF: Valor Bruto Total
-  const irrfBase = safeBruto;
-
-  // 3. Tabela Progressiva do IRPF (Isento até R$ 5.000,00)
-  let irrfCalculated = 0;
-  if (irrfBase <= 5000.00) {
-    irrfCalculated = 0;
-  } else if (irrfBase <= 7500.00) {
-    irrfCalculated = (irrfBase - 5000.00) * 0.15;
-  } else {
-    irrfCalculated = ((7500.00 - 5000.00) * 0.15) + ((irrfBase - 7500.00) * 0.275);
+  // 1. Apuração Acumulada do Mês
+  const totalMonthBruto = parseFloat((alreadyPaidBrutoInMonth + safeBruto).toFixed(2));
+  if (totalMonthBruto === 0) {
+    return {
+      bruto: 0,
+      inss: 0,
+      irrf: 0,
+      liquido: 0,
+      patronal: 0,
+      isPJ: false,
+      totalMonthBruto: 0,
+      totalMonthInss: 0,
+      totalMonthIrrf: 0,
+      irrfBase: 0,
+      deducaoAplicada: 0,
+      impostoTabela: 0,
+      redutorLei: 0,
+      aliquotaFaixa: 0,
+      parcelaDeduzirFaixa: 0
+    };
   }
 
-  const irrf = Math.max(0, parseFloat(irrfCalculated.toFixed(2)));
+  // 2. INSS (11% Contribuinte Individual respeitando o teto de R$ 8.157,41)
+  const baseInssTotalMonth = Math.min(totalMonthBruto, TAX_CONSTANTS_2026.INSS_TETO);
+  const totalMonthInss = parseFloat((baseInssTotalMonth * TAX_CONSTANTS_2026.INSS_ALIQUOTA).toFixed(2));
+  const thisPayoutInss = Math.max(0, parseFloat((totalMonthInss - alreadyRetainedInssInMonth).toFixed(2)));
 
-  // 4. Valor Líquido após dedução do IRPF (sem reter INSS)
-  const liquido = Math.max(0, parseFloat((safeBruto - irrf).toFixed(2)));
+  // 3. Deduções Legais vs Desconto Simplificado (aplicar o maior valor)
+  const legalDeductions = totalMonthInss + (dependentsCount * TAX_CONSTANTS_2026.DEDUCAO_DEPENDENTE) + (alimonyAmount || 0);
+  const deducaoAplicada = Math.max(legalDeductions, TAX_CONSTANTS_2026.DESCONTO_SIMPLIFICADO);
+
+  // 4. Base de Cálculo do IR
+  const totalMonthIrrfBase = Math.max(0, parseFloat((totalMonthBruto - deducaoAplicada).toFixed(2)));
+  const thisPayoutIrrfBase = totalMonthIrrfBase;
+
+  // 5. Imposto pela Tabela Progressiva Mensal
+  const tableResult = calculateProgressiveIRRF(totalMonthIrrfBase);
+  const impostoTabela = parseFloat(tableResult.imposto.toFixed(2));
+
+  // 6. Redutor (Lei 15.270)
+  const redutorLei = parseFloat(calculateRedutorLei15270(totalMonthBruto, impostoTabela).toFixed(2));
+
+  // 7. IR Retido Final (Mensal e Deste Pagamento)
+  const totalMonthIrrf = Math.max(0, parseFloat((impostoTabela - redutorLei).toFixed(2)));
+  const thisPayoutIrrf = Math.max(0, parseFloat((totalMonthIrrf - alreadyRetainedIrrfInMonth).toFixed(2)));
+
+  // 8. Valor Líquido após deduções
+  const liquido = Math.max(0, parseFloat((safeBruto - thisPayoutInss - thisPayoutIrrf).toFixed(2)));
 
   return {
     bruto: parseFloat(safeBruto.toFixed(2)),
-    inss: 0,
-    irrf: irrf,
+    inss: thisPayoutInss,
+    irrf: thisPayoutIrrf,
     liquido: liquido,
     patronal: 0,
     isPJ: false,
-    totalMonthBruto: parseFloat((alreadyPaidBrutoInMonth + safeBruto).toFixed(2)),
-    totalMonthInss: 0,
-    totalMonthIrrf: parseFloat((alreadyRetainedIrrfInMonth + irrf).toFixed(2)),
-    irrfBase: parseFloat(irrfBase.toFixed(2))
+    totalMonthBruto: totalMonthBruto,
+    totalMonthInss: totalMonthInss,
+    totalMonthIrrf: totalMonthIrrf,
+    irrfBase: thisPayoutIrrfBase,
+    deducaoAplicada: parseFloat(deducaoAplicada.toFixed(2)),
+    impostoTabela: impostoTabela,
+    redutorLei: redutorLei,
+    aliquotaFaixa: tableResult.rate,
+    parcelaDeduzirFaixa: tableResult.deduction
   };
 }
 
@@ -4879,7 +4971,7 @@ export const businessRules = {
           payment_forecast_date: forecastDate
         },
         legal_disclaimer:
-          'Recibo de Pagamento a Autônomo (RPA) emitido com dedução do IRPF na Fonte (Tabela Progressiva Oficial) e repasses sem retenções na fonte de INSS (0%), cabendo ao prestador autônomo o recolhimento individual de suas contribuições previdenciárias.',
+          'Recibo de Pagamento a Autônomo (RPA) emitido com retenção de INSS (11% Contribuinte Individual) e IRPF na Fonte (Tabela Progressiva Oficial / Lei 15.270), conforme regras fiscais vigentes.',
         ordersList: ordersList,
         ordersBreakdown: ordersBreakdown
       };
@@ -8076,21 +8168,10 @@ export const businessRules = {
       const isPJ = (prof as any)?.person_type === 'PJ' || (prof?.cnpj && prof.cnpj.replace(/\D/g, '').length === 14);
 
       const totalBruto = parseFloat((g.cashAfiliado + g.cashRevendedor).toFixed(2));
-      const inss = 0; // 0% INSS intermediacao
-      const baseIrpf = Math.max(0, totalBruto - inss);
-
-      // Calculo do IRPF conforme regra de contabilidade (Isenção até R$ 5.000,00)
-      let descontoIrpf = 0;
-      if (!isPJ && baseIrpf > 5000.00) {
-        if (baseIrpf <= 7500.00) {
-          descontoIrpf = (baseIrpf - 5000.00) * 0.15;
-        } else {
-          descontoIrpf = ((7500.00 - 5000.00) * 0.15) + ((baseIrpf - 7500.00) * 0.275);
-        }
-        descontoIrpf = Math.max(0, parseFloat(descontoIrpf.toFixed(2)));
-      }
-
-      const liquidoReceber = parseFloat((totalBruto - descontoIrpf).toFixed(2));
+      const tax = calculateCumulativeTaxDeductions({
+        payoutBruto: totalBruto,
+        isPjUser: isPJ
+      });
 
       reportRows.push({
         id: shortId,
@@ -8099,9 +8180,10 @@ export const businessRules = {
         cashAfiliado: g.cashAfiliado,
         cashRevendedor: g.cashRevendedor,
         totalBruto: totalBruto,
-        baseIrpf: baseIrpf,
-        descontoIrpf: descontoIrpf,
-        liquidoReceber: liquidoReceber,
+        inss: tax.inss,
+        baseIrpf: tax.irrfBase,
+        descontoIrpf: tax.irrf,
+        liquidoReceber: tax.liquido,
         mesReferencia: g.refMonthLabel,
         refMonth: g.refMonth,
         chavePix: pixKey,

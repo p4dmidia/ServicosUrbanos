@@ -1578,7 +1578,7 @@ export default function AdminFinancials() {
 
         const itemsQ3 = [
           { num: '01', desc: 'Total dos rendimentos (inclusive comissões e bonificações)', val: rec.bruto },
-          { num: '02', desc: 'Contribuição previdenciária oficial (0% - Intermediação de Negócios / Isenção na Fonte)', val: rec.inss },
+          { num: '02', desc: 'Contribuição previdenciária oficial (INSS 11% Autônomo PF / Isenção PJ)', val: rec.inss },
           { num: '03', desc: 'Contribuição a entidades de previdência complementar', val: 0 },
           { num: '04', desc: 'Pensão alimentícia', val: 0 },
           { num: '05', desc: 'Imposto sobre a renda retido na fonte (IRRF)', val: rec.irrf }

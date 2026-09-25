@@ -154,8 +154,8 @@ export default function AffiliateFinancialSummary() {
         statement.totalBruto.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
       ],
       [
-        'INSS (0% - Intermediação de Negócios / Isenção na Fonte)',
-        statement.isPJ ? 'Isento (PJ)' : '0% (Intermediação)'
+        'INSS (11% - Contribuinte Individual)',
+        statement.isPJ ? 'Isento (PJ)' : (statement.inss > 0 ? `- ${statement.inss.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}` : 'R$ 0,00')
       ],
       [
         'BASE DE CALCULO DO IRPF (BRUTO-INSS)',
@@ -163,7 +163,7 @@ export default function AffiliateFinancialSummary() {
       ],
       [
         'IRRF',
-        statement.isPJ || statement.irrf === 0 ? 'Isento' : statement.irrf.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+        statement.isPJ || statement.irrf === 0 ? 'Isento' : `- ${statement.irrf.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`
       ],
       ...(statement.adiantamento > 0 ? [
         [
@@ -566,7 +566,7 @@ export default function AffiliateFinancialSummary() {
                   </div>
                   <div className="flex items-center justify-between pt-1 border-t border-slate-200/60 text-[10px]">
                     <span className="font-bold text-slate-500">
-                      {statement.isPJ ? 'Pessoa Jurídica (Isento)' : 'Pessoa Física (RPA 0%)'}
+                      {statement.isPJ ? 'Pessoa Jurídica (Isento via NF)' : 'Pessoa Física (RPA - INSS/IRRF)'}
                     </span>
                     <span className="font-black text-slate-700">
                       {statement.ordersBreakdown?.length || 0} pedido(s)
@@ -697,14 +697,18 @@ export default function AffiliateFinancialSummary() {
                 <div className="flex items-center justify-between p-3.5 rounded-xl bg-slate-50 border border-slate-100">
                   <div>
                     <span className="font-bold text-slate-800 uppercase block">
-                      INSS (0% - Intermediação de Negócios)
+                      INSS (11% - CONTRIBUINTE INDIVIDUAL)
                     </span>
                     <span className="text-[10px] text-slate-400">
-                      {statement.isPJ ? 'Pessoa Jurídica isenta de retenção previdenciária' : '0% de retenção na fonte. Afiliado autônomo recolhe individualmente'}
+                      {statement.isPJ ? 'Pessoa Jurídica isenta de retenção previdenciária' : 'Retenção na fonte (teto máx. R$ 8.157,41)'}
                     </span>
                   </div>
-                  <span className="font-mono font-black text-emerald-600">
-                    R$ 0,00 (0%)
+                  <span className={`font-mono font-black ${statement.isPJ || statement.inss === 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                    {statement.isPJ 
+                      ? 'Isento (PJ)' 
+                      : statement.inss > 0 
+                        ? `- ${statement.inss.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}` 
+                        : 'R$ 0,00 (0%)'}
                   </span>
                 </div>
 
@@ -732,13 +736,13 @@ export default function AffiliateFinancialSummary() {
                       IRRF
                     </span>
                     <span className="text-[10px] text-emerald-700">
-                      {statement.isPJ ? 'Isento para Pessoa Jurídica' : 'Retenção na Fonte conforme faixa de rendimentos da RFB'}
+                      {statement.isPJ ? 'Isento para Pessoa Jurídica' : 'Retenção na Fonte conforme faixa de rendimentos da RFB (Tabela 2026 / Lei 15.270)'}
                     </span>
                   </div>
                   <span className={`font-mono font-black ${statement.isPJ || statement.irrf === 0 ? 'text-emerald-700' : 'text-red-600'}`}>
                     {statement.isPJ || statement.irrf === 0 
                       ? 'Isento' 
-                      : statement.irrf.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                      : `- ${statement.irrf.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`}
                   </span>
                 </div>
 

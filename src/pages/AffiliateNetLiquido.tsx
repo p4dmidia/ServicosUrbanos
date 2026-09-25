@@ -131,8 +131,8 @@ export default function AffiliateNetLiquido() {
         statement.totalBruto.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
       ],
       [
-        'INSS (0% - Intermediação de Negócios / Isenção na Fonte)',
-        statement.isPJ ? 'Isento (PJ)' : '0% (Intermediação)'
+        'INSS (11% - Contribuinte Individual)',
+        statement.isPJ ? 'Isento (PJ)' : (statement.inss > 0 ? `- ${statement.inss.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}` : 'R$ 0,00')
       ],
       [
         'BASE DE CALCULO DO IRPF (BRUTO-INSS)',
@@ -140,7 +140,7 @@ export default function AffiliateNetLiquido() {
       ],
       [
         'IRRF',
-        statement.isPJ || statement.irrf === 0 ? 'Isento' : statement.irrf.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+        statement.isPJ || statement.irrf === 0 ? 'Isento' : `- ${statement.irrf.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`
       ],
       [
         'LIQUIDO A RECEBER',
@@ -505,14 +505,18 @@ export default function AffiliateNetLiquido() {
                 <div className="flex items-center justify-between p-3.5 rounded-xl bg-slate-50 border border-slate-100">
                   <div>
                     <span className="font-bold text-slate-800 uppercase block">
-                      INSS (0% - Intermediação de Negócios)
+                      INSS (11% - CONTRIBUINTE INDIVIDUAL)
                     </span>
                     <span className="text-[10px] text-slate-400">
-                      {statement.isPJ ? 'Isento de retenção (PJ)' : '0% de retenção na fonte. Recolhimento previdenciário individual sob responsabilidade do afiliado.'}
+                      {statement.isPJ ? 'Isento de retenção (PJ)' : 'Retenção na fonte (teto máx. R$ 8.157,41)'}
                     </span>
                   </div>
-                  <span className="font-mono font-black text-emerald-600">
-                    R$ 0,00 (0%)
+                  <span className={`font-mono font-black ${statement.isPJ || statement.inss === 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                    {statement.isPJ 
+                      ? 'Isento (PJ)' 
+                      : statement.inss > 0 
+                        ? `- ${statement.inss.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}` 
+                        : 'R$ 0,00 (0%)'}
                   </span>
                 </div>
 
@@ -535,7 +539,7 @@ export default function AffiliateNetLiquido() {
                     <span className="font-bold text-emerald-950 uppercase block">
                       IRRF
                     </span>
-                    <span className="text-[10px] text-emerald-800/80">Tabela progressiva mensal da Receita Federal</span>
+                    <span className="text-[10px] text-emerald-800/80">Tabela progressiva mensal da Receita Federal (2026 / Lei 15.270)</span>
                   </div>
                   <span className={`font-mono font-black ${statement.isPJ || statement.irrf === 0 ? 'text-emerald-900' : 'text-rose-600'}`}>
                     {statement.isPJ || statement.irrf === 0 ? 'Isento' : `- ${statement.irrf.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`}

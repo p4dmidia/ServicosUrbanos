@@ -3176,11 +3176,11 @@ export default function AdminWithdrawals() {
 
                     <div className="flex items-center justify-between p-3 rounded-xl bg-white/5">
                       <div>
-                        <span className="text-slate-300 font-bold uppercase block">INSS (0% - Intermediação de Negócios)</span>
-                        <span className="text-[9px] text-slate-500">{statementData.user?.isPJ ? 'Isento (PJ)' : '0% retenção na fonte'}</span>
+                        <span className="text-slate-300 font-bold uppercase block">INSS (11% - CONTRIBUINTE INDIVIDUAL)</span>
+                        <span className="text-[9px] text-slate-500">{statementData.user?.isPJ ? 'Isento (PJ)' : 'Retenção na fonte (teto máx. R$ 8.157,41)'}</span>
                       </div>
-                      <span className="font-mono font-black text-emerald-400">
-                        R$ 0,00 (0%)
+                      <span className={`font-mono font-black ${statementData.user?.isPJ || (statementData.inss || 0) === 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                        {statementData.user?.isPJ ? 'Isento (PJ)' : (statementData.inss || 0) > 0 ? `- R$ ${(statementData.inss || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : 'R$ 0,00'}
                       </span>
                     </div>
 
@@ -3194,7 +3194,7 @@ export default function AdminWithdrawals() {
                     <div className="flex items-center justify-between p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
                       <div>
                         <span className="text-emerald-300 font-bold uppercase block">IRRF</span>
-                        <span className="text-[9px] text-emerald-400/70">Tabela progressiva da Receita Federal</span>
+                        <span className="text-[9px] text-emerald-400/70">Tabela progressiva da Receita Federal (2026 / Lei 15.270)</span>
                       </div>
                       <span className={`font-mono font-black ${(statementData.irrf || 0) > 0 ? 'text-rose-400' : 'text-emerald-400'}`}>
                         {(statementData.irrf || 0) > 0 ? `- R$ ${(statementData.irrf || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : 'Isento'}
@@ -3405,14 +3405,18 @@ export default function AdminWithdrawals() {
                     <div className="flex items-center justify-between p-3.5 rounded-xl bg-slate-50 border border-slate-100">
                       <div>
                         <span className="font-bold text-slate-800 uppercase block">
-                          INSS (0% - Intermediação de Negócios)
+                          INSS (11% - CONTRIBUINTE INDIVIDUAL)
                         </span>
                         <span className="text-[10px] text-slate-400">
-                          {consolidatedData.isPJ ? 'Pessoa Jurídica isenta de retenção' : '0% de retenção na fonte. Recolhimento previdenciário individual'}
+                          {consolidatedData.isPJ ? 'Pessoa Jurídica isenta de retenção' : 'Retenção na fonte (teto máx. R$ 8.157,41)'}
                         </span>
                       </div>
-                      <span className="font-mono font-black text-emerald-600">
-                        R$ 0,00 (0%)
+                      <span className={`font-mono font-black ${consolidatedData.isPJ || Number(consolidatedData.inss || 0) === 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                        {consolidatedData.isPJ 
+                          ? 'Isento (PJ)' 
+                          : Number(consolidatedData.inss || 0) > 0 
+                            ? `- ${Number(consolidatedData.inss || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}` 
+                            : 'R$ 0,00'}
                       </span>
                     </div>
 
@@ -3440,13 +3444,13 @@ export default function AdminWithdrawals() {
                           IRRF
                         </span>
                         <span className="text-[10px] text-emerald-700">
-                          {consolidatedData.isPJ ? 'Isento para Pessoa Jurídica' : 'Retenção na Fonte conforme faixa de rendimentos da RFB'}
+                          {consolidatedData.isPJ ? 'Isento para Pessoa Jurídica' : 'Retenção na Fonte conforme faixa de rendimentos da RFB (Tabela 2026 / Lei 15.270)'}
                         </span>
                       </div>
                       <span className={`font-mono font-black ${consolidatedData.isPJ || consolidatedData.irrf === 0 ? 'text-emerald-700' : 'text-red-600'}`}>
                         {consolidatedData.isPJ || consolidatedData.irrf === 0 
                           ? 'Isento' 
-                          : Number(consolidatedData.irrf || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                          : `- ${Number(consolidatedData.irrf || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`}
                       </span>
                     </div>
 

@@ -338,16 +338,15 @@ export function calculateCumulativeTaxDeductions({
     };
   }
 
-  // 2. INSS (11% Contribuinte Individual respeitando o teto de R$ 8.157,41)
-  const baseInssTotalMonth = Math.min(totalMonthBruto, TAX_CONSTANTS_2026.INSS_TETO);
-  const totalMonthInss = parseFloat((baseInssTotalMonth * TAX_CONSTANTS_2026.INSS_ALIQUOTA).toFixed(2));
-  const thisPayoutInss = Math.max(0, parseFloat((totalMonthInss - alreadyRetainedInssInMonth).toFixed(2)));
+  // 2. INSS na Fonte (0% de retenção na fonte pela empresa — recolhimento individual por conta própria do autônomo)
+  const thisPayoutInss = 0;
+  const totalMonthInss = 0;
 
-  // 3. Deduções Legais vs Desconto Simplificado (aplicar o maior valor)
-  const legalDeductions = totalMonthInss + (dependentsCount * TAX_CONSTANTS_2026.DEDUCAO_DEPENDENTE) + (alimonyAmount || 0);
+  // 3. Deduções Legais vs Desconto Simplificado Mensal (R$ 607,20)
+  const legalDeductions = (dependentsCount * TAX_CONSTANTS_2026.DEDUCAO_DEPENDENTE) + (alimonyAmount || 0);
   const deducaoAplicada = Math.max(legalDeductions, TAX_CONSTANTS_2026.DESCONTO_SIMPLIFICADO);
 
-  // 4. Base de Cálculo do IR
+  // 4. Base de Cálculo do IR (Bruto - Dedução Simplificada)
   const totalMonthIrrfBase = Math.max(0, parseFloat((totalMonthBruto - deducaoAplicada).toFixed(2)));
   const thisPayoutIrrfBase = totalMonthIrrfBase;
 
@@ -355,25 +354,25 @@ export function calculateCumulativeTaxDeductions({
   const tableResult = calculateProgressiveIRRF(totalMonthIrrfBase);
   const impostoTabela = parseFloat(tableResult.imposto.toFixed(2));
 
-  // 6. Redutor (Lei 15.270)
+  // 6. Redutor (Lei 15.270 - Isenção até R$ 5.000,00 e Redução até R$ 7.350,00)
   const redutorLei = parseFloat(calculateRedutorLei15270(totalMonthBruto, impostoTabela).toFixed(2));
 
   // 7. IR Retido Final (Mensal e Deste Pagamento)
   const totalMonthIrrf = Math.max(0, parseFloat((impostoTabela - redutorLei).toFixed(2)));
   const thisPayoutIrrf = Math.max(0, parseFloat((totalMonthIrrf - alreadyRetainedIrrfInMonth).toFixed(2)));
 
-  // 8. Valor Líquido após deduções
-  const liquido = Math.max(0, parseFloat((safeBruto - thisPayoutInss - thisPayoutIrrf).toFixed(2)));
+  // 8. Valor Líquido após deduções fiscais (sem retenção de INSS na fonte)
+  const liquido = Math.max(0, parseFloat((safeBruto - thisPayoutIrrf).toFixed(2)));
 
   return {
     bruto: parseFloat(safeBruto.toFixed(2)),
-    inss: thisPayoutInss,
+    inss: 0,
     irrf: thisPayoutIrrf,
     liquido: liquido,
     patronal: 0,
     isPJ: false,
     totalMonthBruto: totalMonthBruto,
-    totalMonthInss: totalMonthInss,
+    totalMonthInss: 0,
     totalMonthIrrf: totalMonthIrrf,
     irrfBase: thisPayoutIrrfBase,
     deducaoAplicada: parseFloat(deducaoAplicada.toFixed(2)),

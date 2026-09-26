@@ -811,6 +811,7 @@ export default function AdminWithdrawals() {
   const totalAnnualCashAfiliado = filteredAnnualCashback.reduce((acc, curr) => acc + (curr.cashAfiliado || 0), 0);
   const totalAnnualCashRevendedor = filteredAnnualCashback.reduce((acc, curr) => acc + (curr.cashRevendedor || 0), 0);
   const totalAnnualBruto = filteredAnnualCashback.reduce((acc, curr) => acc + (curr.totalBruto || 0), 0);
+  const totalAnnualInss = filteredAnnualCashback.reduce((acc, curr) => acc + (curr.inss || 0), 0);
   const totalAnnualBaseIrpf = filteredAnnualCashback.reduce((acc, curr) => acc + (curr.baseIrpf || 0), 0);
   const totalAnnualDescontoIrpf = filteredAnnualCashback.reduce((acc, curr) => acc + (curr.descontoIrpf || 0), 0);
   const totalAnnualLiquidoReceber = filteredAnnualCashback.reduce((acc, curr) => acc + (curr.liquidoReceber || 0), 0);

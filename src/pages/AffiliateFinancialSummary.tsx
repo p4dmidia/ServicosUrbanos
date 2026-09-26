@@ -154,11 +154,11 @@ export default function AffiliateFinancialSummary() {
         statement.totalBruto.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
       ],
       [
-        'INSS (11% - Contribuinte Individual)',
-        statement.isPJ ? 'Isento (PJ)' : (statement.inss > 0 ? `- ${statement.inss.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}` : 'R$ 0,00')
+        'INSS (0% - Intermediação de Negócios / Isenção na Fonte)',
+        statement.isPJ ? 'Isento (PJ)' : '0% (Recolhimento individual)'
       ],
       [
-        'BASE DE CALCULO DO IRPF (BRUTO-INSS)',
+        'BASE DE CALCULO DO IRPF (BRUTO - DEDUÇÃO SIMPLIFICADA)',
         statement.isPJ ? 'Isento (PJ)' : statement.baseIrrf.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
       ],
       [
@@ -697,18 +697,14 @@ export default function AffiliateFinancialSummary() {
                 <div className="flex items-center justify-between p-3.5 rounded-xl bg-slate-50 border border-slate-100">
                   <div>
                     <span className="font-bold text-slate-800 uppercase block">
-                      INSS (11% - CONTRIBUINTE INDIVIDUAL)
+                      INSS (0% - INTERMEDIAÇÃO DE NEGÓCIOS)
                     </span>
                     <span className="text-[10px] text-slate-400">
-                      {statement.isPJ ? 'Pessoa Jurídica isenta de retenção previdenciária' : 'Retenção na fonte (teto máx. R$ 8.157,41)'}
+                      {statement.isPJ ? 'Pessoa Jurídica isenta de retenção previdenciária' : '0% de retenção na fonte. Afiliado autônomo recolhe individualmente'}
                     </span>
                   </div>
-                  <span className={`font-mono font-black ${statement.isPJ || statement.inss === 0 ? 'text-emerald-600' : 'text-red-600'}`}>
-                    {statement.isPJ 
-                      ? 'Isento (PJ)' 
-                      : statement.inss > 0 
-                        ? `- ${statement.inss.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}` 
-                        : 'R$ 0,00 (0%)'}
+                  <span className="font-mono font-black text-emerald-600">
+                    R$ 0,00 (0%)
                   </span>
                 </div>
 
@@ -716,10 +712,10 @@ export default function AffiliateFinancialSummary() {
                 <div className="flex items-center justify-between p-3.5 rounded-xl bg-slate-50 border border-slate-100">
                   <div>
                     <span className="font-bold text-slate-800 uppercase block">
-                      BASE DE CALCULO DO IRPF (BRUTO-INSS)
+                      BASE DE CALCULO DO IRPF (BRUTO - DEDUÇÃO)
                     </span>
                     <span className="text-[10px] text-slate-400">
-                      Base de apuração para aplicação da tabela progressiva
+                      Base de apuração para aplicação da tabela progressiva RFB
                     </span>
                   </div>
                   <span className="font-mono font-black text-slate-700">

@@ -34,7 +34,7 @@ export default function GanheDinheiro() {
   }, []);
 
   const totalMembros = Number(totalMembrosStr) || 0;
-  const planPrice = Number(planPriceStr) || 0;
+  const planPrice = Number(planPriceStr.replace(',', '.')) || 0;
 
   // Calculations based on the simplified spreadsheet & MMN v4 rules
   const arrecadacao = totalMembros * planPrice;
@@ -205,24 +205,32 @@ export default function GanheDinheiro() {
                     <label className="text-xs font-black text-slate-400 uppercase tracking-wider">Valor do Plano (R$)</label>
                     <input
                       type="text"
-                      inputMode="numeric"
-                      pattern="[0-9]*"
+                      inputMode="decimal"
                       value={planPriceStr}
-                      onChange={(e) => setPlanPriceStr(e.target.value.replace(/\D/g, ''))}
+                      placeholder="0,00"
+                      onChange={(e) => {
+                        let val = e.target.value.replace(/[^0-9.,]/g, '');
+                        val = val.replace(/\./g, ',');
+                        const parts = val.split(',');
+                        if (parts.length > 2) {
+                          val = parts[0] + ',' + parts.slice(1).join('');
+                        }
+                        setPlanPriceStr(val);
+                      }}
                       className="w-28 bg-slate-950 border border-white/10 rounded-xl py-2 px-4 text-sm font-black text-white text-center focus:outline-none focus:border-accent"
                     />
                   </div>
                   <input
                     type="range"
-                    min="10"
+                    min="1"
                     max="200"
-                    step="5"
-                    value={planPrice}
+                    step="1"
+                    value={Math.min(200, Math.max(1, planPrice)) || 1}
                     onChange={(e) => setPlanPriceStr(e.target.value)}
                     className="w-full h-2 bg-slate-950 rounded-lg appearance-none cursor-pointer accent-accent"
                   />
                   <div className="flex justify-between text-[10px] text-slate-500 font-bold">
-                    <span>R$ 10,00</span>
+                    <span>R$ 1,00</span>
                     <span>R$ 60,00</span>
                     <span>R$ 200,00</span>
                   </div>

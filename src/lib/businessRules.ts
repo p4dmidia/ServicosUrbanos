@@ -232,7 +232,7 @@ export interface RPAReceipt {
 // Parâmetros Oficiais do Contador — 2026 (Cálculo de IRRF e INSS sobre nota de autônomo / RPA)
 export const TAX_CONSTANTS_2026 = {
   INSS_ALIQUOTA: 0.11, // 11,0% Contribuinte Individual
-  INSS_TETO: 8157.41, // Teto do salário de contribuição (R$)
+  INSS_TETO: 8475.55, // Teto do salário de contribuição (R$ 8.475,55 -> Máx R$ 932,31)
   DESCONTO_SIMPLIFICADO: 607.20, // Desconto simplificado mensal (R$)
   DEDUCAO_DEPENDENTE: 189.59, // Dedução por dependente (R$)
   REDUTOR_PARCELA_FIXA: 978.62, // Redutor — parcela fixa (R$)
@@ -275,13 +275,13 @@ export function calculateRedutorLei15270(valorBruto: number, impostoTabela: numb
 
 /**
  * Apuração Fiscal Oficial de RPA (Recibo de Pagamento a Autônomo) - Conforme Tabela do Contador 2026 / Lei 15.270:
- * 1. INSS: 11% sobre o valor bruto (respeitando o teto de R$ 8.157,41).
- * 2. Dedução Aplicada: Maior valor entre (INSS + dependentes + pensão) e o Desconto Simplificado (R$ 607,20).
+ * 1. INSS Apurado: 11% sobre o valor bruto (respeitando o teto de R$ 8.475,55 -> máx R$ 932,31).
+ * 2. Dedução Aplicada na Base do IR: Maior valor entre (INSS apurado + dependentes + pensão) e o Desconto Simplificado (R$ 607,20).
  * 3. Base de Cálculo do IR = Valor Bruto - Dedução Aplicada.
  * 4. Imposto pela Tabela Progressiva Mensal (Alíquotas de 0% a 27,5% com parcelas a deduzir).
  * 5. Redutor Lei 15.270 (Isenção até R$ 5.000,00 e redução gradual até R$ 7.350,00).
  * 6. IR Retido Final = max(0, Imposto pela Tabela - Redutor).
- * 7. Líquido ao Autônomo = Valor Bruto - INSS - IRRF Retido.
+ * 7. Líquido ao Autônomo = Valor Bruto - IRRF Retido (com INSS retido na fonte = 0, pois o recolhimento é individual por conta do afiliado).
  * 8. Pessoa Jurídica (PJ/MEI com NFS-e): Isenção total de retenção na fonte (0% INSS e 0% IRRF).
  */
 export function calculateCumulativeTaxDeductions({
@@ -342,11 +342,12 @@ export function calculateCumulativeTaxDeductions({
   const thisPayoutInss = 0;
   const totalMonthInss = 0;
 
-  // 3. Deduções Legais vs Desconto Simplificado Mensal (R$ 607,20)
-  const legalDeductions = (dependentsCount * TAX_CONSTANTS_2026.DEDUCAO_DEPENDENTE) + (alimonyAmount || 0);
+  // 3. Deduções Legais (INSS 11% até teto R$ 8.475,55 = máx R$ 932,31 + dependentes + pensão) vs Desconto Simplificado Mensal (R$ 607,20)
+  const inssCalculadoApuracao = Math.min(totalMonthBruto, TAX_CONSTANTS_2026.INSS_TETO) * TAX_CONSTANTS_2026.INSS_ALIQUOTA;
+  const legalDeductions = inssCalculadoApuracao + (dependentsCount * TAX_CONSTANTS_2026.DEDUCAO_DEPENDENTE) + (alimonyAmount || 0);
   const deducaoAplicada = Math.max(legalDeductions, TAX_CONSTANTS_2026.DESCONTO_SIMPLIFICADO);
 
-  // 4. Base de Cálculo do IR (Bruto - Dedução Simplificada)
+  // 4. Base de Cálculo do IR (Bruto - Dedução Aplicada [a maior])
   const totalMonthIrrfBase = Math.max(0, parseFloat((totalMonthBruto - deducaoAplicada).toFixed(2)));
   const thisPayoutIrrfBase = totalMonthIrrfBase;
 

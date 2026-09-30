@@ -172,7 +172,7 @@ export default function RPAReceiptModal({
         { desc: '04. Revendedor (Vendas Diretas / Polo Regional)', val: rpa.financial.vendas_revendedor || 0 },
         { desc: rpa.reference_month?.endsWith('-12') ? `05. Cashback Anual (Ciclo ${rpa.financial.annual_cycle_period || '01/12 a 30/11'} - Liberado)` : `05. Provisão Anual Acumulada (Ciclo ${rpa.financial.annual_cycle_period || '01/12 a 30/11'} - Pago em 10/Dez)`, val: rpa.financial.cashback_anual },
         { desc: '06. TOTAL DOS RENDIMENTOS BRUTOS', val: rpa.financial.bruto_total, isBold: true },
-        { desc: '07. (-) Retenção de INSS na Fonte (11% Autônomo PF)', val: inssVal > 0 ? -inssVal : 0.00, isDeduction: inssVal > 0 },
+        { desc: '07. INSS na Fonte (0% - Recolhimento Individual pelo Afiliado)', val: 0.00 },
         { desc: '08. (-) Retenção de IRPF na Fonte (Tabela Progressiva)', val: irrfVal > 0 ? -irrfVal : 0.00, isDeduction: irrfVal > 0 },
         ...(rpa.financial.adiantamento && rpa.financial.adiantamento > 0 ? [
           { desc: `09. (-) Adiantamento de Rendimentos${rpa.financial.adiantamento_date ? ` (Pago em ${rpa.financial.adiantamento_date})` : ''}`, val: -rpa.financial.adiantamento, isDeduction: true }
@@ -489,17 +489,13 @@ export default function RPAReceiptModal({
               {/* Deduções Fiscais: INSS 11% e IRPF Tabela Progressiva */}
               <div className="px-5 py-2.5 flex items-center justify-between text-slate-400 bg-white/[0.02]">
                 <div className="flex items-center gap-2">
-                  <span>(-) Retenção de INSS na Fonte (11% Autônomo PF)</span>
-                  {(rpa.financial.deducao_inss || 0) > 0 && (
-                    <span className="text-[9px] bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 px-2 py-0.5 rounded-md font-bold">
-                      11% Oficial
-                    </span>
-                  )}
+                  <span>INSS na Fonte (0% - Recolhimento Individual pelo Afiliado)</span>
+                  <span className="text-[9px] bg-slate-500/10 text-slate-400 border border-slate-500/20 px-2 py-0.5 rounded-md font-bold">
+                    Por conta do afiliado
+                  </span>
                 </div>
-                <span className={`font-mono font-bold ${(rpa.financial.deducao_inss || 0) > 0 ? 'text-indigo-400' : 'text-slate-400'}`}>
-                  {(rpa.financial.deducao_inss || 0) > 0
-                    ? `- R$ ${(rpa.financial.deducao_inss || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
-                    : 'R$ 0,00'}
+                <span className="font-mono font-bold text-slate-400">
+                  R$ 0,00
                 </span>
               </div>
 

@@ -20,7 +20,8 @@ import {
   CreditCard,
   ShoppingBag,
   Package,
-  Ticket
+  Ticket,
+  FolderDown
 } from 'lucide-react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
@@ -112,6 +113,7 @@ export default function AdminLayout({ children, title, subtitle }: AdminLayoutPr
   const menuItems = [
     { name: 'Dashboard', icon: BarChart3, path: '/admin/dashboard' },
     { name: 'Produtos', icon: Package, path: '/admin/produtos' },
+    { name: 'Materiais & Criativos', icon: FolderDown, path: '/admin/materiais' },
     { name: 'Pedidos', icon: ShoppingBag, path: '/admin/pedidos' },
     { name: 'Usuários', icon: Users, path: '/admin/usuarios' },
     { name: 'Relatórios & BI', icon: PieChart, path: '/admin/relatorios' },

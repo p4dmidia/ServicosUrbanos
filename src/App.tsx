@@ -17,7 +17,9 @@ import AdminWithdrawals from './pages/AdminWithdrawals';
 import AdminFinancials from './pages/AdminFinancials';
 import AdminProducts from './pages/AdminProducts';
 import AdminOrders from './pages/AdminOrders';
+import AdminMaterials from './pages/AdminMaterials';
 import AffiliateDashboard from './pages/AffiliateDashboard';
+import AffiliateMaterials from './pages/AffiliateMaterials';
 import AffiliateGanhaGanha from './pages/AffiliateGanhaGanha';
 import AffiliateResellerDashboard from './pages/AffiliateResellerDashboard';
 import AffiliateNetwork from './pages/AffiliateNetwork';
@@ -106,6 +108,10 @@ export default function App() {
               path="/admin/financeiro" 
               element={<ProtectedRoute allowedRoles={['admin']}><AdminFinancials /></ProtectedRoute>} 
             />
+            <Route 
+              path="/admin/materiais" 
+              element={<ProtectedRoute allowedRoles={['admin']}><AdminMaterials /></ProtectedRoute>} 
+            />
 
             {/* Affiliate / Virtual Office Routes */}
             <Route 
@@ -115,6 +121,14 @@ export default function App() {
             <Route 
               path="/afiliado/dashboard" 
               element={<ProtectedRoute allowedRoles={['affiliate', 'owner', 'manager', 'admin', 'regional_reseller']}><AffiliateDashboard /></ProtectedRoute>} 
+            />
+            <Route 
+              path="/afiliado/materiais" 
+              element={<ProtectedRoute allowedRoles={['affiliate', 'owner', 'manager', 'admin', 'regional_reseller']}><AffiliateMaterials /></ProtectedRoute>} 
+            />
+            <Route 
+              path="/afiliado/materiais-divulgacao" 
+              element={<ProtectedRoute allowedRoles={['affiliate', 'owner', 'manager', 'admin', 'regional_reseller']}><AffiliateMaterials /></ProtectedRoute>} 
             />
             <Route 
               path="/afiliado/codigo-ganha-ganha" 

@@ -23,7 +23,8 @@ import {
   CircleDollarSign,
   Receipt,
   BarChart3,
-  Gift
+  Gift,
+  FolderDown
 } from 'lucide-react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
@@ -119,6 +120,7 @@ export default function AffiliateLayout({ children, title, customBalance, custom
   const menuItems = [
     { path: '/afiliado/dashboard', icon: LayoutGrid, label: 'Dashboard' },
     { path: '/afiliado/codigo-ganha-ganha', icon: Gift, label: 'Código Ganha & Ganha' },
+    { path: '/afiliado/materiais', icon: FolderDown, label: 'Materiais de Divulgação' },
     ...(profile?.role === 'regional_reseller' ? [
       { path: '/afiliado/revendedor', icon: Target, label: 'Liderança Regional' }
     ] : []),

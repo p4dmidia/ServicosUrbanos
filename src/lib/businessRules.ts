@@ -4525,7 +4525,7 @@ export const businessRules = {
               quitacao_accepted_at: acceptedAt,
               previsao_accepted_at: acceptedAt,
               beneficiary: { name: p.full_name || 'Afiliado', cpf: '', pix_key: '', pix_type: 'CPF' },
-              company: { name: 'SERVIÇOS URBANOS INTERMEDIAÇÃO DE NEGÓCIOS LTDA', cnpj: '58.490.123/0001-45', address: '', city_state: '', activity: '' },
+              company: { name: 'SIC Comércio de Produtos Alimentícios e Serviços Ltda', cnpj: '54.795.377/0001-03', address: '', city_state: '', activity: '' },
               financial: {
                 rede_mmn: 0,
                 rede_g0: 0,
@@ -4562,7 +4562,7 @@ export const businessRules = {
               status: 'ciente_previsao',
               previsao_accepted_at: acceptedAt,
               beneficiary: { name: p.full_name || 'Afiliado', cpf: '', pix_key: '', pix_type: 'CPF' },
-              company: { name: 'SERVIÇOS URBANOS INTERMEDIAÇÃO DE NEGÓCIOS LTDA', cnpj: '58.490.123/0001-45', address: '', city_state: '', activity: '' },
+              company: { name: 'SIC Comércio de Produtos Alimentícios e Serviços Ltda', cnpj: '54.795.377/0001-03', address: '', city_state: '', activity: '' },
               financial: {
                 rede_mmn: 0,
                 rede_g0: 0,
@@ -4625,7 +4625,7 @@ export const businessRules = {
                 previsao_accepted_at: status === 'ciente_previsao' || status === 'quitado' ? inv.created_at : null,
                 quitacao_accepted_at: status === 'quitado' ? (inv.updated_at || inv.created_at) : null,
                 beneficiary: existingInMap?.beneficiary || { name: 'Afiliado', cpf: '', pix_key: '', pix_type: 'CPF' },
-                company: { name: 'SERVIÇOS URBANOS INTERMEDIAÇÃO DE NEGÓCIOS LTDA', cnpj: '58.490.123/0001-45', address: '', city_state: '', activity: '' },
+                company: { name: 'SIC Comércio de Produtos Alimentícios e Serviços Ltda', cnpj: '54.795.377/0001-03', address: '', city_state: '', activity: '' },
                 financial: existingInMap?.financial || {
                   rede_mmn: 0,
                   rede_g0: 0,
@@ -4943,8 +4943,8 @@ export const businessRules = {
           whatsapp: profile.whatsapp || ''
         },
         company: {
-          name: 'SERVIÇOS URBANOS INTERMEDIAÇÃO DE NEGÓCIOS LTDA',
-          cnpj: '58.490.123/0001-45',
+          name: 'SIC Comércio de Produtos Alimentícios e Serviços Ltda',
+          cnpj: '54.795.377/0001-03',
           address: 'Av. Tancredo Neves, 2539, Ed. CEO Salvador Shopping, Torre Londres, Sala 1402',
           city_state: 'Salvador - BA',
           activity: 'Intermediação de Negócios e Agenciamento de Serviços (CNAE 74.90-1-04)'

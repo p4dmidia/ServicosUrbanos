@@ -102,8 +102,8 @@ export default function AffiliateInvoice() {
   };
 
   const companyData = {
-    razaoSocial: 'SERVIÇOS URBANOS INTERMEDIAÇÃO DE NEGÓCIOS LTDA',
-    cnpj: '58.490.123/0001-45',
+    razaoSocial: 'SIC Comércio de Produtos Alimentícios e Serviços Ltda',
+    cnpj: '54.795.377/0001-03',
     descricaoServico: 'Intermediação de negócios, agenciamento e divulgação de planos de benefícios e serviços urbanos.'
   };
 

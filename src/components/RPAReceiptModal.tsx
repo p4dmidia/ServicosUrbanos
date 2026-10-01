@@ -110,7 +110,7 @@ export default function RPAReceiptModal({
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(14);
       doc.setTextColor(255, 255, 255);
-      doc.text('SERVIÇOS URBANOS INTERMEDIAÇÃO DE NEGÓCIOS', 14, 14);
+      doc.text('SIC COMÉRCIO DE PRODUTOS ALIMENTÍCIOS E SERVIÇOS', 14, 14);
 
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(8.5);
@@ -283,7 +283,7 @@ export default function RPAReceiptModal({
 
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(7);
-      doc.text('SERVIÇOS URBANOS INTERMEDIAÇÃO', 16, y + 9);
+      doc.text('SIC COMÉRCIO E SERVIÇOS LTDA', 16, y + 9);
       doc.text(rpa.beneficiary.name.toUpperCase(), 106, y + 9);
 
       doc.setFont('helvetica', 'normal');

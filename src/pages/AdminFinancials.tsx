@@ -1424,7 +1424,7 @@ export default function AdminFinancials() {
           '',
           `Via: ${viaLabel}`,
           `Retenção de IRRF sobre comissões de autônomos`,
-          `Serviços Urbanos Tecnologia Ltda.`
+          `SIC Comércio de Produtos Alimentícios e Serviços Ltda.`
         ];
         let tY = startY + 42;
         textAviso.forEach(line => {
@@ -1449,7 +1449,7 @@ export default function AdminFinancials() {
           doc.text(value, 198, y + height - 2.5, { align: 'right' });
         };
 
-        drawBox(startY, 14, '01', 'NOME / TELEFONE', 'SERVIÇOS URBANOS TECNOLOGIA LTDA', true);
+        drawBox(startY, 14, '01', 'NOME / TELEFONE', 'SIC COMÉRCIO DE PRODUTOS ALIMENTÍCIOS E SERVIÇOS LTDA', true);
         drawBox(startY + 14, 9, '02', 'PERÍODO DE APURAÇÃO', periodStr);
         drawBox(startY + 23, 9, '03', 'NÚMERO DO CPF OU CNPJ', '54.795.377/0001-03', true);
         drawBox(startY + 32, 9, '04', 'CÓDIGO DA RECEITA', '0588 (IRRF - TRABALHO S/ VÍNCULO)', true);
@@ -1538,7 +1538,7 @@ export default function AdminFinancials() {
         doc.setFont('helvetica', 'normal');
         doc.setFontSize(8);
         doc.text('54.795.377/0001-03', 16, y + 9);
-        doc.text('SERVIÇOS URBANOS TECNOLOGIA LTDA', 76, y + 9);
+        doc.text('SIC COMÉRCIO DE PRODUTOS ALIMENTÍCIOS E SERVIÇOS LTDA', 76, y + 9);
 
         // QUADRO 2: PESSOA FÍSICA BENEFICIÁRIA DOS RENDIMENTOS
         y += 13;

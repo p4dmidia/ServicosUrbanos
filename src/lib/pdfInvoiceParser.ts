@@ -129,13 +129,17 @@ export async function auditInvoicePdf(
     const text = await extractTextFromPdf(file);
     const upperText = text.toUpperCase();
 
-    // 1. Checagem do Tomador (Serviços Urbanos Tecnologia Ltda.)
+    // 1. Checagem do Tomador (SIC Comércio de Produtos Alimentícios e Serviços Ltda)
     const cleanDoc = (d: string) => (d || '').replace(/\D/g, '');
     const hasTomadorCnpj = 
       upperText.includes(TOMADOR_CNPJ_CLEAN) || 
       upperText.includes(TOMADOR_CNPJ_FORMATTED) ||
+      upperText.includes('SIC COMERCIO') ||
+      upperText.includes('SIC COMÉRCIO') ||
       upperText.includes('SERVICOS URBANOS TECNOLOGIA') ||
-      upperText.includes('SERVIÇOS URBANOS TECNOLOGIA');
+      upperText.includes('SERVIÇOS URBANOS TECNOLOGIA') ||
+      upperText.includes('SERVICOS URBANOS INTERMEDIACAO') ||
+      upperText.includes('SERVIÇOS URBANOS INTERMEDIAÇÃO');
 
     // 2. Checagem do Prestador (CPF ou CNPJ do Afiliado)
     let hasPrestadorDocument = true;

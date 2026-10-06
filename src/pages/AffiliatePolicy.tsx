@@ -1,5 +1,7 @@
 import React from 'react';
 import { Shield, Download, FileText, CheckCircle2, AlertCircle } from 'lucide-react';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 import AffiliateLayout from '../components/AffiliateLayout';
 import { useAuth } from '../contexts/AuthContext';
 import { toast } from 'react-hot-toast';
@@ -8,14 +10,176 @@ export default function AffiliatePolicy() {
   const { user, profile } = useAuth();
 
   const handleDownload = () => {
-    toast.success('Download da apólice em PDF iniciado!');
+    try {
+      const isPJ = !!profile?.cnpj || !!profile?.description?.includes('[PJ]');
+      let insuredPerson = profile?.full_name || 'Afiliado do Sistema';
+      let insuredPersonCpf = profile?.cpf || '---';
+
+      if (isPJ && profile?.description?.includes('Titular do Seguro:')) {
+        const match = profile.description.match(/Titular do Seguro:\s*([^|]+)/i);
+        if (match && match[1]) insuredPerson = match[1].trim();
+        const cpfMatch = profile.description.match(/CPF Segurado:\s*([0-9.-]+)/i);
+        if (cpfMatch && cpfMatch[1]) insuredPersonCpf = cpfMatch[1].trim();
+      }
+
+      let certNum = (profile as any)?.certificate_number || '';
+      let policyNum = (profile as any)?.policy_number || '11-0982-000058940-0001';
+      let luckyNum = (profile as any)?.lucky_number || '';
+
+      if (profile?.description) {
+        const cMatch = profile.description.match(/\[MBM_CERTIFICATE:([^\]]+)\]/);
+        if (cMatch && cMatch[1]) certNum = cMatch[1].trim();
+        const pMatch = profile.description.match(/\[MBM_POLICY:([^\]]+)\]/);
+        if (pMatch && pMatch[1]) policyNum = pMatch[1].trim();
+        const lMatch = profile.description.match(/\[MBM_LUCKY_NUMBER:([^\]]+)\]/);
+        if (lMatch && lMatch[1]) luckyNum = lMatch[1].trim();
+      }
+
+      const displayCert = certNum ? `MBM-${certNum}` : `SU-2026-${user?.id ? user.id.substring(0, 8).toUpperCase() : '001'}`;
+      const issueDate = profile?.created_at ? new Date(profile.created_at).toLocaleDateString('pt-BR') : new Date().toLocaleDateString('pt-BR');
+      const nowFormatted = new Date().toLocaleString('pt-BR');
+
+      const doc = new jsPDF();
+
+      // Top Header Background
+      doc.setFillColor(11, 21, 40); // Dark Midnight
+      doc.rect(0, 0, 210, 48, 'F');
+
+      // Title & Estipulante
+      doc.setFontSize(15);
+      doc.setTextColor(255, 255, 255);
+      doc.setFont('helvetica', 'bold');
+      doc.text('CERTIFICADO INDIVIDUAL DE SEGURO', 14, 16);
+
+      doc.setFontSize(9);
+      doc.setTextColor(52, 211, 153); // Emerald
+      doc.text('SEGURO DE VIDA & ACIDENTES PESSOAIS EM GRUPO', 14, 23);
+
+      doc.setFontSize(8);
+      doc.setTextColor(203, 213, 225); // Slate 300
+      doc.setFont('helvetica', 'normal');
+      doc.text('Estipulante: SIC COMERCIO DE PRODUTOS ALIMENTICIOS E SERVICOS LTDA', 14, 31);
+      doc.text('CNPJ Estipulante: 54.795.377/0001-03', 14, 37);
+      doc.text(`Data de Emissao: ${nowFormatted}`, 130, 37);
+
+      // Section: Dados do Certificado e Segurado
+      doc.setTextColor(15, 23, 42);
+      doc.setFontSize(11);
+      doc.setFont('helvetica', 'bold');
+      doc.text('1. DADOS DO SEGURADO E DA APOLICE', 14, 56);
+
+      autoTable(doc, {
+        startY: 60,
+        theme: 'grid',
+        head: [['CAMPO', 'INFORMACAO OFICIAL REGISTRADA']],
+        body: [
+          ['Segurado Titular', insuredPerson.toUpperCase()],
+          ['CPF do Titular do Seguro', insuredPersonCpf],
+          ['Numero do Certificado', displayCert],
+          ['Apolice Coletiva MBM', policyNum],
+          ['Seguradora Parceira', 'MBM SEGURADORA S/A (CNPJ: 87.883.807/0001-06)'],
+          ['Numero da Sorte (Loteria Federal)', luckyNum || 'Bilhete oficial em processamento junto a MBM'],
+          ['Inicio da Vigencia / Cobertura', issueDate],
+          ['Status da Cobertura', 'ATIVA E REGULAR']
+        ],
+        headStyles: {
+          fillColor: [15, 23, 42],
+          textColor: [255, 255, 255],
+          fontSize: 8,
+          fontStyle: 'bold'
+        },
+        bodyStyles: {
+          fontSize: 8,
+          cellPadding: 2.5
+        },
+        columnStyles: {
+          0: { fontStyle: 'bold', cellWidth: 65, fillColor: [248, 250, 252] },
+          1: { fontStyle: 'normal' }
+        }
+      });
+
+      // Section: Coberturas e Limites de Indenização
+      const finalY1 = (doc as any).lastAutoTable.finalY + 10;
+      doc.setTextColor(15, 23, 42);
+      doc.setFontSize(11);
+      doc.setFont('helvetica', 'bold');
+      doc.text('2. GARANTIAS E LIMITES MAXIMOS DE INDENIZACAO (LMI)', 14, finalY1);
+
+      autoTable(doc, {
+        startY: finalY1 + 4,
+        theme: 'grid',
+        head: [['COBERTURA / BENEFICIO', 'DESCRICAO DA GARANTIA', 'LIMITE MAXIMO (LMI)']],
+        body: [
+          [
+            'Morte Acidental (MA)',
+            'Indenizacao aos beneficiarios em caso de falecimento acidental do segurado.',
+            'R$ 5.000,00'
+          ],
+          [
+            'Invalidez Permanente por Acidente (IPA)',
+            'Pagamento de indenizacao em caso de perda de membros ou invalidez funcional total decorrente de acidente.',
+            'R$ 5.000,00'
+          ],
+          [
+            'Sorteios Semanais Vida Light',
+            'Sorteios da Loteria Federal no valor de R$ 5.000,00 por sorteio.',
+            'R$ 5.000,00'
+          ]
+        ],
+        headStyles: {
+          fillColor: [15, 23, 42],
+          textColor: [255, 255, 255],
+          fontSize: 8,
+          fontStyle: 'bold'
+        },
+        bodyStyles: {
+          fontSize: 8,
+          cellPadding: 3
+        },
+        columnStyles: {
+          0: { fontStyle: 'bold', cellWidth: 55 },
+          1: { cellWidth: 95 },
+          2: { fontStyle: 'bold', halign: 'right', textColor: [16, 185, 129], cellWidth: 40 }
+        }
+      });
+
+      // Section: Instruções de Sinistro e Acionamento
+      const finalY2 = (doc as any).lastAutoTable.finalY + 10;
+      doc.setTextColor(15, 23, 42);
+      doc.setFontSize(11);
+      doc.setFont('helvetica', 'bold');
+      doc.text('3. PROCEDIMENTO EM CASO DE SINISTRO', 14, finalY2);
+
+      doc.setFontSize(8);
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(71, 85, 105);
+      const textNotice = doc.splitTextToSize(
+        'Em caso de sinistro, o segurado ou seus beneficiarios legais deverao entrar em contato imediatamente com o suporte oficial de atendimento pelo WhatsApp disponivel na plataforma. E obrigatorio apresentar o numero do CPF do titular do seguro para iniciar o processo de validacao tecnica e liberacao dos fundos junto a MBM Seguradora S/A.',
+        182
+      );
+      doc.text(textNotice, 14, finalY2 + 6);
+
+      // Footer / Autenticação
+      doc.setDrawColor(226, 232, 240);
+      doc.line(14, 275, 196, 275);
+      doc.setFontSize(7.5);
+      doc.setTextColor(148, 163, 184);
+      doc.text('Documento gerado eletronicamente pelo Ecossistema Servicos Urbanos / CaZa dos Sorteios.', 14, 280);
+      doc.text(`Codigo de Autenticacao Digital: SU-AUTH-${(user?.id || '000').substring(0, 12).toUpperCase()}`, 14, 284);
+
+      // Download file
+      const cleanFileName = `Certificado_Seguro_${insuredPersonCpf.replace(/\D/g, '') || 'MBM'}.pdf`;
+      doc.save(cleanFileName);
+      toast.success('Certificado baixado com sucesso!');
+    } catch (error) {
+      console.error('Erro ao gerar certificado PDF:', error);
+      toast.error('Erro ao gerar o PDF da apólice. Tente novamente.');
+    }
   };
 
   const coverages = [
-    { title: 'Morte Acidental', value: 'R$ 50.000,00', desc: 'Indenização aos beneficiários em caso de falecimento acidental do segurado.' },
-    { title: 'Invalidez Permanente por Acidente', value: 'R$ 50.000,00', desc: 'Pagamento de indenização em caso de perda de membros ou invalidez funcional total decorrente de acidente.' },
-    { title: 'Assistência Funeral', value: 'R$ 5.000,00', desc: 'Cobertura ou reembolso das despesas com sepultamento ou cremação.' },
-    { title: 'Diária de Internação Hospitalar', value: 'R$ 150,00 / dia', desc: 'Auxílio financeiro por dia de hospitalização decorrente de acidente pessoal coberto.' }
+    { title: 'Morte Acidental', value: 'R$ 5.000,00', desc: 'Indenização aos beneficiários em caso de falecimento acidental do segurado.' },
+    { title: 'Invalidez Permanente por Acidente', value: 'R$ 5.000,00', desc: 'Pagamento de indenização em caso de perda de membros ou invalidez funcional total decorrente de acidente.' }
   ];
 
   return (
@@ -173,7 +337,7 @@ export default function AffiliatePolicy() {
           <div className="space-y-2">
             <h4 className="font-black text-midnight text-sm uppercase">Como acionar o seguro?</h4>
             <p className="text-xs text-slate-500 leading-relaxed font-medium">
-              Em caso de sinistro, entre em contato imediatamente com o nosso suporte oficial de atendimento pelo WhatsApp disponível no painel. Apresente o número do certificado exibido acima para iniciar o processo de validação técnica e liberação dos fundos junto à seguradora parceira.
+              Em caso de sinistro, entre em contato imediatamente com o nosso suporte oficial de atendimento pelo WhatsApp disponível no painel. Apresente o número do CPF do titular do seguro para iniciar o processo de validação técnica e liberação dos fundos junto à seguradora parceira.
             </p>
           </div>
         </div>

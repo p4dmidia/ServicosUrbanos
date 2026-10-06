@@ -68,6 +68,14 @@ export default function AffiliateGanhaGanha() {
     });
   };
 
+  const supportPhone = '5571992102042';
+  const leadWhatsAppText = `Olá! Quero conhecer a CaZa dos Sorteios. Código de indicação: ${referralCode}`;
+  const leadWhatsAppUrl = `https://wa.me/${supportPhone}?text=${encodeURIComponent(leadWhatsAppText)}`;
+
+  const handleOpenLeadWhatsApp = () => {
+    window.open(leadWhatsAppUrl, '_blank');
+  };
+
   const handleShareWhatsApp = () => {
     const text = `🎉 *CONVITE EXCLUSIVO CAZA DOS SORTEIOS* 🎉\n\nProteja sua vida e sua família com o *Seguro Premiável*, concorra a *sorteios semanais de R$ 5.000,00* pela Loteria Federal, use *Telemedicina 24h* e ainda receba *Cashback recorrente*!\n\n👉 Acesse agora pelo meu link *Ganha & Ganha*:\n${inviteUrl}\n\nOu use meu código oficial no cadastro: *${referralCode}*`;
     const whatsappUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`;
@@ -117,26 +125,34 @@ export default function AffiliateGanhaGanha() {
 
             <div className="flex flex-wrap gap-4 pt-4">
               <button 
-                onClick={handleShareWhatsApp}
-                className="inline-flex items-center gap-2.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black px-6 py-3.5 rounded-2xl text-xs uppercase tracking-widest transition-all shadow-lg shadow-emerald-500/20 active:scale-95"
+                onClick={() => copyToClipboard(leadWhatsAppUrl, 'Link do WhatsApp de Atendimento')}
+                className="inline-flex items-center gap-2.5 bg-[#25D366] hover:bg-[#20ba5a] text-slate-950 font-black px-6 py-3.5 rounded-2xl text-xs uppercase tracking-widest transition-all shadow-lg shadow-[#25D366]/30 active:scale-95"
               >
-                <MessageCircle size={18} />
-                Compartilhar no WhatsApp
+                <Copy size={16} />
+                Copiar Link WhatsApp (+55 71 99210-2042)
+              </button>
+
+              <button 
+                onClick={handleShareWhatsApp}
+                className="inline-flex items-center gap-2.5 bg-white/10 hover:bg-white/20 border border-white/20 text-white font-black px-6 py-3.5 rounded-2xl text-xs uppercase tracking-widest transition-all backdrop-blur-md active:scale-95"
+              >
+                <Share2 size={16} />
+                Compartilhar Convite WhatsApp
               </button>
 
               <button 
                 onClick={handleNativeShare}
                 className="inline-flex items-center gap-2.5 bg-white/10 hover:bg-white/20 border border-white/20 text-white font-black px-6 py-3.5 rounded-2xl text-xs uppercase tracking-widest transition-all backdrop-blur-md active:scale-95"
               >
-                <Share2 size={16} />
+                <ExternalLink size={16} />
                 Compartilhar Link
               </button>
             </div>
           </div>
         </div>
 
-        {/* Main Cards: Código & Link Ganha & Ganha */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+        {/* Main Cards: Código, Link Ganha & Ganha e WhatsApp Oficial do Lead */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           
           {/* Card Principal: Código Ganha & Ganha (G1) */}
           <motion.div 
@@ -218,6 +234,48 @@ export default function AffiliateGanhaGanha() {
               >
                 <Copy size={16} />
                 Copiar Link Ganha & Ganha
+              </button>
+            </div>
+          </motion.div>
+
+          {/* Card: WhatsApp Atendimento Oficial do Lead */}
+          <motion.div 
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.2 }}
+            className="bg-white rounded-[2.5rem] p-8 md:p-10 border-2 border-emerald-500/20 shadow-xl shadow-[#25D366]/5 flex flex-col justify-between relative overflow-hidden"
+          >
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-50 text-[#128C7E] border border-emerald-200 rounded-xl text-[10px] font-black uppercase tracking-wider">
+                  <MessageCircle size={13} />
+                  WhatsApp Oficial
+                </span>
+                <span className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest font-mono">+55 71 99210-2042</span>
+              </div>
+
+              <div>
+                <h3 className="text-xl font-black text-midnight tracking-tight uppercase italic">WhatsApp do Lead</h3>
+                <p className="text-xs text-slate-500 font-medium mt-1">
+                  Envie o lead direto para o atendimento oficial no WhatsApp com seu código de indicação já preenchido na mensagem.
+                </p>
+              </div>
+
+              <div className="bg-emerald-50/50 border border-emerald-100 rounded-2xl p-5 space-y-2">
+                <span className="text-[9px] font-black text-emerald-700 uppercase tracking-widest block">Mensagem Pré-configurada</span>
+                <p className="text-xs text-slate-700 font-medium italic bg-white p-3 rounded-xl border border-emerald-100/80">
+                  "{leadWhatsAppText}"
+                </p>
+              </div>
+            </div>
+
+            <div className="pt-6 mt-6 border-t border-slate-100">
+              <button 
+                onClick={() => copyToClipboard(leadWhatsAppUrl, 'Link do WhatsApp de Atendimento')}
+                className="w-full inline-flex items-center justify-center gap-3 bg-[#25D366] hover:bg-[#20ba5a] text-slate-950 py-4 px-6 rounded-2xl font-black text-xs uppercase tracking-widest transition-all shadow-lg shadow-[#25D366]/20 active:scale-95"
+              >
+                <Copy size={16} />
+                Copiar Link WhatsApp
               </button>
             </div>
           </motion.div>

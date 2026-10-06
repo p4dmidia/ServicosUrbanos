@@ -1,17 +1,24 @@
 import React from 'react';
 import { useLocation } from 'react-router-dom';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion } from 'motion/react';
+import { useAuth } from '../contexts/AuthContext';
 
 export default function WhatsAppButton() {
   const location = useLocation();
+  const { user, profile } = useAuth();
 
   // Hide the support button on admin pages
   if (location.pathname.startsWith('/admin')) {
     return null;
   }
 
-  const phoneNumber = '557192102042';
-  const message = 'Olá! Preciso de suporte no Serviços Urbanos.';
+  const phoneNumber = '5571992102042';
+  const referralCode = profile?.referral_code || (user?.id ? user.id.substring(0, 6).toUpperCase() : '');
+  
+  const message = referralCode
+    ? `Olá! Quero conhecer a CaZa dos Sorteios. Código de indicação: ${referralCode}`
+    : 'Olá! Preciso de atendimento na CaZa dos Sorteios.';
+
   const whatsappUrl = `https://wa.me/${phoneNumber}?text=${encodeURIComponent(message)}`;
 
   return (
@@ -37,7 +44,7 @@ export default function WhatsAppButton() {
 
         {/* Text Label - Hidden on small mobile, slides out on hover for desktop */}
         <span className="max-w-0 overflow-hidden whitespace-nowrap text-sm font-extrabold uppercase tracking-wider transition-all duration-300 ease-out group-hover:max-w-xs group-hover:ml-1 group-hover:mr-2">
-          Suporte
+          WhatsApp
         </span>
 
         {/* WhatsApp Official SVG Icon */}

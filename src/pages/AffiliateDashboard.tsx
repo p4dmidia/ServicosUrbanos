@@ -17,7 +17,8 @@ import {
   Lock,
   Sparkles,
   Gift,
-  ArrowRight
+  ArrowRight,
+  MessageCircle
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { Link, useNavigate } from 'react-router-dom';
@@ -327,9 +328,17 @@ export default function AffiliateDashboard() {
                   </span>
                 </div>
 
+                <button
+                  onClick={() => copyToClipboard(`https://wa.me/5571992102042?text=${encodeURIComponent(`Olá! Quero conhecer a CaZa dos Sorteios. Código de indicação: ${profile?.referral_code || (user?.id ? user.id.substring(0, 6).toUpperCase() : '')}`)}`, 'Link do WhatsApp de Atendimento')}
+                  className="inline-flex items-center gap-2 bg-[#25D366] hover:bg-[#20ba5a] text-slate-950 px-5 py-3.5 rounded-2xl font-black text-xs uppercase tracking-widest transition-all shadow-lg shadow-[#25D366]/20 active:scale-95"
+                >
+                  <Copy size={16} />
+                  Copiar Link WhatsApp (+55 71 99210-2042)
+                </button>
+
                 <Link
                   to="/afiliado/codigo-ganha-ganha"
-                  className="inline-flex items-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-slate-950 px-6 py-3.5 rounded-2xl font-black text-xs uppercase tracking-widest transition-all shadow-lg shadow-emerald-500/20 active:scale-95"
+                  className="inline-flex items-center gap-2 bg-white/10 hover:bg-white/20 border border-white/20 text-white px-5 py-3.5 rounded-2xl font-black text-xs uppercase tracking-widest transition-all backdrop-blur-md active:scale-95"
                 >
                   <Gift size={16} />
                   Acessar Aba Ganha & Ganha

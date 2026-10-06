@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { 
   Ticket, 
   Calendar, 
@@ -21,14 +21,101 @@ import {
   RefreshCw,
   Dices,
   ChevronRight,
-  HelpCircle
+  HelpCircle,
+  Flag
 } from 'lucide-react';
 import AffiliateLayout from '../components/AffiliateLayout';
 import { useAuth } from '../contexts/AuthContext';
+import { supabase } from '../lib/supabase';
 import { motion } from 'framer-motion';
 
 export default function AffiliateLuckyNumber() {
   const { user, profile } = useAuth();
+  const [subscription, setSubscription] = useState<any>(null);
+
+  // Carregar assinatura ativa do usuário para saber a vigência exata do plano contratado
+  useEffect(() => {
+    async function loadSub() {
+      if (!user) return;
+      try {
+        const { data: subs } = await supabase
+          .from('subscriptions')
+          .select('*')
+          .eq('profile_id', user.id)
+          .order('end_date', { ascending: false });
+
+        if (subs && subs.length > 0) {
+          const active = subs.find(s => s.status === 'active' && new Date(s.end_date) >= new Date()) || subs[0];
+          setSubscription(active);
+        } else {
+          try {
+            const savedMock = localStorage.getItem(`mock_subscription_${user.id}`);
+            if (savedMock) {
+              const mockData = JSON.parse(savedMock);
+              setSubscription({
+                plan_type: mockData.planType,
+                start_date: mockData.createdAt,
+                end_date: mockData.endDate,
+                status: mockData.status,
+                created_at: mockData.createdAt
+              });
+            }
+          } catch (e) {}
+        }
+      } catch (err) {
+        console.error("Erro ao carregar assinatura:", err);
+      }
+    }
+    loadSub();
+  }, [user]);
+
+  // Informações e duração do plano contratado
+  const planInfo = useMemo(() => {
+    const rawType = (subscription?.plan_type || '').toLowerCase();
+    
+    let durationMonths = 12; // Padrão Anual (48 sorteios)
+    let planName = 'Plano Anual';
+    
+    if (rawType.includes('mensal') || rawType === 'mensal') {
+      durationMonths = 1;
+      planName = 'Plano Mensal';
+    } else if (rawType.includes('trimestral') || rawType === 'trimestral') {
+      durationMonths = 3;
+      planName = 'Plano Trimestral';
+    } else if (rawType.includes('semestral') || rawType === 'semestral') {
+      durationMonths = 6;
+      planName = 'Plano Semestral';
+    } else if (rawType.includes('revendedor') || rawType === 'revendedor') {
+      durationMonths = 12;
+      planName = 'Revendedor Regional';
+    } else if (rawType.includes('anual') || rawType === 'anual') {
+      durationMonths = 12;
+      planName = 'Plano Anual';
+    } else if (subscription?.start_date && subscription?.end_date) {
+      const diffMs = new Date(subscription.end_date).getTime() - new Date(subscription.start_date).getTime();
+      const diffDays = Math.round(diffMs / (1000 * 60 * 60 * 24));
+      if (diffDays <= 45) {
+        durationMonths = 1;
+        planName = 'Plano Mensal';
+      } else if (diffDays <= 120) {
+        durationMonths = 3;
+        planName = 'Plano Trimestral';
+      } else if (diffDays <= 220) {
+        durationMonths = 6;
+        planName = 'Plano Semestral';
+      } else {
+        durationMonths = 12;
+        planName = 'Plano Anual';
+      }
+    }
+
+    const totalDraws = durationMonths * 4; // 4 sorteios mensais da Loteria Federal
+    return {
+      durationMonths,
+      planName,
+      totalDraws
+    };
+  }, [subscription]);
 
   // O número da sorte oficial é definido e emitido diretamente pela MBM Seguradora.
   const luckyNumber = useMemo(() => {
@@ -55,11 +142,14 @@ export default function AffiliateLuckyNumber() {
 
   // Data de adesão / início da assinatura do segurado
   const userJoinDate = useMemo(() => {
+    if (subscription?.created_at || subscription?.start_date) {
+      return new Date(subscription.start_date || subscription.created_at);
+    }
     if (profile?.created_at) {
       return new Date(profile.created_at);
     }
     return new Date(); // Fallback para data atual
-  }, [profile]);
+  }, [subscription, profile]);
 
   // Função para obter os 4 domingos válidos de sorteio para qualquer ano/mês
   // REGRA MBM: Em meses com 5 domingos, desconsidera o primeiro domingo.
@@ -130,12 +220,21 @@ export default function AffiliateLuckyNumber() {
       competitionYear = issuanceYear;
     }
 
-    // Primeiro sorteio elegível no mês de concorrência (respeitando regra dos 5 domingos)
-    const competitionSundays = getDrawingSundaysForMonth(competitionYear, competitionMonth);
-    const firstEligibleDraw = competitionSundays.length > 0 ? competitionSundays[0] : null;
+    // Gerar a lista completa de todos os domingos de sorteio válidos do plano contratado
+    const allPlanSundays: Date[] = [];
+    for (let m = 0; m < planInfo.durationMonths; m++) {
+      const monthIdx = (competitionMonth + m) % 12;
+      const yearIdx = competitionYear + Math.floor((competitionMonth + m) / 12);
+      const sundaysOfMonth = getDrawingSundaysForMonth(yearIdx, monthIdx);
+      allPlanSundays.push(...sundaysOfMonth);
+    }
 
-    // Próximos sorteios do ciclo
-    const allDrawsFormatted = competitionSundays.map(d => d.toLocaleDateString('pt-BR'));
+    const firstEligibleDraw = allPlanSundays.length > 0 ? allPlanSundays[0] : null;
+    const lastEligibleDraw = allPlanSundays.length > 0 ? allPlanSundays[allPlanSundays.length - 1] : null;
+
+    // Próximos sorteios do 1º mês de concorrência
+    const firstMonthSundays = getDrawingSundaysForMonth(competitionYear, competitionMonth);
+    const allDrawsFormatted = firstMonthSundays.map(d => d.toLocaleDateString('pt-BR'));
 
     const monthNames = [
       'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
@@ -157,18 +256,25 @@ export default function AffiliateLuckyNumber() {
     if (firstEligibleDraw && todayZero >= firstEligibleDraw) {
       currentStep = 4;
     }
+    if (lastEligibleDraw && todayZero > lastEligibleDraw) {
+      currentStep = 5;
+    }
 
     return {
       joinDateFormatted: joinDate.toLocaleDateString('pt-BR'),
       batchClosingFormatted: batchClosingDate.toLocaleDateString('pt-BR'),
       issuanceMonthLabel: `${monthNames[issuanceMonth]} de ${issuanceYear}`,
       firstDrawFormatted: firstEligibleDraw ? firstEligibleDraw.toLocaleDateString('pt-BR') : 'A definir',
+      lastDrawFormatted: lastEligibleDraw ? lastEligibleDraw.toLocaleDateString('pt-BR') : 'A definir',
+      totalDraws: allPlanSundays.length || planInfo.totalDraws,
+      planName: planInfo.planName,
+      durationMonths: planInfo.durationMonths,
       competitionSundaysFormatted: allDrawsFormatted,
       currentStep,
       isCompetingNow: currentStep === 4,
       totalSundaysInMonth: new Date(competitionYear, competitionMonth + 1, 0).getDate() // aux
     };
-  }, [userJoinDate]);
+  }, [userJoinDate, planInfo]);
 
   // Próximo sorteio geral válido
   const nextGeneralDrawDate = useMemo(() => {
@@ -316,7 +422,7 @@ export default function AffiliateLuckyNumber() {
                 </p>
               </div>
 
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-6 border-t border-white/10 pt-6">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-6 border-t border-white/10 pt-6">
                 <div>
                   <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1.5">
                     Próximo Sorteio Geral
@@ -335,7 +441,16 @@ export default function AffiliateLuckyNumber() {
                     {mbmSchedule.firstDrawFormatted}
                   </p>
                 </div>
-                <div className="col-span-2 sm:col-span-1">
+                <div>
+                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1.5">
+                    Último Sorteio ({mbmSchedule.totalDraws}º)
+                  </p>
+                  <p className="text-sm font-black flex items-center gap-1.5 text-amber-300">
+                    <Flag size={15} />
+                    {mbmSchedule.lastDrawFormatted}
+                  </p>
+                </div>
+                <div>
                   <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1.5">
                     Premiação Principal
                   </p>
@@ -401,13 +516,18 @@ export default function AffiliateLuckyNumber() {
               </div>
             </div>
 
-            <span className="self-start sm:self-auto text-[10px] font-black uppercase tracking-widest text-indigo-700 bg-indigo-50 px-3.5 py-1.5 rounded-full border border-indigo-200">
-              Fechamento: Todo dia 20
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="self-start sm:self-auto text-[10px] font-black uppercase tracking-widest text-emerald-700 bg-emerald-50 px-3.5 py-1.5 rounded-full border border-emerald-200">
+                {mbmSchedule.planName}: {mbmSchedule.totalDraws} Sorteios
+              </span>
+              <span className="self-start sm:self-auto text-[10px] font-black uppercase tracking-widest text-indigo-700 bg-indigo-50 px-3.5 py-1.5 rounded-full border border-indigo-200">
+                Fechamento: Todo dia 20
+              </span>
+            </div>
           </div>
 
           {/* Cards de Etapas do Ciclo (Timeline) */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
             
             {/* Etapa 1: Adesão */}
             <div className={`p-5 rounded-2xl border transition-all ${
@@ -494,7 +614,7 @@ export default function AffiliateLuckyNumber() {
 
             {/* Etapa 4: Início dos Sorteios */}
             <div className={`p-5 rounded-2xl border transition-all ${
-              mbmSchedule.currentStep >= 4 
+              mbmSchedule.currentStep >= 4 && mbmSchedule.currentStep < 5
                 ? 'bg-emerald-50 border-emerald-300 shadow-sm' 
                 : 'bg-slate-50/80 border-slate-200'
             }`}>
@@ -507,7 +627,7 @@ export default function AffiliateLuckyNumber() {
                 <span className={`text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md ${
                   mbmSchedule.currentStep >= 4 ? 'bg-emerald-100 text-emerald-800' : 'bg-indigo-100 text-indigo-800'
                 }`}>
-                  {mbmSchedule.currentStep >= 4 ? 'Concorrendo' : 'Data de Início'}
+                  {mbmSchedule.currentStep >= 4 ? 'Concorrendo' : '1º Sorteio'}
                 </span>
               </div>
               <h4 className="font-black text-midnight text-xs uppercase tracking-tight">
@@ -517,7 +637,34 @@ export default function AffiliateLuckyNumber() {
                 {mbmSchedule.firstDrawFormatted}
               </p>
               <p className="text-[10px] text-slate-500 mt-2 leading-relaxed">
-                Concorre a todos os 4 sorteios mensais da Loteria Federal.
+                Início dos 4 sorteios mensais da Loteria Federal.
+              </p>
+            </div>
+
+            {/* Etapa 5: Último Sorteio (Encerramento do Ciclo do Plano) */}
+            <div className={`p-5 rounded-2xl border transition-all ${
+              mbmSchedule.currentStep >= 5 
+                ? 'bg-slate-50/80 border-slate-200 opacity-80' 
+                : 'bg-gradient-to-br from-indigo-50/70 to-purple-50/70 border-indigo-200 shadow-sm'
+            }`}>
+              <div className="flex items-center justify-between mb-3">
+                <span className={`size-7 rounded-xl font-black text-xs flex items-center justify-center ${
+                  mbmSchedule.currentStep >= 5 ? 'bg-slate-300 text-slate-700' : 'bg-indigo-600 text-white'
+                }`}>
+                  5
+                </span>
+                <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md bg-indigo-100 text-indigo-800 border border-indigo-200/60">
+                  {mbmSchedule.totalDraws}º Sorteio
+                </span>
+              </div>
+              <h4 className="font-black text-midnight text-xs uppercase tracking-tight">
+                Último Sorteio ({mbmSchedule.totalDraws}º)
+              </h4>
+              <p className="font-mono text-xs font-black text-indigo-700 mt-1">
+                {mbmSchedule.lastDrawFormatted}
+              </p>
+              <p className="text-[10px] text-slate-500 mt-2 leading-relaxed">
+                Encerramento do ciclo de {mbmSchedule.totalDraws} sorteios ({mbmSchedule.planName}).
               </p>
             </div>
 
@@ -528,10 +675,10 @@ export default function AffiliateLuckyNumber() {
             <Info size={20} className="text-primary-blue shrink-0 mt-0.5" />
             <div className="space-y-1">
               <span className="font-bold text-midnight block">
-                Como funciona a regra do fechamento dia 20:
+                Regra de vigência do seu {mbmSchedule.planName} ({mbmSchedule.totalDraws} sorteios):
               </span>
               <p className="leading-relaxed">
-                Adesões realizadas entre <strong>21/09 e 20/10</strong> têm fechamento de lote em <strong>20/10</strong>, recebem o número da sorte no início de novembro e começam a concorrer no sorteio de <strong>08/11/2026</strong>. O mesmo fluxo se repete sucessivamente nos meses seguintes.
+                Com o <strong>{mbmSchedule.planName}</strong>, você concorre a um total de <strong>{mbmSchedule.totalDraws} sorteios semanais da Loteria Federal</strong> (4 sorteios por mês durante {mbmSchedule.durationMonths} {mbmSchedule.durationMonths === 1 ? 'mês' : 'meses'}). Seu 1º sorteio é em <strong>{mbmSchedule.firstDrawFormatted}</strong> e o último sorteio que encerra o ciclo da sua assinatura atual é em <strong>{mbmSchedule.lastDrawFormatted}</strong>.
               </p>
             </div>
           </div>

@@ -41,6 +41,7 @@ import ResetPassword from './pages/ResetPassword';
 import TermosPrivacidade from './pages/TermosPrivacidade';
 import PoliticaCookies from './pages/PoliticaCookies';
 import TermosUso from './pages/TermosUso';
+import WhatsAppRedirect from './pages/WhatsAppRedirect';
 
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { ReferralTracker } from './components/ReferralTracker';
@@ -62,6 +63,10 @@ export default function App() {
           <Routes>
             <Route path="/" element={IS_MAINTENANCE ? <Maintenance /> : <Home />} />
             <Route path="/invite/:referrerId" element={<ReferralTracker />} />
+            <Route path="/contato/:referrerId" element={<WhatsAppRedirect />} />
+            <Route path="/contato" element={<WhatsAppRedirect />} />
+            <Route path="/whatsapp/:referrerId" element={<WhatsAppRedirect />} />
+            <Route path="/whatsapp" element={<WhatsAppRedirect />} />
             <Route path="/ganhe-dinheiro" element={<GanheDinheiro />} />
             <Route path="/cadastro" element={<Cadastro />} />
             <Route path="/login" element={<Login />} />

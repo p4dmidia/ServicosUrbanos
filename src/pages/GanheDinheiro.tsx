@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   LayoutGrid,
   CheckCircle,
@@ -17,60 +17,61 @@ import {
   ArrowRight,
   Calculator,
   UserCheck,
-  Building
+  Building,
+  Briefcase,
+  Sparkles,
+  Calendar,
+  AlertTriangle,
+  Gift
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { Link } from 'react-router-dom';
 import Header from '../components/Header';
-import { businessRules, calculateTaxDeductions } from '../lib/businessRules';
+import { calculateTaxDeductions } from '../lib/businessRules';
 
 export default function GanheDinheiro() {
-  const [totalMembrosStr, setTotalMembrosStr] = useState('10000');
-  const [planPriceStr, setPlanPriceStr] = useState('60');
-  const [mmnConfig, setMmnConfig] = useState<any>(null);
+  // Planos oficiais do Seguro Vida Light (Produto B)
+  const [selectedPlanValue, setSelectedPlanValue] = useState<number>(5.00); // 5, 15, 30, 48
+  const [g0MembersStr, setG0MembersStr] = useState('20'); // Clientes Diretos (G0)
+  const [g1MembersStr, setG1MembersStr] = useState('100'); // Clientes Nível 1 (G1)
+  const [g2MembersStr, setG2MembersStr] = useState('300'); // Clientes Nível 2 (G2)
 
-  useEffect(() => {
-    businessRules.getMMNConfig().then(setMmnConfig).catch(console.error);
-  }, []);
+  const g0 = Math.max(0, Number(g0MembersStr) || 0);
+  const g1 = Math.max(0, Number(g1MembersStr) || 0);
+  const g2 = Math.max(0, Number(g2MembersStr) || 0);
 
-  const totalMembros = Number(totalMembrosStr) || 0;
-  const planPrice = Number(planPriceStr.replace(',', '.')) || 0;
+  const totalVendasRede = g0 + g1 + g2;
+  const faturamentoTotalRede = totalVendasRede * selectedPlanValue;
 
-  // Calculations based on the simplified spreadsheet & MMN v4 rules
-  const arrecadacao = totalMembros * planPrice;
-  
-  function getPlanPeriodLabel(price: number): string {
-    switch (price) {
-      case 20: return 'Mensal';
-      case 30: return 'Trimestral';
-      case 40: return 'Semestral';
-      case 60: return 'Anual';
-      default: return 'Mensal';
-    }
-  }
+  // Regra Oficial de Comissionamento Microfranqueado (33% no total)
+  // G0 (Direto): 27%
+  // G1 (Indireto 1): 3%
+  // G2 (Indireto 2): 3%
+  const comissaoBrutaG0 = g0 * selectedPlanValue * 0.27;
+  const comissaoBrutaG1 = g1 * selectedPlanValue * 0.03;
+  const comissaoBrutaG2 = g2 * selectedPlanValue * 0.03;
+  const comissaoBrutaTotal = comissaoBrutaG0 + comissaoBrutaG1 + comissaoBrutaG2;
 
-  const periodLabel = getPlanPeriodLabel(planPrice);
-  
-  // Taxas carregadas dinamicamente do Painel Admin (mmn_config)
-  const rateMensal = (mmnConfig?.cashbackMensal ?? 5.00) / 100.0;
-  const rateAnual = (mmnConfig?.cashbackAnual ?? 2.00) / 100.0;
+  // Split Oficial de Repasses:
+  // 80% Semanal (pago na terça-feira das vendas de seg a sáb)
+  // 20% Anual (pago em 10 de Dezembro)
+  const splitSemanal80 = comissaoBrutaTotal * 0.80;
+  const splitAnual20 = comissaoBrutaTotal * 0.20;
 
-  const cashMensal = arrecadacao * rateMensal;
-  const cashAnual = arrecadacao * rateAnual;
+  // Base para cálculo tributário (mensal estimada baseada no split semanal * 4)
+  const estimativaMensalBruto = splitSemanal80 * 4;
 
-  // Bruto mensal a receber = Cash Mensal (pago dia 10)
-  const bruto = cashMensal;
+  // Tributação PF (RPA com retenção) vs MEI (Emissão de NF sem retenção na fonte)
+  const taxesPF = calculateTaxDeductions(estimativaMensalBruto, false);
+  const taxesMEI = calculateTaxDeductions(estimativaMensalBruto, true);
+  const economiaMEI = Math.max(0, taxesMEI.liquido - taxesPF.liquido);
 
-  // Apuração oficial unificada (Intermediação de Negócios 0% retenção na fonte)
-  const taxesPF = calculateTaxDeductions(bruto, false);
-  const inss = taxesPF.inss;
-  const irrf = taxesPF.irrf;
-  const recebidoPF = taxesPF.liquido;
-
-  const taxesMEI = calculateTaxDeductions(bruto, true);
-  const recebidoMEI = taxesMEI.liquido;
-
-  const economiaMEI = Math.max(0, recebidoMEI - recebidoPF);
+  const planOptions = [
+    { label: 'Mensal', price: 5.00, desc: 'R$ 5,00 / mês' },
+    { label: 'Trimestral', price: 15.00, desc: 'R$ 15,00 / trim' },
+    { label: 'Semestral', price: 30.00, desc: 'R$ 30,00 / sem' },
+    { label: 'Anual', price: 48.00, desc: 'R$ 48,00 / ano' },
+  ];
 
   return (
     <div className="min-h-screen flex flex-col font-sans bg-midnight text-slate-100 overflow-x-hidden">
@@ -85,331 +86,410 @@ export default function GanheDinheiro() {
           </div>
 
           <div className="max-w-7xl mx-auto px-6 lg:px-20 relative z-10 text-center space-y-6">
-            <span className="inline-block bg-accent/10 border border-accent/20 text-accent px-4 py-1.5 rounded-full text-xs font-black uppercase tracking-widest">
-              Programa de Afiliados CaZa dos Sorteios
+            <span className="inline-flex items-center gap-2 bg-accent/10 border border-accent/20 text-accent px-4 py-1.5 rounded-full text-xs font-black uppercase tracking-widest">
+              <Briefcase size={14} />
+              Programa Oficial de Microfranqueados
             </span>
             <h1 className="text-4xl md:text-7xl font-extrabold text-white leading-tight max-w-5xl mx-auto">
-              Ganhe recorrente indicando o <span className="bg-gradient-to-r from-accent via-emerald-400 to-teal-300 bg-clip-text text-transparent">Seguro Premiável.</span>
+              Ganhe até <span className="bg-gradient-to-r from-accent via-emerald-400 to-teal-300 bg-clip-text text-transparent">33% de comissão</span> distribuindo o Seguro Vida Light.
             </h1>
             <p className="text-lg md:text-xl text-slate-400 max-w-3xl mx-auto font-medium">
-              Transforme a indicação de assinaturas em faturamento recorrente. Use o nosso simulador simplificado para ver o potencial de ganhos da sua rede e a diferença real de receber como Pessoa Física ou MEI.
+              Como Microfranqueado você constrói uma carteira comercial rentável com <strong>27% direto (G0)</strong> e <strong>3% em rede (G1 e G2)</strong>. Repasses no split oficial: <strong>80% semanalmente na terça-feira</strong> e <strong>20% no bônus anual em dezembro</strong>.
             </p>
-            <div className="pt-4 flex justify-center">
+            
+            <div className="pt-4 flex flex-col sm:flex-row items-center justify-center gap-4">
               <Link
                 to="/cadastro"
-                className="bg-accent hover:bg-emerald-500 text-midnight px-12 py-5 rounded-2xl text-xl font-black transition-all hover:scale-105 active:scale-95 shadow-2xl shadow-accent/20 flex items-center gap-3 uppercase tracking-tighter"
+                className="bg-accent hover:bg-emerald-500 text-midnight px-10 py-5 rounded-2xl text-lg font-black transition-all hover:scale-105 active:scale-95 shadow-2xl shadow-accent/20 flex items-center gap-3 uppercase tracking-tighter"
               >
-                Ativar meu plano e indicar
-                <ChevronRight size={24} />
+                Tornar-se Microfranqueado
+                <ChevronRight size={22} />
               </Link>
+              <Link
+                to="/cadastro"
+                className="bg-white/10 hover:bg-white/15 text-white px-8 py-5 rounded-2xl text-base font-bold transition-all border border-white/15 flex items-center gap-2"
+              >
+                Apenas Contratar Seguro (R$ 5/mês)
+              </Link>
+            </div>
+
+            {/* Aviso de Transparência Jurídica */}
+            <div className="max-w-2xl mx-auto p-3.5 bg-blue-950/40 border border-blue-500/20 rounded-2xl text-xs text-blue-200/80 font-medium text-center">
+              🛡️ <strong>Transparência Jurídica:</strong> Clientes que contratam apenas o Seguro Vida Light (Afiliados Premium) são estritamente consumidores de seguro e sorteios. O comissionamento em rede é restrito aos Microfranqueados devidamente licenciados.
             </div>
           </div>
         </section>
 
-        {/* Como Funciona */}
+        {/* Como Funciona a Microfranquia */}
         <section className="py-24 border-b border-white/5 bg-slate-950/20">
           <div className="max-w-7xl mx-auto px-6 lg:px-20">
             <div className="text-center mb-16">
-              <h2 className="text-3xl md:text-5xl font-black mb-4 uppercase tracking-tighter">Fluxo Simplificado</h2>
+              <h2 className="text-3xl md:text-5xl font-black mb-4 uppercase tracking-tighter">Como Funciona o Modelo</h2>
               <div className="w-20 h-1.5 bg-accent mx-auto rounded-full"></div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-12">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
               <div className="bg-slate-900/40 p-8 rounded-3xl border border-white/5 flex flex-col items-center text-center">
                 <div className="size-16 bg-accent/10 border border-accent/20 rounded-2xl flex items-center justify-center text-accent mb-6">
-                  <CheckCircle size={32} />
+                  <Briefcase size={28} />
                 </div>
-                <h3 className="text-xl font-bold mb-3 text-white">1. Selecione um Plano</h3>
-                <p className="text-slate-400 leading-relaxed text-sm font-medium">
-                  Adira a um dos planos de licenciamento ativos para garantir sua proteção e liberar seu Código Ganha & Ganha.
+                <h3 className="text-lg font-bold mb-2 text-white">1. Licença de Franquia</h3>
+                <p className="text-slate-400 text-xs font-medium leading-relaxed">
+                  Adquira a licença comercial anual (R$ 150/ano). <strong>Os 100 primeiros têm isenção inicial</strong> com desconto direto no bônus de dezembro.
                 </p>
               </div>
 
               <div className="bg-slate-900/40 p-8 rounded-3xl border border-white/5 flex flex-col items-center text-center">
                 <div className="size-16 bg-accent/10 border border-accent/20 rounded-2xl flex items-center justify-center text-accent mb-6">
-                  <Users size={32} />
+                  <ShieldCheck size={28} />
                 </div>
-                <h3 className="text-xl font-bold mb-3 text-white">2. Ganha & Ganha</h3>
-                <p className="text-slate-400 leading-relaxed text-sm font-medium">
-                  Divulgue seu código ou link exclusivo. Todos que aderirem terão os mesmos benefícios de proteção, sorteios e afiliação.
+                <h3 className="text-lg font-bold mb-2 text-white">2. Seguro Vida Light</h3>
+                <p className="text-slate-400 text-xs font-medium leading-relaxed">
+                  Ofereça o produto ao público final a partir de <strong>R$ 5,00/mês</strong> com seguro MBM R$ 5.000, telemedicina 24h e sorteios pela Loteria Federal.
                 </p>
               </div>
 
               <div className="bg-slate-900/40 p-8 rounded-3xl border border-white/5 flex flex-col items-center text-center">
                 <div className="size-16 bg-accent/10 border border-accent/20 rounded-2xl flex items-center justify-center text-accent mb-6">
-                  <Wallet size={32} />
+                  <TrendingUp size={28} />
                 </div>
-                <h3 className="text-xl font-bold mb-3 text-white">3. Receba em Rede</h3>
-                <p className="text-slate-400 leading-relaxed text-sm font-medium">
-                  Ganhe repasses recorrentes mensais e o bônus anual acumulado sobre as assinaturas de G0 a G2 da sua rede.
+                <h3 className="text-lg font-bold mb-2 text-white">3. G0 27% | G1 3% | G2 3%</h3>
+                <p className="text-slate-400 text-xs font-medium leading-relaxed">
+                  Receba 27% sobre todas as vendas diretas feitas por você e 3% nos níveis G1 e G2 da sua equipe, totalizando 33% de comissionamento bruto.
+                </p>
+              </div>
+
+              <div className="bg-slate-900/40 p-8 rounded-3xl border border-white/5 flex flex-col items-center text-center">
+                <div className="size-16 bg-accent/10 border border-accent/20 rounded-2xl flex items-center justify-center text-accent mb-6">
+                  <Wallet size={28} />
+                </div>
+                <h3 className="text-lg font-bold mb-2 text-white">4. Split 80 / 20</h3>
+                <p className="text-slate-400 text-xs font-medium leading-relaxed">
+                  <strong>80% semanal</strong> depositado toda terça-feira (vendas seg a sáb) e <strong>20% anual</strong> no bônus acumulado de 10 de dezembro.
                 </p>
               </div>
             </div>
           </div>
         </section>
 
-        {/* Novo Simulador Simplificado */}
+        {/* Simulador Oficial e Interativo */}
         <section className="py-24">
           <div className="max-w-7xl mx-auto px-6 lg:px-20 space-y-16">
             <div className="text-center max-w-3xl mx-auto space-y-4">
               <h2 className="text-3xl md:text-5xl font-black uppercase tracking-tighter">
-                Calculadora Ganha & Ganha
+                Simulador de Comissões do Microfranqueado
               </h2>
-              <p className="text-slate-400 font-medium">
-                Arraste os seletores abaixo ou digite os valores para projetar os repasses de rede imediatos e comparar a diferença tributária entre Pessoa Física e MEI.
+              <p className="text-slate-400 font-medium text-sm">
+                Selecione o plano do Seguro Vida Light contratado pelos clientes e projete seus ganhos nos 3 níveis de comissão e no split 80% semanal e 20% anual.
               </p>
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-12">
               {/* Inputs Panel */}
               <div className="lg:col-span-5 space-y-8 bg-slate-900/30 p-8 rounded-[2.5rem] border border-white/5">
-                <div className="flex items-center gap-3 mb-4">
+                <div className="flex items-center gap-3 mb-2">
                   <div className="size-10 rounded-xl bg-accent/10 border border-accent/20 flex items-center justify-center text-accent">
                     <Calculator size={20} />
                   </div>
-                  <h3 className="text-lg font-black text-white uppercase tracking-tight">Configurações Ganha & Ganha</h3>
+                  <h3 className="text-lg font-black text-white uppercase tracking-tight">Parâmetros de Simulação</h3>
                 </div>
 
-                {/* Total Membros Input & Slider */}
-                <div className="space-y-4">
+                {/* Seleção do Plano do Seguro */}
+                <div className="space-y-3">
+                  <label className="text-xs font-black text-slate-400 uppercase tracking-wider block">
+                    Plano do Seguro Vida Light Comercializado
+                  </label>
+                  <div className="grid grid-cols-2 gap-3">
+                    {planOptions.map((plan) => (
+                      <button
+                        key={plan.price}
+                        type="button"
+                        onClick={() => setSelectedPlanValue(plan.price)}
+                        className={`p-3.5 rounded-2xl border text-left transition-all ${
+                          selectedPlanValue === plan.price
+                            ? 'bg-accent/15 border-accent text-white shadow-lg shadow-accent/10'
+                            : 'bg-slate-950/60 border-white/5 text-slate-400 hover:border-white/20'
+                        }`}
+                      >
+                        <p className="text-xs font-black uppercase">{plan.label}</p>
+                        <p className="text-base font-black text-accent mt-0.5">{plan.desc}</p>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Vendas Diretas G0 (27%) */}
+                <div className="space-y-3 pt-2">
                   <div className="flex justify-between items-center">
-                    <label className="text-xs font-black text-slate-400 uppercase tracking-wider">Equipe Ganha & Ganha (G0 a G2)</label>
+                    <div>
+                      <label className="text-xs font-black text-white uppercase tracking-wider block">Vendas Diretas G0</label>
+                      <span className="text-[10px] text-emerald-400 font-bold">Comissão: 27% Bruta</span>
+                    </div>
                     <input
                       type="text"
                       inputMode="numeric"
-                      pattern="[0-9]*"
-                      value={totalMembrosStr}
-                      onChange={(e) => setTotalMembrosStr(e.target.value.replace(/\D/g, ''))}
-                      className="w-28 bg-slate-950 border border-white/10 rounded-xl py-2 px-4 text-sm font-black text-white text-center focus:outline-none focus:border-accent"
+                      value={g0MembersStr}
+                      onChange={(e) => setG0MembersStr(e.target.value.replace(/\D/g, ''))}
+                      className="w-24 bg-slate-950 border border-white/10 rounded-xl py-2 px-3 text-sm font-black text-white text-center focus:outline-none focus:border-accent"
                     />
                   </div>
                   <input
                     type="range"
                     min="1"
-                    max="20000"
-                    step="50"
-                    value={totalMembros}
-                    onChange={(e) => setTotalMembrosStr(e.target.value)}
+                    max="500"
+                    step="5"
+                    value={g0}
+                    onChange={(e) => setG0MembersStr(e.target.value)}
                     className="w-full h-2 bg-slate-950 rounded-lg appearance-none cursor-pointer accent-accent"
                   />
                   <div className="flex justify-between text-[10px] text-slate-500 font-bold">
-                    <span>1 MEMBRO</span>
-                    <span>10.000 MEMBROS</span>
-                    <span>20.000 MEMBROS</span>
+                    <span>1 Cliente</span>
+                    <span>250 Clientes</span>
+                    <span>500 Clientes</span>
                   </div>
                 </div>
 
-                {/* Plan Price Input & Slider */}
-                <div className="space-y-4">
+                {/* Equipe Nível 1 - G1 (3%) */}
+                <div className="space-y-3">
                   <div className="flex justify-between items-center">
-                    <label className="text-xs font-black text-slate-400 uppercase tracking-wider">Valor do Plano (R$)</label>
+                    <div>
+                      <label className="text-xs font-black text-white uppercase tracking-wider block">Equipe Nível 1 (G1)</label>
+                      <span className="text-[10px] text-sky-400 font-bold">Comissão: 3% Bruta</span>
+                    </div>
                     <input
                       type="text"
-                      inputMode="decimal"
-                      value={planPriceStr}
-                      placeholder="0,00"
-                      onChange={(e) => {
-                        let val = e.target.value.replace(/[^0-9.,]/g, '');
-                        val = val.replace(/\./g, ',');
-                        const parts = val.split(',');
-                        if (parts.length > 2) {
-                          val = parts[0] + ',' + parts.slice(1).join('');
-                        }
-                        setPlanPriceStr(val);
-                      }}
-                      className="w-28 bg-slate-950 border border-white/10 rounded-xl py-2 px-4 text-sm font-black text-white text-center focus:outline-none focus:border-accent"
+                      inputMode="numeric"
+                      value={g1MembersStr}
+                      onChange={(e) => setG1MembersStr(e.target.value.replace(/\D/g, ''))}
+                      className="w-24 bg-slate-950 border border-white/10 rounded-xl py-2 px-3 text-sm font-black text-white text-center focus:outline-none focus:border-accent"
                     />
                   </div>
                   <input
                     type="range"
-                    min="1"
-                    max="200"
-                    step="1"
-                    value={Math.min(200, Math.max(1, planPrice)) || 1}
-                    onChange={(e) => setPlanPriceStr(e.target.value)}
+                    min="0"
+                    max="1000"
+                    step="10"
+                    value={g1}
+                    onChange={(e) => setG1MembersStr(e.target.value)}
                     className="w-full h-2 bg-slate-950 rounded-lg appearance-none cursor-pointer accent-accent"
                   />
                   <div className="flex justify-between text-[10px] text-slate-500 font-bold">
-                    <span>R$ 1,00</span>
-                    <span>R$ 60,00</span>
-                    <span>R$ 200,00</span>
+                    <span>0 Clientes</span>
+                    <span>500 Clientes</span>
+                    <span>1.000 Clientes</span>
                   </div>
                 </div>
 
+                {/* Equipe Nível 2 - G2 (3%) */}
+                <div className="space-y-3">
+                  <div className="flex justify-between items-center">
+                    <div>
+                      <label className="text-xs font-black text-white uppercase tracking-wider block">Equipe Nível 2 (G2)</label>
+                      <span className="text-[10px] text-purple-400 font-bold">Comissão: 3% Bruta</span>
+                    </div>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      value={g2MembersStr}
+                      onChange={(e) => setG2MembersStr(e.target.value.replace(/\D/g, ''))}
+                      className="w-24 bg-slate-950 border border-white/10 rounded-xl py-2 px-3 text-sm font-black text-white text-center focus:outline-none focus:border-accent"
+                    />
+                  </div>
+                  <input
+                    type="range"
+                    min="0"
+                    max="3000"
+                    step="20"
+                    value={g2}
+                    onChange={(e) => setG2MembersStr(e.target.value)}
+                    className="w-full h-2 bg-slate-950 rounded-lg appearance-none cursor-pointer accent-accent"
+                  />
+                  <div className="flex justify-between text-[10px] text-slate-500 font-bold">
+                    <span>0 Clientes</span>
+                    <span>1.500 Clientes</span>
+                    <span>3.000 Clientes</span>
+                  </div>
+                </div>
               </div>
 
               {/* Outputs Panel */}
-              <div className="lg:col-span-7 space-y-8 bg-slate-900/30 p-8 rounded-[2.5rem] border border-white/5">
-                <div className="flex flex-col md:flex-row justify-between md:items-center pb-6 border-b border-white/5 gap-4">
-                  <div>
-                    <p className="text-[10px] text-slate-500 font-black uppercase tracking-wider">Arrecadação {periodLabel} da Rede</p>
-                    <p className="text-3xl font-black text-white tracking-tighter">
-                      R$ {arrecadacao.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                    </p>
-                  </div>
-                  <div className="bg-white/5 border border-white/10 px-6 py-3 rounded-2xl flex items-center gap-3">
-                    <Users size={20} className="text-accent" />
+              <div className="lg:col-span-7 space-y-8 bg-slate-900/30 p-8 rounded-[2.5rem] border border-white/5 flex flex-col justify-between">
+                <div>
+                  {/* Faturamento e Total de Membros */}
+                  <div className="flex flex-col md:flex-row justify-between md:items-center pb-6 border-b border-white/5 gap-4">
                     <div>
-                      <p className="text-[9px] text-slate-500 font-black uppercase tracking-wider">Equipe Ganha & Ganha</p>
-                      <p className="text-sm font-black text-white">{totalMembros.toLocaleString('pt-BR')} Parceiros</p>
+                      <p className="text-[10px] text-slate-500 font-black uppercase tracking-wider">Faturamento Total Gerado na Rede</p>
+                      <p className="text-3xl font-black text-white tracking-tighter">
+                        R$ {faturamentoTotalRede.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </p>
+                    </div>
+                    <div className="bg-white/5 border border-white/10 px-6 py-3 rounded-2xl flex items-center gap-3">
+                      <Users size={20} className="text-accent" />
+                      <div>
+                        <p className="text-[9px] text-slate-500 font-black uppercase tracking-wider">Total de Segurados</p>
+                        <p className="text-sm font-black text-white">{totalVendasRede.toLocaleString('pt-BR')} Vendas</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Detalhamento por Nível G0, G1, G2 */}
+                  <div className="grid grid-cols-3 gap-3 my-6">
+                    <div className="bg-slate-950/60 p-4 rounded-2xl border border-emerald-500/20">
+                      <p className="text-[9px] text-emerald-400 font-black uppercase tracking-wider mb-1">G0 Direto (27%)</p>
+                      <p className="text-base font-black text-white">R$ {comissaoBrutaG0.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                      <p className="text-[10px] text-slate-500 mt-0.5">{g0} vendas</p>
+                    </div>
+
+                    <div className="bg-slate-950/60 p-4 rounded-2xl border border-sky-500/20">
+                      <p className="text-[9px] text-sky-400 font-black uppercase tracking-wider mb-1">G1 Nível 2 (3%)</p>
+                      <p className="text-base font-black text-white">R$ {comissaoBrutaG1.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                      <p className="text-[10px] text-slate-500 mt-0.5">{g1} vendas</p>
+                    </div>
+
+                    <div className="bg-slate-950/60 p-4 rounded-2xl border border-purple-500/20">
+                      <p className="text-[9px] text-purple-400 font-black uppercase tracking-wider mb-1">G2 Nível 3 (3%)</p>
+                      <p className="text-base font-black text-white">R$ {comissaoBrutaG2.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                      <p className="text-[10px] text-slate-500 mt-0.5">{g2} vendas</p>
+                    </div>
+                  </div>
+
+                  {/* Total Bruto Geral */}
+                  <div className="bg-gradient-to-r from-emerald-950/40 to-slate-950/80 p-5 rounded-2xl border border-emerald-500/30 flex justify-between items-center mb-6">
+                    <div>
+                      <p className="text-[10px] text-emerald-400 font-black uppercase tracking-wider">Comissão Bruta Total (33%)</p>
+                      <p className="text-xs text-slate-400">G0 (27%) + G1 (3%) + G2 (3%)</p>
+                    </div>
+                    <span className="text-2xl font-black text-emerald-400">
+                      R$ {comissaoBrutaTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </span>
+                  </div>
+
+                  {/* Split 80/20 Cards */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Split 80% Semanal */}
+                    <div className="bg-slate-950/70 p-5 rounded-2xl border border-emerald-500/20 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-black uppercase text-emerald-400 tracking-wider">
+                          Repasse Semanal (80%)
+                        </span>
+                        <span className="text-[9px] bg-emerald-500/10 text-emerald-400 px-2 py-0.5 rounded font-bold uppercase">
+                          Toda Terça-Feira
+                        </span>
+                      </div>
+                      <p className="text-2xl font-black text-white">
+                        R$ {splitSemanal80.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </p>
+                      <p className="text-[10px] text-slate-400">
+                        Vendas apuradas de segunda a sábado.
+                      </p>
+                    </div>
+
+                    {/* Split 20% Anual */}
+                    <div className="bg-slate-950/70 p-5 rounded-2xl border border-indigo-500/20 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-black uppercase text-indigo-400 tracking-wider">
+                          Bônus Anual (20%)
+                        </span>
+                        <span className="text-[9px] bg-indigo-500/10 text-indigo-400 px-2 py-0.5 rounded font-bold uppercase">
+                          Pago em 10/12
+                        </span>
+                      </div>
+                      <p className="text-2xl font-black text-indigo-300">
+                        R$ {splitAnual20.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </p>
+                      <p className="text-[10px] text-slate-400">
+                        Retenção contratual paga em parcela única no fim do ano.
+                      </p>
                     </div>
                   </div>
                 </div>
 
-                {/* Cashback Cards */}
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="bg-slate-950/40 p-4 rounded-2xl border border-white/5">
-                    <p className="text-[9px] text-slate-500 font-black uppercase tracking-wider mb-1">C. Mensal ({mmnConfig?.cashbackMensal ?? 5}%)</p>
-                    <p className="text-md font-black text-white">R$ {cashMensal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
-                  </div>
-                  <div className="bg-slate-950/40 p-4 rounded-2xl border border-white/5">
-                    <p className="text-[9px] text-slate-500 font-black uppercase tracking-wider mb-1">C. Anual ({mmnConfig?.cashbackAnual ?? 2}% - 13º)</p>
-                    <p className="text-md font-black text-white text-indigo-400">R$ {cashAnual.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
-                  </div>
-                </div>
-
-                <div className="pt-4 border-t border-white/5">
-                  <div className="flex justify-between items-center mb-6">
-                    <span className="text-xs font-black text-slate-400 uppercase tracking-wider">Bruto Mensal a Receber (Dia 10)</span>
-                    <span className="text-xl font-black text-white">R$ {bruto.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                {/* Comparativo Tributário PF vs MEI */}
+                <div className="pt-6 border-t border-white/5 space-y-4">
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs font-black text-slate-400 uppercase tracking-wider">
+                      Comparativo de Recebimento Estimado Mensal (4 semanas)
+                    </span>
+                    <span className="text-sm font-black text-slate-300">
+                      Bruto ~ R$ {estimativaMensalBruto.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </span>
                   </div>
 
-                  {/* PF vs MEI Side-by-Side Cards */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {/* PF Card */}
-                    <div className="bg-slate-950/50 p-6 rounded-2xl border border-red-500/10 flex flex-col justify-between">
-                      <div className="space-y-4">
-                        <div className="flex justify-between items-center">
-                          <span className="flex items-center gap-2 text-xs font-black text-slate-300 uppercase tracking-wider">
-                            <UserCheck size={14} className="text-red-400" />
-                            Pessoa Física
-                          </span>
-                          <span className="text-[9px] bg-red-500/10 text-red-400 px-2 py-0.5 rounded font-bold uppercase border border-red-500/20">IRPF + INSS</span>
-                        </div>
-                        <div className="space-y-2 text-xs">
-                          <div className="flex justify-between text-slate-500">
-                            <span>Desconto INSS</span>
-                            <span className="text-red-400 font-semibold">- R$ {inss.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                          </div>
-                          <div className="flex justify-between text-slate-500">
-                            <span>Desconto IRRF (Lei 15.270)</span>
-                            <span className={irrf > 0 ? "text-red-400 font-semibold" : "text-emerald-400 font-semibold"}>
-                              {irrf > 0 ? `- R$ ${irrf.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : 'R$ 0,00 (Isento)'}
-                            </span>
-                          </div>
-                        </div>
+                    <div className="bg-slate-950/40 p-4 rounded-2xl border border-white/5">
+                      <div className="flex justify-between items-center mb-2">
+                        <span className="text-xs font-black text-slate-300 uppercase">Pessoa Física (PF)</span>
+                        <span className="text-[9px] bg-red-500/10 text-red-400 px-2 py-0.5 rounded font-bold">RPA com Dedução</span>
                       </div>
-                      <div className="pt-4 border-t border-white/5 mt-4 flex justify-between items-center">
-                        <span className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Líquido Recebido</span>
-                        <span className="text-lg font-black text-white">R$ {recebidoPF.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                      </div>
+                      <p className="text-lg font-black text-white">
+                        R$ {taxesPF.liquido.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </p>
+                      <p className="text-[10px] text-slate-500 mt-1">
+                        INSS: -R$ {taxesPF.inss.toFixed(2)} | IRRF: -R$ {taxesPF.irrf.toFixed(2)}
+                      </p>
                     </div>
 
                     {/* MEI Card */}
-                    <div className="bg-slate-950/50 p-6 rounded-2xl border border-accent/20 flex flex-col justify-between shadow-lg shadow-accent/5">
-                      <div className="space-y-4">
-                        <div className="flex justify-between items-center">
-                          <span className="flex items-center gap-2 text-xs font-black text-accent uppercase tracking-wider">
-                            <Building size={14} className="text-accent" />
-                            CNPJ MEI
-                          </span>
-                          <span className="text-[9px] bg-accent/15 text-accent px-2 py-0.5 rounded font-bold uppercase border border-accent/25">Isento na Fonte</span>
-                        </div>
-                        <div className="space-y-2 text-xs">
-                          <div className="flex justify-between text-slate-500">
-                            <span>Desconto INSS</span>
-                            <span className="text-slate-400 font-semibold">R$ 0,00</span>
-                          </div>
-                          <div className="flex justify-between text-slate-500">
-                            <span>Desconto IRRF</span>
-                            <span className="text-slate-400 font-semibold">R$ 0,00</span>
-                          </div>
-                        </div>
+                    <div className="bg-slate-950/40 p-4 rounded-2xl border border-accent/20 shadow-md">
+                      <div className="flex justify-between items-center mb-2">
+                        <span className="text-xs font-black text-accent uppercase">CNPJ MEI / PJ</span>
+                        <span className="text-[9px] bg-accent/15 text-accent px-2 py-0.5 rounded font-bold">Sem Retenção</span>
                       </div>
-                      <div className="pt-4 border-t border-white/5 mt-4 flex justify-between items-center">
-                        <span className="text-[10px] font-black uppercase text-accent tracking-wider">Líquido Recebido</span>
-                        <span className="text-lg font-black text-accent">R$ {recebidoMEI.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                      </div>
+                      <p className="text-lg font-black text-accent">
+                        R$ {taxesMEI.liquido.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </p>
+                      <p className="text-[10px] text-accent/80 mt-1 font-bold">
+                        Receba 100% Bruto via Nota Fiscal
+                      </p>
                     </div>
                   </div>
-
-                  {economiaMEI > 0 && (
-                    <div className="mt-6 p-4 bg-accent/10 border border-accent/20 rounded-2xl flex flex-col md:flex-row justify-between items-center gap-3">
-                      <div>
-                        <p className="text-[9px] text-accent font-black uppercase tracking-wider">Economia de Impostos no MEI</p>
-                        <p className="text-md font-black text-white mt-0.5">Você economiza R$ {economiaMEI.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} por mês!</p>
-                      </div>
-                      <span className="text-[10px] bg-accent text-midnight px-3 py-1.5 rounded-lg font-black uppercase tracking-wider shrink-0">
-                        Receba 100% Bruto
-                      </span>
-                    </div>
-                  )}
                 </div>
+
               </div>
             </div>
           </div>
         </section>
 
-        {/* Sistema 100% transparente */}
-        <section className="py-24 border-t border-white/5 bg-slate-950/20 text-center">
-          <div className="max-w-7xl mx-auto px-6 lg:px-20">
-            <div className="inline-flex items-center justify-center p-4 bg-accent/10 border border-accent/20 rounded-3xl mb-8">
-              <ShieldCheck className="text-accent animate-pulse" size={48} />
+        {/* CTA Section */}
+        <section className="px-6 lg:px-20 py-24 bg-slate-950/40 border-t border-white/5">
+          <div className="max-w-5xl mx-auto bg-gradient-to-br from-slate-900 to-indigo-950 border border-white/10 rounded-[3rem] p-10 lg:p-16 text-center relative overflow-hidden shadow-2xl">
+            <div className="relative z-10 space-y-6">
+              <span className="px-3.5 py-1.5 bg-accent/10 border border-accent/30 text-accent rounded-full text-xs font-black uppercase tracking-wider inline-block">
+                Início Imediato
+              </span>
+              <h2 className="text-3xl lg:text-5xl font-black text-white tracking-tight uppercase italic">
+                Comece a Formar Sua Equipe Agora
+              </h2>
+              <p className="text-slate-300 text-sm md:text-base max-w-xl mx-auto font-medium">
+                Vagas pioneiras com isenção de taxa inicial para os primeiros 100 Microfranqueados. Ative sua franquia e receba suas comissões semanais via PIX toda terça-feira.
+              </p>
+              <div className="pt-4 flex flex-col sm:flex-row items-center justify-center gap-4">
+                <Link
+                  to="/cadastro"
+                  className="bg-accent hover:bg-emerald-500 text-midnight px-10 py-4 rounded-2xl font-black text-base transition-all shadow-xl shadow-accent/20 hover:scale-105 active:scale-95 uppercase tracking-tight"
+                >
+                  Cadastrar como Microfranqueado
+                </Link>
+                <Link
+                  to="/cadastro"
+                  className="bg-white/10 hover:bg-white/15 text-white px-8 py-4 rounded-2xl font-bold text-sm transition-all border border-white/10"
+                >
+                  Quero apenas o Seguro R$ 5,00/mês
+                </Link>
+              </div>
             </div>
-            <h2 className="text-3xl md:text-5xl font-black mb-6 uppercase tracking-tighter text-white">Sistema 100% transparente.</h2>
-            <p className="text-xl text-slate-400 mb-12 max-w-2xl mx-auto font-medium">
-              Ganhos baseados em consumo real de planos do ecossistema. Sem taxas ocultas, sem promessas vazias. Economia compartilhada de verdade.
-            </p>
-
-            <Link
-              to="/cadastro"
-              className="bg-accent hover:bg-emerald-500 text-midnight px-16 py-6 rounded-2xl text-2xl font-black transition-all hover:scale-105 active:scale-95 shadow-2xl shadow-accent/20 uppercase tracking-tighter inline-block"
-            >
-              Cadastre-se e Ative seu Código Ganha & Ganha
-            </Link>
           </div>
         </section>
       </main>
 
-      {/* Footer simples */}
-      <footer className="bg-black text-slate-500 py-16 px-6 lg:px-20 border-t border-slate-900 mt-auto">
-        <div className="max-w-7xl mx-auto">
-          <div className="flex flex-col md:flex-row justify-between items-center gap-8 mb-8">
-            <div className="flex items-center gap-2">
-              <img 
-                src="/logo.png" 
-                alt="CaZa dos Sorteios" 
-                className="h-10 w-auto object-contain" 
-              />
-            </div>
-
-            <div className="flex gap-8 items-center text-xs">
-              <Link to="/" className="hover:text-white transition-colors">Início</Link>
-              <Link to="/ecossistema" className="hover:text-white transition-colors">Ecossistema</Link>
-              <Link to="/termos-uso" className="hover:text-white transition-colors">Termos de Uso</Link>
-              <Link to="/termos-privacidade" className="hover:text-white transition-colors">Privacidade</Link>
-              <Link to="/politica-cookies" className="hover:text-white transition-colors">Cookies</Link>
-              <div className="flex gap-6 border-l border-slate-800 pl-6">
-                <a href="#" className="hover:text-accent transition-colors"><Instagram size={20} /></a>
-                <a href="#" className="hover:text-accent transition-colors"><Twitter size={20} /></a>
-                <a href="#" className="hover:text-accent transition-colors"><Linkedin size={20} /></a>
-              </div>
-            </div>
-          </div>
-
-          <div className="pt-8 border-t border-slate-900 flex flex-col md:flex-row justify-between items-center gap-4 text-[10px] uppercase tracking-widest font-bold">
-            <div className="flex flex-col items-center md:items-start gap-1">
-              <p>© 2026 SIC COMÉRCIO DE PRODUTOS ALIMENTICIOS E SERVIÇOS LTDA CNPJ nº 54.795.377/0001-03. Todos os direitos reservados. Operação: CaZa dos Sorteios.</p>
-              <p className="opacity-50 lowercase font-medium tracking-normal">
-                Desenvolvido por <a href="https://p4dmidia.com.br" target="_blank" rel="noopener noreferrer" className="hover:text-accent transition-colors">P4D Mídia</a> | <Link to="/termos-uso" className="hover:text-accent transition-colors">Termos de Uso</Link> | <Link to="/termos-privacidade" className="hover:text-accent transition-colors">Termos de Privacidade</Link> | <Link to="/politica-cookies" className="hover:text-accent transition-colors">Política de Cookies</Link>
-              </p>
-            </div>
-            <div className="flex gap-8">
-              <span className="flex items-center gap-1">
-                <Globe size={12} />
-                Brasil - Português
-              </span>
-            </div>
+      {/* Footer */}
+      <footer className="bg-black text-slate-500 py-12 px-6 lg:px-20 border-t border-slate-900 mt-auto text-xs">
+        <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-6">
+          <p>© {new Date().getFullYear()} CaZa dos Sorteios. Todos os direitos reservados.</p>
+          <div className="flex gap-6 font-bold uppercase tracking-wider text-[10px]">
+            <Link to="/afiliado/termo-adesao" className="hover:text-white transition-colors">Termos de Franquia</Link>
+            <Link to="/afiliado/termo-adesao" className="hover:text-white transition-colors">Termos de Seguro MBM</Link>
           </div>
         </div>
       </footer>

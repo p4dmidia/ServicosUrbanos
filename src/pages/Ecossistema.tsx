@@ -189,7 +189,7 @@ export default function Ecossistema() {
                 </div>
               </motion.div>
 
-              {/* Card 4: Ganhos Financeiros – Código Ganha & Ganha */}
+              {/* Card 4: Microfranquia Comercial – Canal de Distribuição */}
               <motion.div
                 whileHover={{ y: -6 }}
                 className="bg-slate-900/50 border border-white/10 rounded-[2rem] p-8 shadow-2xl flex flex-col justify-between h-full group"
@@ -198,14 +198,14 @@ export default function Ecossistema() {
                   <div className="size-12 rounded-2xl bg-accent/10 border border-accent/20 flex items-center justify-center text-accent mb-6">
                     <TrendingUp size={24} />
                   </div>
-                  <h3 className="text-xl font-bold text-white mb-3">4. Código Ganha & Ganha</h3>
+                  <h3 className="text-xl font-bold text-white mb-3">4. Microfranquia Comercial</h3>
                   <p className="text-slate-400 text-sm leading-relaxed font-medium">
-                    Convide novos segurados através de seu link ou código exclusivo Ganha & Ganha. Cada nova adesão expande sua rede, gerando bonificações financeiras recorrentes e vitalícias pagas diretamente na sua conta.
+                    Canal exclusivo para empreendedores. Com a licença de Microfranqueado, monte sua equipe e receba 33% de comissão em 3 níveis (G0 27%, G1 3%, G2 3%) com repasses semanais e bônus anual.
                   </p>
                 </div>
                 <div className="pt-6 border-t border-white/5 mt-6 text-xs text-slate-500 font-bold uppercase flex justify-between">
-                  <span>Afiliação MMN</span>
-                  <span className="text-accent flex items-center gap-0.5">Renda Vitalícia <ArrowUpRight size={12} /></span>
+                  <span>Microfranquia MMN</span>
+                  <span className="text-accent flex items-center gap-0.5">Split 80/20 <ArrowUpRight size={12} /></span>
                 </div>
               </motion.div>
             </div>
@@ -217,7 +217,7 @@ export default function Ecossistema() {
           <div className="max-w-7xl mx-auto">
             <div className="text-center mb-20">
               <h2 className="text-3xl lg:text-5xl font-black tracking-tighter text-white">Como a Roda Gira</h2>
-              <p className="text-slate-400 font-medium mt-2">O ciclo simplificado de proteção e ganhos da sua rede de afiliados.</p>
+              <p className="text-slate-400 font-medium mt-2">O ciclo integrado de proteção familiar e empreendedorismo com microfranquia.</p>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-12 relative">
@@ -226,23 +226,23 @@ export default function Ecossistema() {
 
               <div className="flex flex-col items-center text-center group">
                 <div className="size-20 bg-slate-900 rounded-3xl flex items-center justify-center text-accent mb-8 group-hover:bg-accent group-hover:text-midnight border border-white/10 transition-all transform group-hover:rotate-6 shadow-2xl">
-                  <ShieldCheck size={32} />
+                  <TrendingUp size={32} />
                 </div>
                 <div className="text-xs font-black text-accent uppercase tracking-widest mb-4">Passo 01</div>
-                <h4 className="text-xl font-black text-white mb-4">Ative seu Plano & Indique</h4>
+                <h4 className="text-xl font-black text-white mb-4">Licença de Microfranquia</h4>
                 <p className="text-slate-400 text-sm font-medium leading-relaxed">
-                  Adquira o Seguro Premiável para garantir sua cobertura e destrave seu link exclusivo de afiliado para começar a indicar imediatamente.
+                  O Microfranqueado adquire a licença comercial anual para formar equipe e acessar ferramentas de divulgação exclusivas.
                 </p>
               </div>
 
               <div className="flex flex-col items-center text-center group">
                 <div className="size-20 bg-slate-900 rounded-3xl flex items-center justify-center text-accent mb-8 group-hover:bg-accent group-hover:text-midnight border border-white/10 transition-all transform group-hover:rotate-6 shadow-2xl">
-                  <Users2 size={32} />
+                  <ShieldCheck size={32} />
                 </div>
                 <div className="text-xs font-black text-accent uppercase tracking-widest mb-4">Passo 02</div>
-                <h4 className="text-xl font-black text-white mb-4">Sua Rede se Protege</h4>
+                <h4 className="text-xl font-black text-white mb-4">Seguro Vida Light</h4>
                 <p className="text-slate-400 text-sm font-medium leading-relaxed">
-                  Seus convidados ativam os planos de seguro, passando a usufruir de segurança, sorteios mensais da loteria e acesso à telemedicina.
+                  Os clientes contratam proteção real por apenas R$ 5,00/mês, contando com seguro MBM R$ 5.000, telemedicina 24h e sorteios federais.
                 </p>
               </div>
 
@@ -251,9 +251,9 @@ export default function Ecossistema() {
                   <DollarSign size={32} />
                 </div>
                 <div className="text-xs font-black text-accent uppercase tracking-widest mb-4">Passo 03</div>
-                <h4 className="text-xl font-black text-white mb-4">Você Recebe os Ganhos</h4>
+                <h4 className="text-xl font-black text-white mb-4">Repasses Semanais e Anuais</h4>
                 <p className="text-slate-400 text-sm font-medium leading-relaxed">
-                  Ganho Mensal pago via Pix todo dia 10 e o bônus anual (13º) pago em dezembro.
+                  O Microfranqueado recebe 80% das comissões toda terça-feira via PIX e 20% retidos no bônus anual pago em 10 de dezembro.
                 </p>
               </div>
             </div>

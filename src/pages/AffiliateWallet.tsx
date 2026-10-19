@@ -16,10 +16,14 @@ import {
   ArrowUpRight,
   Search,
   Clock,
-  FileText
+  FileText,
+  Building2,
+  AlertTriangle,
+  X,
+  CheckCircle
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { motion } from 'motion/react';
+import { motion, AnimatePresence } from 'motion/react';
 import AffiliateLayout from '../components/AffiliateLayout';
 import { businessRules, calculateTaxDeductions } from '../lib/businessRules';
 import { useAuth } from '../contexts/AuthContext';
@@ -39,6 +43,27 @@ export default function AffiliateWallet() {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 8;
   const [searchQuery, setSearchQuery] = useState('');
+  const [microfranqueadoData, setMicrofranqueadoData] = useState<any>(null);
+  const [comissoesData, setComissoesData] = useState<any>(null);
+  const [regularizing, setRegularizing] = useState(false);
+
+  // Estados da Regra de Transição PF -> PJ (Limite R$ 5.000)
+  const [pjRequirement, setPjRequirement] = useState<any>(null);
+  const [isPjModalOpen, setIsPjModalOpen] = useState(false);
+  const [pjCnpj, setPjCnpj] = useState('');
+  const [pjRazaoSocial, setPjRazaoSocial] = useState('');
+  const [pjNomeFantasia, setPjNomeFantasia] = useState('');
+  const [pjPixKey, setPjPixKey] = useState('');
+  const [migratingPj, setMigratingPj] = useState(false);
+
+  const formatCnpj = (val: string) => {
+    const num = val.replace(/\D/g, '').slice(0, 14);
+    if (num.length <= 2) return num;
+    if (num.length <= 5) return `${num.slice(0, 2)}.${num.slice(2)}`;
+    if (num.length <= 8) return `${num.slice(0, 2)}.${num.slice(2, 5)}.${num.slice(5)}`;
+    if (num.length <= 12) return `${num.slice(0, 2)}.${num.slice(2, 5)}.${num.slice(5, 8)}/${num.slice(8)}`;
+    return `${num.slice(0, 2)}.${num.slice(2, 5)}.${num.slice(5, 8)}/${num.slice(8, 12)}-${num.slice(12)}`;
+  };
 
   const filteredTransactions = useMemo(() => {
     return transactions.filter(t => {
@@ -277,19 +302,75 @@ export default function AffiliateWallet() {
     
     try {
       setLoading(true);
-      const [statsData, activityData, configData] = await Promise.all([
+      const [statsData, activityData, configData, mfRes, pjReq] = await Promise.all([
         businessRules.getAffiliateStats(user.id),
         businessRules.getEcosystemActivity(user.id),
-        businessRules.getMMNConfig()
+        businessRules.getMMNConfig(),
+        businessRules.getMicrofranqueadoData(user.id),
+        businessRules.checkMicrofranqueadoPjRequirement(user.id)
       ]);
       
       setStats(statsData);
       setTransactions(activityData);
       setMmnConfig(configData);
+      setMicrofranqueadoData(mfRes);
+      setPjRequirement(pjReq);
+
+      if (mfRes?.microfranqueado?.id) {
+        const comRes = await businessRules.getComissoesMicrofranqueado(mfRes.microfranqueado.id);
+        setComissoesData(comRes);
+      }
     } catch (error) {
       console.error("Error loading wallet:", error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleMigratePj = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user) return;
+    try {
+      setMigratingPj(true);
+      const res = await businessRules.migrarMicrofranqueadoPJ({
+        userId: user.id,
+        cnpj: pjCnpj,
+        razaoSocial: pjRazaoSocial,
+        nomeFantasia: pjNomeFantasia,
+        pixKey: pjPixKey
+      });
+
+      if (res?.success) {
+        toast.success(res.message || 'Cadastro PJ regularizado com sucesso!');
+        setIsPjModalOpen(false);
+        loadWalletData();
+      } else {
+        toast.error(res?.error || 'Erro ao realizar migração.');
+      }
+    } catch (err: any) {
+      console.error(err);
+      toast.error('Falha ao processar migração para PJ.');
+    } finally {
+      setMigratingPj(false);
+    }
+  };
+
+  const handleRegularizeLicense = async () => {
+    if (!microfranqueadoData?.microfranqueado?.id) return;
+    try {
+      setRegularizing(true);
+      const res = await businessRules.regularizarLicencaMicrofranqueado(microfranqueadoData.microfranqueado.id);
+      if (res?.success) {
+        toast.success('Licença regularizada e saldo desbloqueado com sucesso!');
+        loadWalletData();
+      } else {
+        toast.error(res?.error || 'Erro ao regularizar licença.');
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error('Falha ao regularizar.');
+    } finally {
+      setRegularizing(false);
     }
   };
 
@@ -331,10 +412,94 @@ export default function AffiliateWallet() {
           </div>
         </div>
 
+        {/* Alerta se usuário não for Microfranqueado */}
+        {microfranqueadoData && !microfranqueadoData.isMicrofranqueado && (
+          <div className="bg-amber-500/10 border border-amber-500/30 rounded-3xl p-6 sm:p-8 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+            <div className="flex items-start gap-4">
+              <div className="size-12 rounded-2xl bg-amber-500 text-midnight flex items-center justify-center shrink-0">
+                <Wallet size={26} />
+              </div>
+              <div className="space-y-1">
+                <h4 className="font-black text-amber-950 uppercase text-sm">
+                  Comissões de Rede são Exclusivas de Microfranqueados
+                </h4>
+                <p className="text-xs text-amber-900 leading-relaxed max-w-2xl font-medium">
+                  Seu cadastro atual é de <strong>Afiliado Premium (Seguro Vida Light)</strong>. O Seguro Vida Light contempla cobertura MBM de R$ 5.000, telemedicina 24h e sorteios da Loteria Federal, sem comissões de rede. Para ativar sua carteira financeira e receber até 33% de comissão (split 80% semanal / 20% anual), ative sua Licença de Microfranqueado.
+                </p>
+              </div>
+            </div>
+            <Link
+              to="/afiliado/renovacoes"
+              className="bg-amber-500 hover:bg-amber-400 text-midnight font-black px-6 py-3 rounded-xl text-xs uppercase tracking-widest shrink-0 transition-all shadow-md flex items-center gap-2 whitespace-nowrap"
+            >
+              Ativar Microfranqueado
+              <ArrowUpRight size={14} />
+            </Link>
+          </div>
+        )}
+
+        {/* ALERTA: MIGRAÇÃO OBRIGATÓRIA PARA PJ (LIMITE R$ 5.000 ATINGIDO) */}
+        {pjRequirement?.isPjRequired && !isUserPJ && (
+          <div className="bg-gradient-to-r from-amber-500/15 via-orange-500/10 to-amber-500/15 border-2 border-amber-500/50 p-8 rounded-[2.5rem] flex flex-col md:flex-row items-start md:items-center justify-between gap-6 shadow-lg shadow-amber-500/10">
+            <div className="flex items-center gap-5">
+              <div className="size-16 bg-amber-500 text-slate-950 rounded-3xl flex items-center justify-center shrink-0 font-black shadow-md shadow-amber-500/30">
+                <Building2 size={32} />
+              </div>
+              <div className="space-y-1">
+                <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-amber-500/20 text-amber-950 border border-amber-500/30 rounded-full text-[9px] font-black uppercase tracking-widest">
+                  ⚠️ Transição Tributária Obrigatória
+                </div>
+                <h4 className="text-xl font-black text-amber-950 uppercase tracking-tight">
+                  Limite de R$ 5.000,00 Atingido como Pessoa Física
+                </h4>
+                <p className="text-xs font-medium text-amber-900/90 leading-relaxed max-w-2xl">
+                  Seus ganhos acumulados atingiram <strong>R$ {Number(pjRequirement?.totalEarnings || 0).toFixed(2)}</strong>. Para cumprir as normas fiscais brasileiras e receber seus próximos repasses semanais com valor integral sem retenção na fonte (INSS 11% e IRRF), cadastre seu CNPJ/MEI.
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={() => setIsPjModalOpen(true)}
+              className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-black px-7 py-4 rounded-2xl text-xs uppercase tracking-widest transition-all shadow-xl shadow-amber-500/20 whitespace-nowrap active:scale-95 shrink-0 flex items-center gap-2 cursor-pointer"
+            >
+              <Building2 size={16} /> Cadastrar CNPJ / MEI
+            </button>
+          </div>
+        )}
+
+        {/* CARD INFORMATIVO: PROGRESSO ATÉ R$ 5.000 (PF) */}
+        {!isUserPJ && microfranqueadoData?.isMicrofranqueado && !pjRequirement?.isPjRequired && (
+          <div className="bg-gradient-to-r from-blue-50/70 via-indigo-50/50 to-white border border-indigo-100 p-6 rounded-3xl flex flex-col md:flex-row items-start md:items-center justify-between gap-6 shadow-sm">
+            <div className="flex items-center gap-4">
+              <div className="size-12 rounded-2xl bg-indigo-500/10 text-indigo-600 flex items-center justify-center shrink-0">
+                <TrendingUp size={22} />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-black text-midnight uppercase tracking-wide">
+                    Plano Pessoa Física (PF) — R$ {Number(pjRequirement?.totalEarnings || 0).toFixed(2)} / R$ 5.000,00
+                  </span>
+                  <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-md bg-indigo-100 text-indigo-700">
+                    {Math.min(100, Math.round(((pjRequirement?.totalEarnings || 0) / 5000) * 100))}% da meta
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-500 font-medium mt-0.5 max-w-xl">
+                  Você opera como PF com emissão de Recibo RPA. Ao atingir R$ 5.000,00 acumulados, será solicitado seu CNPJ/MEI para receber 100% bruto sem descontos de INSS/IRRF.
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={() => setIsPjModalOpen(true)}
+              className="text-xs font-black text-indigo-600 hover:text-indigo-800 uppercase tracking-widest flex items-center gap-1.5 whitespace-nowrap cursor-pointer hover:underline"
+            >
+              <Building2 size={14} /> Já possui MEI/CNPJ? Migrar agora
+            </button>
+          </div>
+        )}
+
         {/* Balance Cards - Credit Card Style */}
         <div className="flex flex-col sm:flex-row items-stretch gap-6 md:gap-8">
            
-           {/* Card 1: Cashback Mensal Valor Bruto */}
+           {/* Card 1: Comissões Semanais (80%) */}
            <motion.div 
              whileHover={{ y: -4 }}
              onClick={() => {
@@ -351,7 +516,7 @@ export default function AffiliateWallet() {
               
               <div className="relative z-10 flex justify-between items-start">
                  <div>
-                    <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest">CASHBACK MENSAL VALOR BRUTO</p>
+                    <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest">COMISSÕES SEMANAIS (80%)</p>
                  </div>
                  <div className={`size-8 rounded-lg flex items-center justify-center border transition-colors ${
                    activeFilter === 'mensal' ? 'bg-emerald-500 text-white border-emerald-500' : 'bg-white/5 text-emerald-500 border-white/5'
@@ -361,11 +526,13 @@ export default function AffiliateWallet() {
               </div>
 
               <div className="relative z-10 my-auto">
-                 <h2 className="text-2xl sm:text-3xl font-black tracking-tighter italic uppercase mb-1">R$ {Number(stats.networkAvailableBalance || 0).toFixed(2)}</h2>
+                 <h2 className="text-2xl sm:text-3xl font-black tracking-tighter italic uppercase mb-1">
+                   R$ {Number(comissoesData?.semanalPendente !== undefined ? comissoesData.semanalPendente : stats.networkAvailableBalance || 0).toFixed(2)}
+                 </h2>
                  <div className="flex items-center gap-1.5">
-                    <div className={`size-1.5 rounded-full ${stats.isCurrentMonthPaid ? 'bg-emerald-400' : 'bg-emerald-500 animate-pulse'}`}></div>
+                    <div className="size-1.5 rounded-full bg-emerald-400 animate-pulse"></div>
                     <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">
-                       {stats.isCurrentMonthPaid ? 'Repasse do Mês Quitado' : 'Pagamentos Todo Dia 10'}
+                       {comissoesData?.proximaTerca ? `Pago toda Terça-feira (${comissoesData.proximaTerca})` : 'Pago Toda Terça-Feira'}
                     </p>
                  </div>
               </div>
@@ -376,11 +543,11 @@ export default function AffiliateWallet() {
                     <div className="size-4 rounded-full border border-white/20 bg-white/5"></div>
                     <div className="size-4 rounded-full border border-white/20 bg-white/5"></div>
                  </div>
-                 <span className="text-[7px] font-black uppercase tracking-widest">URBA WALLET</span>
+                 <span className="text-[7px] font-black uppercase tracking-widest">80% SEMANAL • TERÇAS</span>
               </div>
            </motion.div>
 
-           {/* Card 2: Cashback Anual Valor Bruto Acumulado */}
+           {/* Card 2: Bônus Anual Acumulado (20%) */}
            <motion.div 
              whileHover={{ y: -4 }}
              onClick={() => {
@@ -395,7 +562,7 @@ export default function AffiliateWallet() {
               
               <div className="relative z-10 flex justify-between items-start">
                  <div>
-                    <p className="text-[10px] font-black text-blue-200 uppercase tracking-widest">CASHBACK ANUAL VALOR BRUTO ACUMULADO</p>
+                    <p className="text-[10px] font-black text-blue-200 uppercase tracking-widest">BÔNUS ANUAL ACUMULADO (20%)</p>
                  </div>
                  <div className={`size-8 rounded-lg flex items-center justify-center border transition-colors ${
                    activeFilter === 'anual' ? 'bg-white text-indigo-600 border-white' : 'bg-white/10 text-white border-white/10'
@@ -405,7 +572,9 @@ export default function AffiliateWallet() {
               </div>
 
               <div className="relative z-10 my-auto">
-                 <h2 className="text-2xl sm:text-3xl font-black tracking-tighter italic uppercase mb-1">R$ {Number(stats.annualBonus).toFixed(2)}</h2>
+                 <h2 className="text-2xl sm:text-3xl font-black tracking-tighter italic uppercase mb-1">
+                   R$ {Number(comissoesData?.anualAcumulado !== undefined ? comissoesData.anualAcumulado : stats.annualBonus || 0).toFixed(2)}
+                 </h2>
                  <p className="text-[8px] font-black text-blue-200/70 uppercase tracking-widest flex items-center gap-1.5">
                     <ShieldCheck size={11} /> Liberação em 10 de Dezembro
                  </p>
@@ -416,9 +585,38 @@ export default function AffiliateWallet() {
                     <div className="w-4 h-1 bg-white/20 rounded-full"></div>
                     <div className="w-2 h-1 bg-white/20 rounded-full"></div>
                  </div>
-                 <span className="text-[7px] font-black uppercase tracking-widest text-blue-200">POUPANÇA URBA</span>
+                 <span className="text-[7px] font-black uppercase tracking-widest text-blue-200">20% ANUAL • 10 DE DEZEMBRO</span>
               </div>
            </motion.div>
+
+           {/* Card 3: Se houver comissões bloqueadas por inadimplência */}
+           {comissoesData && Number(comissoesData.bloqueadoInadimplencia) > 0 && (
+             <div className="w-full sm:w-[350px] aspect-[1.58/1] bg-rose-950/90 border border-rose-500/30 p-6 rounded-[1.75rem] text-white relative overflow-hidden flex flex-col justify-between shadow-xl shrink-0">
+                <div className="flex justify-between items-start">
+                   <p className="text-[10px] font-black text-rose-300 uppercase tracking-widest">COMISSÕES BLOQUEADAS</p>
+                   <div className="size-8 rounded-lg bg-rose-500/20 text-rose-400 flex items-center justify-center border border-rose-500/30">
+                      <Lock size={16} />
+                   </div>
+                </div>
+
+                <div className="my-auto space-y-1">
+                   <h2 className="text-2xl sm:text-3xl font-black text-rose-300 font-mono">
+                     R$ {Number(comissoesData.bloqueadoInadimplencia).toFixed(2)}
+                   </h2>
+                   <p className="text-[9px] text-rose-200 leading-tight">
+                     Retido por inadimplência da taxa de licença.
+                   </p>
+                </div>
+
+                <button
+                  onClick={handleRegularizeLicense}
+                  disabled={regularizing}
+                  className="w-full py-2.5 bg-rose-600 hover:bg-rose-500 text-white font-black rounded-xl text-[10px] uppercase tracking-widest shadow-md transition-all cursor-pointer disabled:opacity-50"
+                >
+                  {regularizing ? 'Processando...' : 'Regularizar e Desbloquear'}
+                </button>
+             </div>
+           )}
         </div>
 
         {/* Bottom Section: Bank Info and Eligibility */}
@@ -902,6 +1100,129 @@ export default function AffiliateWallet() {
            </div>
         </div>
       </div>
+
+      {/* MODAL DE MIGRAÇÃO PJ / MEI */}
+      <AnimatePresence>
+        {isPjModalOpen && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsPjModalOpen(false)}
+              className="fixed inset-0 bg-midnight/80 backdrop-blur-sm"
+            />
+
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.95, opacity: 0, y: 20 }}
+              className="relative w-full max-w-lg bg-white rounded-[2.5rem] shadow-2xl p-8 z-10 border border-slate-100 max-h-[90vh] overflow-y-auto"
+            >
+              <div className="flex items-center justify-between pb-6 border-b border-slate-100 mb-6">
+                <div className="flex items-center gap-3">
+                  <div className="size-11 rounded-2xl bg-purple-600 text-white flex items-center justify-center font-black shadow-md shadow-purple-600/20">
+                    <Building2 size={22} />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-black text-midnight uppercase tracking-tight">
+                      Cadastrar Empresa / MEI
+                    </h3>
+                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">
+                      Transição para Pessoa Jurídica (PJ)
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsPjModalOpen(false)}
+                  className="p-2 hover:bg-slate-100 rounded-xl transition-colors text-slate-400 hover:text-midnight cursor-pointer"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              <form onSubmit={handleMigratePj} className="space-y-5">
+                <div className="bg-purple-50/70 border border-purple-200/80 p-4 rounded-2xl text-xs text-purple-950 leading-relaxed font-medium">
+                  💡 <strong>Vantagem PJ:</strong> Com seu CNPJ (inclusive MEI), você recebe 100% dos seus repasses semanais via PIX da empresa, isento de retenções na fonte de INSS (11%) e tabela progressiva de IRRF.
+                </div>
+
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">
+                    CNPJ da Empresa ou MEI *
+                  </label>
+                  <input
+                    required
+                    type="text"
+                    value={pjCnpj}
+                    onChange={(e) => setPjCnpj(formatCnpj(e.target.value))}
+                    placeholder="00.000.000/0000-00"
+                    maxLength={18}
+                    className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:ring-4 focus:ring-purple-500/10 focus:border-purple-500 font-bold font-mono text-midnight"
+                  />
+                </div>
+
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">
+                    Razão Social / Nome MEI *
+                  </label>
+                  <input
+                    required
+                    type="text"
+                    value={pjRazaoSocial}
+                    onChange={(e) => setPjRazaoSocial(e.target.value)}
+                    placeholder="Ex: João da Silva Serviços MEI"
+                    className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:ring-4 focus:ring-purple-500/10 focus:border-purple-500 font-bold text-midnight"
+                  />
+                </div>
+
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">
+                    Nome Fantasia (Opcional)
+                  </label>
+                  <input
+                    type="text"
+                    value={pjNomeFantasia}
+                    onChange={(e) => setPjNomeFantasia(e.target.value)}
+                    placeholder="Ex: Urba Serviços Digitais"
+                    className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:ring-4 focus:ring-purple-500/10 focus:border-purple-500 font-bold text-midnight"
+                  />
+                </div>
+
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">
+                    Chave PIX da Empresa (Recomendado: CNPJ)
+                  </label>
+                  <input
+                    type="text"
+                    value={pjPixKey}
+                    onChange={(e) => setPjPixKey(e.target.value)}
+                    placeholder="CNPJ, E-mail ou Chave Aleatória da conta PJ"
+                    className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:ring-4 focus:ring-purple-500/10 focus:border-purple-500 font-bold text-midnight"
+                  />
+                </div>
+
+                <div className="pt-4 flex gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setIsPjModalOpen(false)}
+                    className="flex-1 py-4 bg-slate-100 hover:bg-slate-200 text-slate-700 font-black rounded-2xl text-xs uppercase tracking-widest transition-all cursor-pointer"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={migratingPj}
+                    className="flex-1 py-4 bg-purple-600 hover:bg-purple-700 text-white font-black rounded-2xl text-xs uppercase tracking-widest transition-all shadow-lg shadow-purple-600/25 active:scale-95 disabled:opacity-50 cursor-pointer"
+                  >
+                    {migratingPj ? 'Salvando...' : 'Confirmar e Migrar'}
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
     </AffiliateLayout>
   );

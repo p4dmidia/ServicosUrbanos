@@ -24,7 +24,10 @@ import {
   Receipt,
   BarChart3,
   Gift,
-  FolderDown
+  FolderDown,
+  AlertCircle,
+  Briefcase,
+  ArrowRight
 } from 'lucide-react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
@@ -42,12 +45,31 @@ interface AffiliateLayoutProps {
   customBalanceLabel?: string;
 }
 
-
 export default function AffiliateLayout({ children, title, customBalance, customBalanceLabel }: AffiliateLayoutProps) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [stats, setStats] = useState<any>(null);
+  const [userRoles, setUserRoles] = useState<{
+    isMicrofranqueado: boolean;
+    isSegurado: boolean;
+    microfranqueado: any;
+    segurado: any;
+    isLicenseActive: boolean;
+    isPolicyActive: boolean;
+    comissoes: any;
+    loading: boolean;
+  }>({
+    isMicrofranqueado: false,
+    isSegurado: false,
+    microfranqueado: null,
+    segurado: null,
+    isLicenseActive: false,
+    isPolicyActive: false,
+    comissoes: null,
+    loading: true
+  });
+
   const location = useLocation();
   const navigate = useNavigate();
   const { user, profile, signOut } = useAuth();
@@ -70,16 +92,39 @@ export default function AffiliateLayout({ children, title, customBalance, custom
   };
 
   useEffect(() => {
-    async function loadStats() {
-      if (user) {
-        const data = await businessRules.getAffiliateStats(user.id);
-        setStats(data);
+    async function loadRolesAndStats() {
+      if (!user) return;
+      try {
+        const [mfData, segData, statsData] = await Promise.all([
+          businessRules.getMicrofranqueadoData(user.id),
+          businessRules.getSeguradoData(user.id),
+          businessRules.getAffiliateStats(user.id)
+        ]);
+
+        let comissoesData = null;
+        if (mfData?.microfranqueado?.id) {
+          comissoesData = await businessRules.getComissoesMicrofranqueado(mfData.microfranqueado.id);
+        }
+
+        setUserRoles({
+          isMicrofranqueado: !!mfData?.isMicrofranqueado,
+          isSegurado: !!segData?.isSegurado,
+          microfranqueado: mfData?.microfranqueado,
+          segurado: segData?.segurado,
+          isLicenseActive: !!mfData?.isLicenseActive,
+          isPolicyActive: !!segData?.isPolicyActive,
+          comissoes: comissoesData,
+          loading: false
+        });
+
+        setStats(statsData);
+      } catch (err) {
+        console.error('Erro ao carregar dados do usuário:', err);
       }
     }
-    loadStats();
-    
-    // Atualizar a cada 30 segundos para manter o saldo real
-    const interval = setInterval(loadStats, 30000);
+
+    loadRolesAndStats();
+    const interval = setInterval(loadRolesAndStats, 30000);
     return () => clearInterval(interval);
   }, [user]);
 
@@ -96,16 +141,16 @@ export default function AffiliateLayout({ children, title, customBalance, custom
 
     if (Notification.permission === "granted") {
       toast.success("Notificações push já estão ativas!");
-      new Notification("Serviços Urbanos", {
-        body: "As notificações push estão configuradas corretamentes!",
+      new Notification("CaZa dos Sorteios", {
+        body: "As notificações push estão configuradas corretamente!",
         icon: "/vite.svg"
       });
     } else if (Notification.permission !== "denied") {
       const permission = await Notification.requestPermission();
       if (permission === "granted") {
         toast.success("Notificações ativadas com sucesso!");
-        new Notification("Serviços Urbanos", {
-          body: "Parabéns! Você receberá alertas de novos cashbacks.",
+        new Notification("CaZa dos Sorteios", {
+          body: "Parabéns! Você receberá atualizações em tempo real.",
           icon: "/vite.svg"
         });
       }
@@ -117,29 +162,50 @@ export default function AffiliateLayout({ children, title, customBalance, custom
   const isPJ = Boolean(profile?.cnpj && profile.cnpj.replace(/\D/g, '').length > 11) || 
                Boolean((profile as any)?.description?.includes('[PJ]'));
 
-  const menuItems = [
-    { path: '/afiliado/dashboard', icon: LayoutGrid, label: 'Dashboard' },
+  // SEPARAÇÃO RIGOROSA DE MENUS CONFORME NOVO MODELO JURÍDICO
+  // 1. Menu para Afiliado Premium (Consumidor de Proteção e Sorteios - ZERO MMN)
+  const afiliadoPremiumMenuItems = [
+    { path: '/afiliado/dashboard', icon: LayoutGrid, label: 'Painel do Segurado' },
+    { path: '/afiliado/apolice', icon: Shield, label: 'Apólice MBM R$ 5.000' },
+    { path: '/afiliado/numero-sorte', icon: Ticket, label: 'Números da Sorte' },
+    { path: '/afiliado/telemedicina', icon: HeartPulse, label: 'Telemedicina 24/7' },
+    { path: '/afiliado/sinistros', icon: AlertCircle, label: 'Sinistros MBM' },
+    { path: '/afiliado/renovacoes', icon: RefreshCw, label: 'Planos & Renovação' },
+    { path: '/afiliado/pedidos', icon: ShoppingBag, label: 'Meus Pedidos' },
+    { path: '/afiliado/perfil', icon: User, label: 'Dados Cadastrais' },
+    { path: '/afiliado/termo-adesao', icon: FileText, label: 'Termo de Adesão' },
+  ];
+
+  // 2. Menu para Microfranqueado (MMN, Gestão de Rede e Vendas)
+  const microfranqueadoMenuItems = [
+    { path: '/afiliado/dashboard', icon: LayoutGrid, label: 'Dashboard MMN' },
     { path: '/afiliado/codigo-ganha-ganha', icon: Gift, label: 'Código Ganha & Ganha' },
     { path: '/afiliado/materiais', icon: FolderDown, label: 'Materiais de Divulgação' },
     ...(profile?.role === 'regional_reseller' ? [
       { path: '/afiliado/revendedor', icon: Target, label: 'Liderança Regional' }
     ] : []),
-    { path: '/afiliado/rede', icon: Users, label: 'Cashback de rede' },
-    { path: '/afiliado/financeiro', icon: Wallet, label: 'Financeiro de Rede' },
+    { path: '/afiliado/rede', icon: Users, label: 'Rede MMN (3 Níveis)' },
+    { path: '/afiliado/financeiro', icon: Wallet, label: 'Comissões & Carteira' },
     ...(profile?.role === 'regional_reseller' ? [
-      { path: '/afiliado/financeiro-revendedor', icon: CircleDollarSign, label: 'Financeiro do Revendedor' }
+      { path: '/afiliado/financeiro-revendedor', icon: CircleDollarSign, label: 'Financeiro Revendedor' }
     ] : []),
-    { path: '/afiliado/financeiro-resumo', icon: BarChart3, label: 'Financeiro Resumo' },
+    { path: '/afiliado/financeiro-resumo', icon: BarChart3, label: 'Extrato Consolidado' },
     { path: '/afiliado/nota-fiscal', icon: Receipt, label: isPJ ? 'Nota Fiscal (PJ)' : 'Recibo RPA (PF)' },
-    { path: '/afiliado/pedidos', icon: ShoppingBag, label: 'Meus Pedidos' },
-    { path: '/afiliado/renovacoes', icon: RefreshCw, label: 'Minhas Renovações' },
-    { path: '/afiliado/ecossistema', icon: Globe, label: 'Ecossistema' },
-    { path: '/afiliado/telemedicina', icon: HeartPulse, label: 'Telemedicina' },
-    { path: '/afiliado/perfil', icon: User, label: 'Dados Pessoais' },
-    { path: '/afiliado/termo-adesao', icon: FileText, label: 'Termo de Adesão' },
-    { path: '/afiliado/apolice', icon: Shield, label: 'Apólice' },
-    { path: '/afiliado/numero-sorte', icon: Ticket, label: 'Número da Sorte' },
+    { path: '/afiliado/pedidos', icon: ShoppingBag, label: 'Pedidos da Rede' },
+    { path: '/afiliado/renovacoes', icon: RefreshCw, label: 'Licença da Franquia' },
+    { path: '/afiliado/perfil', icon: User, label: 'Dados da Franquia' },
+    { path: '/afiliado/termo-adesao', icon: FileText, label: 'Termo de Franquia' },
   ];
+
+  // Itens de Proteção Pessoal para Microfranqueado (apenas se tiver Seguro Ativo)
+  const microfranqueadoSeguroItems = userRoles.isPolicyActive ? [
+    { path: '/afiliado/apolice', icon: Shield, label: 'Minha Apólice MBM' },
+    { path: '/afiliado/numero-sorte', icon: Ticket, label: 'Meus Números Sorte' },
+    { path: '/afiliado/telemedicina', icon: HeartPulse, label: 'Telemedicina 24/7' },
+    { path: '/afiliado/sinistros', icon: AlertCircle, label: 'Sinistros' },
+  ] : [];
+
+  const activeMenuItems = userRoles.isMicrofranqueado ? microfranqueadoMenuItems : afiliadoPremiumMenuItems;
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] flex font-sans text-midnight">
@@ -166,7 +232,7 @@ export default function AffiliateLayout({ children, title, customBalance, custom
         </div>
 
         <nav className="flex-1 px-4 py-4 space-y-2 overflow-y-auto custom-scrollbar">
-          {menuItems.map((item) => {
+          {activeMenuItems.map((item) => {
             const isTermActive = location.pathname.startsWith('/afiliado/termo-adesao');
             const isActive = item.path === '/afiliado/termo-adesao' 
               ? isTermActive 
@@ -198,18 +264,18 @@ export default function AffiliateLayout({ children, title, customBalance, custom
                       handleTermClick(e);
                     }
                   }}
-                  className={`flex items-center gap-4 px-4 py-4 rounded-2xl transition-all group ${
+                  className={`flex items-center gap-4 px-4 py-3.5 rounded-2xl transition-all group ${
                     isActive 
                       ? 'bg-primary-blue text-white shadow-lg shadow-primary-blue/20' 
-                      : 'text-slate-400 hover:bg-slate-50 hover:text-midnight'
+                      : 'text-slate-500 hover:bg-slate-50 hover:text-midnight'
                   }`}
                 >
-                  <item.icon size={22} className={isActive ? 'text-white' : 'group-hover:text-primary-blue'} />
-                  {isSidebarOpen && <span className="font-bold text-sm tracking-tight">{item.label}</span>}
+                  <item.icon size={20} className={isActive ? 'text-white' : 'group-hover:text-primary-blue'} />
+                  {isSidebarOpen && <span className="font-bold text-xs tracking-tight">{item.label}</span>}
                   
                   {item.path !== '/afiliado/termo-adesao' && isActive && isSidebarOpen && (
                     <motion.div layoutId="activeNav" className="ml-auto">
-                      <ChevronRight size={16} />
+                      <ChevronRight size={14} />
                     </motion.div>
                   )}
 
@@ -219,7 +285,7 @@ export default function AffiliateLayout({ children, title, customBalance, custom
                       transition={{ duration: 0.2 }}
                       className={`ml-auto ${isActive ? 'text-white' : 'text-slate-400 group-hover:text-primary-blue'}`}
                     >
-                      <ChevronRight size={16} />
+                      <ChevronRight size={14} />
                     </motion.div>
                   )}
                 </Link>
@@ -240,7 +306,7 @@ export default function AffiliateLayout({ children, title, customBalance, custom
                             <Link
                               key={subItem.path}
                               to={subItem.path}
-                              className={`block py-2 px-3 text-xs font-bold rounded-xl transition-all ${
+                              className={`block py-1.5 px-3 text-[11px] font-bold rounded-xl transition-all ${
                                 isSubActive 
                                   ? 'text-primary-blue bg-primary-blue/5' 
                                   : 'text-slate-400 hover:text-midnight hover:bg-slate-50'
@@ -258,14 +324,78 @@ export default function AffiliateLayout({ children, title, customBalance, custom
             );
           })}
 
-          {/* Sair do Painel - Integrado ao fim do menu com rolagem */}
+          {/* Seção adicional para Microfranqueado que também tem Seguro Ativo */}
+          {userRoles.isMicrofranqueado && microfranqueadoSeguroItems.length > 0 && isSidebarOpen && (
+            <div className="pt-4 mt-2 border-t border-slate-100">
+              <p className="px-4 text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2">
+                Meu Seguro & Benefícios
+              </p>
+              {microfranqueadoSeguroItems.map((item) => {
+                const isActive = location.pathname === item.path;
+                return (
+                  <Link
+                    key={item.path}
+                    to={item.path}
+                    className={`flex items-center gap-3 px-4 py-2.5 rounded-xl transition-all group ${
+                      isActive 
+                        ? 'bg-emerald-50 text-emerald-700 font-bold' 
+                        : 'text-slate-400 hover:bg-slate-50 hover:text-midnight font-medium'
+                    }`}
+                  >
+                    <item.icon size={16} className={isActive ? 'text-emerald-600' : 'text-slate-400 group-hover:text-emerald-600'} />
+                    <span className="text-xs">{item.label}</span>
+                  </Link>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Banner de Upgrade para Afiliado Premium Puro */}
+          {!userRoles.isMicrofranqueado && isSidebarOpen && (
+            <div className="mt-4 p-4 bg-gradient-to-br from-amber-50 to-orange-50 border border-amber-200/70 rounded-2xl text-left shadow-sm">
+              <div className="flex items-center gap-2 text-amber-900 font-black text-[11px] uppercase tracking-wider mb-1">
+                <Briefcase size={14} className="text-amber-600" />
+                <span>Seja Microfranqueado</span>
+              </div>
+              <p className="text-[10px] text-amber-900/80 mb-2.5 leading-relaxed font-medium">
+                Monte sua equipe de vendas e receba <strong>33% de comissão</strong> (G0 27%, G1 3%, G2 3%) com split 80% semanal e 20% anual.
+              </p>
+              <Link 
+                to="/afiliado/renovacoes" 
+                className="inline-flex items-center gap-1.5 bg-amber-600 hover:bg-amber-700 text-white font-black text-[9px] uppercase tracking-wider px-3 py-1.5 rounded-xl transition-all shadow-sm active:scale-95"
+              >
+                Ativar Franquia <ArrowRight size={10} />
+              </Link>
+            </div>
+          )}
+
+          {/* Banner de Proteção para Microfranqueado sem Seguro */}
+          {userRoles.isMicrofranqueado && !userRoles.isPolicyActive && isSidebarOpen && (
+            <div className="mt-4 p-4 bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-200/70 rounded-2xl text-left shadow-sm">
+              <div className="flex items-center gap-2 text-primary-blue font-black text-[11px] uppercase tracking-wider mb-1">
+                <Shield size={14} className="text-primary-blue" />
+                <span>Seguro Vida Light</span>
+              </div>
+              <p className="text-[10px] text-slate-600 mb-2.5 leading-relaxed font-medium">
+                Sua franquia não inclui seguro. Contrate a partir de <strong>R$ 5,00/mês</strong> para cobertura de R$ 5.000 + Sorteios + Telemedicina.
+              </p>
+              <Link 
+                to="/afiliado/renovacoes" 
+                className="inline-flex items-center gap-1.5 bg-primary-blue hover:bg-blue-700 text-white font-black text-[9px] uppercase tracking-wider px-3 py-1.5 rounded-xl transition-all shadow-sm active:scale-95"
+              >
+                Contratar Plano <ArrowRight size={10} />
+              </Link>
+            </div>
+          )}
+
+          {/* Sair do Painel */}
           <div className="pt-4 mt-2 border-t border-slate-100">
             <button 
               onClick={handleLogout}
-              className="flex items-center gap-4 w-full px-4 py-4 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-2xl transition-all group"
+              className="flex items-center gap-4 w-full px-4 py-3.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-2xl transition-all group"
             >
-              <LogOut size={22} className="group-hover:text-red-500 shrink-0" />
-              {isSidebarOpen && <span className="font-bold text-sm tracking-tight">Sair do Painel</span>}
+              <LogOut size={20} className="group-hover:text-red-500 shrink-0" />
+              {isSidebarOpen && <span className="font-bold text-xs tracking-tight">Sair do Painel</span>}
             </button>
           </div>
         </nav>
@@ -286,22 +416,38 @@ export default function AffiliateLayout({ children, title, customBalance, custom
           </div>
 
           <div className="flex items-center gap-6">
-            {/* Saldo Rápido Real do Banco de Dados */}
-            <div className="hidden md:flex flex-col items-end">
-              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">
-                {customBalanceLabel || "Saldo Mensal Disponível (Dia 10)"}
-              </p>
-              <div className="flex items-center gap-2">
-                 <span className="text-lg font-black text-emerald-600 tracking-tighter">
-                   {customBalance !== undefined
-                     ? `R$ ${Number(customBalance).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-                     : (stats ? `R$ ${stats.availableBalance.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : 'R$ 0,00')}
-                 </span>
-                 <div className="size-6 bg-emerald-50 rounded-full flex items-center justify-center text-emerald-600">
-                    <TrendingUp size={12} />
-                 </div>
+            {/* Header Balance / Info Decoupled */}
+            {userRoles.isMicrofranqueado ? (
+              <div className="hidden md:flex flex-col items-end">
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">
+                  {customBalanceLabel || "Comissão Semanal (Terça-feira)"}
+                </p>
+                <div className="flex items-center gap-2">
+                   <span className="text-lg font-black text-emerald-600 tracking-tighter">
+                     {customBalance !== undefined
+                       ? `R$ ${Number(customBalance).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                       : (userRoles.comissoes ? `R$ ${Number(userRoles.comissoes.semanalPendente || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : (stats ? `R$ ${stats.availableBalance.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : 'R$ 0,00'))}
+                   </span>
+                   <div className="size-6 bg-emerald-50 rounded-full flex items-center justify-center text-emerald-600">
+                      <TrendingUp size={12} />
+                   </div>
+                </div>
               </div>
-            </div>
+            ) : (
+              <div className="hidden md:flex flex-col items-end">
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">
+                  {customBalanceLabel || "Proteção Individual MBM"}
+                </p>
+                <div className="flex items-center gap-2">
+                   <span className={`text-lg font-black tracking-tighter ${userRoles.isPolicyActive ? 'text-emerald-600' : 'text-amber-600'}`}>
+                     {userRoles.isPolicyActive ? 'R$ 5.000,00' : 'Plano Pendente'}
+                   </span>
+                   <div className={`size-6 rounded-full flex items-center justify-center ${userRoles.isPolicyActive ? 'bg-emerald-50 text-emerald-600' : 'bg-amber-50 text-amber-600'}`}>
+                      <Shield size={12} />
+                   </div>
+                </div>
+              </div>
+            )}
 
             <div className="h-8 w-px bg-slate-200 hidden md:block"></div>
 
@@ -404,7 +550,9 @@ export default function AffiliateLayout({ children, title, customBalance, custom
                   <div className="text-right hidden sm:block">
                     <p className="text-xs font-black text-midnight leading-none mb-1">{profile?.full_name || 'Carregando...'}</p>
                     <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">
-                      {profile?.role === 'regional_reseller' ? 'Revendedor Regional' : 'Afiliado Premium'}
+                      {userRoles.isMicrofranqueado 
+                        ? (userRoles.microfranqueado?.is_primeiros_100 ? 'Microfranqueado (Primeiros 100)' : 'Microfranqueado CaZa')
+                        : 'Afiliado Premium (Segurado)'}
                     </p>
                   </div>
                  <div className="size-10 rounded-xl bg-slate-100 flex items-center justify-center font-black text-slate-400 border border-slate-200 uppercase overflow-hidden relative">
@@ -451,7 +599,7 @@ export default function AffiliateLayout({ children, title, customBalance, custom
                </div>
                
                <nav className="flex-1 space-y-2 overflow-y-auto max-h-[70vh] no-scrollbar pr-2">
-                  {menuItems.map((item) => {
+                  {activeMenuItems.map((item) => {
                     const isTermActive = location.pathname.startsWith('/afiliado/termo-adesao');
                     const isActive = item.path === '/afiliado/termo-adesao' 
                       ? isTermActive 

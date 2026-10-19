@@ -23,6 +23,8 @@ export default function AffiliateTelemedicina() {
   const { user, profile } = useAuth();
   const [loading, setLoading] = useState(true);
   const [isEligible, setIsEligible] = useState(false);
+  const [seguradoData, setSeguradoData] = useState<any>(null);
+  const [microfranqueadoData, setMicrofranqueadoData] = useState<any>(null);
   const [stats, setStats] = useState<any>(null);
 
   const raccaTelemedicinaUrl = 'https://raccasaude.com.br/parceiro/servicos-urbanos';
@@ -32,9 +34,19 @@ export default function AffiliateTelemedicina() {
       if (!user) return;
       try {
         setLoading(true);
-        const statsData = await businessRules.getAffiliateStats(user.id);
+        const [statsData, segRes, mfRes] = await Promise.all([
+          businessRules.getAffiliateStats(user.id),
+          businessRules.getSeguradoData(user.id),
+          businessRules.getMicrofranqueadoData(user.id)
+        ]);
+
         setStats(statsData);
-        setIsEligible(statsData?.isEligible || false);
+        setSeguradoData(segRes);
+        setMicrofranqueadoData(mfRes);
+
+        // O usuário é elegível se tiver apólice ativa no novo modelo de seguro ou assinatura ativa
+        const active = segRes?.isPolicyActive || (statsData?.isEligible && !mfRes?.isMicrofranqueado);
+        setIsEligible(!!active);
       } catch (error) {
         console.error("Error loading telemedicine dashboard stats:", error);
       } finally {
@@ -56,6 +68,8 @@ export default function AffiliateTelemedicina() {
 
   // Se o usuário não estiver ativo (isEligible === false)
   if (!isEligible) {
+    const isOnlyMicrofranqueado = microfranqueadoData?.isMicrofranqueado && !seguradoData?.isPolicyActive;
+
     return (
       <AffiliateLayout title="Telemedicina">
         <div className="p-8 lg:p-12 min-h-[75vh] flex items-center justify-center">
@@ -65,20 +79,36 @@ export default function AffiliateTelemedicina() {
             className="max-w-2xl bg-white p-8 sm:p-12 rounded-[2.5rem] border border-slate-100 shadow-2xl text-center space-y-8 relative overflow-hidden"
           >
             {/* Background design glow */}
-            <div className="absolute -top-20 -right-20 size-60 bg-red-500/5 rounded-full blur-3xl pointer-events-none"></div>
+            <div className="absolute -top-20 -right-20 size-60 bg-amber-500/5 rounded-full blur-3xl pointer-events-none"></div>
             <div className="absolute -bottom-20 -left-20 size-60 bg-primary-blue/5 rounded-full blur-3xl pointer-events-none"></div>
 
-            <div className="size-20 bg-rose-50 text-rose-500 rounded-3xl flex items-center justify-center shadow-lg shadow-rose-500/10 mx-auto animate-bounce">
+            <div className={`size-20 rounded-3xl flex items-center justify-center shadow-lg mx-auto ${
+              isOnlyMicrofranqueado 
+                ? 'bg-amber-50 text-amber-600 shadow-amber-500/10' 
+                : 'bg-rose-50 text-rose-500 shadow-rose-500/10 animate-bounce'
+            }`}>
               <Lock size={36} />
             </div>
 
             <div className="space-y-4">
-              <h2 className="text-3xl font-black text-midnight tracking-tight uppercase italic">Acesso Bloqueado</h2>
+              <h2 className="text-3xl font-black text-midnight tracking-tight uppercase italic">
+                {isOnlyMicrofranqueado ? 'Benefício Afiliado Premium' : 'Acesso Bloqueado'}
+              </h2>
               <p className="text-slate-500 font-bold uppercase tracking-wider text-xs">
-                Benefício Exclusivo para Membros Ativos
+                {isOnlyMicrofranqueado 
+                  ? 'Telemedicina Exclusiva para Titulares do Seguro Vida Light' 
+                  : 'Benefício Exclusivo para Membros Ativos'}
               </p>
               <p className="text-slate-600 leading-relaxed max-w-lg mx-auto text-sm">
-                A telemedicina 24/7 com atendimento médico de urgência e agendamento com especialistas está bloqueada. Regularize seu plano de licenciamento para desbloquear consultas ilimitadas para você e sua família.
+                {isOnlyMicrofranqueado ? (
+                  <>
+                    Sua conta está cadastrada como <strong>Microfranqueado</strong>, cujo foco é o plano de expansão e comissões de rede MMN. A telemedicina 24/7 (Racca Saúde ilimitada para você e dependentes) está disponível contratando o plano <strong>Seguro Vida Light a partir de apenas R$ 5,00/mês</strong>.
+                  </>
+                ) : (
+                  <>
+                    A telemedicina 24/7 com atendimento médico de urgência e agendamento com especialistas está bloqueada. Regularize seu plano para desbloquear consultas ilimitadas para você e sua família.
+                  </>
+                )}
               </p>
             </div>
 
@@ -87,9 +117,9 @@ export default function AffiliateTelemedicina() {
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
               <Link 
                 to="/afiliado/renovacoes"
-                className="w-full sm:w-auto bg-midnight text-white px-8 py-4 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-slate-800 transition-all shadow-xl shadow-midnight/10 flex items-center justify-center gap-2"
+                className="w-full sm:w-auto bg-emerald-600 hover:bg-emerald-500 text-white px-8 py-4 rounded-2xl font-black text-xs uppercase tracking-widest transition-all shadow-xl shadow-emerald-600/20 flex items-center justify-center gap-2"
               >
-                Ativar Minha Assinatura
+                {isOnlyMicrofranqueado ? 'Contratar Seguro Vida Light (R$ 5/mês)' : 'Ativar Minha Assinatura'}
                 <ArrowUpRight size={16} />
               </Link>
               <a 
@@ -98,7 +128,7 @@ export default function AffiliateTelemedicina() {
                 rel="noopener noreferrer"
                 className="w-full sm:w-auto bg-slate-50 text-slate-700 border border-slate-200 px-8 py-4 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-slate-100 transition-all flex items-center justify-center gap-2"
               >
-                Suporte Financeiro
+                Suporte WhatsApp
               </a>
             </div>
           </motion.div>

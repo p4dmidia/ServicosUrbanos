@@ -24,28 +24,40 @@ import {
   HelpCircle,
   Flag
 } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import AffiliateLayout from '../components/AffiliateLayout';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
+import { businessRules } from '../lib/businessRules';
 import { motion } from 'framer-motion';
 
 export default function AffiliateLuckyNumber() {
   const { user, profile } = useAuth();
   const [subscription, setSubscription] = useState<any>(null);
+  const [seguradoData, setSeguradoData] = useState<any>(null);
+  const [microfranqueadoData, setMicrofranqueadoData] = useState<any>(null);
 
-  // Carregar assinatura ativa do usuário para saber a vigência exata do plano contratado
+  // Carregar dados da nova arquitetura e assinatura
   useEffect(() => {
-    async function loadSub() {
+    async function loadAll() {
       if (!user) return;
       try {
-        const { data: subs } = await supabase
-          .from('subscriptions')
-          .select('*')
-          .eq('profile_id', user.id)
-          .order('end_date', { ascending: false });
+        const [segRes, mfRes, subRes] = await Promise.all([
+          businessRules.getSeguradoData(user.id),
+          businessRules.getMicrofranqueadoData(user.id),
+          supabase
+            .from('subscriptions')
+            .select('*')
+            .eq('profile_id', user.id)
+            .order('end_date', { ascending: false })
+        ]);
 
+        setSeguradoData(segRes);
+        setMicrofranqueadoData(mfRes);
+
+        const subs = subRes.data;
         if (subs && subs.length > 0) {
-          const active = subs.find(s => s.status === 'active' && new Date(s.end_date) >= new Date()) || subs[0];
+          const active = subs.find((s: any) => s.status === 'active' && new Date(s.end_date) >= new Date()) || subs[0];
           setSubscription(active);
         } else {
           try {
@@ -63,10 +75,10 @@ export default function AffiliateLuckyNumber() {
           } catch (e) {}
         }
       } catch (err) {
-        console.error("Erro ao carregar assinatura:", err);
+        console.error("Erro ao carregar dados:", err);
       }
     }
-    loadSub();
+    loadAll();
   }, [user]);
 
   // Informações e duração do plano contratado
@@ -119,18 +131,19 @@ export default function AffiliateLuckyNumber() {
 
   // O número da sorte oficial é definido e emitido diretamente pela MBM Seguradora.
   const luckyNumber = useMemo(() => {
+    if (seguradoData?.numerosDaSorte?.[0]?.numero) return seguradoData.numerosDaSorte[0].numero;
     if ((profile as any)?.lucky_number) return (profile as any).lucky_number;
     if (profile?.description) {
       const match = profile.description.match(/\[MBM_LUCKY_NUMBER:([^\]]+)\]/);
       if (match && match[1]) return match[1].trim();
     }
     return null;
-  }, [profile]);
+  }, [seguradoData, profile]);
 
   // Certificado e Apólice da MBM
   const mbmCertificate = useMemo(() => {
-    let cert = (profile as any)?.certificate_number || null;
-    let policy = (profile as any)?.policy_number || '11-0982-000058940-0001';
+    let cert = seguradoData?.apolice?.numero_certificado || (profile as any)?.certificate_number || null;
+    let policy = seguradoData?.apolice?.numero_apolice || (profile as any)?.policy_number || '11-0982-000058940-0001';
     if (profile?.description) {
       const certMatch = profile.description.match(/\[MBM_CERTIFICATE:([^\]]+)\]/);
       if (certMatch && certMatch[1]) cert = certMatch[1].trim();
@@ -138,7 +151,7 @@ export default function AffiliateLuckyNumber() {
       if (policyMatch && policyMatch[1]) policy = policyMatch[1].trim();
     }
     return { cert, policy };
-  }, [profile]);
+  }, [seguradoData, profile]);
 
   // Data de adesão / início da assinatura do segurado
   const userJoinDate = useMemo(() => {
@@ -387,6 +400,32 @@ export default function AffiliateLuckyNumber() {
             </div>
           </div>
         </div>
+
+        {/* Alerta para Microfranqueado sem plano de sorteio ativo */}
+        {microfranqueadoData?.isMicrofranqueado && !seguradoData?.isPolicyActive && (
+          <div className="bg-amber-500/10 border border-amber-500/30 rounded-3xl p-6 sm:p-8 flex flex-col md:flex-row items-start md:items-center justify-between gap-6 shadow-xs">
+            <div className="flex items-start gap-4">
+              <div className="size-12 rounded-2xl bg-amber-500 text-midnight flex items-center justify-center shrink-0">
+                <AlertTriangle size={26} />
+              </div>
+              <div className="space-y-1">
+                <h4 className="font-black text-amber-950 uppercase text-sm">
+                  Aviso ao Microfranqueado: Sorteios são Exclusivos do Afiliado Premium
+                </h4>
+                <p className="text-xs text-amber-900 leading-relaxed max-w-2xl font-medium">
+                  Sua conta de <strong>Microfranqueado</strong> é voltada à gestão de rede e comissões MMN. O Número da Sorte e a participação nos sorteios semanais de R$ 5.000,00 da Loteria Federal são vinculados à contratação do plano de Seguro Vida Light (a partir de R$ 5,00/mês).
+                </p>
+              </div>
+            </div>
+            <Link
+              to="/afiliado/renovacoes"
+              className="bg-amber-500 hover:bg-amber-400 text-midnight font-black px-6 py-3 rounded-xl text-xs uppercase tracking-widest shrink-0 transition-all shadow-md flex items-center gap-2 whitespace-nowrap"
+            >
+              Ativar Seguro Vida Light
+              <ArrowRight size={14} />
+            </Link>
+          </div>
+        )}
 
         {/* Cupom / Bilhete Digital Premium */}
         <div className="relative bg-gradient-to-br from-indigo-950 via-midnight to-slate-950 text-white rounded-[2.5rem] p-8 md:p-10 overflow-hidden shadow-2xl shadow-indigo-950/20 border border-indigo-500/20">

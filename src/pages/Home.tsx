@@ -523,7 +523,7 @@ export default function Home() {
             </div>
           </section>
 
-          {/* SECTION 4: Ganhos Financeiros – Código Ganha & Ganha */}
+          {/* SECTION 4: Oportunidade Comercial – Seja um Microfranqueado */}
           <section className="py-14 sm:py-20 lg:py-28 border-t border-white/5 bg-slate-950/20">
             <div className="max-w-7xl mx-auto px-6 lg:px-20">
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 lg:gap-16 items-center">
@@ -535,9 +535,9 @@ export default function Home() {
                   transition={{ duration: 0.6 }}
                   className="flex flex-col gap-6 text-left"
                 >
-                  <span className="text-accent font-black uppercase text-sm tracking-widest">04. Ganhos Financeiros – Código Ganha & Ganha</span>
+                  <span className="text-accent font-black uppercase text-sm tracking-widest">04. Oportunidade Comercial – Seja um Microfranqueado</span>
                   <h2 className="text-3xl md:text-5xl font-extrabold text-white leading-tight">
-                    “Ganhe protegendo e convidando.”
+                    “Ganhe comissões em rede comercializando o Seguro Vida Light.”
                   </h2>
                   
                   <div className="h-1 w-20 bg-accent rounded-full mb-2"></div>
@@ -548,7 +548,7 @@ export default function Home() {
                         <CheckCircle2 size={14} />
                       </div>
                       <span className="text-slate-300 font-medium text-base">
-                        Todo segurado recebe um link exclusivo de convite.
+                        Ganhos de rede exclusivos para Microfranqueados devidamente licenciados.
                       </span>
                     </li>
                     <li className="flex items-start gap-3">
@@ -556,7 +556,7 @@ export default function Home() {
                         <CheckCircle2 size={14} />
                       </div>
                       <span className="text-slate-300 font-medium text-base">
-                        Ao compartilhar, você pode convidar novas pessoas para aderirem ao plano.
+                        Comissionamento de até 33% em 3 níveis: 27% direto (G0) e 3% na equipe (G1 e G2).
                       </span>
                     </li>
                     <li className="flex items-start gap-3">
@@ -564,7 +564,7 @@ export default function Home() {
                         <CheckCircle2 size={14} />
                       </div>
                       <span className="text-slate-300 font-medium text-base">
-                        Cada novo segurado que adquirir nosso seguro terá a mesma oportunidade de proteção, sorteios e ganhos financeiros.
+                        Divisão oficial de repasses: 80% semanalmente toda terça-feira e 20% no bônus anual em dezembro.
                       </span>
                     </li>
                     <li className="flex items-start gap-3">
@@ -572,18 +572,24 @@ export default function Home() {
                         <CheckCircle2 size={14} />
                       </div>
                       <span className="text-slate-300 font-medium text-base">
-                        Expanda sua rede e aumente seus resultados com transparência total no painel financeiro.
+                        Os clientes do Seguro Vida Light contam com seguro MBM R$ 5.000, telemedicina e sorteios a partir de R$ 5,00/mês.
                       </span>
                     </li>
                   </ul>
 
-                  <div className="pt-4">
+                  <div className="pt-4 flex flex-wrap gap-4">
+                    <Link
+                      to="/ganhe-dinheiro"
+                      className="bg-accent hover:bg-emerald-500 text-midnight px-8 py-3.5 rounded-xl font-black text-sm uppercase tracking-wider transition-all shadow-lg hover:scale-105 active:scale-95 inline-flex items-center gap-2"
+                    >
+                      Conhecer a Microfranquia
+                      <ChevronRight size={18} />
+                    </Link>
                     <Link
                       to="/cadastro"
-                      className="bg-accent hover:bg-emerald-500 text-midnight px-8 py-3.5 rounded-xl font-bold transition-all shadow-lg hover:scale-105 active:scale-95 inline-flex items-center gap-2"
+                      className="bg-white/10 hover:bg-white/15 text-white px-6 py-3.5 rounded-xl font-bold text-sm transition-all border border-white/10"
                     >
-                      Ative seu plano e comece a indicar hoje mesmo
-                      <ChevronRight size={18} />
+                      Contratar Seguro (R$ 5,00/mês)
                     </Link>
                   </div>
                 </motion.div>

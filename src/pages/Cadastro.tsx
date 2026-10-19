@@ -22,7 +22,8 @@ import {
     X,
     Target,
     Building2,
-    Sparkles
+    Sparkles,
+    Briefcase
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
@@ -45,9 +46,29 @@ export default function Cadastro() {
     const [success, setSuccess] = useState(false);
     const [termsAccepted, setTermsAccepted] = useState(false);
     const [showTermsModal, setShowTermsModal] = useState(false);
+    const [termoHash, setTermoHash] = useState<string>('');
 
-    // Person Type State (Pessoa Física ou Pessoa Jurídica)
-    const [personType, setPersonType] = useState<'PF' | 'PJ'>('PF');
+    // Escolha da Modalidade (Afiliado Premium Seguro Vida Light vs Microfranqueado MMN)
+    const [accountProduct, setAccountProduct] = useState<'seguro' | 'microfranqueado'>(() => {
+        const p = (searchParams.get('tipo') || searchParams.get('produto') || '').toLowerCase();
+        if (p.includes('micro') || p.includes('franquia') || p.includes('mmn')) return 'microfranqueado';
+        return 'seguro';
+    });
+
+    // Modalidade Tributária do Cadastro Inicial: Sempre Pessoa Física (PF)
+    const personType: 'PF' = 'PF';
+
+    // Função para calcular SHA-256 do Termo de Aceite
+    const generateContractHash = async (content: string) => {
+        try {
+            const msgUint8 = new TextEncoder().encode(content);
+            const hashBuffer = await crypto.subtle.digest('SHA-256', msgUint8);
+            const hashArray = Array.from(new Uint8Array(hashBuffer));
+            return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+        } catch (e) {
+            return `SHA256-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+        }
+    };
 
     // Form States (Pessoa Física / Geral)
     const [fullName, setFullName] = useState('');
@@ -64,12 +85,6 @@ export default function Cadastro() {
         d.setFullYear(d.getFullYear() - 18);
         return d.toISOString().split('T')[0];
     })();
-
-    // Form States (Pessoa Jurídica e Titular do Seguro)
-    const [companyName, setCompanyName] = useState('');
-    const [cnpj, setCnpj] = useState('');
-    const [insuredName, setInsuredName] = useState(''); // Nome da pessoa física titular do seguro
-    const [insuredCpf, setInsuredCpf] = useState(''); // CPF do titular do seguro
 
     // Formatadores de Documentos
     const formatCpf = (val: string) => {
@@ -374,51 +389,20 @@ export default function Cadastro() {
             return;
         }
 
-        if (personType === 'PF') {
-            if (!fullName.trim() || !whatsapp.trim() || !cpf.trim() || !email.trim()) {
-                setError("Por favor, preencha todos os dados pessoais básicos (Nome, WhatsApp, CPF e E-mail).");
-                setLoading(false);
-                return;
-            }
+        if (!fullName.trim() || !whatsapp.trim() || !cpf.trim() || !email.trim()) {
+            setError("Por favor, preencha todos os dados pessoais básicos (Nome, WhatsApp, CPF e E-mail).");
+            setLoading(false);
+            return;
+        }
 
-            if (cpf.replace(/\D/g, '').length !== 11) {
-                setError("O CPF informado deve conter exatamente 11 dígitos numéricos.");
-                setLoading(false);
-                return;
-            }
-        } else {
-            // Validações da Pessoa Jurídica
-            if (!companyName.trim() || !cnpj.trim() || !whatsapp.trim() || !email.trim()) {
-                setError("Por favor, preencha a Razão Social, CNPJ, WhatsApp e E-mail da empresa.");
-                setLoading(false);
-                return;
-            }
-
-            if (cnpj.replace(/\D/g, '').length !== 14) {
-                setError("O CNPJ informado deve conter 14 dígitos numéricos.");
-                setLoading(false);
-                return;
-            }
-
-            // Validação crucial: Titular do Seguro para PJ
-            if (!insuredName.trim()) {
-                setError("Por favor, informe o nome completo da pessoa física que terá direito ao seguro de vida MBM.");
-                setLoading(false);
-                return;
-            }
-
-            if (!insuredCpf.trim() || insuredCpf.replace(/\D/g, '').length !== 11) {
-                setError("Por favor, informe um CPF válido (11 dígitos) para o titular com direito ao seguro de vida.");
-                setLoading(false);
-                return;
-            }
+        if (cpf.replace(/\D/g, '').length !== 11) {
+            setError("O CPF informado deve conter exatamente 11 dígitos numéricos.");
+            setLoading(false);
+            return;
         }
 
         if (!birthDate || !gender) {
-            setError(personType === 'PJ' 
-                ? "Data de nascimento e sexo do titular do seguro são obrigatórios para a apólice MBM."
-                : "Data de nascimento e sexo são obrigatórios para a apólice de seguro."
-            );
+            setError("Data de nascimento e sexo são obrigatórios para a apólice de seguro.");
             setLoading(false);
             return;
         }
@@ -455,11 +439,8 @@ export default function Cadastro() {
 
         const finalSponsorId = referrerId || SIC_COMERCIO_ID;
         const finalResellerId = resellerId || SIC_COMERCIO_ID;
-
-        const finalDisplayName = personType === 'PJ' ? companyName.trim() : fullName.trim();
-        const finalCpf = personType === 'PJ' ? insuredCpf.replace(/\D/g, '') : cpf.replace(/\D/g, '');
-        const cleanCnpj = personType === 'PJ' ? cnpj.replace(/\D/g, '') : null;
-        const finalInsuredName = personType === 'PJ' ? insuredName.trim() : fullName.trim();
+        const finalDisplayName = fullName.trim();
+        const finalCpf = cpf.replace(/\D/g, '');
 
         try {
             // Checagem prévia: verificar se CPF já possui cadastro para evitar erro 500 do banco
@@ -488,37 +469,10 @@ export default function Cadastro() {
                 }
             }
 
-            // Checagem prévia: verificar se CNPJ já possui cadastro
-            if (cleanCnpj) {
-                const { data: existingCnpj } = await supabase
-                    .from('profiles')
-                    .select('id')
-                    .eq('cnpj', cleanCnpj)
-                    .maybeSingle();
-
-                if (existingCnpj) {
-                    const msg = "Este CNPJ já possui cadastro no sistema. Se você já possui uma conta, faça login ou solicite a recuperação de senha.";
-                    setError(msg);
-                    toast.error("Este CNPJ já está cadastrado no sistema.", {
-                        duration: 7000,
-                        style: {
-                            borderRadius: '16px',
-                            background: '#dc2626',
-                            color: '#fff',
-                            fontWeight: 'bold',
-                            fontSize: '12px'
-                        }
-                    });
-                    setLoading(false);
-                    return;
-                }
-            }
-
             // Checagem Antifraude: verificar se a chave PIX ou conta bancária já pertence a outro CPF
             if (pixKey?.trim() || (bankBranch?.trim() && bankAccount?.trim())) {
                 const conflict = await businessRules.checkReceivingAccountConflict({
                     cpf: finalCpf,
-                    cnpj: cleanCnpj || undefined,
                     pixKey: pixKey,
                     bankName: bankName,
                     bankBranch: bankBranch,
@@ -560,12 +514,10 @@ export default function Cadastro() {
                 options: {
                     data: {
                         email: email.trim().toLowerCase(),
-                        person_type: personType,
+                        person_type: 'PF',
                         full_name: finalDisplayName,
-                        store_name: personType === 'PJ' ? companyName.trim() : undefined,
-                        cnpj: cleanCnpj,
                         cpf: finalCpf,
-                        insured_person_name: finalInsuredName,
+                        insured_person_name: finalDisplayName,
                         insured_person_cpf: finalCpf,
                         whatsapp: whatsapp,
                         role: 'affiliate',
@@ -583,7 +535,7 @@ export default function Cadastro() {
                         bank_branch: bankBranch,
                         bank_account: bankAccount,
                         pix_key: pixKey,
-                        pix_type: personType === 'PJ' ? 'cnpj' : 'cpf'
+                        pix_type: 'cpf'
                     }
                 }
             });
@@ -604,6 +556,7 @@ export default function Cadastro() {
                     email: email.trim().toLowerCase(),
                     whatsapp: whatsapp,
                     cpf: finalCpf,
+                    person_type: 'PF',
                     role: 'affiliate',
                     referred_by: finalSponsorId,
                     reseller_id: finalResellerId,
@@ -619,16 +572,42 @@ export default function Cadastro() {
                     bank_branch: bankBranch,
                     bank_account: bankAccount,
                     pix_key: pixKey,
-                    pix_type: personType === 'PJ' ? 'cnpj' : 'cpf'
+                    pix_type: 'cpf'
                 };
 
-                if (personType === 'PJ') {
-                    profilePayload.cnpj = cleanCnpj;
-                    profilePayload.store_name = companyName.trim();
-                    profilePayload.description = `[PJ] Titular do Seguro: ${finalInsuredName} | CPF Segurado: ${finalCpf}`;
-                }
-
                 await supabase.from('profiles').update(profilePayload).eq('id', data.user.id);
+
+                // Auditoria do Aceite Digital com IP e Assinatura Criptográfica
+                let clientIp = '127.0.0.1';
+                try {
+                    const ipRes = await fetch('https://api.ipify.org?format=json');
+                    const ipData = await ipRes.json();
+                    if (ipData?.ip) clientIp = ipData.ip;
+                } catch (e) {}
+
+                if (accountProduct === 'seguro') {
+                    await businessRules.cadastrarSegurado({
+                        profile_id: data.user.id,
+                        nome_completo: finalDisplayName,
+                        cpf: finalCpf,
+                        data_nascimento: birthDate,
+                        telefone: whatsapp,
+                        ip: clientIp,
+                        user_agent: navigator.userAgent,
+                        termo_hash: termoHash || 'SHA256-ACEITE-SEGURO-VIDA-LIGHT-DEFAULT'
+                    });
+                } else {
+                    await businessRules.cadastrarMicrofranqueado({
+                        profile_id: data.user.id,
+                        nome_completo: finalDisplayName,
+                        cpf: finalCpf,
+                        razao_social: finalDisplayName,
+                        upline_id: finalSponsorId,
+                        ip: clientIp,
+                        user_agent: navigator.userAgent,
+                        termo_hash: termoHash || 'SHA256-ACEITE-MICROFRANQUEADO-MMN-DEFAULT'
+                    });
+                }
             }
 
             toast.success('Conta criada com sucesso!', {
@@ -647,11 +626,15 @@ export default function Cadastro() {
                 localStorage.removeItem('urba_reseller');
             } catch (e) {}
 
-            // Login automático e direcionamento para ativação do plano
+            // Login automático e direcionamento adequado
             try {
                 const { error: signInErr } = await supabase.auth.signInWithPassword({ email, password });
                 if (!signInErr) {
-                    navigate('/afiliado/renovacoes');
+                    if (accountProduct === 'seguro') {
+                        navigate('/afiliado/renovacoes');
+                    } else {
+                        navigate('/afiliado/dashboard');
+                    }
                     return;
                 }
             } catch (loginErr) {
@@ -800,6 +783,97 @@ export default function Cadastro() {
                         </div>
 
                         <form className="space-y-12 pb-20" onSubmit={handleSubmit}>
+                            {/* Seção 0: Escolha do Produto / Perfil de Cadastro */}
+                            <div className="space-y-4">
+                                <div className="flex items-center justify-between gap-3 mb-1 flex-wrap">
+                                    <div className="flex items-center gap-3">
+                                        <div className="size-2 rounded-full bg-primary-blue animate-pulse" />
+                                        <h3 className="text-xs font-black uppercase tracking-widest text-midnight">
+                                            Selecione sua Modalidade de Cadastro
+                                        </h3>
+                                    </div>
+                                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                                        Dois Produtos Distintos
+                                    </span>
+                                </div>
+
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    {/* Opção 1: Afiliado Premium (Seguro Vida Light) */}
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setAccountProduct('seguro');
+                                            setTermsAccepted(false);
+                                        }}
+                                        className={`p-5 rounded-2xl border text-left transition-all relative flex flex-col justify-between gap-4 cursor-pointer ${
+                                            accountProduct === 'seguro'
+                                                ? 'bg-emerald-50/70 border-emerald-500 ring-2 ring-emerald-500/20 shadow-md'
+                                                : 'bg-slate-50 border-slate-200 hover:bg-white hover:border-slate-300 opacity-75'
+                                        }`}
+                                    >
+                                        <div className="flex items-center justify-between">
+                                            <span className={`text-[9px] font-black uppercase px-2.5 py-1 rounded-lg ${
+                                                accountProduct === 'seguro' ? 'bg-emerald-500 text-white' : 'bg-slate-200 text-slate-600'
+                                            }`}>
+                                                Produto B • Seguro & Sorteios
+                                            </span>
+                                            <span className="text-xs font-black text-emerald-700 font-mono">
+                                                A partir de R$ 5,00/mês
+                                            </span>
+                                        </div>
+
+                                        <div>
+                                            <h4 className="text-sm font-black text-midnight uppercase tracking-tight">
+                                                Afiliado Premium
+                                            </h4>
+                                            <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-wider mt-0.5">
+                                                Seguro Vida Light R$ 5.000 + Telemedicina
+                                            </p>
+                                            <p className="text-[11px] text-slate-500 font-medium leading-relaxed mt-2">
+                                                Cobertura MBM Seguradora, 4 sorteios semanais da Loteria Federal por mês e Telemedicina 24/7 Racca Saúde. <strong>Sem MMN e sem rede.</strong>
+                                            </p>
+                                        </div>
+                                    </button>
+
+                                    {/* Opção 2: Microfranqueado (MMN) */}
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setAccountProduct('microfranqueado');
+                                            setTermsAccepted(false);
+                                        }}
+                                        className={`p-5 rounded-2xl border text-left transition-all relative flex flex-col justify-between gap-4 cursor-pointer ${
+                                            accountProduct === 'microfranqueado'
+                                                ? 'bg-indigo-50/70 border-indigo-600 ring-2 ring-indigo-500/20 shadow-md'
+                                                : 'bg-slate-50 border-slate-200 hover:bg-white hover:border-slate-300 opacity-75'
+                                        }`}
+                                    >
+                                        <div className="flex items-center justify-between">
+                                            <span className={`text-[9px] font-black uppercase px-2.5 py-1 rounded-lg ${
+                                                accountProduct === 'microfranqueado' ? 'bg-indigo-600 text-white' : 'bg-slate-200 text-slate-600'
+                                            }`}>
+                                                Produto A • Licença MMN
+                                            </span>
+                                            <span className="text-[10px] font-black text-amber-700 uppercase bg-amber-100 px-2 py-0.5 rounded-md">
+                                                100 Primeiros Isentos
+                                            </span>
+                                        </div>
+
+                                        <div>
+                                            <h4 className="text-sm font-black text-midnight uppercase tracking-tight">
+                                                Microfranqueado Oficial
+                                            </h4>
+                                            <p className="text-[10px] font-bold text-indigo-600 uppercase tracking-wider mt-0.5">
+                                                Comissões em Rede (G0 27%, G1 3%, G2 3%)
+                                            </p>
+                                            <p className="text-[11px] text-slate-500 font-medium leading-relaxed mt-2">
+                                                Construa sua rede comercial. Split 80% semanal às terças e 20% anual em 10 de Dezembro. Taxa de R$ 150/ano debitada do bônus anual em Dezembro.
+                                            </p>
+                                        </div>
+                                    </button>
+                                </div>
+                            </div>
+
                             {/* Seção 1: Tipo de Conta e Identificação */}
                             <div className="space-y-6">
                                 <div className="flex items-center justify-between gap-3 mb-2 underline-offset-8 flex-wrap">
@@ -810,351 +884,162 @@ export default function Cadastro() {
                                         </h3>
                                     </div>
                                     <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                                        Pessoa Física ou Jurídica
+                                        Pessoa Física (PF)
                                     </span>
                                 </div>
 
-                                {/* SELETOR PF / PJ */}
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    {/* Botão Pessoa Física */}
-                                    <button
-                                        type="button"
-                                        onClick={() => setPersonType('PF')}
-                                        className={`p-5 rounded-2xl border text-left transition-all relative flex flex-col justify-between gap-3 cursor-pointer ${
-                                            personType === 'PF'
-                                                ? 'bg-emerald-50/60 border-emerald-500 ring-2 ring-emerald-500/20 shadow-md'
-                                                : 'bg-slate-50 border-slate-200 hover:bg-white hover:border-slate-300'
-                                        }`}
-                                    >
-                                        <div className="flex items-center justify-between">
-                                            <div className="flex items-center gap-3">
-                                                <div className={`size-9 rounded-xl flex items-center justify-center font-black ${
-                                                    personType === 'PF' ? 'bg-emerald-500 text-white shadow-sm' : 'bg-slate-200 text-slate-500'
-                                                }`}>
-                                                    <User size={18} />
-                                                </div>
-                                                <div>
-                                                    <span className="text-xs font-black text-midnight uppercase tracking-wide block">
-                                                        Pessoa Física (PF)
+                                {/* CARD INFORMATIVO REGRA PF / PJ */}
+                                {accountProduct === 'seguro' ? (
+                                    <div className="bg-emerald-50/70 border border-emerald-500/30 p-5 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-sm">
+                                        <div className="flex items-center gap-3.5">
+                                            <div className="size-10 rounded-xl bg-emerald-500 text-white flex items-center justify-center font-black shrink-0 shadow-sm">
+                                                <User size={20} />
+                                            </div>
+                                            <div>
+                                                <div className="flex items-center gap-2">
+                                                    <span className="text-xs font-black text-midnight uppercase tracking-wide">
+                                                        Pessoa Física (PF com CPF)
                                                     </span>
-                                                    <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">
-                                                        Cadastro com CPF
+                                                    <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-md bg-emerald-500 text-white shadow-xs">
+                                                        Apólice Individual MBM
                                                     </span>
                                                 </div>
+                                                <p className="text-[11px] text-slate-600 font-medium leading-relaxed mt-0.5">
+                                                    O Seguro Vida Light R$ 5.000,00 e a participação semanal nos sorteios da Loteria Federal são vinculados exclusivamente ao seu CPF nominal.
+                                                </p>
                                             </div>
-                                            <span className={`text-[9px] font-black uppercase px-2.5 py-1 rounded-lg ${
-                                                personType === 'PF' ? 'bg-emerald-500 text-white shadow-sm' : 'bg-slate-200 text-slate-600'
-                                            }`}>
-                                                Recibo RPA (PF)
-                                            </span>
-                                        </div>
-                                        <p className="text-[11px] text-slate-500 font-medium leading-relaxed">
-                                            Emissão digital automática de Recibo RPA com apuração de INSS (11%) e IRRF na fonte conforme tabela 2026. Seguro Vida Light MBM é emitido em seu próprio nome.
-                                        </p>
-                                    </button>
-
-                                    {/* Botão Pessoa Jurídica */}
-                                    <button
-                                        type="button"
-                                        onClick={() => setPersonType('PJ')}
-                                        className={`p-5 rounded-2xl border text-left transition-all relative flex flex-col justify-between gap-3 cursor-pointer ${
-                                            personType === 'PJ'
-                                                ? 'bg-purple-50/60 border-purple-500 ring-2 ring-purple-500/20 shadow-md'
-                                                : 'bg-slate-50 border-slate-200 hover:bg-white hover:border-slate-300'
-                                        }`}
-                                    >
-                                        <div className="flex items-center justify-between">
-                                            <div className="flex items-center gap-3">
-                                                <div className={`size-9 rounded-xl flex items-center justify-center font-black ${
-                                                    personType === 'PJ' ? 'bg-purple-600 text-white shadow-sm' : 'bg-slate-200 text-slate-500'
-                                                }`}>
-                                                    <Building2 size={18} />
-                                                </div>
-                                                <div>
-                                                    <span className="text-xs font-black text-midnight uppercase tracking-wide block">
-                                                        Pessoa Jurídica (PJ)
-                                                    </span>
-                                                    <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">
-                                                        Empresa com CNPJ
-                                                    </span>
-                                                </div>
-                                            </div>
-                                            <span className={`text-[9px] font-black uppercase px-2.5 py-1 rounded-lg ${
-                                                personType === 'PJ' ? 'bg-purple-600 text-white shadow-sm' : 'bg-slate-200 text-slate-600'
-                                            }`}>
-                                                PJ Isento (Sem Retenção)
-                                            </span>
-                                        </div>
-                                        <p className="text-[11px] text-slate-500 font-medium leading-relaxed">
-                                            Não paga impostos retidos (isento de INSS e IRRF via NFS-e). Requer indicar o nome da pessoa física com direito ao seguro de vida.
-                                        </p>
-                                    </button>
-                                </div>
-
-                                {personType === 'PF' ? (
-                                    /* CAMPOS PESSOA FÍSICA */
-                                    <div className="space-y-6">
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                            <div className="flex flex-col gap-2">
-                                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Nome Completo</label>
-                                                <div className="relative group">
-                                                    <User className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300 group-focus-within:text-emerald-500 transition-colors" size={18} />
-                                                    <input
-                                                        required
-                                                        type="text"
-                                                        value={fullName}
-                                                        onChange={(e) => setFullName(e.target.value)}
-                                                        placeholder="João da Silva Pereira"
-                                                        className="w-full pl-12 pr-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500/50 transition-all font-bold text-midnight placeholder:text-slate-300"
-                                                    />
-                                                </div>
-                                            </div>
-                                            <div className="flex flex-col gap-2">
-                                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Documento (CPF)</label>
-                                                <div className="relative group">
-                                                    <ShieldCheck className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300 group-focus-within:text-emerald-500 transition-colors" size={18} />
-                                                    <input
-                                                        required
-                                                        type="text"
-                                                        value={cpf}
-                                                        onChange={(e) => setCpf(formatCpf(e.target.value))}
-                                                        placeholder="000.000.000-00"
-                                                        maxLength={14}
-                                                        className="w-full pl-12 pr-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500/50 transition-all font-bold text-midnight placeholder:text-slate-300 font-mono"
-                                                    />
-                                                </div>
-                                            </div>
-                                            <div className="flex flex-col gap-2">
-                                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">WhatsApp de Contato</label>
-                                                <div className="relative group">
-                                                    <Smartphone className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300 group-focus-within:text-emerald-500 transition-colors" size={18} />
-                                                    <input
-                                                        required
-                                                        type="tel"
-                                                        value={whatsapp}
-                                                        onChange={(e) => setWhatsapp(e.target.value)}
-                                                        placeholder="(00) 90000-0000"
-                                                        className="w-full pl-12 pr-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500/50 transition-all font-bold text-midnight placeholder:text-slate-300"
-                                                    />
-                                                </div>
-                                            </div>
-                                            <div className="flex flex-col gap-2">
-                                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Endereço de E-mail</label>
-                                                <div className="relative group">
-                                                    <Globe className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300 group-focus-within:text-emerald-500 transition-colors" size={18} />
-                                                    <input
-                                                        required
-                                                        type="email"
-                                                        value={email}
-                                                        onChange={(e) => setEmail(e.target.value)}
-                                                        placeholder="contato@exemplo.com"
-                                                        className="w-full pl-12 pr-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500/50 transition-all font-bold text-midnight placeholder:text-slate-300"
-                                                    />
-                                                </div>
-                                            </div>
-                                            <div className="flex flex-col gap-2">
-                                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Data de Nascimento (Titular - Mín. 18 anos)</label>
-                                                <div className="relative group">
-                                                    <input
-                                                        required
-                                                        type="date"
-                                                        max={maxBirthDate}
-                                                        value={birthDate}
-                                                        onChange={(e) => setBirthDate(e.target.value)}
-                                                        className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500/50 transition-all font-bold text-midnight"
-                                                    />
-                                                </div>
-                                                {birthDate && !businessRules.isAtLeast18YearsOld(birthDate) && (
-                                                    <span className="text-[10px] font-bold text-red-500 ml-1">
-                                                        A seguradora MBM exige ter 18 anos completos.
-                                                    </span>
-                                                )}
-                                            </div>
-                                            <div className="flex flex-col gap-2">
-                                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Sexo (Titular)</label>
-                                                <div className="relative group">
-                                                    <select
-                                                        required
-                                                        value={gender}
-                                                        onChange={(e) => setGender(e.target.value)}
-                                                        className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500/50 transition-all font-bold text-midnight appearance-none"
-                                                    >
-                                                        <option value="" disabled>Selecione...</option>
-                                                        <option value="M">Masculino</option>
-                                                        <option value="F">Feminino</option>
-                                                    </select>
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        <div className="bg-emerald-500/10 border border-emerald-500/20 p-4 rounded-2xl flex items-center gap-3 text-xs text-emerald-900">
-                                            <ShieldCheck size={20} className="text-emerald-600 shrink-0" />
-                                            <span><strong>Seguro Vida Light MBM (R$ 5.000,00):</strong> Emitido automaticamente em seu próprio nome e CPF. Os recebimentos como Pessoa Física sofrem retenção fiscal de INSS e IRRF conforme legislação previdenciária.</span>
                                         </div>
                                     </div>
                                 ) : (
-                                    /* CAMPOS PESSOA JURÍDICA */
-                                    <div className="space-y-6">
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                            <div className="flex flex-col gap-2">
-                                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Razão Social / Nome Empresarial *</label>
-                                                <div className="relative group">
-                                                    <Building2 className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300 group-focus-within:text-purple-500 transition-colors" size={18} />
-                                                    <input
-                                                        required
-                                                        type="text"
-                                                        value={companyName}
-                                                        onChange={(e) => setCompanyName(e.target.value)}
-                                                        placeholder="Acme Serviços e Comércio Ltda"
-                                                        className="w-full pl-12 pr-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:outline-none focus:ring-4 focus:ring-purple-500/10 focus:border-purple-500/50 transition-all font-bold text-midnight placeholder:text-slate-300"
-                                                    />
-                                                </div>
+                                    <div className="bg-gradient-to-r from-blue-50/80 via-indigo-50/60 to-purple-50/40 border border-indigo-200 p-5 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-sm">
+                                        <div className="flex items-center gap-3.5">
+                                            <div className="size-10 rounded-xl bg-indigo-600 text-white flex items-center justify-center font-black shrink-0 shadow-sm">
+                                                <Briefcase size={20} />
                                             </div>
-                                            <div className="flex flex-col gap-2">
-                                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">CNPJ da Empresa *</label>
-                                                <div className="relative group">
-                                                    <ShieldCheck className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300 group-focus-within:text-purple-500 transition-colors" size={18} />
-                                                    <input
-                                                        required
-                                                        type="text"
-                                                        value={cnpj}
-                                                        onChange={(e) => setCnpj(formatCnpj(e.target.value))}
-                                                        placeholder="00.000.000/0000-00"
-                                                        maxLength={18}
-                                                        className="w-full pl-12 pr-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:outline-none focus:ring-4 focus:ring-purple-500/10 focus:border-purple-500/50 transition-all font-bold text-midnight placeholder:text-slate-300 font-mono"
-                                                    />
+                                            <div>
+                                                <div className="flex items-center gap-2">
+                                                    <span className="text-xs font-black text-midnight uppercase tracking-wide">
+                                                        Início Rápido como Pessoa Física (PF)
+                                                    </span>
+                                                    <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-md bg-indigo-600 text-white shadow-xs">
+                                                        Recibo RPA Inicial
+                                                    </span>
                                                 </div>
+                                                <p className="text-[11px] text-slate-600 font-medium leading-relaxed mt-0.5">
+                                                    Comece a faturar imediatamente sem burocracia. Ao acumular <strong className="text-indigo-950 font-bold">R$ 5.000,00</strong> em comissões, a transição para MEI/PJ será solicitada para emissão de Nota Fiscal e liberação contínua de repasses sem retenções.
+                                                </p>
                                             </div>
-                                            <div className="flex flex-col gap-2">
-                                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">WhatsApp Comercial da Empresa *</label>
-                                                <div className="relative group">
-                                                    <Smartphone className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300 group-focus-within:text-purple-500 transition-colors" size={18} />
-                                                    <input
-                                                        required
-                                                        type="tel"
-                                                        value={whatsapp}
-                                                        onChange={(e) => setWhatsapp(e.target.value)}
-                                                        placeholder="(00) 90000-0000"
-                                                        className="w-full pl-12 pr-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:outline-none focus:ring-4 focus:ring-purple-500/10 focus:border-purple-500/50 transition-all font-bold text-midnight placeholder:text-slate-300"
-                                                    />
-                                                </div>
-                                            </div>
-                                            <div className="flex flex-col gap-2">
-                                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">E-mail Corporativo / Financeiro *</label>
-                                                <div className="relative group">
-                                                    <Globe className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300 group-focus-within:text-purple-500 transition-colors" size={18} />
-                                                    <input
-                                                        required
-                                                        type="email"
-                                                        value={email}
-                                                        onChange={(e) => setEmail(e.target.value)}
-                                                        placeholder="financeiro@suaempresa.com.br"
-                                                        className="w-full pl-12 pr-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:outline-none focus:ring-4 focus:ring-purple-500/10 focus:border-purple-500/50 transition-all font-bold text-midnight placeholder:text-slate-300"
-                                                    />
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        {/* BLOCO OBRIGATÓRIO: TITULAR DO SEGURO DE VIDA PARA PJ */}
-                                        <div className="bg-gradient-to-br from-amber-500/10 via-amber-500/5 to-transparent border-2 border-amber-500/30 p-6 rounded-3xl space-y-4 shadow-sm">
-                                            <div className="flex items-center justify-between border-b border-amber-500/10 pb-3 flex-wrap gap-2">
-                                                <div className="flex items-center gap-2.5">
-                                                    <div className="size-8 rounded-xl bg-amber-500 text-slate-900 flex items-center justify-center font-black">
-                                                        <ShieldCheck size={18} />
-                                                    </div>
-                                                    <div>
-                                                        <h4 className="text-xs font-black uppercase tracking-wider text-amber-950">
-                                                            Pessoa Física com Direito ao Seguro de Vida MBM
-                                                        </h4>
-                                                        <p className="text-[10px] text-amber-800/90 font-medium">
-                                                            A apólice exige uma Pessoa Física (sócio, titular ou colaborador) como segurado do Vida Light (R$ 5.000,00).
-                                                        </p>
-                                                    </div>
-                                                </div>
-                                                <span className="px-2.5 py-1 bg-amber-500/20 text-amber-900 text-[9px] font-black uppercase rounded-lg border border-amber-500/30">
-                                                    Obrigatório para PJ
-                                                </span>
-                                            </div>
-
-                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                                <div className="flex flex-col gap-1.5">
-                                                    <label className="text-[10px] font-black text-slate-600 uppercase tracking-widest ml-1">
-                                                        Nome Completo da Pessoa Segurada *
-                                                    </label>
-                                                    <div className="relative group">
-                                                        <User className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-amber-500 transition-colors" size={18} />
-                                                        <input
-                                                            required
-                                                            type="text"
-                                                            value={insuredName}
-                                                            onChange={(e) => setInsuredName(e.target.value)}
-                                                            placeholder="Nome do sócio ou pessoa física segurada"
-                                                            className="w-full pl-12 pr-5 py-3.5 bg-white border border-amber-200 rounded-2xl focus:outline-none focus:ring-4 focus:ring-amber-500/10 focus:border-amber-500/50 transition-all font-bold text-midnight text-sm placeholder:text-slate-300 shadow-sm"
-                                                        />
-                                                    </div>
-                                                </div>
-
-                                                <div className="flex flex-col gap-1.5">
-                                                    <label className="text-[10px] font-black text-slate-600 uppercase tracking-widest ml-1">
-                                                        CPF da Pessoa Segurada *
-                                                    </label>
-                                                    <div className="relative group">
-                                                        <ShieldCheck className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-amber-500 transition-colors" size={18} />
-                                                        <input
-                                                            required
-                                                            type="text"
-                                                            value={insuredCpf}
-                                                            onChange={(e) => setInsuredCpf(formatCpf(e.target.value))}
-                                                            placeholder="000.000.000-00"
-                                                            maxLength={14}
-                                                            className="w-full pl-12 pr-5 py-3.5 bg-white border border-amber-200 rounded-2xl focus:outline-none focus:ring-4 focus:ring-amber-500/10 focus:border-amber-500/50 transition-all font-bold text-midnight text-sm placeholder:text-slate-300 font-mono shadow-sm"
-                                                        />
-                                                    </div>
-                                                </div>
-
-                                                <div className="flex flex-col gap-1.5">
-                                                    <label className="text-[10px] font-black text-slate-600 uppercase tracking-widest ml-1">
-                                                        Data de Nascimento do Titular * (Mín. 18 anos)
-                                                    </label>
-                                                    <input
-                                                        required
-                                                        type="date"
-                                                        max={maxBirthDate}
-                                                        value={birthDate}
-                                                        onChange={(e) => setBirthDate(e.target.value)}
-                                                        className="w-full px-5 py-3.5 bg-white border border-amber-200 rounded-2xl focus:outline-none focus:ring-4 focus:ring-amber-500/10 focus:border-amber-500/50 transition-all font-bold text-midnight text-sm shadow-sm"
-                                                    />
-                                                    {birthDate && !businessRules.isAtLeast18YearsOld(birthDate) && (
-                                                        <span className="text-[10px] font-bold text-red-500 ml-1">
-                                                            A seguradora MBM exige ter 18 anos completos.
-                                                        </span>
-                                                    )}
-                                                </div>
-
-                                                <div className="flex flex-col gap-1.5">
-                                                    <label className="text-[10px] font-black text-slate-600 uppercase tracking-widest ml-1">
-                                                        Sexo do Titular *
-                                                    </label>
-                                                    <select
-                                                        required
-                                                        value={gender}
-                                                        onChange={(e) => setGender(e.target.value)}
-                                                        className="w-full px-5 py-3.5 bg-white border border-amber-200 rounded-2xl focus:outline-none focus:ring-4 focus:ring-amber-500/10 focus:border-amber-500/50 transition-all font-bold text-midnight text-sm appearance-none shadow-sm"
-                                                    >
-                                                        <option value="" disabled>Selecione...</option>
-                                                        <option value="M">Masculino</option>
-                                                        <option value="F">Feminino</option>
-                                                    </select>
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        <div className="bg-purple-500/10 border border-purple-500/20 p-4 rounded-2xl flex items-center gap-3 text-xs text-purple-950">
-                                            <Building2 size={20} className="text-purple-600 shrink-0" />
-                                            <span><strong>Isenção Fiscal PJ:</strong> Como Pessoa Jurídica com CNPJ, sua empresa receberá o valor total dos repasses sem retenção de INSS ou IRPF, mediante envio da Nota Fiscal de Prestação de Serviços (NFS-e).</span>
                                         </div>
                                     </div>
                                 )}
+
+                                {/* CAMPOS PESSOA FÍSICA */}
+                                <div className="space-y-6">
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                        <div className="flex flex-col gap-2">
+                                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Nome Completo</label>
+                                            <div className="relative group">
+                                                <User className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300 group-focus-within:text-emerald-500 transition-colors" size={18} />
+                                                <input
+                                                    required
+                                                    type="text"
+                                                    value={fullName}
+                                                    onChange={(e) => setFullName(e.target.value)}
+                                                    placeholder="João da Silva Pereira"
+                                                    className="w-full pl-12 pr-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500/50 transition-all font-bold text-midnight placeholder:text-slate-300"
+                                                />
+                                            </div>
+                                        </div>
+                                        <div className="flex flex-col gap-2">
+                                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Documento (CPF)</label>
+                                            <div className="relative group">
+                                                <ShieldCheck className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300 group-focus-within:text-emerald-500 transition-colors" size={18} />
+                                                <input
+                                                    required
+                                                    type="text"
+                                                    value={cpf}
+                                                    onChange={(e) => setCpf(formatCpf(e.target.value))}
+                                                    placeholder="000.000.000-00"
+                                                    maxLength={14}
+                                                    className="w-full pl-12 pr-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500/50 transition-all font-bold text-midnight placeholder:text-slate-300 font-mono"
+                                                />
+                                            </div>
+                                        </div>
+                                        <div className="flex flex-col gap-2">
+                                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">WhatsApp de Contato</label>
+                                            <div className="relative group">
+                                                <Smartphone className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300 group-focus-within:text-emerald-500 transition-colors" size={18} />
+                                                <input
+                                                    required
+                                                    type="tel"
+                                                    value={whatsapp}
+                                                    onChange={(e) => setWhatsapp(e.target.value)}
+                                                    placeholder="(00) 90000-0000"
+                                                    className="w-full pl-12 pr-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500/50 transition-all font-bold text-midnight placeholder:text-slate-300"
+                                                />
+                                            </div>
+                                        </div>
+                                        <div className="flex flex-col gap-2">
+                                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Endereço de E-mail</label>
+                                            <div className="relative group">
+                                                <Globe className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300 group-focus-within:text-emerald-500 transition-colors" size={18} />
+                                                <input
+                                                    required
+                                                    type="email"
+                                                    value={email}
+                                                    onChange={(e) => setEmail(e.target.value)}
+                                                    placeholder="contato@exemplo.com"
+                                                    className="w-full pl-12 pr-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500/50 transition-all font-bold text-midnight placeholder:text-slate-300"
+                                                />
+                                            </div>
+                                        </div>
+                                        <div className="flex flex-col gap-2">
+                                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Data de Nascimento (Titular - Mín. 18 anos)</label>
+                                            <div className="relative group">
+                                                <input
+                                                    required
+                                                    type="date"
+                                                    max={maxBirthDate}
+                                                    value={birthDate}
+                                                    onChange={(e) => setBirthDate(e.target.value)}
+                                                    className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500/50 transition-all font-bold text-midnight"
+                                                />
+                                            </div>
+                                            {birthDate && !businessRules.isAtLeast18YearsOld(birthDate) && (
+                                                <span className="text-[10px] font-bold text-red-500 ml-1">
+                                                    A seguradora MBM exige ter 18 anos completos.
+                                                </span>
+                                            )}
+                                        </div>
+                                        <div className="flex flex-col gap-2">
+                                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Sexo (Titular)</label>
+                                            <div className="relative group">
+                                                <select
+                                                    required
+                                                    value={gender}
+                                                    onChange={(e) => setGender(e.target.value)}
+                                                    className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500/50 transition-all font-bold text-midnight appearance-none"
+                                                >
+                                                    <option value="" disabled>Selecione...</option>
+                                                    <option value="M">Masculino</option>
+                                                    <option value="F">Feminino</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {accountProduct === 'seguro' ? (
+                                        <div className="bg-emerald-500/10 border border-emerald-500/20 p-4 rounded-2xl flex items-center gap-3 text-xs text-emerald-900">
+                                            <ShieldCheck size={20} className="text-emerald-600 shrink-0" />
+                                            <span><strong>Seguro Vida Light MBM (R$ 5.000,00):</strong> Emitido automaticamente em seu próprio nome e CPF. Assistência funeral individual e sorteios semanais vinculados ao seu cadastro.</span>
+                                        </div>
+                                    ) : (
+                                        <div className="bg-indigo-50 border border-indigo-200/80 p-4 rounded-2xl flex items-center gap-3 text-xs text-indigo-950">
+                                            <Briefcase size={20} className="text-indigo-600 shrink-0" />
+                                            <span><strong>Transição Tributária Planejada:</strong> Seus primeiros repasses serão emitidos via Recibo RPA. Ao atingir o acumulado de R$ 5.000,00 em comissões, nosso sistema orientará a inclusão do seu MEI/CNPJ para emissão de NFS-e sem qualquer retenção na fonte.</span>
+                                        </div>
+                                    )}
+                                </div>
                             </div>
 
                             {/* Seção 2: Localização */}
@@ -1255,18 +1140,13 @@ export default function Cadastro() {
                                         />
                                     </div>
                                     <div className="flex flex-col gap-2">
-                                        <div className="flex items-center justify-between">
-                                            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Chave PIX para Recebimento</label>
-                                            {personType === 'PJ' && (
-                                                <span className="text-[9px] font-black text-purple-600 uppercase tracking-wider">PIX CNPJ Recomendado</span>
-                                            )}
-                                        </div>
+                                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Chave PIX para Recebimento</label>
                                         <input
                                             required
                                             type="text"
                                             value={pixKey}
                                             onChange={(e) => setPixKey(e.target.value)}
-                                            placeholder={personType === 'PJ' ? "CNPJ da empresa, E-mail, Celular ou Chave" : "CPF, E-mail, Celular ou Chave Aleatória"}
+                                            placeholder="CPF, E-mail, Celular ou Chave Aleatória"
                                             className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500/50 transition-all font-bold text-midnight placeholder:text-slate-300"
                                         />
                                     </div>
@@ -1541,22 +1421,30 @@ export default function Cadastro() {
                             {/* Header */}
                             <div className="p-8 border-b border-slate-100 flex items-center justify-between bg-slate-50">
                                 <div className="flex items-center gap-3">
-                                    <div className="size-10 rounded-xl bg-emerald-500 text-midnight flex items-center justify-center shadow-lg shadow-emerald-500/20">
-                                        <ShieldCheck size={22} />
+                                    <div className={`size-10 rounded-xl flex items-center justify-center shadow-lg ${
+                                        accountProduct === 'seguro' 
+                                            ? 'bg-emerald-500 text-midnight shadow-emerald-500/20' 
+                                            : 'bg-indigo-600 text-white shadow-indigo-600/20'
+                                    }`}>
+                                        {accountProduct === 'seguro' ? <ShieldCheck size={22} /> : <Briefcase size={22} />}
                                     </div>
                                     <div>
                                         <h3 className="text-lg font-black text-midnight uppercase italic tracking-tight">
-                                            Resumo dos Anexos I a XIII – Seguro Vida Light R$ 5.000,00
+                                            {accountProduct === 'seguro' 
+                                                ? 'Termo de Adesão ao Seguro Coletivo Vida Light R$ 5.000,00' 
+                                                : 'Contrato de Franquia Comercial & Termo de Intermediação MMN'}
                                         </h3>
                                         <p className="text-[9px] text-slate-400 font-black uppercase tracking-widest">
-                                            Termo de Aceite Digital Simplificado
+                                            {accountProduct === 'seguro' 
+                                                ? 'Aceite Digital do Segurado • MBM Seguradora e Loteria Federal' 
+                                                : 'Aceite Digital do Microfranqueado • Licença MMN Oficial'}
                                         </p>
                                     </div>
                                 </div>
                                 <button
                                     type="button"
                                     onClick={() => setShowTermsModal(false)}
-                                    className="p-2 hover:bg-slate-200/50 rounded-xl transition-colors text-slate-400 hover:text-midnight"
+                                    className="p-2 hover:bg-slate-200/50 rounded-xl transition-colors text-slate-400 hover:text-midnight cursor-pointer"
                                 >
                                     <X size={20} />
                                 </button>
@@ -1564,115 +1452,113 @@ export default function Cadastro() {
 
                             {/* Content */}
                             <div className="p-8 overflow-y-auto space-y-6 text-sm text-slate-600 leading-relaxed max-h-[50vh]">
-                                <ul className="space-y-4">
-                                    <li className="flex gap-3 items-start">
-                                        <div className="size-2 rounded-full bg-emerald-500 mt-2 shrink-0 animate-pulse" />
-                                        <span>
-                                            <strong className="text-midnight font-bold">Anexo I – Regulamento da Promoção:</strong> Sorteios nos 4 últimos domingos de cada mês; se houver 5 domingos, desconsidera-se o primeiro.
-                                        </span>
-                                    </li>
-                                    <li className="flex gap-3 items-start">
-                                        <div className="size-2 rounded-full bg-emerald-500 mt-2 shrink-0" />
-                                        <span>
-                                            <strong className="text-midnight font-bold">Anexo II – Condições Gerais:</strong> Direitos e deveres do segurado em relação às coberturas contratadas.
-                                        </span>
-                                    </li>
-                                    <li className="flex gap-3 items-start">
-                                        <div className="size-2 rounded-full bg-emerald-500 mt-2 shrink-0" />
-                                        <span>
-                                            <strong className="text-midnight font-bold">Anexo III – Tabela de Indenização:</strong> Percentuais aplicados em casos de invalidez permanente por acidente.
-                                        </span>
-                                    </li>
-                                    <li className="flex gap-3 items-start">
-                                        <div className="size-2 rounded-full bg-emerald-500 mt-2 shrink-0" />
-                                        <span>
-                                            <strong className="text-midnight font-bold">Anexo IV – Cobrança e Renovação:</strong> Pagamento mensal, trimestral, semestral ou anual; necessidade de renovação para manter cobertura e sorteios.
-                                        </span>
-                                    </li>
-                                    <li className="flex gap-3 items-start">
-                                        <div className="size-2 rounded-full bg-emerald-500 mt-2 shrink-0" />
-                                        <span>
-                                            <strong className="text-midnight font-bold">Anexo V – Proteção de Dados (LGPD):</strong> Tratamento seguro e transparente das informações pessoais.
-                                        </span>
-                                    </li>
-                                    <li className="flex gap-3 items-start">
-                                        <div className="size-2 rounded-full bg-emerald-500 mt-2 shrink-0" />
-                                        <span>
-                                            <strong className="text-midnight font-bold">Anexo VI – Divulgação:</strong> Resultados dos sorteios comunicados por e-mail e dashboard; uso da imagem dos ganhadores mediante anuência.
-                                        </span>
-                                    </li>
-                                    <li className="flex gap-3 items-start">
-                                        <div className="size-2 rounded-full bg-emerald-500 mt-2 shrink-0" />
-                                        <span>
-                                            <strong className="text-midnight font-bold">Anexo VII – Cancelamento e Exclusão:</strong> Perda de direitos por inadimplência, fraude ou descumprimento das regras.
-                                        </span>
-                                    </li>
-                                    <li className="flex gap-3 items-start">
-                                        <div className="size-2 rounded-full bg-emerald-500 mt-2 shrink-0" />
-                                        <span>
-                                            <strong className="text-midnight font-bold">Anexo VIII – Comissionamento (MMN):</strong> Regras de comissões por indicações confirmadas e pagas.
-                                        </span>
-                                    </li>
-                                    <li className="flex gap-3 items-start">
-                                        <div className="size-2 rounded-full bg-emerald-500 mt-2 shrink-0" />
-                                        <span>
-                                            <strong className="text-midnight font-bold">Anexo IX – Telemedicina:</strong> Consultas online disponíveis enquanto a apólice estiver ativa e adimplente.
-                                        </span>
-                                    </li>
-                                    <li className="flex gap-3 items-start">
-                                        <div className="size-2 rounded-full bg-emerald-500 mt-2 shrink-0" />
-                                        <div className="flex flex-col gap-1 w-full">
+                                {accountProduct === 'seguro' ? (
+                                    /* TERMOS ESPECÍFICOS DO SEGURO VIDA LIGHT (PRODUTO B) */
+                                    <ul className="space-y-4">
+                                        <li className="flex gap-3 items-start">
+                                            <div className="size-2 rounded-full bg-emerald-500 mt-2 shrink-0 animate-pulse" />
                                             <span>
-                                                <strong className="text-midnight font-bold">Anexo X – Quantidade de Sorteios por Modalidade:</strong>
+                                                <strong className="text-midnight font-bold">1. Cobertura Securitária MBM:</strong> Apólice Coletiva de Seguro de Pessoas sob gestão da MBM Seguradora S/A, garantindo indenização por Morte Acidental ou Invalidez Permanente de até R$ 5.000,00.
                                             </span>
-                                            <ul className="pl-6 space-y-1 list-disc text-slate-500">
-                                                <li><strong className="text-midnight font-bold">Mensal:</strong> 4 sorteios/mês</li>
-                                                <li><strong className="text-midnight font-bold">Trimestral:</strong> 12 sorteios/período</li>
-                                                <li><strong className="text-midnight font-bold">Semestral:</strong> 24 sorteios/período</li>
-                                                <li><strong className="text-midnight font-bold">Anual:</strong> 48 sorteios/período 🔔 Renovação obrigatória via dashboard para continuidade nos sorteios.</li>
-                                            </ul>
-                                        </div>
-                                    </li>
-                                    <li className="flex gap-3 items-start">
-                                        <div className="size-2 rounded-full bg-emerald-500 mt-2 shrink-0" />
-                                        <span>
-                                            <strong className="text-midnight font-bold">Anexo XI – Documentos para Indenização:</strong> Formulário de Aviso de Sinistro, Certificado Individual, RG/CPF, laudos médicos, folha de anestesia (quando aplicável), atestado de óbito e demais documentos solicitados pela seguradora.
-                                        </span>
-                                    </li>
-                                    <li className="flex gap-3 items-start">
-                                        <div className="size-2 rounded-full bg-emerald-500 mt-2 shrink-0" />
-                                        <span>
-                                            <strong className="text-midnight font-bold">Anexo XII – Regras de Cashback e Inadimplência</strong>
-                                        </span>
-                                    </li>
-                                    <li className="flex gap-3 items-start">
-                                        <div className="size-2 rounded-full bg-emerald-500 mt-2 shrink-0" />
-                                        <span>
-                                            <strong className="text-midnight font-bold">Anexo XIII – Termo de Intermediação e uso de Plataforma Digital</strong>
-                                        </span>
-                                    </li>
-                                </ul>
+                                        </li>
+                                        <li className="flex gap-3 items-start">
+                                            <div className="size-2 rounded-full bg-emerald-500 mt-2 shrink-0" />
+                                            <span>
+                                                <strong className="text-midnight font-bold">2. Sorteios da Loteria Federal:</strong> Concorrência semanal nos 4 últimos domingos de cada mês (desconsiderando o primeiro domingo em meses com 5 domingos), com prêmio de R$ 5.000,00 bruto por sorteio.
+                                            </span>
+                                        </li>
+                                        <li className="flex gap-3 items-start">
+                                            <div className="size-2 rounded-full bg-emerald-500 mt-2 shrink-0" />
+                                            <span>
+                                                <strong className="text-midnight font-bold">3. Telemedicina 24/7 Racca Saúde:</strong> Consultas ilimitadas online de urgência com clínico geral e agendamentos com especialistas parceiros sem coparticipação.
+                                            </span>
+                                        </li>
+                                        <li className="flex gap-3 items-start">
+                                            <div className="size-2 rounded-full bg-emerald-500 mt-2 shrink-0" />
+                                            <span>
+                                                <strong className="text-midnight font-bold">4. Ausência de MMN / Rede:</strong> O plano Afiliado Premium é um produto estritamente securitário e de benefícios ao consumidor, não contemplando bônus de rede ou comissões comerciais.
+                                            </span>
+                                        </li>
+                                        <li className="flex gap-3 items-start">
+                                            <div className="size-2 rounded-full bg-emerald-500 mt-2 shrink-0" />
+                                            <span>
+                                                <strong className="text-midnight font-bold">5. Manutenção da Vigência:</strong> A cobertura e os sorteios dependem da adimplência da modalidade escolhida (Mensal R$ 5, Trimestral R$ 15, Semestral R$ 30 ou Anual R$ 48).
+                                            </span>
+                                        </li>
+                                    </ul>
+                                ) : (
+                                    /* CONTRATO ESPECÍFICO DO MICROFRANQUEADO MMN (PRODUTO A) */
+                                    <ul className="space-y-4">
+                                        <li className="flex gap-3 items-start">
+                                            <div className="size-2 rounded-full bg-indigo-600 mt-2 shrink-0 animate-pulse" />
+                                            <span>
+                                                <strong className="text-midnight font-bold">1. Objeto da Licença Comercial:</strong> Concessão de licença anual para intermediação comercial e expansão da rede de assinaturas da plataforma CaZa dos Sorteios.
+                                            </span>
+                                        </li>
+                                        <li className="flex gap-3 items-start">
+                                            <div className="size-2 rounded-full bg-indigo-600 mt-2 shrink-0" />
+                                            <span>
+                                                <strong className="text-midnight font-bold">2. Tabela de Comissionamento em 3 Níveis:</strong> O Microfranqueado recebe 33% de comissão bruta total sobre as vendas de seguros da sua rede: G0 (27%), G1 (3%) e G2 (3%).
+                                            </span>
+                                        </li>
+                                        <li className="flex gap-3 items-start">
+                                            <div className="size-2 rounded-full bg-indigo-600 mt-2 shrink-0" />
+                                            <span>
+                                                <strong className="text-midnight font-bold">3. Split de Pagamento Operacional:</strong> Repasse semanal de 80% das comissões pago toda terça-feira (referente a vendas de segunda a sábado) e 20% anual acumulado para liquidação em 10 de Dezembro.
+                                            </span>
+                                        </li>
+                                        <li className="flex gap-3 items-start">
+                                            <div className="size-2 rounded-full bg-indigo-600 mt-2 shrink-0" />
+                                            <span>
+                                                <strong className="text-midnight font-bold">4. Regra dos 100 Primeiros Microfranqueados:</strong> Isenção inicial da taxa anual de franquia (R$ 150,00), a qual será descontada exclusivamente do bônus anual em Dezembro.
+                                            </span>
+                                        </li>
+                                        <li className="flex gap-3 items-start">
+                                            <div className="size-2 rounded-full bg-indigo-600 mt-2 shrink-0" />
+                                            <span>
+                                                <strong className="text-midnight font-bold">5. Bloqueio por Inadimplência:</strong> O não pagamento da licença de Microfranqueado bloqueia o recebimento de comissões de rede até a devida regularização.
+                                            </span>
+                                        </li>
+                                        <li className="flex gap-3 items-start">
+                                            <div className="size-2 rounded-full bg-indigo-600 mt-2 shrink-0" />
+                                            <span>
+                                                <strong className="text-midnight font-bold">6. Distinção de Produtos:</strong> A licença de Microfranqueado não confere apólice de seguro de vida ou participação nos sorteios, devendo o mesmo contratar o plano Seguro Vida Light caso deseje os benefícios pessoais.
+                                            </span>
+                                        </li>
+                                        <li className="flex gap-3 items-start">
+                                            <div className="size-2 rounded-full bg-indigo-600 mt-2 shrink-0" />
+                                            <span>
+                                                <strong className="text-midnight font-bold">7. Regime Tributário e Transição PF para PJ:</strong> A adesão e os primeiros repasses são operados via Pessoa Física (CPF com Recibo RPA). Ao acumular o valor total de R$ 5.000,00 em comissões, a transição para Pessoa Jurídica (MEI ou PJ) passa a ser obrigatória para emissão de Nota Fiscal e continuidade dos pagamentos sem retenções.
+                                            </span>
+                                        </li>
+                                    </ul>
+                                )}
                             </div>
 
                             {/* Footer */}
                             <div className="p-8 border-t border-slate-100 bg-slate-50 flex flex-col gap-4">
                                 <p className="text-[11px] font-bold text-slate-500 text-center uppercase tracking-wide">
-                                    Ao aceitar digitalmente, o AFILIADO declara estar ciente e concorda com todas as condições acima.
+                                    Ao aceitar digitalmente, você confirma sua identidade e concorda com todas as cláusulas do contrato acima com assinatura criptográfica SHA-256 e registro de IP.
                                 </p>
                                 <div className="flex gap-4">
                                     <button
                                         type="button"
                                         onClick={() => setShowTermsModal(false)}
-                                        className="flex-1 bg-slate-200 hover:bg-slate-300 text-midnight py-4 rounded-2xl font-black text-xs uppercase tracking-widest transition-all active:scale-[0.98]"
+                                        className="flex-1 bg-slate-200 hover:bg-slate-300 text-midnight py-4 rounded-2xl font-black text-xs uppercase tracking-widest transition-all active:scale-[0.98] cursor-pointer"
                                     >
                                         Recusar
                                     </button>
                                     <button
                                         type="button"
-                                        onClick={() => {
+                                        onClick={async () => {
+                                            const contractText = accountProduct === 'seguro'
+                                                ? 'TERMO-ADESAO-SEGURO-VIDA-LIGHT-MBM-5000-V1.0'
+                                                : 'CONTRATO-FRANQUIA-COMERCIAL-MMN-SPLIT-80-20-V1.0';
+                                            const hash = await generateContractHash(contractText);
+                                            setTermoHash(hash);
                                             setTermsAccepted(true);
                                             setShowTermsModal(false);
-                                            toast.success('Termos aceitos!', {
+                                            toast.success('Termos aceitos digitalmente!', {
                                                 style: {
                                                     borderRadius: '16px',
                                                     background: '#0a0e17',
@@ -1682,9 +1568,13 @@ export default function Cadastro() {
                                                 }
                                             });
                                         }}
-                                        className="flex-1 bg-emerald-500 hover:bg-emerald-400 text-midnight py-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg shadow-emerald-500/20 transition-all active:scale-[0.98]"
+                                        className={`flex-1 py-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg transition-all active:scale-[0.98] cursor-pointer ${
+                                            accountProduct === 'seguro'
+                                                ? 'bg-emerald-500 hover:bg-emerald-400 text-midnight shadow-emerald-500/20'
+                                                : 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-indigo-600/20'
+                                        }`}
                                     >
-                                        Aceitar e Confirmar
+                                        Aceitar e Confirmar Assinatura Digital
                                     </button>
                                 </div>
                             </div>

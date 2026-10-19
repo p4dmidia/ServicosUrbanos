@@ -33,6 +33,7 @@ import AffiliatePolicy from './pages/AffiliatePolicy';
 import AffiliateLuckyNumber from './pages/AffiliateLuckyNumber';
 import AffiliateRenewals from './pages/AffiliateRenewals';
 import AffiliateTelemedicina from './pages/AffiliateTelemedicina';
+import AffiliateClaims from './pages/AffiliateClaims';
 import AffiliateInvoice from './pages/AffiliateInvoice';
 import AffiliateNetLiquido from './pages/AffiliateNetLiquido';
 import AffiliateFinancialSummary from './pages/AffiliateFinancialSummary';
@@ -202,6 +203,10 @@ export default function App() {
             <Route 
               path="/afiliado/telemedicina" 
               element={<ProtectedRoute allowedRoles={['affiliate', 'owner', 'manager', 'admin', 'regional_reseller']}><AffiliateTelemedicina /></ProtectedRoute>} 
+            />
+            <Route 
+              path="/afiliado/sinistros" 
+              element={<ProtectedRoute allowedRoles={['affiliate', 'owner', 'manager', 'admin', 'regional_reseller']}><AffiliateClaims /></ProtectedRoute>} 
             />
           </Routes>
         </BrowserRouter>

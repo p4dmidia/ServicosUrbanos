@@ -8619,6 +8619,634 @@ export const businessRules = {
     } catch (e) {
       console.warn('Erro ao dispensar todos os alertas de fraude:', e);
     }
+  },
+
+  // =========================================================================
+  // NOVO MODELO JURÍDICO: MÉTODOS PARA MICROFRANQUEADO E SEGURO VIDA LIGHT
+  // =========================================================================
+
+  /**
+   * Obtém os dados e status do Microfranqueado (MMN), incluindo licença e carência dos 100 primeiros.
+   */
+  getMicrofranqueadoData: async (userId: string) => {
+    try {
+      if (!userId) return null;
+      const { data: mf } = await supabase
+        .from('microfranqueados')
+        .select(`
+          *,
+          licencas_mmn(*)
+        `)
+        .eq('profile_id', userId)
+        .maybeSingle();
+
+      if (!mf) {
+        return {
+          isMicrofranqueado: false,
+          microfranqueado: null,
+          licenca: null,
+          isLicenseActive: false,
+          isLimit100Free: false
+        };
+      }
+
+      const licencas = mf.licencas_mmn || [];
+      const activeLicenca = licencas.find((l: any) => l.status === 'ativa' && new Date(l.data_fim) >= new Date()) || licencas[0] || null;
+      const isLicenseActive = mf.status === 'ativo' && activeLicenca?.status === 'ativa' && new Date(activeLicenca.data_fim) >= new Date();
+
+      return {
+        isMicrofranqueado: true,
+        microfranqueado: mf,
+        licenca: activeLicenca,
+        isLicenseActive,
+        isLimit100Free: !!mf.limit_100_free,
+        registrationFeeStatus: mf.registration_fee_status,
+        status: mf.status
+      };
+    } catch (e) {
+      console.error('Erro ao buscar dados do microfranqueado:', e);
+      return null;
+    }
+  },
+
+  /**
+   * Obtém os dados do Segurado Premium (Seguro Vida Light), apólice ativa, números da sorte e telemedicina.
+   */
+  getSeguradoData: async (userId: string) => {
+    try {
+      if (!userId) return null;
+      const { data: segurado } = await supabase
+        .from('segurados')
+        .select(`
+          *,
+          apolices(*),
+          telemedicina_acesso(*)
+        `)
+        .eq('profile_id', userId)
+        .maybeSingle();
+
+      if (!segurado) {
+        return {
+          isSegurado: false,
+          segurado: null,
+          apolice: null,
+          numerosDaSorte: [],
+          telemedicina: null,
+          isPolicyActive: false
+        };
+      }
+
+      const apolices = segurado.apolices || [];
+      const activeApolice = apolices.find((a: any) => a.status === 'ativa' && new Date(a.vigencia_fim) >= new Date()) || apolices[0] || null;
+      const isPolicyActive = segurado.status === 'ativo' && activeApolice?.status === 'ativa' && new Date(activeApolice.vigencia_fim) >= new Date();
+
+      let numerosDaSorte: any[] = [];
+      if (segurado.id) {
+        const { data: nums } = await supabase
+          .from('numeros_da_sorte')
+          .select('*')
+          .eq('segurado_id', segurado.id)
+          .order('created_at', { ascending: false });
+        numerosDaSorte = nums || [];
+      }
+
+      return {
+        isSegurado: true,
+        segurado,
+        apolice: activeApolice,
+        numerosDaSorte,
+        telemedicina: segurado.telemedicina_acesso?.[0] || null,
+        isPolicyActive,
+        status: segurado.status
+      };
+    } catch (e) {
+      console.error('Erro ao buscar dados do segurado:', e);
+      return null;
+    }
+  },
+
+  /**
+   * Obtém as comissões oficiais do Microfranqueado divididas no modelo:
+   * 80% semanal (pago toda terça-feira) e 20% anual (pago em 10 de dezembro).
+   */
+  getComissoesMicrofranqueado: async (microfranqueadoId: string) => {
+    try {
+      if (!microfranqueadoId) return null;
+
+      const { data: comissoes } = await supabase
+        .from('comissoes_mmn')
+        .select('*')
+        .eq('microfranqueado_id', microfranqueadoId)
+        .order('created_at', { ascending: false });
+
+      const list = comissoes || [];
+
+      // Filtros por Nível
+      const g0Comissoes = list.filter(c => c.nivel === 0);
+      const g1Comissoes = list.filter(c => c.nivel === 1);
+      const g2Comissoes = list.filter(c => c.nivel === 2);
+
+      const totalBrutoG0 = g0Comissoes.reduce((acc, c) => acc + Number(c.valor_bruto || 0), 0);
+      const totalBrutoG1 = g1Comissoes.reduce((acc, c) => acc + Number(c.valor_bruto || 0), 0);
+      const totalBrutoG2 = g2Comissoes.reduce((acc, c) => acc + Number(c.valor_bruto || 0), 0);
+      const totalBrutoGeral = totalBrutoG0 + totalBrutoG1 + totalBrutoG2;
+
+      // Split 80% Semanal e 20% Anual
+      const semanalPendente = list
+        .filter(c => c.status === 'pendente' || c.status === 'liberado_semanal')
+        .reduce((acc, c) => acc + Number(c.valor_semanal_80 || 0), 0);
+
+      const semanalPago = list
+        .filter(c => c.status === 'pago_semanal')
+        .reduce((acc, c) => acc + Number(c.valor_semanal_80 || 0), 0);
+
+      const anualAcumulado = list
+        .filter(c => c.status !== 'cancelado' && c.status !== 'bloqueado_inadimplencia')
+        .reduce((acc, c) => acc + Number(c.valor_anual_20 || 0), 0);
+
+      const anualPago = list
+        .filter(c => c.status === 'pago_anual')
+        .reduce((acc, c) => acc + Number(c.valor_anual_20 || 0), 0);
+
+      const bloqueadoInadimplencia = list
+        .filter(c => c.status === 'bloqueado_inadimplencia')
+        .reduce((acc, c) => acc + Number(c.valor_bruto || 0), 0);
+
+      // Calcular datas operacionais
+      const now = new Date();
+      const dayOfWeek = now.getDay(); // 0 = Domingo, 1 = Segunda, 2 = Terça...
+      const daysUntilTuesday = (2 - dayOfWeek + 7) % 7 || 7;
+      const nextTuesday = new Date(now);
+      nextTuesday.setDate(now.getDate() + daysUntilTuesday);
+
+      const currentYear = now.getFullYear();
+      let decemberPayout = new Date(currentYear, 11, 10); // 10 de Dezembro
+      if (now > decemberPayout) {
+        decemberPayout = new Date(currentYear + 1, 11, 10);
+      }
+
+      return {
+        list,
+        totalBrutoGeral,
+        totalBrutoG0,
+        totalBrutoG1,
+        totalBrutoG2,
+        semanalPendente,
+        semanalPago,
+        anualAcumulado,
+        anualPago,
+        bloqueadoInadimplencia,
+        proximaTerca: nextTuesday.toLocaleDateString('pt-BR'),
+        proximoDezembro: decemberPayout.toLocaleDateString('pt-BR')
+      };
+    } catch (e) {
+      console.error('Erro ao calcular comissões do microfranqueado:', e);
+      return null;
+    }
+  },
+
+  /**
+   * Regulariza a taxa de licença do Microfranqueado e libera comissões bloqueadas.
+   */
+  regularizarLicencaMicrofranqueado: async (microfranqueadoId: string) => {
+    try {
+      const { data, error } = await supabase.rpc('regularizar_licenca_microfranqueado', {
+        p_microfranqueado_id: microfranqueadoId
+      });
+
+      if (error) {
+        // Fallback manual se a RPC não for encontrada
+        await supabase
+          .from('licencas_mmn')
+          .update({ status: 'ativa', data_fim: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString() })
+          .eq('microfranqueado_id', microfranqueadoId);
+
+        await supabase
+          .from('microfranqueados')
+          .update({ status: 'ativo', registration_fee_status: 'pago' })
+          .eq('id', microfranqueadoId);
+
+        await supabase
+          .from('comissoes_mmn')
+          .update({ status: 'pendente' })
+          .eq('microfranqueado_id', microfranqueadoId)
+          .eq('status', 'bloqueado_inadimplencia');
+
+        return { success: true };
+      }
+
+      return data;
+    } catch (e: any) {
+      console.error('Erro ao regularizar licença:', e);
+      return { success: false, error: e.message };
+    }
+  },
+
+  /**
+   * Obtém a lista de sinistros de um segurado com seus documentos anexados.
+   */
+  getSinistros: async (seguradoId: string) => {
+    try {
+      if (!seguradoId) return [];
+      const { data, error } = await supabase
+        .from('sinistros')
+        .select(`
+          *,
+          documentos:documentos_sinistro(*)
+        `)
+        .eq('segurado_id', seguradoId)
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('Erro ao buscar sinistros:', error);
+        return [];
+      }
+      return data || [];
+    } catch (e) {
+      console.error('Erro ao buscar sinistros:', e);
+      return [];
+    }
+  },
+
+  /**
+   * Registra abertura de novo sinistro pelo segurado e anexa os documentos.
+   */
+  abrirSinistro: async (params: {
+    segurado_id: string;
+    apolice_id: string;
+    tipo_sinistro: 'morte_acidental' | 'invalidez_permanente_total' | 'invalidez_permanente_parcial';
+    data_ocorrencia: string;
+    descricao: string;
+    documentos?: Array<{ tipo_documento: string; arquivo_url: string; nome_arquivo: string }>;
+  }) => {
+    try {
+      const { data: sinistro, error } = await supabase
+        .from('sinistros')
+        .insert({
+          segurado_id: params.segurado_id,
+          apolice_id: params.apolice_id,
+          tipo_sinistro: params.tipo_sinistro,
+          data_ocorrencia: params.data_ocorrencia,
+          descricao: params.descricao,
+          status: 'aberto',
+          valor_solicitado: 5000.00
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      if (params.documentos && params.documentos.length > 0) {
+        const docsToInsert = params.documentos.map(d => ({
+          sinistro_id: sinistro.id,
+          tipo_documento: d.tipo_documento,
+          arquivo_url: d.arquivo_url,
+          nome_arquivo: d.nome_arquivo,
+          status: 'enviado'
+        }));
+
+        await supabase.from('documentos_sinistro').insert(docsToInsert);
+      }
+
+      return { success: true, sinistro };
+    } catch (e: any) {
+      console.error('Erro ao abrir sinistro:', e);
+      return { success: false, error: e.message };
+    }
+  },
+
+  /**
+   * Adiciona um novo documento a um sinistro existente.
+   */
+  adicionarDocumentoSinistro: async (sinistroId: string, doc: {
+    tipo_documento: string;
+    arquivo_url: string;
+    nome_arquivo: string;
+  }) => {
+    try {
+      const { data, error } = await supabase
+        .from('documentos_sinistro')
+        .insert({
+          sinistro_id: sinistroId,
+          tipo_documento: doc.tipo_documento,
+          arquivo_url: doc.arquivo_url,
+          nome_arquivo: doc.nome_arquivo,
+          status: 'enviado'
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+      return { success: true, data };
+    } catch (e: any) {
+      console.error('Erro ao anexar documento ao sinistro:', e);
+      return { success: false, error: e.message };
+    }
+  },
+
+  /**
+   * Cadastra um novo Segurado Premium (Seguro Vida Light) com auditoria de aceite digital.
+   */
+  cadastrarSegurado: async (params: {
+    profile_id: string;
+    nome_completo: string;
+    cpf: string;
+    data_nascimento?: string;
+    telefone?: string;
+    ip?: string;
+    user_agent?: string;
+    termo_hash?: string;
+  }) => {
+    try {
+      // 1. Inserir ou atualizar na tabela segurados
+      const { data: segurado, error: segErr } = await supabase
+        .from('segurados')
+        .upsert({
+          profile_id: params.profile_id,
+          nome_completo: params.nome_completo,
+          cpf: params.cpf,
+          data_nascimento: params.data_nascimento || null,
+          telefone: params.telefone || null,
+          status: 'pendente_pagamento'
+        }, { onConflict: 'cpf' })
+        .select()
+        .single();
+
+      if (segErr) throw segErr;
+
+      // 2. Gravar Aceite Digital do Seguro com Auditoria
+      if (segurado?.id) {
+        await supabase
+          .from('aceites_seguro')
+          .insert({
+            segurado_id: segurado.id,
+            versao_termo: '1.0',
+            hash_texto: params.termo_hash || 'SHA256-TERMO-SEGURO-VIDA-LIGHT-V1.0',
+            ip: params.ip || '127.0.0.1',
+            user_agent: params.user_agent || navigator.userAgent,
+            data_hora: new Date().toISOString()
+          });
+      }
+
+      return { success: true, segurado };
+    } catch (e: any) {
+      console.error('Erro ao cadastrar segurado:', e);
+      return { success: false, error: e.message };
+    }
+  },
+
+  /**
+   * Cadastra um novo Microfranqueado (MMN) com auditoria de aceite e regra dos 100 primeiros.
+   */
+  cadastrarMicrofranqueado: async (params: {
+    profile_id: string;
+    nome_completo: string;
+    cpf?: string;
+    cnpj?: string;
+    razao_social?: string;
+    upline_id?: string;
+    ip?: string;
+    user_agent?: string;
+    termo_hash?: string;
+  }) => {
+    try {
+      // 1. Contar quantos microfranqueados já existem para verificar regra dos 100 primeiros
+      const { count, error: countErr } = await supabase
+        .from('microfranqueados')
+        .select('*', { count: 'exact', head: true });
+
+      const totalCount = count || 0;
+      const isPrimeiros100 = totalCount < 100;
+
+      // 2. Inserir na tabela microfranqueados
+      const { data: mf, error: mfErr } = await supabase
+        .from('microfranqueados')
+        .upsert({
+          profile_id: params.profile_id,
+          razao_social: params.razao_social || params.nome_completo,
+          nome_fantasia: params.nome_completo,
+          cnpj: params.cnpj || null,
+          cpf: params.cpf || null,
+          is_primeiros_100: isPrimeiros100,
+          registration_fee_status: isPrimeiros100 ? 'isento_inicial_desconto_dezembro' : 'pendente',
+          registration_fee_amount: 150.00,
+          status: 'ativo'
+        }, { onConflict: 'profile_id' })
+        .select()
+        .single();
+
+      if (mfErr) throw mfErr;
+
+      // 3. Gerar licença anual
+      if (mf?.id) {
+        const now = new Date();
+        const oneYearLater = new Date();
+        oneYearLater.setFullYear(oneYearLater.getFullYear() + 1);
+
+        await supabase
+          .from('licencas_mmn')
+          .insert({
+            microfranqueado_id: mf.id,
+            tipo_licenca: isPrimeiros100 ? 'anual_primeiros_100' : 'anual_padrao',
+            valor: 150.00,
+            status: 'ativa',
+            data_inicio: now.toISOString(),
+            data_fim: oneYearLater.toISOString()
+          });
+
+        // 4. Gravar Aceite Digital MMN com Auditoria
+        await supabase
+          .from('aceites_mmn')
+          .insert({
+            microfranqueado_id: mf.id,
+            tipo_termo: 'termo_adesao_microfranqueado',
+            versao_documento: '1.0',
+            hash_texto: params.termo_hash || 'SHA256-CONTRATO-MICROFRANQUEADO-MMN-V1.0',
+            ip: params.ip || '127.0.0.1',
+            user_agent: params.user_agent || navigator.userAgent,
+            data_hora: now.toISOString()
+          });
+
+        // 5. Vincular rede se houver upline
+        if (params.upline_id) {
+          await supabase
+            .from('rede_mmn')
+            .upsert({
+              microfranqueado_id: mf.id,
+              upline_microfranqueado_id: params.upline_id,
+              nivel: 1
+            }, { onConflict: 'microfranqueado_id' });
+        }
+      }
+
+      return { success: true, microfranqueado: mf, isPrimeiros100 };
+    } catch (e: any) {
+      console.error('Erro ao cadastrar microfranqueado:', e);
+      return { success: false, error: e.message };
+    }
+  },
+
+  /**
+   * Verifica se o Microfranqueado atingiu o limite de R$ 5.000,00 como PF
+   * e precisa obrigatoriamente migrar para PJ/MEI.
+   */
+  checkMicrofranqueadoPjRequirement: async (userId: string) => {
+    try {
+      // 1. Buscar profile e microfranqueado
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('id, person_type, cnpj, store_name')
+        .eq('id', userId)
+        .maybeSingle();
+
+      const { data: mf } = await supabase
+        .from('microfranqueados')
+        .select('id, is_pj_obrigatorio, data_migracao_pj, cnpj, razao_social')
+        .eq('profile_id', userId)
+        .maybeSingle();
+
+      if (!mf) {
+        return {
+          isMicrofranqueado: false,
+          isPJ: false,
+          isPjRequired: false,
+          totalEarnings: 0,
+          threshold: 5000,
+          remainingUntilPj: 5000
+        };
+      }
+
+      const isPJ = profile?.person_type === 'PJ' || 
+                   (!!profile?.cnpj && profile.cnpj.replace(/\D/g, '').length === 14) ||
+                   (!!mf?.cnpj && mf.cnpj.replace(/\D/g, '').length === 14);
+
+      // 2. Calcular total de comissões brutas acumuladas
+      const { data: comissoes } = await supabase
+        .from('comissoes_mmn')
+        .select('valor_bruto, status')
+        .eq('microfranqueado_id', mf.id)
+        .neq('status', 'cancelado');
+
+      const totalEarnings = (comissoes || []).reduce((acc: number, c: any) => acc + Number(c.valor_bruto || 0), 0);
+      const threshold = 5000;
+      const isPjRequired = !isPJ && (mf.is_pj_obrigatorio === true || totalEarnings >= threshold);
+      const remainingUntilPj = Math.max(0, threshold - totalEarnings);
+
+      return {
+        isMicrofranqueado: true,
+        isPJ,
+        isPjRequired,
+        totalEarnings,
+        threshold,
+        remainingUntilPj,
+        dataMigracaoPj: mf.data_migracao_pj,
+        cnpj: mf.cnpj || profile?.cnpj,
+        razaoSocial: mf.razao_social || profile?.store_name
+      };
+    } catch (e: any) {
+      console.error('Erro ao verificar limite PJ do microfranqueado:', e);
+      return {
+        isMicrofranqueado: false,
+        isPJ: false,
+        isPjRequired: false,
+        totalEarnings: 0,
+        threshold: 5000,
+        remainingUntilPj: 5000
+      };
+    }
+  },
+
+  /**
+   * Realiza a migração do Microfranqueado de PF para PJ (MEI ou Empresa)
+   */
+  migrarMicrofranqueadoPJ: async (params: {
+    userId: string;
+    cnpj: string;
+    razaoSocial: string;
+    nomeFantasia?: string;
+    pixKey?: string;
+  }) => {
+    try {
+      const cleanCnpj = params.cnpj.replace(/\D/g, '');
+      if (cleanCnpj.length !== 14) {
+        return { success: false, error: 'CNPJ deve conter 14 dígitos numéricos.' };
+      }
+      if (!params.razaoSocial?.trim()) {
+        return { success: false, error: 'Razão Social é obrigatória.' };
+      }
+
+      // 1. Tentar executar a RPC transacional se existir no Postgres
+      try {
+        const { data: rpcData, error: rpcError } = await supabase.rpc('fn_migrar_microfranqueado_pj', {
+          p_user_id: params.userId,
+          p_cnpj: cleanCnpj,
+          p_razao_social: params.razaoSocial.trim(),
+          p_nome_fantasia: params.nomeFantasia?.trim() || params.razaoSocial.trim(),
+          p_pix_key: params.pixKey?.trim() || cleanCnpj
+        });
+
+        if (!rpcError && rpcData?.success) {
+          return { success: true, message: rpcData.message || 'Migração para PJ concluída com sucesso!' };
+        }
+      } catch (rpcErr) {
+        console.warn('RPC fn_migrar_microfranqueado_pj indisponível, usando fallback client-side:', rpcErr);
+      }
+
+      // 2. Fallback client-side direto no Supabase
+      // Atualizar profile
+      const { error: profileErr } = await supabase
+        .from('profiles')
+        .update({
+          person_type: 'PJ',
+          cnpj: cleanCnpj,
+          store_name: params.razaoSocial.trim(),
+          pix_key: params.pixKey?.trim() || cleanCnpj,
+          pix_type: 'cnpj',
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', params.userId);
+
+      if (profileErr) throw profileErr;
+
+      // Atualizar microfranqueados
+      const { error: mfErr } = await supabase
+        .from('microfranqueados')
+        .update({
+          cnpj: cleanCnpj,
+          razao_social: params.razaoSocial.trim(),
+          nome_fantasia: params.nomeFantasia?.trim() || params.razaoSocial.trim(),
+          data_migracao_pj: new Date().toISOString(),
+          is_pj_obrigatorio: false,
+          updated_at: new Date().toISOString()
+        })
+        .eq('profile_id', params.userId);
+
+      if (mfErr) throw mfErr;
+
+      // Inserir registro em pj_migration_requests
+      await supabase
+        .from('pj_migration_requests')
+        .insert({
+          user_id: params.userId,
+          cnpj: cleanCnpj,
+          company_name: params.razaoSocial.trim(),
+          trade_name: params.nomeFantasia?.trim() || params.razaoSocial.trim(),
+          pix_type: 'CNPJ',
+          pix_key: params.pixKey?.trim() || cleanCnpj,
+          status: 'approved',
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        });
+
+      return {
+        success: true,
+        message: 'Migração para Pessoa Jurídica (PJ/MEI) realizada com sucesso!'
+      };
+    } catch (e: any) {
+      console.error('Erro ao migrar microfranqueado para PJ:', e);
+      return { success: false, error: e.message || 'Erro ao processar migração para PJ.' };
+    }
   }
 };
+
 

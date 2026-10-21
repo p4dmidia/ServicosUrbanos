@@ -1,7 +1,7 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useState, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { User } from '@supabase/supabase-js';
-import { businessRules } from '../lib/businessRules';
+import { businessRules, clearAffiliateDataCache } from '../lib/businessRules';
 
 interface Profile {
   id: string;
@@ -58,17 +58,34 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [profile, setProfile] = useState<Profile | null>(null);
   const [isMerchantAuthorized, setIsMerchantAuthorized] = useState<boolean>(false);
   const [loading, setLoading] = useState(true);
+  const fetchingProfileRef = useRef<string | null>(null);
 
   useEffect(() => {
-    // Get initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    // Obter sessão inicial e tratar possíveis tokens expirados/inválidos
+    supabase.auth.getSession().then(({ data: { session }, error }) => {
+      if (error) {
+        console.warn('Sessão expirada ou inválida, resetando token:', error.message);
+        if (error.message?.includes('Refresh Token') || error.message?.includes('invalid_grant')) {
+          supabase.auth.signOut().catch(() => {});
+        }
+        setUser(null);
+        setProfile(null);
+        setLoading(false);
+        return;
+      }
+
       setUser(session?.user ?? null);
-      if (session?.user) fetchProfile(session.user.id, session.user.email);
-      else setLoading(false);
+      if (session?.user) {
+        fetchProfile(session.user.id, session.user.email);
+      } else {
+        setLoading(false);
+      }
     });
 
-    // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    // Ouvir alterações de autenticação (ignora INITIAL_SESSION duplicado pois getSession acima já tratou)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'INITIAL_SESSION') return;
+
       setUser(session?.user ?? null);
       if (session?.user) {
         fetchProfile(session.user.id, session.user.email);
@@ -83,6 +100,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const fetchProfile = async (userId: string, email?: string) => {
+    if (fetchingProfileRef.current === userId) return;
+    fetchingProfileRef.current = userId;
+
     try {
       const { data, error } = await supabase
         .from('profiles')
@@ -92,7 +112,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       if (error) {
         if (error.code === 'PGRST116') {
-          // Profile doesn't exist yet, it might be being created by the trigger
           console.warn('Profile not found, waiting for trigger...');
           return;
         }
@@ -115,6 +134,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       console.error('Error fetching profile:', error);
       setIsMerchantAuthorized(false);
     } finally {
+      fetchingProfileRef.current = null;
       setLoading(false);
     }
   };
@@ -122,15 +142,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const refreshProfile = async (userId?: string) => {
     const targetId = userId || user?.id || (await supabase.auth.getUser()).data.user?.id;
     if (targetId) {
+      fetchingProfileRef.current = null;
       const authUser = (await supabase.auth.getUser()).data.user;
       await fetchProfile(targetId, authUser?.email);
     }
   };
 
   const signOut = async () => {
+    clearAffiliateDataCache();
     await supabase.auth.signOut();
     setIsMerchantAuthorized(false);
     setProfile(null);
+    setUser(null);
   };
 
   return (

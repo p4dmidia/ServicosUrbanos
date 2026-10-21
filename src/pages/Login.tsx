@@ -192,6 +192,7 @@ export default function Login() {
                                         placeholder="E-mail, CPF ou CNPJ"
                                         value={email}
                                         onChange={e => setEmail(e.target.value)}
+                                        autoComplete="username"
                                         className="w-full bg-white/5 border border-white/10 rounded-2xl py-4 pl-12 pr-4 focus:outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 transition-all font-medium text-white placeholder:text-slate-600"
                                         required
                                     />
@@ -212,6 +213,7 @@ export default function Login() {
                                         placeholder="••••••••"
                                         value={password}
                                         onChange={e => setPassword(e.target.value)}
+                                        autoComplete="current-password"
                                         className="w-full bg-white/5 border border-white/10 rounded-2xl py-4 pl-12 pr-12 focus:outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 transition-all font-medium text-white placeholder:text-slate-600"
                                         required
                                     />

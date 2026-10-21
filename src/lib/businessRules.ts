@@ -563,6 +563,46 @@ export function calculateSubscriptionRepasseCycle(
 // In-memory fallback para solicitações de migração PJ
 const memoryPjRequests: any[] = [];
 
+// Cache de deduplicação e memória curta (TTL 8-10s) para evitar sobrecarga e requisições repetidas
+const _inFlightPromises = new Map<string, Promise<any>>();
+const _memoryCache = new Map<string, { data: any; expiry: number }>();
+
+export function withRequestDeduplication<T>(key: string, ttlMs: number, fn: () => Promise<T>): Promise<T> {
+  const cached = _memoryCache.get(key);
+  if (cached && Date.now() < cached.expiry) {
+    return Promise.resolve(cached.data);
+  }
+
+  const existing = _inFlightPromises.get(key);
+  if (existing) {
+    return existing;
+  }
+
+  const promise = fn()
+    .then((result) => {
+      _memoryCache.set(key, { data: result, expiry: Date.now() + ttlMs });
+      _inFlightPromises.delete(key);
+      return result;
+    })
+    .catch((err) => {
+      _inFlightPromises.delete(key);
+      throw err;
+    });
+
+  _inFlightPromises.set(key, promise);
+  return promise;
+}
+
+export function clearAffiliateDataCache(userId?: string) {
+  if (userId) {
+    for (const k of _memoryCache.keys()) {
+      if (k.includes(userId)) _memoryCache.delete(k);
+    }
+  } else {
+    _memoryCache.clear();
+  }
+}
+
 export const businessRules = {
   calculateSubscriptionRepasseCycle,
   // Validação de Maioridade (Seguradora MBM exige 18 anos completos)
@@ -665,7 +705,8 @@ export const businessRules = {
 
   // Verifica se o usuário tem permissão temporária de acesso à área de lojista
   checkMerchantAccess: async (userId: string, userEmail?: string): Promise<boolean> => {
-    let emailNormalized = userEmail?.trim().toLowerCase();
+    return withRequestDeduplication(`merchant_access_${userId}`, 15000, async () => {
+      let emailNormalized = userEmail?.trim().toLowerCase();
     
     // Buscar perfil do usuário atual
     const profile = await businessRules.getProfileById(userId);
@@ -719,6 +760,7 @@ export const businessRules = {
     }
 
     return false;
+    });
   },
 
   // Ativa o lado lojista de uma conta já existente (Afiliado -> Lojista)
@@ -1442,21 +1484,32 @@ export const businessRules = {
   },
 
   getAffiliateStats: async (userId: string) => {
-    try {
-      if (!userId || userId === 'user123') {
-        throw new Error('ID de usuário inválido.');
-      }
+    return withRequestDeduplication(`affiliate_stats_${userId}`, 8000, async () => {
+      try {
+        if (!userId || userId === 'user123') {
+          throw new Error('ID de usuário inválido.');
+        }
 
-      const [tResult, nSummary, oResult, allOrdersResult] = await Promise.all([
-        supabase.from('transactions').select('amount, type, description, status, order_id').eq('profile_id', userId),
-        businessRules.getNetworkSummary(userId),
-        supabase.from('orders').select('id').eq('customer_id', userId).in('status', ['Pago, Aguardando Retirada', 'Concluído']),
-        supabase.from('orders').select('id, status')
-      ]);
+        const [tResult, nSummary, oResult] = await Promise.all([
+          supabase.from('transactions').select('amount, type, description, status, order_id').eq('profile_id', userId),
+          businessRules.getNetworkSummary(userId),
+          supabase.from('orders').select('id').eq('customer_id', userId).in('status', ['Pago, Aguardando Retirada', 'Concluído'])
+        ]);
 
-      const ordersMap = new Map(allOrdersResult.data?.map(o => [o.id, o.status]) || []);
-      const transactions = (tResult.data || []).filter(t => ordersMap.get(t.order_id) !== 'Cancelado');
-      const consumptionCount = oResult.data?.length || 0;
+        const rawTransactions = tResult.data || [];
+        const relatedOrderIds = [...new Set(rawTransactions.map(t => t.order_id).filter(Boolean))];
+
+        let ordersMap = new Map();
+        if (relatedOrderIds.length > 0) {
+          const { data: relatedOrders } = await supabase
+            .from('orders')
+            .select('id, status')
+            .in('id', relatedOrderIds);
+          ordersMap = new Map(relatedOrders?.map(o => [o.id, o.status]) || []);
+        }
+
+        const transactions = rawTransactions.filter(t => !t.order_id || ordersMap.get(t.order_id) !== 'Cancelado');
+        const consumptionCount = oResult.data?.length || 0;
 
       const isResellerTx = (t: any) => 
         t.description?.includes('Revendedor') || 
@@ -1624,6 +1677,7 @@ export const businessRules = {
         rank: 'Afiliado'
       };
     }
+    });
   },
 
   paySubscription: async (userId: string, planType: 'mensal' | 'trimestral' | 'semestral' | 'anual') => {
@@ -1858,8 +1912,9 @@ export const businessRules = {
   },
 
   getEcosystemActivity: async (userId: string) => {
-    try {
-      if (!userId || userId === 'user123') return [];
+    return withRequestDeduplication(`ecosystem_activity_${userId}`, 8000, async () => {
+      try {
+        if (!userId || userId === 'user123') return [];
 
       const { data: transactions, error } = await supabase
         .from('transactions')
@@ -1900,33 +1955,29 @@ export const businessRules = {
         buyer_name: (o.profiles as any)?.full_name || o.customer_name || 'Desconhecido'
       }]) || []);
 
-      // 2. Buscar rede para cálculo de níveis (Fallback seguro para evitar erro 500)
+      // 2. Buscar rede apenas para os compradores desses pedidos específicos (Fallback pontual)
       const levelMap = new Map();
-      try {
-        const { data: allProfiles } = await supabase.from('profiles').select('id, referred_by').limit(5000);
-        if (allProfiles) {
-          const childrenMap = new Map();
-          allProfiles.forEach(p => {
-            if (p.referred_by) {
-              const children = childrenMap.get(p.referred_by) || [];
-              children.push(p.id);
-              childrenMap.set(p.referred_by, children);
+      const buyerIdsToResolve = [...new Set(
+        Array.from(ordersMap.values())
+          .map(o => o.customer_id)
+          .filter(cid => cid && cid !== userId)
+      )];
+
+      if (buyerIdsToResolve.length > 0) {
+        try {
+          const { data: buyers } = await supabase
+            .from('profiles')
+            .select('id, referred_by')
+            .in('id', buyerIdsToResolve);
+          
+          buyers?.forEach(b => {
+            if (b.referred_by === userId) {
+              levelMap.set(b.id, 1);
             }
           });
-
-          const buildLevelsRecursive = (parentId: string, currentLevel: number, visited: Set<string>) => {
-            if (currentLevel > 10 || visited.has(parentId)) return;
-            visited.add(parentId);
-            const children = childrenMap.get(parentId) || [];
-            children.forEach((childId: string) => {
-              levelMap.set(childId, currentLevel);
-              buildLevelsRecursive(childId, currentLevel + 1, visited);
-            });
-          };
-          buildLevelsRecursive(userId, 1, new Set());
+        } catch (err) {
+          console.warn("Aviso ao mapear compradores em getEcosystemActivity:", err);
         }
-      } catch (err) {
-        console.error("Erro no cálculo de níveis:", err);
       }
 
       // 3. Buscar meses quitados via RPA ou fatura aprovada
@@ -2129,6 +2180,7 @@ export const businessRules = {
       console.error("Activity Fetch Error:", error);
       return [];
     }
+    });
   },
 
   getAffiliateTree: async (userId: string) => {
@@ -8629,102 +8681,106 @@ export const businessRules = {
    * Obtém os dados e status do Microfranqueado (MMN), incluindo licença e carência dos 100 primeiros.
    */
   getMicrofranqueadoData: async (userId: string) => {
-    try {
-      if (!userId) return null;
-      const { data: mf } = await supabase
-        .from('microfranqueados')
-        .select(`
-          *,
-          licencas_mmn(*)
-        `)
-        .eq('profile_id', userId)
-        .maybeSingle();
+    return withRequestDeduplication(`microfranqueado_data_${userId}`, 10000, async () => {
+      try {
+        if (!userId) return null;
+        const { data: mf } = await supabase
+          .from('microfranqueados')
+          .select(`
+            *,
+            licencas_mmn(*)
+          `)
+          .eq('profile_id', userId)
+          .maybeSingle();
 
-      if (!mf) {
+        if (!mf) {
+          return {
+            isMicrofranqueado: false,
+            microfranqueado: null,
+            licenca: null,
+            isLicenseActive: false,
+            isLimit100Free: false,
+            isPrimeiros100: false
+          };
+        }
+
+        const licencas = mf.licencas_mmn || [];
+        const activeLicenca = licencas.find((l: any) => l.status === 'ativa' && new Date(l.data_fim) >= new Date()) || licencas[0] || null;
+        const isLicenseActive = mf.status === 'ativo' && activeLicenca?.status === 'ativa' && new Date(activeLicenca.data_fim) >= new Date();
+
         return {
-          isMicrofranqueado: false,
-          microfranqueado: null,
-          licenca: null,
-          isLicenseActive: false,
-          isLimit100Free: false,
-          isPrimeiros100: false
+          isMicrofranqueado: true,
+          microfranqueado: mf,
+          licenca: activeLicenca,
+          isLicenseActive,
+          isLimit100Free: !!mf.limit_100_free,
+          isPrimeiros100: !!mf.limit_100_free,
+          registrationFeeStatus: mf.registration_fee_status,
+          status: mf.status
         };
+      } catch (e) {
+        console.error('Erro ao buscar dados do microfranqueado:', e);
+        return null;
       }
-
-      const licencas = mf.licencas_mmn || [];
-      const activeLicenca = licencas.find((l: any) => l.status === 'ativa' && new Date(l.data_fim) >= new Date()) || licencas[0] || null;
-      const isLicenseActive = mf.status === 'ativo' && activeLicenca?.status === 'ativa' && new Date(activeLicenca.data_fim) >= new Date();
-
-      return {
-        isMicrofranqueado: true,
-        microfranqueado: mf,
-        licenca: activeLicenca,
-        isLicenseActive,
-        isLimit100Free: !!mf.limit_100_free,
-        isPrimeiros100: !!mf.limit_100_free,
-        registrationFeeStatus: mf.registration_fee_status,
-        status: mf.status
-      };
-    } catch (e) {
-      console.error('Erro ao buscar dados do microfranqueado:', e);
-      return null;
-    }
+    });
   },
 
   /**
    * Obtém os dados do Segurado Premium (Seguro Vida Light), apólice ativa, números da sorte e telemedicina.
    */
   getSeguradoData: async (userId: string) => {
-    try {
-      if (!userId) return null;
-      const { data: segurado } = await supabase
-        .from('segurados')
-        .select(`
-          *,
-          apolices(*),
-          telemedicina_acesso(*)
-        `)
-        .eq('profile_id', userId)
-        .maybeSingle();
+    return withRequestDeduplication(`segurado_data_${userId}`, 10000, async () => {
+      try {
+        if (!userId) return null;
+        const { data: segurado } = await supabase
+          .from('segurados')
+          .select(`
+            *,
+            apolices(*),
+            telemedicina_acesso(*)
+          `)
+          .eq('profile_id', userId)
+          .maybeSingle();
 
-      if (!segurado) {
+        if (!segurado) {
+          return {
+            isSegurado: false,
+            segurado: null,
+            apolice: null,
+            numerosDaSorte: [],
+            telemedicina: null,
+            isPolicyActive: false
+          };
+        }
+
+        const apolices = segurado.apolices || [];
+        const activeApolice = apolices.find((a: any) => a.status === 'ativa' && new Date(a.vigencia_fim) >= new Date()) || apolices[0] || null;
+        const isPolicyActive = segurado.status === 'ativo' && activeApolice?.status === 'ativa' && new Date(activeApolice.vigencia_fim) >= new Date();
+
+        let numerosDaSorte: any[] = [];
+        if (segurado.id) {
+          const { data: nums } = await supabase
+            .from('numeros_da_sorte')
+            .select('*')
+            .eq('segurado_id', segurado.id)
+            .order('created_at', { ascending: false });
+          numerosDaSorte = nums || [];
+        }
+
         return {
-          isSegurado: false,
-          segurado: null,
-          apolice: null,
-          numerosDaSorte: [],
-          telemedicina: null,
-          isPolicyActive: false
+          isSegurado: true,
+          segurado,
+          apolice: activeApolice,
+          numerosDaSorte,
+          telemedicina: segurado.telemedicina_acesso?.[0] || null,
+          isPolicyActive,
+          status: segurado.status
         };
+      } catch (e) {
+        console.error('Erro ao buscar dados do segurado:', e);
+        return null;
       }
-
-      const apolices = segurado.apolices || [];
-      const activeApolice = apolices.find((a: any) => a.status === 'ativa' && new Date(a.vigencia_fim) >= new Date()) || apolices[0] || null;
-      const isPolicyActive = segurado.status === 'ativo' && activeApolice?.status === 'ativa' && new Date(activeApolice.vigencia_fim) >= new Date();
-
-      let numerosDaSorte: any[] = [];
-      if (segurado.id) {
-        const { data: nums } = await supabase
-          .from('numeros_da_sorte')
-          .select('*')
-          .eq('segurado_id', segurado.id)
-          .order('created_at', { ascending: false });
-        numerosDaSorte = nums || [];
-      }
-
-      return {
-        isSegurado: true,
-        segurado,
-        apolice: activeApolice,
-        numerosDaSorte,
-        telemedicina: segurado.telemedicina_acesso?.[0] || null,
-        isPolicyActive,
-        status: segurado.status
-      };
-    } catch (e) {
-      console.error('Erro ao buscar dados do segurado:', e);
-      return null;
-    }
+    });
   },
 
   /**
@@ -8732,79 +8788,81 @@ export const businessRules = {
    * 80% semanal (pago toda terça-feira) e 20% anual (pago em 10 de dezembro).
    */
   getComissoesMicrofranqueado: async (microfranqueadoId: string) => {
-    try {
-      if (!microfranqueadoId) return null;
+    return withRequestDeduplication(`comissoes_mf_${microfranqueadoId}`, 8000, async () => {
+      try {
+        if (!microfranqueadoId) return null;
 
-      const { data: comissoes } = await supabase
-        .from('comissoes_mmn')
-        .select('*')
-        .eq('microfranqueado_id', microfranqueadoId)
-        .order('created_at', { ascending: false });
+        const { data: comissoes } = await supabase
+          .from('comissoes_mmn')
+          .select('*')
+          .eq('microfranqueado_id', microfranqueadoId)
+          .order('created_at', { ascending: false });
 
-      const list = comissoes || [];
+        const list = comissoes || [];
 
-      // Filtros por Nível
-      const g0Comissoes = list.filter(c => c.nivel === 0);
-      const g1Comissoes = list.filter(c => c.nivel === 1);
-      const g2Comissoes = list.filter(c => c.nivel === 2);
+        // Filtros por Nível
+        const g0Comissoes = list.filter(c => c.nivel === 0);
+        const g1Comissoes = list.filter(c => c.nivel === 1);
+        const g2Comissoes = list.filter(c => c.nivel === 2);
 
-      const totalBrutoG0 = g0Comissoes.reduce((acc, c) => acc + Number(c.valor_bruto || 0), 0);
-      const totalBrutoG1 = g1Comissoes.reduce((acc, c) => acc + Number(c.valor_bruto || 0), 0);
-      const totalBrutoG2 = g2Comissoes.reduce((acc, c) => acc + Number(c.valor_bruto || 0), 0);
-      const totalBrutoGeral = totalBrutoG0 + totalBrutoG1 + totalBrutoG2;
+        const totalBrutoG0 = g0Comissoes.reduce((acc, c) => acc + Number(c.valor_bruto || 0), 0);
+        const totalBrutoG1 = g1Comissoes.reduce((acc, c) => acc + Number(c.valor_bruto || 0), 0);
+        const totalBrutoG2 = g2Comissoes.reduce((acc, c) => acc + Number(c.valor_bruto || 0), 0);
+        const totalBrutoGeral = totalBrutoG0 + totalBrutoG1 + totalBrutoG2;
 
-      // Split 80% Semanal e 20% Anual
-      const semanalPendente = list
-        .filter(c => c.status === 'pendente' || c.status === 'liberado_semanal')
-        .reduce((acc, c) => acc + Number(c.valor_semanal_80 || 0), 0);
+        // Split 80% Semanal e 20% Anual
+        const semanalPendente = list
+          .filter(c => c.status === 'pendente' || c.status === 'liberado_semanal')
+          .reduce((acc, c) => acc + Number(c.valor_semanal_80 || 0), 0);
 
-      const semanalPago = list
-        .filter(c => c.status === 'pago_semanal')
-        .reduce((acc, c) => acc + Number(c.valor_semanal_80 || 0), 0);
+        const semanalPago = list
+          .filter(c => c.status === 'pago_semanal')
+          .reduce((acc, c) => acc + Number(c.valor_semanal_80 || 0), 0);
 
-      const anualAcumulado = list
-        .filter(c => c.status !== 'cancelado' && c.status !== 'bloqueado_inadimplencia')
-        .reduce((acc, c) => acc + Number(c.valor_anual_20 || 0), 0);
+        const anualAcumulado = list
+          .filter(c => c.status !== 'cancelado' && c.status !== 'bloqueado_inadimplencia')
+          .reduce((acc, c) => acc + Number(c.valor_anual_20 || 0), 0);
 
-      const anualPago = list
-        .filter(c => c.status === 'pago_anual')
-        .reduce((acc, c) => acc + Number(c.valor_anual_20 || 0), 0);
+        const anualPago = list
+          .filter(c => c.status === 'pago_anual')
+          .reduce((acc, c) => acc + Number(c.valor_anual_20 || 0), 0);
 
-      const bloqueadoInadimplencia = list
-        .filter(c => c.status === 'bloqueado_inadimplencia')
-        .reduce((acc, c) => acc + Number(c.valor_bruto || 0), 0);
+        const bloqueadoInadimplencia = list
+          .filter(c => c.status === 'bloqueado_inadimplencia')
+          .reduce((acc, c) => acc + Number(c.valor_bruto || 0), 0);
 
-      // Calcular datas operacionais
-      const now = new Date();
-      const dayOfWeek = now.getDay(); // 0 = Domingo, 1 = Segunda, 2 = Terça...
-      const daysUntilTuesday = (2 - dayOfWeek + 7) % 7 || 7;
-      const nextTuesday = new Date(now);
-      nextTuesday.setDate(now.getDate() + daysUntilTuesday);
+        // Calcular datas operacionais
+        const now = new Date();
+        const dayOfWeek = now.getDay(); // 0 = Domingo, 1 = Segunda, 2 = Terça...
+        const daysUntilTuesday = (2 - dayOfWeek + 7) % 7 || 7;
+        const nextTuesday = new Date(now);
+        nextTuesday.setDate(now.getDate() + daysUntilTuesday);
 
-      const currentYear = now.getFullYear();
-      let decemberPayout = new Date(currentYear, 11, 10); // 10 de Dezembro
-      if (now > decemberPayout) {
-        decemberPayout = new Date(currentYear + 1, 11, 10);
+        const currentYear = now.getFullYear();
+        let decemberPayout = new Date(currentYear, 11, 10); // 10 de Dezembro
+        if (now > decemberPayout) {
+          decemberPayout = new Date(currentYear + 1, 11, 10);
+        }
+
+        return {
+          list,
+          totalBrutoGeral,
+          totalBrutoG0,
+          totalBrutoG1,
+          totalBrutoG2,
+          semanalPendente,
+          semanalPago,
+          anualAcumulado,
+          anualPago,
+          bloqueadoInadimplencia,
+          proximaTerca: nextTuesday.toLocaleDateString('pt-BR'),
+          proximoDezembro: decemberPayout.toLocaleDateString('pt-BR')
+        };
+      } catch (e) {
+        console.error('Erro ao calcular comissões do microfranqueado:', e);
+        return null;
       }
-
-      return {
-        list,
-        totalBrutoGeral,
-        totalBrutoG0,
-        totalBrutoG1,
-        totalBrutoG2,
-        semanalPendente,
-        semanalPago,
-        anualAcumulado,
-        anualPago,
-        bloqueadoInadimplencia,
-        proximaTerca: nextTuesday.toLocaleDateString('pt-BR'),
-        proximoDezembro: decemberPayout.toLocaleDateString('pt-BR')
-      };
-    } catch (e) {
-      console.error('Erro ao calcular comissões do microfranqueado:', e);
-      return null;
-    }
+    });
   },
 
   /**
@@ -8834,9 +8892,11 @@ export const businessRules = {
           .eq('microfranqueado_id', microfranqueadoId)
           .eq('status', 'bloqueado_inadimplencia');
 
+        clearAffiliateDataCache();
         return { success: true };
       }
 
+      clearAffiliateDataCache();
       return data;
     } catch (e: any) {
       console.error('Erro ao regularizar licença:', e);
@@ -9149,6 +9209,7 @@ export const businessRules = {
         }
       }
 
+      clearAffiliateDataCache(params.profile_id);
       return { success: true, microfranqueado: mf, isPrimeiros100 };
     } catch (e: any) {
       console.error('Erro ao cadastrar microfranqueado:', e);
@@ -9161,7 +9222,8 @@ export const businessRules = {
    * e precisa obrigatoriamente migrar para PJ/MEI.
    */
   checkMicrofranqueadoPjRequirement: async (userId: string) => {
-    try {
+    return withRequestDeduplication(`pj_req_${userId}`, 10000, async () => {
+      try {
       // 1. Buscar profile e microfranqueado
       const { data: profile } = await supabase
         .from('profiles')
@@ -9224,6 +9286,7 @@ export const businessRules = {
         remainingUntilPj: 5000
       };
     }
+    });
   },
 
   /**

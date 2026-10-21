@@ -151,22 +151,22 @@ export default function AffiliateNetwork() {
                 Rede MMN & Comissões
               </h2>
               <p className="text-slate-600 leading-relaxed max-w-lg mx-auto text-sm">
-                Sua conta atual é de <strong>Afiliado Premium (Seguro Vida Light)</strong>, que dá direito a apólice MBM R$ 5.000, telemedicina 24h e sorteios da Loteria Federal. A formação de rede e recebimento de comissões (<strong>33% no split 80/20</strong>) é restrita aos Microfranqueados.
+                Sua conta atual é de <strong>Afiliado Premium (Seguro Vida Light)</strong>, que dá direito a apólice MBM R$ 5.000, telemedicina 24h e sorteios da Loteria Federal. A formação de rede e recebimento de comissões (<strong>33% no modelo oficial: 27% semanal na terça e 6% anual</strong>) é restrita aos Microfranqueados.
               </p>
             </div>
 
             <div className="grid grid-cols-3 gap-4 border-y border-slate-100 py-6 text-center">
               <div>
                 <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">G0 Direto</span>
-                <span className="text-xl font-black text-midnight font-mono">27%</span>
+                <span className="text-xl font-black text-midnight font-mono">21% + 2%</span>
               </div>
               <div>
                 <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">G1 Indireto</span>
-                <span className="text-xl font-black text-midnight font-mono">3%</span>
+                <span className="text-xl font-black text-midnight font-mono">3% + 2%</span>
               </div>
               <div>
                 <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">G2 Indireto</span>
-                <span className="text-xl font-black text-midnight font-mono">3%</span>
+                <span className="text-xl font-black text-midnight font-mono">3% + 2%</span>
               </div>
             </div>
 
@@ -199,26 +199,26 @@ export default function AffiliateNetwork() {
     {
       label: 'G0 (Vendas Diretas)',
       count: network.filter(item => item.level === 1).length, // Diretos
-      rate: '27%',
-      splitDesc: '80% terça / 20% dez',
+      rate: '21% + 2%',
+      splitDesc: '21% terça / 2% anual (23%)',
       color: 'text-indigo-600',
       bg: 'bg-indigo-50',
       border: 'border-indigo-200'
     },
     {
-      label: 'G1 (Indiretos 2º Nível)',
+      label: 'G1 (Indiretos 1º Nível)',
       count: network.filter(item => item.level === 2).length,
-      rate: '3%',
-      splitDesc: '80% terça / 20% dez',
+      rate: '3% + 2%',
+      splitDesc: '3% terça / 2% anual (5%)',
       color: 'text-emerald-600',
       bg: 'bg-emerald-50',
       border: 'border-emerald-200'
     },
     {
-      label: 'G2 (Indiretos 3º Nível)',
+      label: 'G2 (Indiretos 2º Nível)',
       count: 0,
-      rate: '3%',
-      splitDesc: '80% terça / 20% dez',
+      rate: '3% + 2%',
+      splitDesc: '3% terça / 2% anual (5%)',
       color: 'text-blue-600',
       bg: 'bg-blue-50',
       border: 'border-blue-200'
@@ -227,7 +227,7 @@ export default function AffiliateNetwork() {
       label: 'Comissão Total Rede',
       count: network.filter(item => item.level > 0).length,
       rate: '33%',
-      splitDesc: 'Teto Comissional Oficial',
+      splitDesc: '27% semanal / 6% anual',
       color: 'text-amber-700',
       bg: 'bg-amber-50',
       border: 'border-amber-200'
@@ -317,7 +317,7 @@ export default function AffiliateNetwork() {
 
           <div className="space-y-1 border-t md:border-t-0 md:border-l border-white/10 pt-4 md:pt-0 md:pl-6">
             <span className="text-[10px] font-black uppercase tracking-widest text-amber-300 flex items-center gap-1.5">
-              <Sparkles size={14} /> Bônus Anual (20%)
+              <Sparkles size={14} /> Bônus Anual (6%)
             </span>
             <p className="text-lg font-black text-amber-400">
               10 de Dezembro
@@ -386,9 +386,9 @@ export default function AffiliateNetwork() {
                 className="bg-slate-50 border border-slate-200 px-4 py-3 rounded-2xl text-xs font-black text-slate-600 uppercase tracking-wider cursor-pointer focus:outline-hidden"
               >
                 <option value={0}>Todos os Níveis (G0, G1, G2)</option>
-                <option value={-1}>G0 (Você)</option>
-                <option value={1}>G1 (Diretos - 27%)</option>
-                <option value={2}>G2 (Indiretos - 3%)</option>
+                <option value={-1}>G0 (Você - 21% sem + 2% anual)</option>
+                <option value={1}>G1 (Indiretos 1º Nível - 3% sem + 2% anual)</option>
+                <option value={2}>G2 (Indiretos 2º Nível - 3% sem + 2% anual)</option>
               </select>
             </div>
           </div>

@@ -556,7 +556,7 @@ export default function Home() {
                         <CheckCircle2 size={14} />
                       </div>
                       <span className="text-slate-300 font-medium text-base">
-                        Comissionamento de até 33% em 3 níveis: 27% direto (G0) e 3% na equipe (G1 e G2).
+                        Comissionamento de 33% em 3 níveis: G0 (21%+2%), G1 (3%+2%) e G2 (3%+2%).
                       </span>
                     </li>
                     <li className="flex items-start gap-3">
@@ -564,7 +564,7 @@ export default function Home() {
                         <CheckCircle2 size={14} />
                       </div>
                       <span className="text-slate-300 font-medium text-base">
-                        Divisão oficial de repasses: 80% semanalmente toda terça-feira e 20% no bônus anual em dezembro.
+                        Repasses oficiais: 27% semanal toda terça-feira e 6% no bônus anual em 10 de dezembro.
                       </span>
                     </li>
                     <li className="flex items-start gap-3">

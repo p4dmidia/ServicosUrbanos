@@ -25,9 +25,10 @@ import { useNavigate } from 'react-router-dom';
 
 export default function AffiliateRenewals() {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const [loading, setLoading] = useState(true);
   const [regularizing, setRegularizing] = useState(false);
+  const [activatingMf, setActivatingMf] = useState(false);
   const [stats, setStats] = useState<any>(null);
   const [subscription, setSubscription] = useState<any | null>(null);
   const [seguradoData, setSeguradoData] = useState<any>(null);
@@ -159,10 +160,11 @@ export default function AffiliateRenewals() {
 
   const handlePay = (plan: any) => {
     try {
+      const isMf = plan.plan_type === 'microfranqueado' || plan.id === 'sub-microfranqueado';
       const cartItem = {
         id: plan.id,
         name: plan.name,
-        price: plan.price,
+        price: isMf ? 0.00 : plan.price,
         quantity: 1,
         image: plan.image || "🔄",
         is_subscription: true,
@@ -173,6 +175,40 @@ export default function AffiliateRenewals() {
       navigate('/checkout');
     } catch (e: any) {
       toast.error('Erro ao redirecionar para o checkout: ' + e.message);
+    }
+  };
+
+  const handleActivateFreeMicrofranqueado = async () => {
+    if (!user) return;
+    try {
+      setActivatingMf(true);
+      const loadingToast = toast.loading('Ativando sua Licença de Microfranqueado...');
+      
+      const res = await businessRules.cadastrarMicrofranqueado({
+        profile_id: user.id,
+        nome_completo: profile?.full_name || user?.user_metadata?.full_name || 'Microfranqueado Oficial',
+        cpf: profile?.cpf || user?.user_metadata?.cpf,
+        razao_social: profile?.full_name || user?.user_metadata?.full_name,
+        ip: '127.0.0.1',
+        user_agent: navigator.userAgent,
+        termo_hash: 'SHA256-ACEITE-MICROFRANQUEADO-1-ANO-GRATIS'
+      });
+
+      toast.dismiss(loadingToast);
+
+      if (res?.success) {
+        toast.success('🎉 Licença de Microfranqueado ativada com sucesso! Você tem 1 ano 100% gratuito.');
+        try {
+          localStorage.removeItem('urbashop_cart');
+        } catch {}
+        await loadData();
+      } else {
+        toast.error(res?.error || 'Erro ao ativar licença.');
+      }
+    } catch (e: any) {
+      toast.error('Erro ao ativar: ' + e.message);
+    } finally {
+      setActivatingMf(false);
     }
   };
 
@@ -263,20 +299,18 @@ export default function AffiliateRenewals() {
 
                 {isMicrofranqueado ? (
                   <div className="space-y-6">
-                    {/* Caso seja um dos 100 primeiros */}
-                    {isPrimeiros100 && (
-                      <div className="bg-amber-500/15 border border-amber-500/30 rounded-2xl p-5 flex items-start gap-3.5 text-amber-200">
-                        <Sparkles size={22} className="text-amber-400 shrink-0 mt-0.5" />
-                        <div>
-                          <h4 className="font-black text-amber-300 text-xs uppercase tracking-tight">
-                            Você é um dos 100 Primeiros Microfranqueados Oficiais!
-                          </h4>
-                          <p className="text-xs text-amber-200/90 leading-relaxed mt-1">
-                            Sua taxa anual de inscrição (R$ 150,00) foi isenta na entrada. Ela será descontada diretamente do seu bônus anual acumulado no fechamento de <strong>10 de Dezembro</strong>. Sua rede e seus ganhos estão ativos.
-                          </p>
-                        </div>
+                    {/* Licença Ativa (1º Ano Gratuito) */}
+                    <div className="bg-emerald-500/15 border border-emerald-500/30 rounded-2xl p-5 flex items-start gap-3.5 text-emerald-200">
+                      <Sparkles size={22} className="text-emerald-400 shrink-0 mt-0.5" />
+                      <div>
+                        <h4 className="font-black text-emerald-300 text-xs uppercase tracking-tight">
+                          Licença de Microfranqueado Ativa • 1º Ano Gratuito!
+                        </h4>
+                        <p className="text-xs text-emerald-200/90 leading-relaxed mt-1">
+                          Sua licença comercial de Microfranqueado é 100% gratuita durante o primeiro ano. Sua rede e seus repasses semanais de comissão (até 33%) estão ativos. A anuidade de R$ 150,00 só será devida após o término de 12 meses.
+                        </p>
                       </div>
-                    )}
+                    </div>
 
                     {/* Caso esteja inadimplente */}
                     {!isLicenseActive && (
@@ -288,7 +322,7 @@ export default function AffiliateRenewals() {
                               Comissões de Rede Bloqueadas por Inadimplência
                             </h4>
                             <p className="text-xs text-rose-200/90 leading-relaxed mt-1">
-                              Sua taxa de licença anual está pendente. Enquanto não regularizada, as comissões da sua rede (G0 27%, G1 3%, G2 3%) ficam retidas.
+                              Sua taxa de licença anual está pendente. Enquanto não regularizada, as comissões da sua rede (G0 21%+2%, G1 3%+2%, G2 3%+2%) ficam retidas.
                             </p>
                           </div>
                         </div>
@@ -307,22 +341,22 @@ export default function AffiliateRenewals() {
                         <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 block mb-1">
                           Comissão Direta (G0)
                         </span>
-                        <span className="text-xl font-black text-white font-mono">27%</span>
-                        <span className="text-[10px] text-slate-400 block mt-0.5">80% terça / 20% dez</span>
+                        <span className="text-xl font-black text-white font-mono">21% + 2%</span>
+                        <span className="text-[10px] text-slate-400 block mt-0.5">21% terça / 2% dez (23%)</span>
                       </div>
                       <div className="bg-white/5 border border-white/10 rounded-2xl p-4">
                         <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 block mb-1">
                           Comissão Indireta (G1)
                         </span>
-                        <span className="text-xl font-black text-white font-mono">3%</span>
-                        <span className="text-[10px] text-slate-400 block mt-0.5">80% terça / 20% dez</span>
+                        <span className="text-xl font-black text-white font-mono">3% + 2%</span>
+                        <span className="text-[10px] text-slate-400 block mt-0.5">3% terça / 2% dez (5%)</span>
                       </div>
                       <div className="bg-white/5 border border-white/10 rounded-2xl p-4">
                         <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 block mb-1">
                           Comissão Indireta (G2)
                         </span>
-                        <span className="text-xl font-black text-white font-mono">3%</span>
-                        <span className="text-[10px] text-slate-400 block mt-0.5">80% terça / 20% dez</span>
+                        <span className="text-xl font-black text-white font-mono">3% + 2%</span>
+                        <span className="text-[10px] text-slate-400 block mt-0.5">3% terça / 2% dez (5%)</span>
                       </div>
                     </div>
                   </div>
@@ -330,25 +364,33 @@ export default function AffiliateRenewals() {
                   <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6 pt-2">
                     <div className="space-y-2 max-w-xl">
                       <p className="text-xs text-slate-300 leading-relaxed">
-                        Torne-se um <strong>Microfranqueado CaZa dos Sorteios</strong> para construir sua rede e receber <strong>até 33% de comissão</strong> (G0 27%, G1 3%, G2 3%) sobre as vendas de seguros da sua equipe.
+                        Torne-se um <strong>Microfranqueado CaZa dos Sorteios</strong> para construir sua rede e receber <strong>até 33% de comissão</strong> (G0 21%+2%, G1 3%+2%, G2 3%+2%) sobre as vendas de seguros da sua equipe.
                       </p>
-                      <span className="text-[11px] font-mono font-bold text-amber-400 block">
-                        Investimento: R$ 150,00 / ano
-                      </span>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-[11px] font-mono font-bold text-emerald-400 bg-emerald-500/15 border border-emerald-500/30 px-3 py-1 rounded-xl">
+                          🎉 1º Ano Gratuito (R$ 0,00)
+                        </span>
+                        <span className="text-[11px] font-mono text-slate-400">
+                          (Renovação de R$ 150,00/ano somente após 12 meses)
+                        </span>
+                      </div>
                     </div>
                     <button
-                      onClick={() => handlePay({
-                        id: 'sub-microfranqueado',
-                        name: 'Licença Anual de Microfranqueado (MMN)',
-                        price: 150.00,
-                        duration_days: 365,
-                        plan_type: 'microfranqueado',
-                        image: '💼'
-                      })}
-                      className="bg-amber-500 hover:bg-amber-400 text-midnight font-black px-8 py-4 rounded-2xl text-xs uppercase tracking-widest transition-all shadow-xl shadow-amber-500/20 active:scale-95 cursor-pointer shrink-0 flex items-center gap-2"
+                      onClick={handleActivateFreeMicrofranqueado}
+                      disabled={activatingMf}
+                      className="bg-emerald-500 hover:bg-emerald-400 text-midnight font-black px-8 py-4 rounded-2xl text-xs uppercase tracking-widest transition-all shadow-xl shadow-emerald-500/20 active:scale-95 cursor-pointer shrink-0 flex items-center gap-2 disabled:opacity-50"
                     >
-                      Adquirir Licença Microfranqueado
-                      <ArrowRight size={16} />
+                      {activatingMf ? (
+                        <>
+                          <div className="size-4 border-2 border-midnight/30 border-t-midnight rounded-full animate-spin" />
+                          <span>Ativando...</span>
+                        </>
+                      ) : (
+                        <>
+                          <span>Ativar Licença Grátis (1º Ano)</span>
+                          <Sparkles size={16} />
+                        </>
+                      )}
                     </button>
                   </div>
                 )}

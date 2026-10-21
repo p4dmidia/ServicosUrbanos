@@ -854,8 +854,8 @@ export default function Cadastro() {
                                             }`}>
                                                 Produto A • Licença MMN
                                             </span>
-                                            <span className="text-[10px] font-black text-amber-700 uppercase bg-amber-100 px-2 py-0.5 rounded-md">
-                                                100 Primeiros Isentos
+                                            <span className="text-[10px] font-black text-emerald-700 uppercase bg-emerald-100 px-2 py-0.5 rounded-md flex items-center gap-1">
+                                                🎉 1º Ano Gratuito
                                             </span>
                                         </div>
 
@@ -864,10 +864,10 @@ export default function Cadastro() {
                                                 Microfranqueado Oficial
                                             </h4>
                                             <p className="text-[10px] font-bold text-indigo-600 uppercase tracking-wider mt-0.5">
-                                                Comissões em Rede (G0 27%, G1 3%, G2 3%)
+                                                Comissões em Rede (G0 21%+2%, G1 3%+2%, G2 3%+2%)
                                             </p>
                                             <p className="text-[11px] text-slate-500 font-medium leading-relaxed mt-2">
-                                                Construa sua rede comercial. Split 80% semanal às terças e 20% anual em 10 de Dezembro. Taxa de R$ 150/ano debitada do bônus anual em Dezembro.
+                                                Construa sua rede comercial com comissões de até 33%. 1º ano 100% gratuito (R$ 0,00). Renovação anual de R$ 150,00 somente a partir do 2º ano.
                                             </p>
                                         </div>
                                     </button>
@@ -1498,19 +1498,19 @@ export default function Cadastro() {
                                         <li className="flex gap-3 items-start">
                                             <div className="size-2 rounded-full bg-indigo-600 mt-2 shrink-0" />
                                             <span>
-                                                <strong className="text-midnight font-bold">2. Tabela de Comissionamento em 3 Níveis:</strong> O Microfranqueado recebe 33% de comissão bruta total sobre as vendas de seguros da sua rede: G0 (27%), G1 (3%) e G2 (3%).
+                                                <strong className="text-midnight font-bold">2. Tabela de Comissionamento em 3 Níveis:</strong> O Microfranqueado recebe 33% de comissão oficial total sobre as vendas de seguros da sua rede: G0 (21% semanal / 2% anual = 23%), G1 (3% semanal / 2% anual = 5%) e G2 (3% semanal / 2% anual = 5%).
                                             </span>
                                         </li>
                                         <li className="flex gap-3 items-start">
                                             <div className="size-2 rounded-full bg-indigo-600 mt-2 shrink-0" />
                                             <span>
-                                                <strong className="text-midnight font-bold">3. Split de Pagamento Operacional:</strong> Repasse semanal de 80% das comissões pago toda terça-feira (referente a vendas de segunda a sábado) e 20% anual acumulado para liquidação em 10 de Dezembro.
+                                                <strong className="text-midnight font-bold">3. Pagamento Operacional:</strong> Repasse semanal de 27% pago toda terça-feira (referente a vendas confirmadas e pagas de segunda a sábado da semana anterior) e 6% anual referente ao ciclo 01.11.25 a 30.11.26 pago em 10 de Dezembro.
                                             </span>
                                         </li>
                                         <li className="flex gap-3 items-start">
                                             <div className="size-2 rounded-full bg-indigo-600 mt-2 shrink-0" />
                                             <span>
-                                                <strong className="text-midnight font-bold">4. Regra dos 100 Primeiros Microfranqueados:</strong> Isenção inicial da taxa anual de franquia (R$ 150,00), a qual será descontada exclusivamente do bônus anual em Dezembro.
+                                                <strong className="text-midnight font-bold">4. Gratuito no 1º Ano:</strong> A taxa de licença anual de Microfranqueado é 100% gratuita no primeiro ano (R$ 0,00), permitindo a formação de rede sem cobrança inicial. A anuidade de R$ 150,00 ocorrerá somente a partir do segundo ano de vigência.
                                             </span>
                                         </li>
                                         <li className="flex gap-3 items-start">

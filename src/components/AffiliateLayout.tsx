@@ -358,7 +358,7 @@ export default function AffiliateLayout({ children, title, customBalance, custom
                 <span>Seja Microfranqueado</span>
               </div>
               <p className="text-[10px] text-amber-900/80 mb-2.5 leading-relaxed font-medium">
-                Monte sua equipe de vendas e receba <strong>33% de comissão</strong> (G0 27%, G1 3%, G2 3%) com split 80% semanal e 20% anual.
+                Monte sua equipe de vendas e receba <strong>33% de comissão</strong> (G0 21%+2%, G1 3%+2%, G2 3%+2%) com repasses 27% semanal e 6% anual.
               </p>
               <Link 
                 to="/afiliado/renovacoes" 

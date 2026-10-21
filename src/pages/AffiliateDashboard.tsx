@@ -425,22 +425,22 @@ export default function AffiliateDashboard() {
                   </h3>
                   <p className="text-slate-300 text-xs font-medium mt-3 leading-relaxed">
                     Você sabia que pode montar uma equipe de vendas e ganhar comissões em rede? 
-                    Microfranqueados recebem <strong>33% de comissão</strong> (G0 27%, G1 3%, G2 3%) sobre vendas do Seguro Vida Light!
+                    Microfranqueados recebem <strong>33% de comissão</strong> (G0 21%+2%, G1 3%+2%, G2 3%+2%) sobre vendas do Seguro Vida Light!
                   </p>
                 </div>
 
                 <div className="bg-white/10 border border-white/15 p-4 rounded-2xl space-y-2 backdrop-blur-md">
                   <div className="flex justify-between items-center text-xs">
                     <span className="text-slate-300">Comissão Direta (G0):</span>
-                    <span className="font-mono font-black text-emerald-400">27%</span>
+                    <span className="font-mono font-black text-emerald-400">21% + 2%</span>
                   </div>
                   <div className="flex justify-between items-center text-xs">
                     <span className="text-slate-300">Comissão Indireta (G1 e G2):</span>
-                    <span className="font-mono font-black text-sky-300">3% + 3%</span>
+                    <span className="font-mono font-black text-sky-300">3%+2% / 3%+2%</span>
                   </div>
                   <div className="flex justify-between items-center text-xs pt-1 border-t border-white/10">
                     <span className="text-slate-300">Pagamento:</span>
-                    <span className="font-black text-amber-300">80% Semanal / 20% Anual</span>
+                    <span className="font-black text-amber-300">27% Semanal / 6% Anual</span>
                   </div>
                 </div>
 
@@ -825,7 +825,7 @@ export default function AffiliateDashboard() {
               {stats?.networkSummary?.total || 0} <span className="text-sm font-normal text-slate-400">membros</span>
             </h3>
             <p className="text-[11px] text-slate-400 mt-2 font-medium">
-              G0: 27% | G1: 3% | G2: 3%
+              G0: 21%+2% | G1: 3%+2% | G2: 3%+2%
             </p>
           </motion.div>
 
@@ -849,10 +849,10 @@ export default function AffiliateDashboard() {
               </div>
             </div>
             <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">
-              {isLimit100Free ? 'Primeiros 100 Franqueados' : 'Anuidade R$ 150,00'}
+              {isLimit100Free ? '1º Ano Gratuito' : 'Anuidade R$ 150,00'}
             </p>
             <h3 className="text-base font-black text-midnight tracking-tight">
-              {isLimit100Free ? 'Isenção Inicial (Desconto 10/12)' : 'Taxa Anual Ativa'}
+              {isLimit100Free ? 'Licença Ativa (1º Ano Grátis)' : 'Taxa Anual Ativa'}
             </h3>
             <p className="text-[11px] text-slate-400 mt-2 font-medium">
               Direito exclusivo a comissões em rede.
@@ -922,9 +922,9 @@ export default function AffiliateDashboard() {
                
                <div className="space-y-6">
                  {[
-                   { label: 'G0 Direto (27%)', value: stats?.networkSummary?.g1 || 0, max: 100, color: 'bg-emerald-500' },
-                   { label: 'G1 Indireto (3%)', value: stats?.networkSummary?.g2 || 0, max: 200, color: 'bg-primary-blue' },
-                   { label: 'G2 Indireto (3%)', value: stats?.networkSummary?.g3 || 0, max: 300, color: 'bg-indigo-400' },
+                   { label: 'G0 Direto (21% + 2%)', value: stats?.networkSummary?.g1 || 0, max: 100, color: 'bg-emerald-500' },
+                   { label: 'G1 Indireto (3% + 2%)', value: stats?.networkSummary?.g2 || 0, max: 200, color: 'bg-primary-blue' },
+                   { label: 'G2 Indireto (3% + 2%)', value: stats?.networkSummary?.g3 || 0, max: 300, color: 'bg-indigo-400' },
                  ].map((item, i) => (
                    <div key={i} className="space-y-2">
                      <div className="flex justify-between text-xs font-bold uppercase tracking-widest">
@@ -1037,16 +1037,16 @@ export default function AffiliateDashboard() {
                         </td>
                         <td className="py-6 text-center pr-4">
                           {item.level === '0' || item.level === 0 ? (
-                            <span className="inline-flex items-center justify-center px-2.5 py-1 rounded-xl text-[10px] font-black bg-emerald-100 text-emerald-800 border border-emerald-200" title="G0 Direto (27%)">
-                              🟢 G0 (27%)
+                            <span className="inline-flex items-center justify-center px-2.5 py-1 rounded-xl text-[10px] font-black bg-emerald-100 text-emerald-800 border border-emerald-200" title="G0 Direto (21% + 2%)">
+                              🟢 G0 (21% + 2%)
                             </span>
                           ) : item.level === '1' || item.level === 1 ? (
-                            <span className="inline-flex items-center justify-center px-2.5 py-1 rounded-xl text-[10px] font-black bg-blue-100 text-blue-800 border border-blue-200" title="G1 Indireto (3%)">
-                              🔵 G1 (3%)
+                            <span className="inline-flex items-center justify-center px-2.5 py-1 rounded-xl text-[10px] font-black bg-blue-100 text-blue-800 border border-blue-200" title="G1 Indireto (3% + 2%)">
+                              🔵 G1 (3% + 2%)
                             </span>
                           ) : item.level === '2' || item.level === 2 ? (
-                            <span className="inline-flex items-center justify-center px-2.5 py-1 rounded-xl text-[10px] font-black bg-purple-100 text-purple-800 border border-purple-200" title="G2 Indireto (3%)">
-                              🟣 G2 (3%)
+                            <span className="inline-flex items-center justify-center px-2.5 py-1 rounded-xl text-[10px] font-black bg-purple-100 text-purple-800 border border-purple-200" title="G2 Indireto (3% + 2%)">
+                              🟣 G2 (3% + 2%)
                             </span>
                           ) : (
                             <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-50 text-emerald-600 rounded-full text-[10px] font-black uppercase">

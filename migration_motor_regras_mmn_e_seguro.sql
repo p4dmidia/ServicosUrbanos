@@ -1,9 +1,10 @@
 -- =========================================================================
 -- MIGRATION: ETAPA 2 - MOTOR DE REGRAS DE NEGÓCIO E COMISSIONAMENTO OFICIAL
 -- Alinhamento com a Nova Tabela Oficial Ganha & Ganha (33% Total):
---   G0 (Microfranqueado Direto): 27% Bruto (80% Semanal Terça / 20% Anual Dezembro)
---   G1 (Upline Nível 1): 3% Bruto (80% Semanal Terça / 20% Anual Dezembro)
---   G2 (Upline Nível 2): 3% Bruto (80% Semanal Terça / 20% Anual Dezembro)
+--   G0 (Microfranqueado Direto): 21% Semanal (Terça) + 2% Anual (10/Dez) = 23% Total
+--   G1 (Upline Nível 1): 3% Semanal (Terça) + 2% Anual (10/Dez) = 5% Total
+--   G2 (Upline Nível 2): 3% Semanal (Terça) + 2% Anual (10/Dez) = 5% Total
+--   Total: 27% Semanal + 6% Anual = 33% Total Geral
 --
 -- Regras Fundamentais:
 -- 1. APENAS MICROFRANQUEADOS RECEBEM COMISSÃO DE REDE.
@@ -45,11 +46,17 @@ DECLARE
     v_dezembro DATE;
 BEGIN
     v_ano := EXTRACT(YEAR FROM data_venda);
-    v_dezembro := (v_ano || '-12-10')::date;
     
-    -- Se a venda ocorreu após 30/11 do ano atual, entra no ciclo do ano seguinte
+    -- O ciclo inicial vai de 01/11/2025 a 30/11/2026, com pagamento em 10/12/2026
+    IF v_ano <= 2025 THEN
+        RETURN '2026-12-10'::date;
+    END IF;
+
+    -- Se a venda ocorreu após 30/11 do ano corrente (em dezembro), entra no ciclo do ano seguinte
     IF data_venda > (v_ano || '-11-30')::date THEN
         v_dezembro := ((v_ano + 1) || '-12-10')::date;
+    ELSE
+        v_dezembro := (v_ano || '-12-10')::date;
     END IF;
     
     RETURN v_dezembro;
@@ -308,9 +315,9 @@ BEGIN
 
             -- APENAS SE FOR MICROFRANQUEADO (Afiliados comuns NÃO recebem comissão)
             IF v_microfranqueado_id IS NOT NULL THEN
-                v_bruto_g0 := ROUND(v_amount * 0.27, 2);
-                v_semanal_g0 := ROUND(v_bruto_g0 * 0.80, 2);
-                v_anual_g0 := ROUND(v_bruto_g0 * 0.20, 2);
+                v_semanal_g0 := ROUND(v_amount * 0.21, 2); -- 21% Semanal
+                v_anual_g0   := ROUND(v_amount * 0.02, 2); -- 2% Anual
+                v_bruto_g0   := v_semanal_g0 + v_anual_g0; -- 23% Total
 
                 -- Se a licença estiver ativa, libera normal; se estiver em atraso, bloqueia por inadimplência
                 IF v_licenca_status = 'ativa' AND v_mf_status = 'ativo' THEN
@@ -347,7 +354,7 @@ BEGIN
                     NEW.customer_id,
                     0,
                     v_amount,
-                    27.00,
+                    23.00,
                     v_bruto_g0,
                     v_semanal_g0,
                     v_anual_g0,
@@ -368,10 +375,10 @@ BEGIN
                 -- Transações financeiras para relatórios consolidados
                 INSERT INTO public.transactions (profile_id, type, description, amount, status, order_id)
                 VALUES 
-                (v_vendedor_profile_id, 'commission', 'Comissão Semanal G0 (80% de 27%) - Terça ' || TO_CHAR(v_data_terca, 'DD/MM') || ' - Pedido #' || NEW.id, v_semanal_g0, CASE WHEN v_status_comissao = 'pendente' THEN 'pending' ELSE 'failed' END, NEW.id),
-                (v_vendedor_profile_id, 'commission', 'Comissão Anual G0 (20% de 27%) - Dezembro - Pedido #' || NEW.id, v_anual_g0, CASE WHEN v_status_comissao = 'pendente' THEN 'pending' ELSE 'failed' END, NEW.id);
+                (v_vendedor_profile_id, 'commission', 'Comissão Semanal G0 (21%) - Terça ' || TO_CHAR(v_data_terca, 'DD/MM') || ' - Pedido #' || NEW.id, v_semanal_g0, CASE WHEN v_status_comissao = 'pendente' THEN 'pending' ELSE 'failed' END, NEW.id),
+                (v_vendedor_profile_id, 'commission', 'Comissão Anual G0 (2%) - Dezembro - Pedido #' || NEW.id, v_anual_g0, CASE WHEN v_status_comissao = 'pendente' THEN 'pending' ELSE 'failed' END, NEW.id);
 
-                -- 2. IDENTIFICAR O UPLINE NÍVEL 1 (G1 = 3%)
+                -- 2. IDENTIFICAR O UPLINE NÍVEL 1 (G1 = 3% SEMANAL / 2% ANUAL)
                 SELECT referred_by INTO v_upline1_profile_id FROM public.profiles WHERE id = v_vendedor_profile_id;
                 
                 IF v_upline1_profile_id IS NOT NULL THEN
@@ -384,9 +391,9 @@ BEGIN
 
                     -- Apenas comissiona se Upline 1 for Microfranqueado
                     IF v_upline1_mf_id IS NOT NULL THEN
-                        v_bruto_g1 := ROUND(v_amount * 0.03, 2);
-                        v_semanal_g1 := ROUND(v_bruto_g1 * 0.80, 2);
-                        v_anual_g1 := ROUND(v_bruto_g1 * 0.20, 2);
+                        v_semanal_g1 := ROUND(v_amount * 0.03, 2); -- 3% Semanal
+                        v_anual_g1   := ROUND(v_amount * 0.02, 2); -- 2% Anual
+                        v_bruto_g1   := v_semanal_g1 + v_anual_g1; -- 5% Total
 
                         IF v_upline1_licenca_status = 'ativa' THEN
                             v_status_comissao := 'pendente';
@@ -399,7 +406,7 @@ BEGIN
                             valor_bruto, valor_semanal_80, valor_anual_20, status, semana_inicio, semana_fim,
                             data_prevista_terca, data_prevista_dezembro
                         ) VALUES (
-                            NEW.id, v_upline1_mf_id, NEW.customer_id, 1, v_amount, 3.00,
+                            NEW.id, v_upline1_mf_id, NEW.customer_id, 1, v_amount, 5.00,
                             v_bruto_g1, v_semanal_g1, v_anual_g1, v_status_comissao, v_semana_inicio, v_semana_fim,
                             v_data_terca, v_data_dezembro
                         ) RETURNING id INTO v_comissao_id;
@@ -412,10 +419,10 @@ BEGIN
 
                         INSERT INTO public.transactions (profile_id, type, description, amount, status, order_id)
                         VALUES 
-                        (v_upline1_profile_id, 'commission', 'Comissão Semanal G1 (80% de 3%) - Terça ' || TO_CHAR(v_data_terca, 'DD/MM') || ' - Pedido #' || NEW.id, v_semanal_g1, CASE WHEN v_status_comissao = 'pendente' THEN 'pending' ELSE 'failed' END, NEW.id),
-                        (v_upline1_profile_id, 'commission', 'Comissão Anual G1 (20% de 3%) - Dezembro - Pedido #' || NEW.id, v_anual_g1, CASE WHEN v_status_comissao = 'pendente' THEN 'pending' ELSE 'failed' END, NEW.id);
+                        (v_upline1_profile_id, 'commission', 'Comissão Semanal G1 (3%) - Terça ' || TO_CHAR(v_data_terca, 'DD/MM') || ' - Pedido #' || NEW.id, v_semanal_g1, CASE WHEN v_status_comissao = 'pendente' THEN 'pending' ELSE 'failed' END, NEW.id),
+                        (v_upline1_profile_id, 'commission', 'Comissão Anual G1 (2%) - Dezembro - Pedido #' || NEW.id, v_anual_g1, CASE WHEN v_status_comissao = 'pendente' THEN 'pending' ELSE 'failed' END, NEW.id);
 
-                        -- 3. IDENTIFICAR O UPLINE NÍVEL 2 (G2 = 3%)
+                        -- 3. IDENTIFICAR O UPLINE NÍVEL 2 (G2 = 3% SEMANAL / 2% ANUAL)
                         SELECT referred_by INTO v_upline2_profile_id FROM public.profiles WHERE id = v_upline1_profile_id;
                         
                         IF v_upline2_profile_id IS NOT NULL THEN
@@ -427,9 +434,9 @@ BEGIN
                             LIMIT 1;
 
                             IF v_upline2_mf_id IS NOT NULL THEN
-                                v_bruto_g2 := ROUND(v_amount * 0.03, 2);
-                                v_semanal_g2 := ROUND(v_bruto_g2 * 0.80, 2);
-                                v_anual_g2 := ROUND(v_bruto_g2 * 0.20, 2);
+                                v_semanal_g2 := ROUND(v_amount * 0.03, 2); -- 3% Semanal
+                                v_anual_g2   := ROUND(v_amount * 0.02, 2); -- 2% Anual
+                                v_bruto_g2   := v_semanal_g2 + v_anual_g2; -- 5% Total
 
                                 IF v_upline2_licenca_status = 'ativa' THEN
                                     v_status_comissao := 'pendente';
@@ -442,7 +449,7 @@ BEGIN
                                     valor_bruto, valor_semanal_80, valor_anual_20, status, semana_inicio, semana_fim,
                                     data_prevista_terca, data_prevista_dezembro
                                 ) VALUES (
-                                    NEW.id, v_upline2_mf_id, NEW.customer_id, 2, v_amount, 3.00,
+                                    NEW.id, v_upline2_mf_id, NEW.customer_id, 2, v_amount, 5.00,
                                     v_bruto_g2, v_semanal_g2, v_anual_g2, v_status_comissao, v_semana_inicio, v_semana_fim,
                                     v_data_terca, v_data_dezembro
                                 ) RETURNING id INTO v_comissao_id;
@@ -455,8 +462,8 @@ BEGIN
 
                                 INSERT INTO public.transactions (profile_id, type, description, amount, status, order_id)
                                 VALUES 
-                                (v_upline2_profile_id, 'commission', 'Comissão Semanal G2 (80% de 3%) - Terça ' || TO_CHAR(v_data_terca, 'DD/MM') || ' - Pedido #' || NEW.id, v_semanal_g2, CASE WHEN v_status_comissao = 'pendente' THEN 'pending' ELSE 'failed' END, NEW.id),
-                                (v_upline2_profile_id, 'commission', 'Comissão Anual G2 (20% de 3%) - Dezembro - Pedido #' || NEW.id, v_anual_g2, CASE WHEN v_status_comissao = 'pendente' THEN 'pending' ELSE 'failed' END, NEW.id);
+                                (v_upline2_profile_id, 'commission', 'Comissão Semanal G2 (3%) - Terça ' || TO_CHAR(v_data_terca, 'DD/MM') || ' - Pedido #' || NEW.id, v_semanal_g2, CASE WHEN v_status_comissao = 'pendente' THEN 'pending' ELSE 'failed' END, NEW.id),
+                                (v_upline2_profile_id, 'commission', 'Comissão Anual G2 (2%) - Dezembro - Pedido #' || NEW.id, v_anual_g2, CASE WHEN v_status_comissao = 'pendente' THEN 'pending' ELSE 'failed' END, NEW.id);
                             END IF;
                         END IF;
                     END IF;

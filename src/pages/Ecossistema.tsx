@@ -200,12 +200,12 @@ export default function Ecossistema() {
                   </div>
                   <h3 className="text-xl font-bold text-white mb-3">4. Microfranquia Comercial</h3>
                   <p className="text-slate-400 text-sm leading-relaxed font-medium">
-                    Canal exclusivo para empreendedores. Com a licença de Microfranqueado, monte sua equipe e receba 33% de comissão em 3 níveis (G0 27%, G1 3%, G2 3%) com repasses semanais e bônus anual.
+                    Canal exclusivo para empreendedores. Com a licença de Microfranqueado, monte sua equipe e receba 33% de comissão em 3 níveis (G0 21%+2%, G1 3%+2%, G2 3%+2%) com repasses semanais (27%) e bônus anual (6%).
                   </p>
                 </div>
                 <div className="pt-6 border-t border-white/5 mt-6 text-xs text-slate-500 font-bold uppercase flex justify-between">
                   <span>Microfranquia MMN</span>
-                  <span className="text-accent flex items-center gap-0.5">Split 80/20 <ArrowUpRight size={12} /></span>
+                  <span className="text-accent flex items-center gap-0.5">27% Semanal / 6% Anual <ArrowUpRight size={12} /></span>
                 </div>
               </motion.div>
             </div>
@@ -231,7 +231,7 @@ export default function Ecossistema() {
                 <div className="text-xs font-black text-accent uppercase tracking-widest mb-4">Passo 01</div>
                 <h4 className="text-xl font-black text-white mb-4">Licença de Microfranquia</h4>
                 <p className="text-slate-400 text-sm font-medium leading-relaxed">
-                  O Microfranqueado adquire a licença comercial anual para formar equipe e acessar ferramentas de divulgação exclusivas.
+                  O Microfranqueado ativa sua licença comercial com 1º ano 100% gratuito para formar equipe e acessar ferramentas exclusivas.
                 </p>
               </div>
 

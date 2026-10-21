@@ -8646,7 +8646,8 @@ export const businessRules = {
           microfranqueado: null,
           licenca: null,
           isLicenseActive: false,
-          isLimit100Free: false
+          isLimit100Free: false,
+          isPrimeiros100: false
         };
       }
 
@@ -8660,6 +8661,7 @@ export const businessRules = {
         licenca: activeLicenca,
         isLicenseActive,
         isLimit100Free: !!mf.limit_100_free,
+        isPrimeiros100: !!mf.limit_100_free,
         registrationFeeStatus: mf.registration_fee_status,
         status: mf.status
       };
@@ -9018,18 +9020,50 @@ export const businessRules = {
       const totalCount = count || 0;
       const isPrimeiros100 = totalCount < 100;
 
-      // 2. Inserir na tabela microfranqueados
+      let nomeCompleto = params.nome_completo;
+      let cpf = params.cpf;
+      let razaoSocial = params.razao_social || params.nome_completo;
+
+      // Se nome ou CPF não foram passados diretamente, buscar do profile
+      if (!nomeCompleto || !cpf) {
+        const { data: prof } = await supabase
+          .from('profiles')
+          .select('full_name, cpf, store_name')
+          .eq('id', params.profile_id)
+          .maybeSingle();
+
+        if (prof) {
+          if (!nomeCompleto && prof.full_name) nomeCompleto = prof.full_name;
+          if (!cpf && prof.cpf) cpf = prof.cpf;
+          if (!razaoSocial && (prof.store_name || prof.full_name)) {
+            razaoSocial = prof.store_name || prof.full_name;
+          }
+        }
+      }
+
+      // Atualizar CPF no perfil caso ainda não estivesse cadastrado
+      if (cpf) {
+        try {
+          await supabase
+            .from('profiles')
+            .update({ cpf })
+            .eq('id', params.profile_id);
+        } catch (cpfErr) {
+          console.warn('Aviso ao sincronizar CPF no perfil:', cpfErr);
+        }
+      }
+
+      // 2. Inserir ou atualizar na tabela microfranqueados (conforme schema real do PostgreSQL)
       const { data: mf, error: mfErr } = await supabase
         .from('microfranqueados')
         .upsert({
           profile_id: params.profile_id,
-          razao_social: params.razao_social || params.nome_completo,
-          nome_fantasia: params.nome_completo,
+          razao_social: razaoSocial || nomeCompleto || 'Microfranqueado Oficial',
+          nome_fantasia: nomeCompleto || 'Microfranqueado Oficial',
           cnpj: params.cnpj || null,
-          cpf: params.cpf || null,
-          is_primeiros_100: isPrimeiros100,
-          registration_fee_status: isPrimeiros100 ? 'isento_inicial_desconto_dezembro' : 'pendente',
-          registration_fee_amount: 150.00,
+          limit_100_free: true,
+          registration_fee_status: 'isento',
+          registration_fee_amount: 0.00,
           status: 'ativo'
         }, { onConflict: 'profile_id' })
         .select()
@@ -9037,25 +9071,41 @@ export const businessRules = {
 
       if (mfErr) throw mfErr;
 
-      // 3. Gerar licença anual
+      // 3. Gerar licença anual (1º Ano 100% Gratuito)
       if (mf?.id) {
         const now = new Date();
         const oneYearLater = new Date();
         oneYearLater.setFullYear(oneYearLater.getFullYear() + 1);
 
-        await supabase
+        const { data: existingLic } = await supabase
           .from('licencas_mmn')
-          .insert({
-            microfranqueado_id: mf.id,
-            tipo_licenca: isPrimeiros100 ? 'anual_primeiros_100' : 'anual_padrao',
-            valor: 150.00,
-            status: 'ativa',
-            data_inicio: now.toISOString(),
-            data_fim: oneYearLater.toISOString()
-          });
+          .select('id')
+          .eq('microfranqueado_id', mf.id)
+          .maybeSingle();
+
+        if (!existingLic) {
+          const { error: licErr } = await supabase
+            .from('licencas_mmn')
+            .insert({
+              microfranqueado_id: mf.id,
+              profile_id: params.profile_id,
+              status: 'ativa',
+              validade_meses: 12,
+              valor: 0.00,
+              gratis_100_primeiros: true,
+              cobranca_dezembro: false,
+              ano_referencia: now.getFullYear(),
+              data_inicio: now.toISOString(),
+              data_fim: oneYearLater.toISOString()
+            });
+
+          if (licErr) {
+            console.warn('Aviso ao gerar licença MMN:', licErr);
+          }
+        }
 
         // 4. Gravar Aceite Digital MMN com Auditoria
-        await supabase
+        const { error: aceiteErr } = await supabase
           .from('aceites_mmn')
           .insert({
             microfranqueado_id: mf.id,
@@ -9063,19 +9113,39 @@ export const businessRules = {
             versao_documento: '1.0',
             hash_texto: params.termo_hash || 'SHA256-CONTRATO-MICROFRANQUEADO-MMN-V1.0',
             ip: params.ip || '127.0.0.1',
-            user_agent: params.user_agent || navigator.userAgent,
+            user_agent: params.user_agent || (typeof navigator !== 'undefined' ? navigator.userAgent : 'Server'),
             data_hora: now.toISOString()
           });
 
+        if (aceiteErr) {
+          console.warn('Aviso ao registrar aceite MMN:', aceiteErr);
+        }
+
         // 5. Vincular rede se houver upline
-        if (params.upline_id) {
-          await supabase
-            .from('rede_mmn')
-            .upsert({
-              microfranqueado_id: mf.id,
-              upline_microfranqueado_id: params.upline_id,
-              nivel: 1
-            }, { onConflict: 'microfranqueado_id' });
+        if (params.upline_id && params.upline_id !== params.profile_id) {
+          try {
+            let uplineMfId = params.upline_id;
+            const { data: uplineMf } = await supabase
+              .from('microfranqueados')
+              .select('id')
+              .eq('profile_id', params.upline_id)
+              .maybeSingle();
+
+            if (uplineMf?.id) {
+              uplineMfId = uplineMf.id;
+            }
+
+            await supabase
+              .from('rede_mmn')
+              .upsert({
+                microfranqueado_id: uplineMfId,
+                indicado_profile_id: params.profile_id,
+                nivel: 1,
+                tipo_indicado: 'microfranqueado'
+              }, { onConflict: 'microfranqueado_id,indicado_profile_id,nivel' });
+          } catch (redeErr) {
+            console.warn('Aviso ao vincular rede MMN:', redeErr);
+          }
         }
       }
 

@@ -59,10 +59,10 @@ export interface ComissaoMMN {
   origem_profile_id: string;
   nivel: 0 | 1 | 2;
   valor_venda: number;
-  percentual_bruto: number; // 27% para G0, 3% para G1, 3% para G2
+  percentual_bruto: number; // 23% para G0 (21%+2%), 5% para G1 (3%+2%), 5% para G2 (3%+2%)
   valor_bruto: number;
-  valor_semanal_80: number; // 80% pago na terça-feira
-  valor_anual_20: number; // 20% pago em 10 de dezembro
+  valor_semanal_80: number; // Semanal pago na terça-feira (21% G0, 3% G1, 3% G2)
+  valor_anual_20: number; // Anual pago em 10 de dezembro (2% G0, 2% G1, 2% G2)
   status: ComissaoMMNStatus;
   semana_inicio?: string;
   semana_fim?: string;

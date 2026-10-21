@@ -23,7 +23,8 @@ import {
   Trash2,
   ShieldCheck,
   ShoppingBag,
-  Package
+  Package,
+  Sparkles
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import toast from 'react-hot-toast';
@@ -38,7 +39,19 @@ export default function Checkout() {
   const [cartItems, setCartItems] = useState<any[]>(() => {
     try {
       const saved = localStorage.getItem('urbashop_cart');
-      return saved ? JSON.parse(saved) : [];
+      const parsed = saved ? JSON.parse(saved) : [];
+      let updated = false;
+      const normalized = parsed.map((item: any) => {
+        if (item.id === 'sub-microfranqueado' || item.plan_type === 'microfranqueado' || (item.name && item.name.toLowerCase().includes('microfranqueado'))) {
+          if (item.price !== 0) updated = true;
+          return { ...item, price: 0 };
+        }
+        return item;
+      });
+      if (updated) {
+        localStorage.setItem('urbashop_cart', JSON.stringify(normalized));
+      }
+      return normalized;
     } catch {
       return [];
     }
@@ -54,6 +67,27 @@ export default function Checkout() {
   
   const cartCount = cartItems.reduce((acc, item) => acc + item.quantity, 0);
   const hasSubscription = cartItems.some(item => item.is_subscription);
+  const isOnlyMicrofranqueado = cartItems.length > 0 && cartItems.every(item => 
+    item.id === 'sub-microfranqueado' || item.plan_type === 'microfranqueado' || (item.name && item.name.toLowerCase().includes('microfranqueado'))
+  );
+  const hasMicrofranqueado = cartItems.some(item => 
+    item.id === 'sub-microfranqueado' || item.plan_type === 'microfranqueado' || (item.name && item.name.toLowerCase().includes('microfranqueado'))
+  );
+
+  useEffect(() => {
+    let updated = false;
+    const normalized = cartItems.map(item => {
+      if ((item.id === 'sub-microfranqueado' || item.plan_type === 'microfranqueado' || (item.name && item.name.toLowerCase().includes('microfranqueado'))) && item.price !== 0) {
+        updated = true;
+        return { ...item, price: 0 };
+      }
+      return item;
+    });
+    if (updated) {
+      setCartItems(normalized);
+      localStorage.setItem('urbashop_cart', JSON.stringify(normalized));
+    }
+  }, [cartItems]);
 
   const markAllAsRead = () => {
     setNotifications(notifications.map(n => ({ ...n, read: true })));
@@ -107,6 +141,8 @@ export default function Checkout() {
     }
   }, [profile]);
 
+  const effectiveNeedsProfileUpdate = !isOnlyMicrofranqueado && needsProfileUpdate;
+
   const maxBirthDate = (() => {
     const d = new Date();
     d.setFullYear(d.getFullYear() - 18);
@@ -114,7 +150,7 @@ export default function Checkout() {
   })();
 
   const effectiveBirthDate = birthDate || profile?.birth_date;
-  const isUnderage = effectiveBirthDate ? !businessRules.isAtLeast18YearsOld(effectiveBirthDate) : false;
+  const isUnderage = (!isOnlyMicrofranqueado && effectiveBirthDate) ? !businessRules.isAtLeast18YearsOld(effectiveBirthDate) : false;
 
   const [availableLocations, setAvailableLocations] = useState<any[]>([]);
   const [selectedLocationId, setSelectedLocationId] = useState<string>('');
@@ -414,7 +450,7 @@ export default function Checkout() {
     }
 
     if (!acceptTerms) {
-      toast.error('Você precisa aceitar os Termos de Adesão do Seguro.');
+      toast.error(isOnlyMicrofranqueado ? 'Você precisa aceitar os Termos de Adesão do Microfranqueado.' : 'Você precisa aceitar os Termos de Adesão do Seguro.');
       return;
     }
 
@@ -423,13 +459,13 @@ export default function Checkout() {
       return;
     }
 
-    if (needsProfileUpdate && (!birthDate || !gender)) {
+    if (effectiveNeedsProfileUpdate && (!birthDate || !gender)) {
       toast.error('Por favor, preencha sua data de nascimento e sexo.');
       return;
     }
 
     const currentBirthDate = birthDate || profile.birth_date;
-    if (currentBirthDate && !businessRules.isAtLeast18YearsOld(currentBirthDate)) {
+    if (!isOnlyMicrofranqueado && currentBirthDate && !businessRules.isAtLeast18YearsOld(currentBirthDate)) {
       toast.error('Compra bloqueada: é necessário ter pelo menos 18 anos completos (exigência da seguradora MBM).');
       return;
     }
@@ -458,7 +494,7 @@ export default function Checkout() {
       }
     }
 
-    if (paymentMethod === 'wallet') {
+    if (paymentMethod === 'wallet' && total > 0) {
       if (walletBalance < 10) {
         toast.error('Saldo mínimo de R$ 10,00 necessário para usar a carteira.');
         return;
@@ -474,7 +510,48 @@ export default function Checkout() {
     setIsProcessing(true);
 
     try {
-      if (needsProfileUpdate) {
+      // Caso 1: Ativação Direta de Microfranqueado (1º Ano Gratuito - R$ 0,00)
+      if (isOnlyMicrofranqueado || (hasSubscription && total === 0)) {
+        const loadingToast = toast.loading('Ativando sua Licença de Microfranqueado...');
+        const res = await businessRules.cadastrarMicrofranqueado({
+          profile_id: authUser.id,
+          nome_completo: profile.full_name || 'Microfranqueado Oficial',
+          cpf: profile.cpf,
+          razao_social: profile.full_name,
+          ip: '127.0.0.1',
+          user_agent: navigator.userAgent,
+          termo_hash: 'SHA256-ACEITE-MICROFRANQUEADO-1-ANO-GRATIS'
+        });
+
+        if (!res?.success) {
+          toast.dismiss(loadingToast);
+          toast.error('Erro ao ativar licença: ' + (res?.error || 'Tente novamente.'));
+          setIsProcessing(false);
+          isSubmittingRef.current = false;
+          return;
+        }
+
+        // Criar registro de pedido gratuito
+        await supabase.from('orders').insert([{
+          customer_id: authUser.id,
+          customer_name: profile.full_name,
+          customer_initial: profile.full_name?.[0] || 'U',
+          amount: 0,
+          status: 'Concluído',
+          items: cartItems,
+          cashback_amount: 0,
+          shipping_address: 'Licenciamento MMN Digital (1º Ano Gratuito)',
+          payment_method: 'Ativação Gratuita (1º Ano)'
+        }]);
+
+        toast.dismiss(loadingToast);
+        toast.success('🎉 Licença de Microfranqueado ativada com sucesso! 1º ano 100% gratuito.');
+        localStorage.removeItem('urbashop_cart');
+        navigate('/afiliado/renovacoes');
+        return;
+      }
+
+      if (effectiveNeedsProfileUpdate) {
         const { error: updateError } = await supabase
           .from('profiles')
           .update({
@@ -492,7 +569,7 @@ export default function Checkout() {
       }
 
       // Bloqueia compra/recompra de plano se o usuário já possuir assinatura ativa antes da abertura do mês de cobrança da renovação
-      if (hasSubscription && authUser) {
+      if (hasSubscription && !isOnlyMicrofranqueado && authUser) {
         const { data: activeSub } = await supabase
           .from('subscriptions')
           .select('*')
@@ -1143,8 +1220,14 @@ export default function Checkout() {
                     <CheckCircle2 size={24} />
                   </div>
                   <div>
-                    <h2 className="text-base font-black text-emerald-950 uppercase italic tracking-tight">Ativação Digital</h2>
-                    <p className="text-xs text-slate-500 font-bold uppercase tracking-wider mt-1">Este plano de licenciamento será ativado de forma imediata na sua conta após a confirmação de pagamento.</p>
+                    <h2 className="text-base font-black text-emerald-950 uppercase italic tracking-tight">
+                      {isOnlyMicrofranqueado ? 'Ativação Digital • 1º Ano Gratuito' : 'Ativação Digital'}
+                    </h2>
+                    <p className="text-xs text-slate-500 font-bold uppercase tracking-wider mt-1">
+                      {isOnlyMicrofranqueado 
+                        ? 'Sua licença anual de Microfranqueado é 100% gratuita no primeiro ano. O acesso e os ganhos de rede serão ativados de imediato.' 
+                        : 'Este plano de licenciamento será ativado de forma imediata na sua conta após a confirmação de pagamento.'}
+                    </p>
                   </div>
                 </div>
               </motion.section>
@@ -1167,22 +1250,41 @@ export default function Checkout() {
               </div>
 
               <div className="space-y-4">
-                <label className="flex items-center justify-between p-4 rounded-xl border-2 border-primary-blue bg-blue-50/50 cursor-default">
-                  <div className="flex items-center gap-4">
-                    <div className="size-5 rounded-full border-2 border-primary-blue flex items-center justify-center">
-                      <div className="size-2.5 bg-primary-blue rounded-full" />
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <div className="size-8 bg-blue-100 rounded-lg flex items-center justify-center text-primary-blue">
-                        <TrendingUp size={20} />
+                {isOnlyMicrofranqueado || total === 0 ? (
+                  <div className="flex items-center justify-between p-4 rounded-xl border-2 border-emerald-500 bg-emerald-50/50 cursor-default">
+                    <div className="flex items-center gap-4">
+                      <div className="size-5 rounded-full border-2 border-emerald-500 flex items-center justify-center">
+                        <div className="size-2.5 bg-emerald-500 rounded-full" />
                       </div>
-                      <div>
-                        <p className="font-black text-midnight uppercase tracking-tight">Pagamento via PIX</p>
-                        <p className="text-[10px] text-slate-400 font-bold uppercase">QR Code gerado na hora</p>
+                      <div className="flex items-center gap-3">
+                        <div className="size-8 bg-emerald-100 rounded-lg flex items-center justify-center text-emerald-600">
+                          <Sparkles size={20} />
+                        </div>
+                        <div>
+                          <p className="font-black text-midnight uppercase tracking-tight">Ativação Gratuita (1º Ano Isento)</p>
+                          <p className="text-[10px] text-emerald-700 font-bold uppercase">Sem cobrança inicial • R$ 0,00</p>
+                        </div>
                       </div>
                     </div>
                   </div>
-                </label>
+                ) : (
+                  <label className="flex items-center justify-between p-4 rounded-xl border-2 border-primary-blue bg-blue-50/50 cursor-default">
+                    <div className="flex items-center gap-4">
+                      <div className="size-5 rounded-full border-2 border-primary-blue flex items-center justify-center">
+                        <div className="size-2.5 bg-primary-blue rounded-full" />
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <div className="size-8 bg-blue-100 rounded-lg flex items-center justify-center text-primary-blue">
+                          <TrendingUp size={20} />
+                        </div>
+                        <div>
+                          <p className="font-black text-midnight uppercase tracking-tight">Pagamento via PIX</p>
+                          <p className="text-[10px] text-slate-400 font-bold uppercase">QR Code gerado na hora</p>
+                        </div>
+                      </div>
+                    </div>
+                  </label>
+                )}
               </div>
             </motion.section>
           </div>
@@ -1208,7 +1310,11 @@ export default function Checkout() {
                     </div>
                     <div className="flex-1 min-w-0">
                       <h4 className="text-xs font-bold text-midnight truncate">{item.name}</h4>
-                      <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">{item.quantity}x R$ {item.price.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                      <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">
+                        {item.price === 0 
+                          ? '1x Gratuito (1º Ano Isento)' 
+                          : `${item.quantity}x R$ ${item.price.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`}
+                      </p>
                     </div>
                   </div>
                 ))}
@@ -1235,7 +1341,9 @@ export default function Checkout() {
                 <div className="flex justify-between items-center pt-3 border-t border-slate-100">
                   <span className="text-lg font-black text-midnight uppercase tracking-tighter">Total</span>
                   <span className="text-2xl font-black text-primary-blue">
-                    R$ {(subtotal + (shippingMethod === 'sedex' ? shippingCost * 1.8 : shippingMethod === 'pac' ? shippingCost : 0)).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                    {total === 0 
+                      ? 'R$ 0,00 (Grátis)' 
+                      : `R$ ${(subtotal + (shippingMethod === 'sedex' ? shippingCost * 1.8 : shippingMethod === 'pac' ? shippingCost : 0)).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`}
                   </span>
                 </div>
 
@@ -1271,7 +1379,7 @@ export default function Checkout() {
               )}
 
               {/* Coleta de Dados Adicionais se o perfil estiver incompleto */}
-              {needsProfileUpdate && (
+              {effectiveNeedsProfileUpdate && (
                 <div className="bg-slate-50 border border-slate-100 rounded-2xl p-5 mb-4 space-y-4">
                   <p className="text-[10px] font-black text-amber-600 uppercase tracking-widest block italic leading-tight">
                     * Informações obrigatórias adicionais para a ativação do seu seguro de acidentes pessoais junto à MBM Seguradora:
@@ -1320,19 +1428,29 @@ export default function Checkout() {
                     className="mt-1 size-4 rounded border-slate-300 text-primary-blue focus:ring-primary-blue cursor-pointer"
                   />
                   <div className="text-[10px] font-bold text-slate-500 leading-relaxed uppercase tracking-tight">
-                    Li e concordo com os <span className="text-primary-blue font-black underline">Termos de Adesão do Seguro de Acidentes Pessoais MBM</span> (Cobertura de R$ 5.000,00) e concordo em ceder os direitos de participação nos sorteios semanais da Loteria Federal.
+                    {isOnlyMicrofranqueado ? (
+                      <>
+                        Li e concordo com os <span className="text-primary-blue font-black underline">Termos de Adesão do Microfranqueado</span> (Licença Comercial MMN, regras de expansão e comissionamento G0 21%+2%, G1 3%+2%, G2 3%+2%, totalizando 27% semanal e 6% anual).
+                      </>
+                    ) : (
+                      <>
+                        Li e concordo com os <span className="text-primary-blue font-black underline">Termos de Adesão do Seguro de Acidentes Pessoais MBM</span> (Cobertura de R$ 5.000,00) e concordo em ceder os direitos de participação nos sorteios semanais da Loteria Federal.
+                      </>
+                    )}
                   </div>
                 </label>
               </div>
 
               <button 
                 onClick={handleCheckout}
-                disabled={isProcessing || isUnderage || (!hasSubscription && (!shippingMethod || (shippingMethod === 'pickup' && !selectedLocationId))) || !acceptTerms || (needsProfileUpdate && (!birthDate || !gender))}
+                disabled={isProcessing || isUnderage || (!hasSubscription && (!shippingMethod || (shippingMethod === 'pickup' && !selectedLocationId))) || !acceptTerms || (effectiveNeedsProfileUpdate && (!birthDate || !gender))}
                 style={{ pointerEvents: (isProcessing || isUnderage) ? 'none' : 'auto' }}
                 className={`w-full py-4 rounded-xl font-black text-sm uppercase tracking-widest transition-all shadow-lg flex items-center justify-center gap-2 ${
                   isUnderage 
                     ? 'bg-rose-600/90 text-white cursor-not-allowed shadow-rose-600/20' 
-                    : 'bg-primary-blue hover:bg-blue-600 text-white shadow-primary-blue/30 disabled:opacity-50 disabled:cursor-not-allowed'
+                    : (isOnlyMicrofranqueado || total === 0)
+                      ? 'bg-emerald-500 hover:bg-emerald-600 text-white shadow-emerald-500/30'
+                      : 'bg-primary-blue hover:bg-blue-600 text-white shadow-primary-blue/30 disabled:opacity-50 disabled:cursor-not-allowed'
                 }`}
               >
                 {isProcessing ? (
@@ -1342,6 +1460,8 @@ export default function Checkout() {
                   </>
                 ) : isUnderage ? (
                   'Compra Bloqueada (Menor de 18 anos)'
+                ) : (isOnlyMicrofranqueado || total === 0) ? (
+                  'Ativar Licença Gratuitamente'
                 ) : paymentMethod === 'wallet' ? (
                   'Pagar com Carteira Digital'
                 ) : (

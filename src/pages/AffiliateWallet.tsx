@@ -38,6 +38,7 @@ export default function AffiliateWallet() {
   const [stats, setStats] = useState<any>(null);
   const [mmnConfig, setMmnConfig] = useState<any>(null);
   const [transactions, setTransactions] = useState<any[]>([]);
+  const [networkMembers, setNetworkMembers] = useState<any[]>([]);
   const [activeFilter, setActiveFilter] = useState<'all' | 'mensal' | 'anual'>('all');
   const [mmnLevelFilter, setMmnLevelFilter] = useState<'all' | '0' | '1' | '2'>('all');
   const [currentPage, setCurrentPage] = useState(1);
@@ -73,7 +74,7 @@ export default function AffiliateWallet() {
 
       const matchesFilter = 
         activeFilter === 'all' || 
-        (activeFilter === 'mensal' && t.cashbackType?.includes('Mensal')) ||
+        (activeFilter === 'mensal' && !t.cashbackType?.includes('Anual')) ||
         (activeFilter === 'anual' && t.cashbackType?.includes('Anual'));
 
       const matchesLevel = 
@@ -128,6 +129,221 @@ export default function AffiliateWallet() {
       };
     });
   }, [filteredTransactions]);
+
+  const totalPages = Math.ceil(filteredTransactions.length / itemsPerPage) || 1;
+  const startIndex = (currentPage - 1) * itemsPerPage;
+
+  // Lógica oficial de pagamentos semanais: repasses realizados toda terça-feira
+  const nextTuesdayFormatted = useMemo(() => {
+    const now = new Date();
+    const dayOfWeek = now.getDay(); // 0 = Domingo, 2 = Terça
+    let daysUntilTuesday = (2 - dayOfWeek + 7) % 7;
+    if (daysUntilTuesday === 0) daysUntilTuesday = 7;
+    const nextTuesday = new Date(now);
+    nextTuesday.setDate(now.getDate() + daysUntilTuesday);
+    
+    const dd = String(nextTuesday.getDate()).padStart(2, '0');
+    const mm = String(nextTuesday.getMonth() + 1).padStart(2, '0');
+    const yyyy = nextTuesday.getFullYear();
+    return `${dd}.${mm}.${yyyy}`;
+  }, []);
+
+  const weeklyCommissionTotal = useMemo(() => {
+    return enrichedTransactions
+      .filter(t => !t.cashbackType?.includes('Anual') && t.status !== 'Cancelado' && t.status !== 'Recusado' && Number(t.bruto || t.amount || 0) > 0)
+      .reduce((acc, t) => acc + Number(t.bruto || t.amount || 0), 0);
+  }, [enrichedTransactions]);
+
+  const annualBonusTotal = useMemo(() => {
+    return enrichedTransactions
+      .filter(t => t.cashbackType?.includes('Anual') && t.status !== 'Cancelado' && t.status !== 'Recusado' && Number(t.bruto || t.amount || 0) > 0)
+      .reduce((acc, t) => acc + Number(t.bruto || t.amount || 0), 0);
+  }, [enrichedTransactions]);
+
+  const displayWeeklyCommission = weeklyCommissionTotal > 0 
+    ? weeklyCommissionTotal 
+    : Number(comissoesData?.semanalPendente || stats?.networkAvailableBalance || 0);
+
+  const displayAnnualBonus = annualBonusTotal > 0 
+    ? annualBonusTotal 
+    : Number(comissoesData?.anualAcumulado || stats?.annualBonus || 0);
+
+  // Agrupamento hierárquico MMN: Microfranqueados G0, G1 e G2 e seus pedidos de Afiliados Premium (AF)
+  const mmnHierarchyGroups = useMemo(() => {
+    const searchLower = searchQuery.toLowerCase();
+
+    // 1. G0 - O próprio Microfranqueado autenticado (Vendas Diretas)
+    const g0Mf = {
+      id: user?.id || 'g0',
+      name: profile?.full_name || 'Você (Microfranqueado)',
+      levelTag: 'G0',
+      category: 'FRANQUEADO',
+      date: '0',
+      status: '0'
+    };
+    const g0Orders = enrichedTransactions.filter(t => t.level === '0');
+
+    // 2. G1 - Microfranqueados indicados direto por G0
+    const g1Members = networkMembers.filter(m => Number(m.level) === 1);
+    const g1Orders = enrichedTransactions.filter(t => t.level === '1');
+
+    const g1Groups: any[] = [];
+    if (g1Members.length > 0) {
+      g1Members.forEach(m => {
+        const orders = g1Members.length === 1 
+          ? g1Orders 
+          : g1Orders.filter(t => t.sellerId === m.id || t.referredBy === m.id);
+        g1Groups.push({
+          microfranqueado: {
+            id: m.id,
+            name: m.name,
+            levelTag: 'G1',
+            category: 'FRANQUEADO',
+            date: '0',
+            status: '0'
+          },
+          orders: orders.length > 0 ? orders : (g1Members.length === 1 ? g1Orders : [])
+        });
+      });
+    } else if (g1Orders.length > 0) {
+      g1Groups.push({
+        microfranqueado: {
+          id: 'g1-default',
+          name: 'Microfranqueado Indicado Direto (G1)',
+          levelTag: 'G1',
+          category: 'FRANQUEADO',
+          date: '0',
+          status: '0'
+        },
+        orders: g1Orders
+      });
+    }
+
+    // 3. G2 - Microfranqueados indicados diretos de seu G1
+    const g2Members = networkMembers.filter(m => Number(m.level) === 2);
+    const g2Orders = enrichedTransactions.filter(t => t.level === '2');
+
+    const g2Groups: any[] = [];
+    if (g2Members.length > 0) {
+      g2Members.forEach(m => {
+        const orders = g2Members.length === 1 
+          ? g2Orders 
+          : g2Orders.filter(t => t.sellerId === m.id || t.referredBy === m.id);
+        g2Groups.push({
+          microfranqueado: {
+            id: m.id,
+            name: m.name,
+            levelTag: 'G2',
+            category: 'FRANQUEADO',
+            date: '0',
+            status: '0'
+          },
+          orders: orders.length > 0 ? orders : (g2Members.length === 1 ? g2Orders : [])
+        });
+      });
+    } else if (g2Orders.length > 0) {
+      g2Groups.push({
+        microfranqueado: {
+          id: 'g2-default',
+          name: 'Microfranqueado Indireto (G2)',
+          levelTag: 'G2',
+          category: 'FRANQUEADO',
+          date: '0',
+          status: '0'
+        },
+        orders: g2Orders
+      });
+    }
+
+    const allGroups: any[] = [];
+
+    // Filtro por Nível:
+    if (mmnLevelFilter === 'all' || mmnLevelFilter === '0') {
+      const filteredOrders = g0Orders.filter(t => {
+        if (!searchLower) return true;
+        return t.orderId?.toLowerCase().includes(searchLower) ||
+               t.affiliateName?.toLowerCase().includes(searchLower) ||
+               t.cashbackType?.toLowerCase().includes(searchLower) ||
+               t.date?.toLowerCase().includes(searchLower);
+      });
+      allGroups.push({
+        key: 'g0',
+        levelTag: 'G0',
+        microfranqueado: g0Mf,
+        orders: filteredOrders
+      });
+    }
+
+    if (mmnLevelFilter === 'all' || mmnLevelFilter === '1') {
+      if (g1Groups.length > 0) {
+        g1Groups.forEach((g, idx) => {
+          const filteredOrders = g.orders.filter((t: any) => {
+            if (!searchLower) return true;
+            return t.orderId?.toLowerCase().includes(searchLower) ||
+                   t.affiliateName?.toLowerCase().includes(searchLower) ||
+                   t.cashbackType?.toLowerCase().includes(searchLower) ||
+                   t.date?.toLowerCase().includes(searchLower);
+          });
+          allGroups.push({
+            key: `g1-${idx}`,
+            levelTag: 'G1',
+            microfranqueado: g.microfranqueado,
+            orders: filteredOrders
+          });
+        });
+      } else if (mmnLevelFilter === '1') {
+        allGroups.push({
+          key: 'g1-empty',
+          levelTag: 'G1',
+          microfranqueado: {
+            id: 'g1-none',
+            name: 'Nenhum Microfranqueado G1 Cadastrado',
+            levelTag: 'G1',
+            category: 'FRANQUEADO',
+            date: '0',
+            status: '0'
+          },
+          orders: []
+        });
+      }
+    }
+
+    if (mmnLevelFilter === 'all' || mmnLevelFilter === '2') {
+      if (g2Groups.length > 0) {
+        g2Groups.forEach((g, idx) => {
+          const filteredOrders = g.orders.filter((t: any) => {
+            if (!searchLower) return true;
+            return t.orderId?.toLowerCase().includes(searchLower) ||
+                   t.affiliateName?.toLowerCase().includes(searchLower) ||
+                   t.cashbackType?.toLowerCase().includes(searchLower) ||
+                   t.date?.toLowerCase().includes(searchLower);
+          });
+          allGroups.push({
+            key: `g2-${idx}`,
+            levelTag: 'G2',
+            microfranqueado: g.microfranqueado,
+            orders: filteredOrders
+          });
+        });
+      } else if (mmnLevelFilter === '2') {
+        allGroups.push({
+          key: 'g2-empty',
+          levelTag: 'G2',
+          microfranqueado: {
+            id: 'g2-none',
+            name: 'Nenhum Microfranqueado G2 Cadastrado',
+            levelTag: 'G2',
+            category: 'FRANQUEADO',
+            date: '0',
+            status: '0'
+          },
+          orders: []
+        });
+      }
+    }
+
+    return allGroups;
+  }, [user, profile, networkMembers, enrichedTransactions, mmnLevelFilter, searchQuery]);
 
   const globalAdvances = useMemo(() => {
     return transactions.filter(t => 
@@ -239,17 +455,33 @@ export default function AffiliateWallet() {
     doc.text(`(=) Valor Bruto do Cashback: ${totalsSummary.all.totalBruto.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`, 14, 78);
 
     // Tabela
-    const tableData = enrichedTransactions.map(t => [
-      t.orderId,
-      t.affiliateName,
-      t.level,
-      t.cashbackType,
-      t.date,
-      t.contractAmount ? t.contractAmount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : '---',
-      t.percentage ? `${t.percentage.toFixed(2)}%` : '---',
-      t.bruto.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }),
-      t.status
-    ]);
+    const tableData: any[] = [];
+    mmnHierarchyGroups.forEach(g => {
+      tableData.push([
+        '0',
+        g.microfranqueado.name,
+        g.levelTag,
+        'FRANQUEADO',
+        '0',
+        '0',
+        '0',
+        '0',
+        '0'
+      ]);
+      g.orders.forEach((t: any) => {
+        tableData.push([
+          `#${t.orderId}`,
+          t.affiliateName.replace(' (Você)', '').replace(' (Regional)', ''),
+          'AF',
+          t.cashbackType,
+          t.date,
+          t.contractAmount ? t.contractAmount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : '---',
+          t.percentage ? `${t.percentage.toFixed(0)}%` : '---',
+          t.bruto.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }),
+          t.cashbackType?.includes('Anual') ? 'Acumulando' : t.status
+        ]);
+      });
+    });
 
     autoTable(doc, {
       startY: 85,
@@ -302,12 +534,13 @@ export default function AffiliateWallet() {
     
     try {
       setLoading(true);
-      const [statsData, activityData, configData, mfRes, pjReq] = await Promise.all([
+      const [statsData, activityData, configData, mfRes, pjReq, networkData] = await Promise.all([
         businessRules.getAffiliateStats(user.id),
         businessRules.getEcosystemActivity(user.id),
         businessRules.getMMNConfig(),
         businessRules.getMicrofranqueadoData(user.id),
-        businessRules.checkMicrofranqueadoPjRequirement(user.id)
+        businessRules.checkMicrofranqueadoPjRequirement(user.id),
+        businessRules.getAffiliateNetwork(user.id)
       ]);
       
       setStats(statsData);
@@ -315,6 +548,7 @@ export default function AffiliateWallet() {
       setMmnConfig(configData);
       setMicrofranqueadoData(mfRes);
       setPjRequirement(pjReq);
+      setNetworkMembers(networkData || []);
 
       if (mfRes?.microfranqueado?.id) {
         const comRes = await businessRules.getComissoesMicrofranqueado(mfRes.microfranqueado.id);
@@ -499,7 +733,7 @@ export default function AffiliateWallet() {
         {/* Balance Cards - Credit Card Style */}
         <div className="flex flex-col sm:flex-row items-stretch gap-6 md:gap-8">
            
-           {/* Card 1: Comissões Semanais (80%) */}
+           {/* Card 1: Comissões Semanais */}
            <motion.div 
              whileHover={{ y: -4 }}
              onClick={() => {
@@ -516,7 +750,7 @@ export default function AffiliateWallet() {
               
               <div className="relative z-10 flex justify-between items-start">
                  <div>
-                    <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest">COMISSÕES SEMANAIS (80%)</p>
+                    <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest">COMISSÕES SEMANAIS</p>
                  </div>
                  <div className={`size-8 rounded-lg flex items-center justify-center border transition-colors ${
                    activeFilter === 'mensal' ? 'bg-emerald-500 text-white border-emerald-500' : 'bg-white/5 text-emerald-500 border-white/5'
@@ -527,12 +761,12 @@ export default function AffiliateWallet() {
 
               <div className="relative z-10 my-auto">
                  <h2 className="text-2xl sm:text-3xl font-black tracking-tighter italic uppercase mb-1">
-                   R$ {Number(comissoesData?.semanalPendente !== undefined ? comissoesData.semanalPendente : stats.networkAvailableBalance || 0).toFixed(2)}
+                   R$ {displayWeeklyCommission.toFixed(2).replace('.', ',')}
                  </h2>
                  <div className="flex items-center gap-1.5">
                     <div className="size-1.5 rounded-full bg-emerald-400 animate-pulse"></div>
                     <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">
-                       {comissoesData?.proximaTerca ? `Pago toda Terça-feira (${comissoesData.proximaTerca})` : 'Pago Toda Terça-Feira'}
+                       Pagos toda terça-feira – {nextTuesdayFormatted}
                     </p>
                  </div>
               </div>
@@ -543,11 +777,11 @@ export default function AffiliateWallet() {
                     <div className="size-4 rounded-full border border-white/20 bg-white/5"></div>
                     <div className="size-4 rounded-full border border-white/20 bg-white/5"></div>
                  </div>
-                 <span className="text-[7px] font-black uppercase tracking-widest">80% SEMANAL • TERÇAS</span>
+                 <span className="text-[7px] font-black uppercase tracking-widest">SEMANAL • TODA TERÇA-FEIRA</span>
               </div>
            </motion.div>
 
-           {/* Card 2: Bônus Anual Acumulado (20%) */}
+           {/* Card 2: Bônus Anual Acumulado */}
            <motion.div 
              whileHover={{ y: -4 }}
              onClick={() => {
@@ -562,7 +796,7 @@ export default function AffiliateWallet() {
               
               <div className="relative z-10 flex justify-between items-start">
                  <div>
-                    <p className="text-[10px] font-black text-blue-200 uppercase tracking-widest">BÔNUS ANUAL ACUMULADO (20%)</p>
+                    <p className="text-[10px] font-black text-blue-200 uppercase tracking-widest">BÔNUS ANUAL ACUMULADO</p>
                  </div>
                  <div className={`size-8 rounded-lg flex items-center justify-center border transition-colors ${
                    activeFilter === 'anual' ? 'bg-white text-indigo-600 border-white' : 'bg-white/10 text-white border-white/10'
@@ -573,10 +807,10 @@ export default function AffiliateWallet() {
 
               <div className="relative z-10 my-auto">
                  <h2 className="text-2xl sm:text-3xl font-black tracking-tighter italic uppercase mb-1">
-                   R$ {Number(comissoesData?.anualAcumulado !== undefined ? comissoesData.anualAcumulado : stats.annualBonus || 0).toFixed(2)}
+                   R$ {displayAnnualBonus.toFixed(2).replace('.', ',')}
                  </h2>
                  <p className="text-[8px] font-black text-blue-200/70 uppercase tracking-widest flex items-center gap-1.5">
-                    <ShieldCheck size={11} /> Liberação em 10 de Dezembro
+                    <ShieldCheck size={11} /> Liberação 10 de dezembro.
                  </p>
               </div>
 
@@ -585,7 +819,7 @@ export default function AffiliateWallet() {
                     <div className="w-4 h-1 bg-white/20 rounded-full"></div>
                     <div className="w-2 h-1 bg-white/20 rounded-full"></div>
                  </div>
-                 <span className="text-[7px] font-black uppercase tracking-widest text-blue-200">20% ANUAL • 10 DE DEZEMBRO</span>
+                 <span className="text-[7px] font-black uppercase tracking-widest text-blue-200">ANUAL • 10 DE DEZEMBRO</span>
               </div>
            </motion.div>
 
@@ -691,12 +925,12 @@ export default function AffiliateWallet() {
         <div className="bg-white rounded-[2.5rem] border border-slate-100 shadow-sm p-10">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-8 mb-8">
               <div>
-                 <h2 className="text-2xl font-black text-midnight tracking-tighter uppercase italic underline decoration-primary-blue decoration-4 underline-offset-8 mb-2">
-                   Comissões de Rede MMN
-                 </h2>
-                 <p className="text-slate-500 font-medium">
-                    Exibindo comissões de sua compra própria (G0) e de sua rede de indicados (G1 e G2).
-                 </p>
+                 <h2 className="text-2xl font-black text-midnight tracking-tighter uppercase italic underline decoration-primary-blue decoration-4 underline-offset-8">
+                     Comissões de Rede MMN
+                  </h2>
+                  <p className="text-slate-500 font-medium mt-3">
+                     Exibindo comissões de suas VENDAS DIRETAS (G0) e de sua rede de indicados (G1 e G2).
+                  </p>
               </div>
               <div className="flex items-center gap-4">
                  {(activeFilter !== 'all' || mmnLevelFilter !== 'all') && (
@@ -736,7 +970,7 @@ export default function AffiliateWallet() {
            {/* Subfiltro de Níveis MMN (G0, G1, G2 ou Todas) */}
            <div className="flex flex-wrap items-center gap-2 mb-6 bg-slate-50 p-2 rounded-2xl border border-slate-200/60 shadow-sm">
              <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-3 py-1">
-               Nível:
+               NÍVEL:
              </span>
              <button
                onClick={() => {
@@ -749,7 +983,7 @@ export default function AffiliateWallet() {
                    : 'text-slate-600 hover:text-slate-900 hover:bg-white'
                }`}
              >
-               Todas ({transactions.filter(t => t.level !== 'REG' && !t.isReseller && t.category !== 'reseller').length})
+               TODAS ({transactions.filter(t => t.level !== 'REG' && !t.isReseller && t.category !== 'reseller').length})
              </button>
              <button
                onClick={() => {
@@ -758,12 +992,12 @@ export default function AffiliateWallet() {
                }}
                className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer flex items-center gap-2 ${
                  mmnLevelFilter === '0'
-                   ? 'bg-amber-500 text-white shadow-md'
-                   : 'text-slate-700 hover:text-amber-600 hover:bg-amber-50/70'
+                   ? 'bg-emerald-600 text-white shadow-md'
+                   : 'text-slate-700 hover:text-emerald-600 hover:bg-emerald-50/70'
                }`}
              >
-               <span className="size-2 rounded-full bg-amber-400" />
-               G0 - Compra Própria ({transactions.filter(t => t.level === '0').length})
+               <span className="size-2 rounded-full bg-emerald-400" />
+               G0 – VENDAS DIRETAS ({transactions.filter(t => t.level === '0').length})
              </button>
              <button
                onClick={() => {
@@ -772,12 +1006,12 @@ export default function AffiliateWallet() {
                }}
                className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer flex items-center gap-2 ${
                  mmnLevelFilter === '1'
-                   ? 'bg-emerald-600 text-white shadow-md'
-                   : 'text-slate-700 hover:text-emerald-600 hover:bg-emerald-50/70'
+                   ? 'bg-indigo-600 text-white shadow-md'
+                   : 'text-slate-700 hover:text-indigo-600 hover:bg-indigo-50/70'
                }`}
              >
-               <span className="size-2 rounded-full bg-emerald-400" />
-               G1 - Indicação Direta ({transactions.filter(t => t.level === '1').length})
+               <span className="size-2 rounded-full bg-indigo-400" />
+               G1 – VENDAS DOS MICROFRANQUEADOS INDICADOS DIRETO POR G0 ({transactions.filter(t => t.level === '1').length})
              </button>
              <button
                onClick={() => {
@@ -791,23 +1025,13 @@ export default function AffiliateWallet() {
                }`}
              >
                <span className="size-2 rounded-full bg-sky-400" />
-               G2 - 2ª Geração ({transactions.filter(t => t.level === '2').length})
+               G2 – VENDAS DO MICROFRANQUEADO INDICADOS DIRETOS DE SEU G1 ({transactions.filter(t => t.level === '2').length})
              </button>
            </div>
 
            <div className="space-y-6">
               {(() => {
-                const startIndex = (currentPage - 1) * itemsPerPage;
-                const totalPages = Math.ceil(enrichedTransactions.length / itemsPerPage);
-                const paginatedTransactions = enrichedTransactions.slice(startIndex, startIndex + itemsPerPage);
-
-                if (enrichedTransactions.length === 0) {
-                  return (
-                    <div className="py-20 text-center text-slate-400 font-bold uppercase tracking-widest">
-                       Nenhuma transação encontrada para este filtro.
-                    </div>
-                  );
-                }
+                const totalOrdersCount = mmnHierarchyGroups.reduce((acc, g) => acc + g.orders.length, 0);
 
                 return (
                   <>
@@ -848,7 +1072,7 @@ export default function AffiliateWallet() {
                     </div>
 
                     <div className="overflow-x-auto">
-                      <table className="w-full text-left border-separate border-spacing-y-3">
+                      <table className="w-full text-left border-separate border-spacing-y-2">
                         <thead>
                           <tr className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
                             <th className="px-5 py-2">ID DO PEDIDO</th>
@@ -863,108 +1087,119 @@ export default function AffiliateWallet() {
                           </tr>
                         </thead>
                         <tbody>
-                          {paginatedTransactions.map((t, i) => (
-                            <motion.tr
-                              key={t.id}
-                              initial={{ opacity: 0, y: 10 }}
-                              animate={{ opacity: 1, y: 0 }}
-                              transition={{ delay: i * 0.05 }}
-                              className="bg-slate-50 hover:bg-white hover:shadow-xl hover:shadow-slate-100/50 transition-all cursor-pointer group"
-                            >
-                              <td className="px-5 py-5 rounded-l-3xl font-black text-midnight text-xs border-y border-transparent group-hover:border-slate-100 whitespace-nowrap">
-                                #{t.orderId}
-                              </td>
-                              <td className="px-5 py-5 font-bold text-slate-600 text-xs border-y border-transparent group-hover:border-slate-100 whitespace-nowrap">
-                                {t.affiliateName}
-                              </td>
-                              <td className="px-3 py-5 text-center border-y border-transparent group-hover:border-slate-100 whitespace-nowrap">
-                                {t.level === 'REG' ? (
-                                  <span className="inline-flex items-center justify-center px-2.5 py-1 rounded-xl text-[10px] font-black bg-purple-100 text-purple-700 border border-purple-200 shadow-sm" title="Comissão de Revendedor Regional">
-                                    🏢 REG
+                          {mmnHierarchyGroups.map((group) => (
+                            <React.Fragment key={group.key}>
+                              {/* Linha do Microfranqueado (G0, G1 ou G2) */}
+                              <tr className="bg-slate-900 text-white font-bold border-y border-indigo-500/30">
+                                <td className="px-5 py-3.5 rounded-l-2xl font-mono text-xs font-black text-slate-300">
+                                  0
+                                </td>
+                                <td className="px-5 py-3.5 text-xs font-black text-white">
+                                  <div className="flex items-center gap-2">
+                                    <span className="size-2 rounded-full bg-emerald-400 animate-pulse" />
+                                    <span>{group.microfranqueado.name}</span>
+                                  </div>
+                                </td>
+                                <td className="px-3 py-3.5 text-center">
+                                  <span className={`inline-flex items-center justify-center px-2.5 py-0.5 rounded-lg text-[10px] font-black ${
+                                    group.levelTag === 'G0' 
+                                      ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' 
+                                      : group.levelTag === 'G1' 
+                                      ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30'
+                                      : 'bg-sky-500/20 text-sky-300 border border-sky-500/30'
+                                  }`}>
+                                    {group.levelTag}
                                   </span>
-                                ) : t.level === '0' ? (
-                                  <span className="inline-flex items-center justify-center px-2 py-0.5 rounded-xl text-[10px] font-black bg-amber-100 text-amber-800 border border-amber-200 shadow-sm" title="Titular da Compra (G0)">
-                                    🟡 G0
+                                </td>
+                                <td className="px-4 py-3.5">
+                                  <span className="text-[10px] font-black px-2 py-0.5 rounded-md bg-white/10 text-slate-200 uppercase tracking-wider">
+                                    {group.microfranqueado.category}
                                   </span>
-                                ) : t.level === '1' ? (
-                                  <span className="inline-flex items-center justify-center px-2 py-0.5 rounded-xl text-[10px] font-black bg-emerald-100 text-emerald-800 border border-emerald-200 shadow-sm" title="1º Nível (G1)">
-                                    🟢 G1
-                                  </span>
-                                ) : t.level === '2' ? (
-                                  <span className="inline-flex items-center justify-center px-2 py-0.5 rounded-xl text-[10px] font-black bg-sky-100 text-sky-800 border border-sky-200 shadow-sm" title="2º Nível (G2)">
-                                    🔵 G2
-                                  </span>
-                                ) : (
-                                  <span className="inline-flex items-center justify-center px-2 py-0.5 rounded-xl text-[10px] font-black bg-slate-200 text-slate-600">
-                                    {t.level}
-                                  </span>
-                                )}
-                              </td>
-                              <td className="px-4 py-5 border-y border-transparent group-hover:border-slate-100 whitespace-nowrap">
-                                <span className={`text-[10px] font-black px-2.5 py-1 rounded-lg uppercase ${
-                                  t.isReseller
-                                    ? 'bg-purple-50 text-purple-700 border border-purple-100'
-                                    : t.cashbackType?.includes('Adiantamento')
-                                      ? 'bg-amber-50 text-amber-800 border border-amber-200'
-                                      : t.cashbackType?.includes('Resgate')
-                                        ? 'bg-indigo-50 text-indigo-700 border border-indigo-200'
-                                        : t.cashbackType?.includes('Mensal') 
-                                          ? 'bg-rose-50 text-rose-600 border border-rose-100' 
-                                          : t.cashbackType?.includes('Anual') 
-                                            ? 'bg-amber-50 text-amber-600 border border-amber-100' 
-                                            : 'bg-blue-50 text-blue-600 border border-blue-100'
-                                }`}>
-                                  {t.cashbackType}
-                                </span>
-                              </td>
-                              <td className="px-4 py-5 text-[10px] font-bold text-slate-400 uppercase border-y border-transparent group-hover:border-slate-100 whitespace-nowrap">
-                                {t.date}
-                              </td>
-                              <td className="px-5 py-5 text-right border-y border-transparent group-hover:border-slate-100 whitespace-nowrap">
-                                <span className="text-xs font-black tracking-tight text-slate-800 font-mono">
-                                  {Number(t.contractAmount || 0) > 0 
-                                    ? Number(t.contractAmount).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
-                                    : '---'}
-                                </span>
-                              </td>
-                              <td className="px-4 py-5 text-center border-y border-transparent group-hover:border-slate-100 whitespace-nowrap">
-                                <span className="inline-flex items-center px-2 py-0.5 rounded-lg text-xs font-black bg-indigo-50 text-indigo-700 border border-indigo-100 font-mono">
-                                  {Number(t.percentage || 0) > 0 ? `${Number(t.percentage).toFixed(2)}%` : '---'}
-                                </span>
-                              </td>
-                              <td className="px-5 py-5 text-right border-y border-transparent group-hover:border-slate-100 whitespace-nowrap">
-                                <p className={`text-sm font-black tracking-tighter font-mono ${
-                                  t.status === 'Cancelado' || t.status === 'Recusado'
-                                    ? 'text-slate-400 line-through'
-                                    : Number(t.bruto || t.amount || 0) < 0
-                                      ? 'text-rose-500'
-                                      : 'text-emerald-600'
-                                }`}>
-                                  {Number(t.bruto || t.amount || 0) < 0 ? '-' : '+'}
-                                  {Math.abs(Number(t.bruto || t.amount || 0)).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                                </p>
-                              </td>
-                              <td className="px-4 py-5 rounded-r-3xl text-center border-y border-transparent group-hover:border-slate-100 whitespace-nowrap">
-                                <span className={`text-[9px] font-black px-2.5 py-1 rounded-md uppercase whitespace-nowrap ${
-                                  t.status === 'Cancelado' || t.status === 'Recusado'
-                                    ? 'bg-rose-50 text-rose-600 border border-rose-200' 
-                                    : t.status === 'Pago'
-                                      ? 'bg-emerald-50 text-emerald-600 border border-emerald-100'
-                                      : (t.status === 'Adiantado' || t.status === 'ADIANTADO' || (t.cashbackType?.includes('Mensal') && globalTotalAdiantamentos > 0))
-                                        ? 'bg-amber-100 text-amber-900 border border-amber-300'
-                                        : t.cashbackType?.includes('Anual')
+                                </td>
+                                <td className="px-4 py-3.5 text-[10px] text-slate-400 font-mono">
+                                  0
+                                </td>
+                                <td className="px-5 py-3.5 text-right text-xs font-mono text-slate-400">
+                                  0
+                                </td>
+                                <td className="px-4 py-3.5 text-center text-xs font-mono text-slate-400">
+                                  0
+                                </td>
+                                <td className="px-5 py-3.5 text-right text-xs font-mono text-slate-400">
+                                  0
+                                </td>
+                                <td className="px-4 py-3.5 rounded-r-2xl text-center text-[10px] font-mono text-slate-400">
+                                  0
+                                </td>
+                              </tr>
+
+                              {/* Pedidos dos Afiliados Premium vinculados logo abaixo deste Microfranqueado */}
+                              {group.orders.length > 0 ? (
+                                group.orders.map((t: any) => (
+                                  <tr 
+                                    key={t.id}
+                                    className="bg-slate-50 hover:bg-white hover:shadow-md transition-all group border-b border-slate-100"
+                                  >
+                                    <td className="px-5 py-4 font-black text-midnight text-xs rounded-l-2xl whitespace-nowrap">
+                                      #{t.orderId}
+                                    </td>
+                                    <td className="px-5 py-4 font-bold text-slate-700 text-xs whitespace-nowrap">
+                                      {t.affiliateName.replace(' (Você)', '').replace(' (Regional)', '')}
+                                    </td>
+                                    <td className="px-3 py-4 text-center whitespace-nowrap">
+                                      <span 
+                                        className="inline-flex items-center justify-center px-2 py-0.5 rounded-lg text-[10px] font-black bg-indigo-100 text-indigo-700 border border-indigo-200 shadow-sm"
+                                        title="AF - Afiliado Premium"
+                                      >
+                                        AF
+                                      </span>
+                                    </td>
+                                    <td className="px-4 py-4 whitespace-nowrap">
+                                      <span className={`text-[10px] font-black px-2.5 py-1 rounded-lg uppercase ${
+                                        t.cashbackType?.includes('Anual') 
+                                          ? 'bg-amber-50 text-amber-600 border border-amber-100' 
+                                          : 'bg-emerald-50 text-emerald-600 border border-emerald-100'
+                                      }`}>
+                                        {t.cashbackType}
+                                      </span>
+                                    </td>
+                                    <td className="px-4 py-4 text-[10px] font-bold text-slate-400 uppercase whitespace-nowrap">
+                                      {t.date}
+                                    </td>
+                                    <td className="px-5 py-4 text-right font-mono font-bold text-xs text-slate-800 whitespace-nowrap">
+                                      {Number(t.contractAmount || 0) > 0 
+                                        ? Number(t.contractAmount).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+                                        : '---'}
+                                    </td>
+                                    <td className="px-4 py-4 text-center font-mono font-black text-xs text-indigo-600 whitespace-nowrap">
+                                      {Number(t.percentage || 0) > 0 ? `${Number(t.percentage).toFixed(0)}%` : '---'}
+                                    </td>
+                                    <td className="px-5 py-4 text-right font-mono font-black text-sm text-emerald-600 whitespace-nowrap">
+                                      +{Number(t.bruto || t.amount || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                                    </td>
+                                    <td className="px-4 py-4 rounded-r-2xl text-center whitespace-nowrap">
+                                      <span className={`text-[9px] font-black px-2.5 py-1 rounded-md uppercase ${
+                                        t.status === 'Cancelado' || t.status === 'Recusado'
+                                          ? 'bg-rose-50 text-rose-600 border border-rose-200'
+                                          : t.status === 'Pago'
+                                          ? 'bg-emerald-50 text-emerald-600 border border-emerald-100'
+                                          : t.cashbackType?.includes('Anual')
                                           ? 'bg-indigo-50 text-indigo-700 border border-indigo-200'
                                           : 'bg-amber-50 text-amber-700 border border-amber-200'
-                                }`}>
-                                  {t.status === 'Recusado' ? 'Recusado' : 
-                                   t.status === 'Cancelado' ? 'Cancelado' : 
-                                   t.status === 'Pago' ? 'Pago' : 
-                                   (t.status === 'Adiantado' || t.status === 'ADIANTADO' || (t.cashbackType?.includes('Mensal') && globalTotalAdiantamentos > 0)) ? 'Adiantado' :
-                                   t.cashbackType?.includes('Anual') ? 'Acumulando' :
-                                   'Pendente'}
-                                </span>
-                              </td>
-                            </motion.tr>
+                                      }`}>
+                                        {t.cashbackType?.includes('Anual') ? 'Acumulando' : t.status}
+                                      </span>
+                                    </td>
+                                  </tr>
+                                ))
+                              ) : (
+                                <tr>
+                                  <td colSpan={9} className="px-6 py-2.5 text-center text-[10px] font-medium text-slate-400 italic bg-slate-50/50 rounded-2xl">
+                                    Nenhum pedido de Afiliado Premium vinculado a este Microfranqueado no momento.
+                                  </td>
+                                </tr>
+                              )}
+                            </React.Fragment>
                           ))}
                         </tbody>
                         <tfoot>
@@ -1024,13 +1259,13 @@ export default function AffiliateWallet() {
                               {totalsSummary.all.totalContratos.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                             </td>
                             <td className="px-4 py-4 text-center font-mono text-xs text-indigo-300">
-                              {totalsSummary.all.percentualRepasse > 0 ? `${totalsSummary.all.percentualRepasse.toFixed(2)}%` : '---'}
+                              {totalsSummary.all.percentualRepasse > 0 ? `${totalsSummary.all.percentualRepasse.toFixed(0)}%` : '---'}
                             </td>
-                            <td className="px-5 py-4 text-right font-mono text-sm text-amber-400 font-black">
-                              {totalsSummary.saldoMensalAReceber.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                            <td className="px-5 py-4 text-right font-mono text-sm text-emerald-400 font-black">
+                              {totalsSummary.all.totalBruto.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                             </td>
                             <td className="px-4 py-4 rounded-r-2xl text-center text-[9px] text-amber-400 font-bold">
-                              {totalsSummary.saldoMensalAReceber > 0 ? 'PENDENTE' : 'QUITADO'}
+                              {totalsSummary.saldoMensalAReceber > 0 ? 'PENDENTE' : 'ACUMULADO'}
                             </td>
                           </tr>
 
@@ -1054,6 +1289,7 @@ export default function AffiliateWallet() {
                         </tfoot>
                       </table>
                     </div>
+
 
                     {/* Pagination Controls */}
                     {totalPages > 1 && (

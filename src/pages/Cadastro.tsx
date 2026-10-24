@@ -32,6 +32,7 @@ import PWAInstallPrompt from '../components/PWAInstallPrompt';
 import { supabase } from '../lib/supabase';
 import { businessRules } from '../lib/businessRules';
 import { toast } from 'react-hot-toast';
+import { useSubscriptionPlans } from '../lib/subscriptionPlans';
 
 // Empresa Matriz (Fallback Padrão para evitar afiliados órfãos)
 const SIC_COMERCIO_ID = '194e5265-cdb6-431f-9f77-8888b1ee74ae';
@@ -40,6 +41,7 @@ const SIC_COMERCIO_NAME = 'Sic Comercio de Produtos Alimentícios e Serviços Lt
 
 export default function Cadastro() {
     const navigate = useNavigate();
+    const { minPrice } = useSubscriptionPlans();
     const [searchParams] = useSearchParams();
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -818,7 +820,7 @@ export default function Cadastro() {
                                                 Produto B • Seguro & Sorteios
                                             </span>
                                             <span className="text-xs font-black text-emerald-700 font-mono">
-                                                A partir de R$ 5,00/mês
+                                                A partir de R$ {minPrice.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}/mês
                                             </span>
                                         </div>
 

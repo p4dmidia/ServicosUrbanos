@@ -166,18 +166,14 @@ export default function RPAReceiptModal({
       const irrfVal = rpa.financial.deducao_irrf || 0;
 
       const items = [
-        { desc: '01. Nível G0 (Cashback Titular 5%)', val: rpa.financial.rede_g0 || rpa.financial.cashback_mensal || 0 },
-        { desc: '02. Nível G1 (Comissão de Rede MMN)', val: rpa.financial.rede_g1 || 0 },
-        { desc: '03. Nível G2 (Comissão de Rede MMN)', val: rpa.financial.rede_g2 || 0 },
-        { desc: '04. Revendedor (Vendas Diretas / Polo Regional)', val: rpa.financial.vendas_revendedor || 0 },
-        { desc: rpa.reference_month?.endsWith('-12') ? `05. Cashback Anual (Ciclo ${rpa.financial.annual_cycle_period || '01/12 a 30/11'} - Liberado)` : `05. Provisão Anual Acumulada (Ciclo ${rpa.financial.annual_cycle_period || '01/12 a 30/11'} - Pago em 10/Dez)`, val: rpa.financial.cashback_anual },
-        { desc: '06. TOTAL DOS RENDIMENTOS BRUTOS', val: rpa.financial.bruto_total, isBold: true },
-        { desc: '07. INSS na Fonte (0% - Recolhimento Individual pelo Afiliado)', val: 0.00 },
-        { desc: '08. (-) Retenção de IRPF na Fonte (Tabela Progressiva)', val: irrfVal > 0 ? -irrfVal : 0.00, isDeduction: irrfVal > 0 },
-        ...(rpa.financial.adiantamento && rpa.financial.adiantamento > 0 ? [
-          { desc: `09. (-) Adiantamento de Rendimentos${rpa.financial.adiantamento_date ? ` (Pago em ${rpa.financial.adiantamento_date})` : ''}`, val: -rpa.financial.adiantamento, isDeduction: true }
-        ] : []),
-        { desc: '10. VALOR LÍQUIDO EFETIVAMENTE PAGO / A PAGAR', val: rpa.financial.liquido_total, isHighlight: true }
+        { desc: '01. Nível G0 (Comissões Vendas Diretas)', val: rpa.financial.rede_g0 || rpa.financial.cashback_mensal || 0 },
+        { desc: '02. Nível G1 (Comissão Indicados Diretos)', val: rpa.financial.rede_g1 || 0 },
+        { desc: '03. Nível G2 (Comissão Indicados Indiretos)', val: rpa.financial.rede_g2 || 0 },
+        { desc: rpa.reference_month?.endsWith('-12') ? `04. Cashback Anual (Ciclo ${rpa.financial.annual_cycle_period || '01/12 a 30/11'} - Liberado)` : `04. Provisão Anual Acumulada (Ciclo ${rpa.financial.annual_cycle_period || '01/12 a 30/11'} - Pago em 10/Dez)`, val: rpa.financial.cashback_anual },
+        { desc: '05. TOTAL DOS RENDIMENTOS BRUTOS', val: rpa.financial.bruto_total, isBold: true },
+        { desc: '06. INSS na Fonte (0% - Recolhimento Individual pelo Afiliado)', val: 0.00 },
+        { desc: '07. (-) Retenção de IRPF na Fonte (Tabela Progressiva)', val: irrfVal > 0 ? -irrfVal : 0.00, isDeduction: irrfVal > 0 },
+        { desc: '08. VALOR LÍQUIDO EFETIVAMENTE PAGO / A PAGAR', val: rpa.financial.liquido_total, isHighlight: true }
       ];
 
       y += 6;
@@ -461,10 +457,6 @@ export default function RPAReceiptModal({
                 <span className="text-slate-300 font-semibold">Nível G2</span>
                 <span className="font-mono font-bold text-white">R$ {(rpa.financial.rede_g2 || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
               </div>
-              <div className="px-5 py-2.5 flex items-center justify-between">
-                <span className="text-slate-300 font-semibold">Revendedor</span>
-                <span className="font-mono font-bold text-white">R$ {(rpa.financial.vendas_revendedor || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
-              </div>
               <div className="px-5 py-2.5">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-1.5">
@@ -518,23 +510,6 @@ export default function RPAReceiptModal({
                     : 'R$ 0,00 (Isento na Fonte)'}
                 </span>
               </div>
-
-              {/* (-) Adiantamento de Rendimentos se houver */}
-              {(rpa.financial.adiantamento || 0) > 0 && (
-                <div className="px-5 py-2.5 flex items-center justify-between text-slate-300 bg-amber-500/10 border-t border-amber-500/20">
-                  <div className="flex items-center gap-2">
-                    <span className="text-amber-300 font-bold">(-) Adiantamento de Rendimentos</span>
-                    {rpa.financial.adiantamento_date && (
-                      <span className="text-[9px] bg-amber-500/20 text-amber-300 border border-amber-500/30 px-2 py-0.5 rounded-md font-bold">
-                        Pago em {rpa.financial.adiantamento_date}
-                      </span>
-                    )}
-                  </div>
-                  <span className="font-mono font-bold text-amber-300">
-                    - R$ {rpa.financial.adiantamento.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                  </span>
-                </div>
-              )}
 
               {/* Total Líquido a Receber */}
               <div className="px-5 py-4 bg-emerald-500/10 border-t border-emerald-500/20 flex items-center justify-between">

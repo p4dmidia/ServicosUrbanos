@@ -23,9 +23,12 @@ import { businessRules, calculateSubscriptionRepasseCycle } from '../lib/busines
 import { toast } from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 
+import { useSubscriptionPlans } from '../lib/subscriptionPlans';
+
 export default function AffiliateRenewals() {
   const navigate = useNavigate();
   const { user, profile } = useAuth();
+  const { plans: seguroPlans, microfranqueadoPlan, loading: plansLoading } = useSubscriptionPlans();
   const [loading, setLoading] = useState(true);
   const [regularizing, setRegularizing] = useState(false);
   const [activatingMf, setActivatingMf] = useState(false);
@@ -34,50 +37,6 @@ export default function AffiliateRenewals() {
   const [seguradoData, setSeguradoData] = useState<any>(null);
   const [microfranqueadoData, setMicrofranqueadoData] = useState<any>(null);
   const [subHistory, setSubHistory] = useState<any[]>([]);
-
-  // 4 Planos Oficiais do Seguro Vida Light (Produto B)
-  const officialSeguroPlans = [
-    { 
-      id: 'sub-mensal', 
-      name: 'Seguro Vida Light Mensal', 
-      price: 5.00, 
-      duration_days: 30, 
-      plan_type: 'mensal', 
-      image: '📅', 
-      sorteios: 4, 
-      desc: '30 dias de cobertura securitária MBM, 4 sorteios semanais da Loteria Federal e telemedicina 24h ilimitada.' 
-    },
-    { 
-      id: 'sub-trimestral', 
-      name: 'Seguro Vida Light Trimestral', 
-      price: 15.00, 
-      duration_days: 90, 
-      plan_type: 'trimestral', 
-      image: '🌟', 
-      sorteios: 12, 
-      desc: '90 dias de cobertura, 12 sorteios semanais de R$ 5.000,00 e telemedicina Racca Saúde.' 
-    },
-    { 
-      id: 'sub-semestral', 
-      name: 'Seguro Vida Light Semestral', 
-      price: 30.00, 
-      duration_days: 180, 
-      plan_type: 'semestral', 
-      image: '💼', 
-      sorteios: 24, 
-      desc: '180 dias de tranquilidade, 24 sorteios semanais da Loteria Federal e telemedicina 24h.' 
-    },
-    { 
-      id: 'sub-anual', 
-      name: 'Seguro Vida Light Anual', 
-      price: 48.00, 
-      duration_days: 365, 
-      plan_type: 'anual', 
-      image: '🏆', 
-      sorteios: 48, 
-      desc: 'Plano mais econômico (R$ 4,00/mês). 365 dias de vigência, 48 sorteios anuais e telemedicina.' 
-    }
-  ];
 
   const loadData = async () => {
     if (!user) return;
@@ -160,11 +119,11 @@ export default function AffiliateRenewals() {
 
   const handlePay = (plan: any) => {
     try {
-      const isMf = plan.plan_type === 'microfranqueado' || plan.id === 'sub-microfranqueado';
+      const isMf = plan.plan_type === 'microfranqueado' || plan.plan_type === 'revendedor' || plan.id === 'sub-microfranqueado';
       const cartItem = {
         id: plan.id,
         name: plan.name,
-        price: isMf ? 0.00 : plan.price,
+        price: isMf ? 0.00 : Number(plan.price),
         quantity: 1,
         image: plan.image || "🔄",
         is_subscription: true,
@@ -235,6 +194,7 @@ export default function AffiliateRenewals() {
   const isPrimeiros100 = microfranqueadoData?.isPrimeiros100;
   const isLicenseActive = microfranqueadoData?.isLicenseActive;
   const isSeguradoAtivo = seguradoData?.isPolicyActive;
+  const mfRenewalPrice = microfranqueadoPlan ? Number(microfranqueadoPlan.price) : 250;
 
   return (
     <AffiliateLayout title="Renovações & Licenciamento">
@@ -307,7 +267,7 @@ export default function AffiliateRenewals() {
                           Licença de Microfranqueado Ativa • 1º Ano Gratuito!
                         </h4>
                         <p className="text-xs text-emerald-200/90 leading-relaxed mt-1">
-                          Sua licença comercial de Microfranqueado é 100% gratuita durante o primeiro ano. Sua rede e seus repasses semanais de comissão (até 33%) estão ativos. A anuidade de R$ 150,00 só será devida após o término de 12 meses.
+                          Sua licença comercial de Microfranqueado é 100% gratuita durante o primeiro ano. Sua rede e seus repasses semanais de comissão (até 33%) estão ativos. A anuidade de R$ {mfRenewalPrice.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} só será devida após o término de 12 meses.
                         </p>
                       </div>
                     </div>
@@ -371,7 +331,7 @@ export default function AffiliateRenewals() {
                           🎉 1º Ano Gratuito (R$ 0,00)
                         </span>
                         <span className="text-[11px] font-mono text-slate-400">
-                          (Renovação de R$ 150,00/ano somente após 12 meses)
+                          (Renovação de R$ {mfRenewalPrice.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}/ano somente após 12 meses)
                         </span>
                       </div>
                     </div>
@@ -425,7 +385,7 @@ export default function AffiliateRenewals() {
 
               {/* Grid dos 4 Planos do Seguro Vida Light */}
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-                {officialSeguroPlans.map((plan) => {
+                {seguroPlans.map((plan) => {
                   const isActive = subscription && subscription.plan_type === plan.plan_type && stats?.isEligible;
                   const isEcon = plan.plan_type === 'anual';
                   const isPopular = plan.plan_type === 'mensal';
@@ -469,7 +429,7 @@ export default function AffiliateRenewals() {
                         <div className="space-y-1.5 border-t border-slate-100 pt-3 text-xs">
                           <div className="flex items-center gap-2 text-slate-700 font-bold">
                             <Ticket size={14} className="text-amber-500 shrink-0" />
-                            <span>{plan.sorteios} sorteios semanais</span>
+                            <span>{plan.sorteios} sorteios {plan.plan_type === 'anual' ? 'anuais' : 'semanais'}</span>
                           </div>
                           <div className="flex items-center gap-2 text-slate-700 font-bold">
                             <HeartPulse size={14} className="text-rose-500 shrink-0" />

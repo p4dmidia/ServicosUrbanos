@@ -57,11 +57,30 @@ export default function AdminSettings() {
   // MMN State
   const [mmnDepth, setMmnDepth] = useState(3);
   const [mmnType, setMmnType] = useState<'percent' | 'fixed'>('percent');
-  const [mmnLevels, setMmnLevels] = useState<any[]>([]);
-  const [cashbackMensal, setCashbackMensal] = useState(5.00);
-  const [cashbackAnual, setCashbackAnual] = useState(2.00);
-  const [commissionRegionalMensal, setCommissionRegionalMensal] = useState(5.00);
-  const [commissionRegionalAnual, setCommissionRegionalAnual] = useState(2.00);
+  const [mmnLevels, setMmnLevels] = useState<any[]>([
+    { level: 1, cashbackSemanal: 21.00, cashbackAnual: 2.00, value: 23.00 },
+    { level: 2, cashbackSemanal: 3.00, cashbackAnual: 2.00, value: 5.00 },
+    { level: 3, cashbackSemanal: 3.00, cashbackAnual: 2.00, value: 5.00 },
+  ]);
+
+  const handleLevelChange = (levelNum: number, field: 'cashbackSemanal' | 'cashbackAnual', newValue: number) => {
+    setMmnLevels(prev => prev.map(lvl => {
+      if (lvl.level === levelNum) {
+        const updated = { ...lvl, [field]: newValue };
+        const sem = field === 'cashbackSemanal' ? newValue : Number(updated.cashbackSemanal || 0);
+        const anu = field === 'cashbackAnual' ? newValue : Number(updated.cashbackAnual || 0);
+        updated.value = Number((sem + anu).toFixed(2));
+        return updated;
+      }
+      return lvl;
+    }));
+  };
+
+  const activeLevels = mmnLevels.filter(lvl => lvl.level <= mmnDepth);
+  const totalCashbackSemanal = Number(activeLevels.reduce((acc, lvl) => acc + (Number(lvl.cashbackSemanal) || 0), 0).toFixed(2));
+  const totalCashbackAnual = Number(activeLevels.reduce((acc, lvl) => acc + (Number(lvl.cashbackAnual) || 0), 0).toFixed(2));
+  const totalDistribuicaoMMN = Number((totalCashbackSemanal + totalCashbackAnual).toFixed(2));
+  const margemEmpresa = Number(Math.max(0, 100 - totalDistribuicaoMMN).toFixed(2));
 
   // Financeiro State
   const [minWithdrawal, setMinWithdrawal] = useState(50);
@@ -78,27 +97,6 @@ export default function AdminSettings() {
   const [fullLogs, setFullLogs] = useState<any[]>([]);
   const [logFilter, setLogFilter] = useState<'all' | 'Success' | 'Warning' | 'Error' | 'Info'>('all');
 
-  // Automação de Níveis baseada na Regra Geral
-  // O valor total de cada nível MMN (G0, G1, G2...) é a soma dos 2 ciclos (Mensal 4% + Anual 2% = 6.00%)
-  React.useEffect(() => {
-    const totalNivel = 
-      (Number(cashbackMensal) || 0) + 
-      (Number(cashbackAnual) || 0);
-    
-    setMmnLevels(prev => {
-      const baseLevels = prev.length > 0 ? [...prev] : Array.from({ length: 10 }, (_, i) => ({ level: i + 1, value: 0 }));
-      
-      return baseLevels.map(lvl => ({
-        ...lvl,
-        value: lvl.level <= mmnDepth ? Number(totalNivel.toFixed(2)) : 0
-      }));
-    });
-  }, [
-    cashbackMensal, 
-    cashbackAnual, 
-    mmnDepth
-  ]);
-
   // Carregar dados iniciais
   React.useEffect(() => {
     const loadConfig = async () => {
@@ -113,21 +111,34 @@ export default function AdminSettings() {
         ]);
         
         // MMN
-        setMmnDepth(mmnConfig.depth);
-        setMmnType(mmnConfig.paymentType);
-        setCashbackMensal(mmnConfig.cashbackMensal);
-        setCashbackAnual(mmnConfig.cashbackAnual);
-        setCommissionRegionalMensal(mmnConfig.commissionRegionalMensal);
-        setCommissionRegionalAnual(mmnConfig.commissionRegionalAnual);
-        
-        setMmnLevels(levelsData.length > 0 ? levelsData : [
-          { level: 1, value: 0.25 },
-          { level: 2, value: 1.5 },
-          { level: 3, value: 1.5 },
-          { level: 4, value: 1.5 },
-          { level: 5, value: 0 },
-          { level: 6, value: 0 },
-        ]);
+        setMmnDepth(mmnConfig.depth || 3);
+        setMmnType(mmnConfig.paymentType || 'percent');
+
+        const defaultLevels = [
+          { level: 1, cashbackSemanal: 21.00, cashbackAnual: 2.00, value: 23.00 },
+          { level: 2, cashbackSemanal: 3.00, cashbackAnual: 2.00, value: 5.00 },
+          { level: 3, cashbackSemanal: 3.00, cashbackAnual: 2.00, value: 5.00 },
+        ];
+
+        if (levelsData && levelsData.length > 0) {
+          const merged = defaultLevels.map(def => {
+            const found = levelsData.find((l: any) => l.level === def.level);
+            if (found) {
+              const sem = Number(found.cashbackSemanal && Number(found.cashbackSemanal) > 0 ? found.cashbackSemanal : def.cashbackSemanal);
+              const anu = Number(found.cashbackAnual && Number(found.cashbackAnual) > 0 ? found.cashbackAnual : def.cashbackAnual);
+              return {
+                level: def.level,
+                cashbackSemanal: sem,
+                cashbackAnual: anu,
+                value: Number((sem + anu).toFixed(2))
+              };
+            }
+            return def;
+          });
+          setMmnLevels(merged);
+        } else {
+          setMmnLevels(defaultLevels);
+        }
 
         // Financeiro
         setMinWithdrawal(finConfig.minWithdrawalAmount);
@@ -229,14 +240,15 @@ export default function AdminSettings() {
         await businessRules.saveMMNConfig({ 
           depth: mmnDepth, 
           paymentType: mmnType,
-          cashbackMensal,
+          cashbackMensal: totalCashbackSemanal,
           cashbackDigital: 0,
-          cashbackAnual,
+          cashbackAnual: totalCashbackAnual,
           commissionRegionalSemanal: 0,
-          commissionRegionalMensal,
-          commissionRegionalAnual
+          commissionRegionalMensal: 0,
+          commissionRegionalAnual: 0
         });
-        await businessRules.saveMMNLevels(mmnLevels.slice(0, mmnDepth));
+        await businessRules.saveMMNLevels(mmnLevels);
+        toast.success("Configurações de MMN atualizadas com sucesso!");
       } else if (activeTab === 'financeiro') {
         await businessRules.saveFinancialConfig({
           minWithdrawalAmount: minWithdrawal,
@@ -365,210 +377,428 @@ export default function AdminSettings() {
                   initial={{ opacity: 0, x: 20 }}
                   animate={{ opacity: 1, x: 0 }}
                   exit={{ opacity: 0, x: -20 }}
-                  className="space-y-12"
+                  className="space-y-10"
                 >
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
-                    <div className="space-y-8">
+                  {/* Top Section: Depth + Commission Type + Totals Summary */}
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                    
+                    {/* Left Column: Network Depth & Payment Type */}
+                    <div className="space-y-6">
                       <div>
-                        <h3 className="text-xl font-black text-white tracking-tighter uppercase italic leading-none mb-2">Configuração MMN</h3>
-                        <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Defina a profundidade e distribuição da rede</p>
+                        <h3 className="text-xl font-black text-white tracking-tighter uppercase italic leading-none mb-2">
+                          Configuração MMN
+                        </h3>
+                        <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">
+                          Defina a profundidade e distribuição da rede
+                        </p>
                       </div>
 
-                      <div className="space-y-6">
-                        <div className="space-y-2">
-                          <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Profundidade da Rede (Níveis)</label>
-                          <div className="flex items-center gap-6 p-6 bg-white/5 rounded-3xl border border-white/5">
-                            <input 
-                              type="range" 
-                              min="1" 
-                              max="6" 
-                              value={mmnDepth}
-                              onChange={(e) => {
-                                const newDepth = parseInt(e.target.value);
-                                setMmnDepth(newDepth);
-                                if (newDepth > mmnLevels.length) {
-                                  const extended = [...mmnLevels];
-                                  for (let i = mmnLevels.length + 1; i <= newDepth; i++) {
-                                    extended.push({ level: i, value: 0 });
-                                  }
-                                  setMmnLevels(extended);
-                                }
-                              }}
-                              className="flex-1 accent-indigo-500"
-                            />
-                            <div className="size-12 bg-indigo-600 rounded-2xl flex items-center justify-center text-white font-black text-lg shadow-lg shadow-indigo-600/30">
-                              {mmnDepth}
-                            </div>
+                      {/* Profundidade da Rede */}
+                      <div className="space-y-3 p-6 bg-white/5 rounded-3xl border border-white/5">
+                        <div className="flex items-center justify-between">
+                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                            <Layers size={14} className="text-indigo-400" />
+                            Profundidade da Rede: 3 Níveis (G0, G1 e G2)
+                          </label>
+                          <span className="px-2.5 py-1 bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 rounded-xl text-[10px] font-black uppercase tracking-wider">
+                            {mmnDepth} Níveis Ativos (G0 a G{mmnDepth - 1})
+                          </span>
+                        </div>
+
+                        <div className="flex items-center gap-6 pt-2">
+                          <input 
+                            type="range" 
+                            min="1" 
+                            max="3" 
+                            value={mmnDepth}
+                            onChange={(e) => setMmnDepth(parseInt(e.target.value))}
+                            className="flex-1 accent-indigo-500 cursor-pointer h-2 bg-white/10 rounded-lg appearance-none"
+                          />
+                          <div className="size-12 bg-indigo-600 rounded-2xl flex items-center justify-center text-white font-black text-lg shadow-lg shadow-indigo-600/30 shrink-0">
+                            {mmnDepth}
                           </div>
                         </div>
 
-                        <div className="grid grid-cols-2 gap-4">
-                           <div className="space-y-2">
-                              <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1">Cashback Mensal (Dia 10)</label>
-                              <div className="relative">
-                                <input 
-                                  type="number" 
-                                  step="0.01"
-                                  value={cashbackMensal}
-                                  onChange={e => setCashbackMensal(Number(e.target.value))}
-                                  className="w-full bg-white/5 border border-white/5 px-4 py-4 rounded-2xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-white font-black text-center"
-                                />
-                                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-indigo-500/50 text-[10px] font-black">%</span>
-                              </div>
-                           </div>
-                           <div className="space-y-2">
-                              <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1">Cashback Anual (10/Dez)</label>
-                              <div className="relative">
-                                <input 
-                                  type="number" 
-                                  step="0.01"
-                                  value={cashbackAnual}
-                                  onChange={e => setCashbackAnual(Number(e.target.value))}
-                                  className="w-full bg-white/5 border border-white/5 px-4 py-4 rounded-2xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-white font-black text-center"
-                                />
-                                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-indigo-500/50 text-[10px] font-black">%</span>
-                              </div>
-                           </div>
+                        {/* Level markers */}
+                        <div className="grid grid-cols-3 text-center pt-1 text-[9px] font-bold text-slate-500">
+                          <span className={mmnDepth >= 1 ? 'text-indigo-400 font-black' : ''}>1º (G0)</span>
+                          <span className={mmnDepth >= 2 ? 'text-indigo-400 font-black' : ''}>2º (G1)</span>
+                          <span className={mmnDepth >= 3 ? 'text-indigo-400 font-black' : ''}>3º (G2)</span>
                         </div>
+                      </div>
 
-                        {/* Comissão Regional */}
-                        <div className="space-y-4 pt-4 border-t border-white/5">
-                          <h4 className="text-[11px] font-black uppercase tracking-widest text-indigo-400">Comissões do Revendedor Regional</h4>
-                          <div className="grid grid-cols-2 gap-4">
-                            <div className="space-y-2">
-                               <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1">Reg. Mensal (Dia 10)</label>
-                               <div className="relative">
-                                 <input 
-                                   type="number" 
-                                   step="0.01"
-                                   value={commissionRegionalMensal}
-                                   onChange={e => setCommissionRegionalMensal(Number(e.target.value))}
-                                   className="w-full bg-white/5 border border-white/5 px-4 py-4 rounded-2xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-white font-black text-center"
-                                 />
-                                 <span className="absolute right-3 top-1/2 -translate-y-1/2 text-indigo-500/50 text-[10px] font-black">%</span>
-                               </div>
-                            </div>
-                            <div className="space-y-2">
-                               <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1">Reg. Anual (10/Dez)</label>
-                               <div className="relative">
-                                 <input 
-                                   type="number" 
-                                   step="0.01"
-                                   value={commissionRegionalAnual}
-                                   onChange={e => setCommissionRegionalAnual(Number(e.target.value))}
-                                   className="w-full bg-white/5 border border-white/5 px-4 py-4 rounded-2xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-white font-black text-center"
-                                 />
-                                 <span className="absolute right-3 top-1/2 -translate-y-1/2 text-indigo-500/50 text-[10px] font-black">%</span>
-                               </div>
-                            </div>
-                          </div>
+                      {/* Tipo de Comissionamento */}
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">
+                          Tipo de Comissionamento
+                        </label>
+                        <div className="flex p-1.5 bg-white/5 rounded-3xl border border-white/5">
+                          <button 
+                            type="button"
+                            onClick={() => setMmnType('percent')}
+                            className={`flex-1 py-3.5 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 ${mmnType === 'percent' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20' : 'text-slate-400 hover:text-white'}`}
+                          >
+                            <Percent size={14} /> Percentual (%)
+                          </button>
+                          <button 
+                            type="button"
+                            onClick={() => setMmnType('fixed')}
+                            className={`flex-1 py-3.5 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 ${mmnType === 'fixed' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20' : 'text-slate-400 hover:text-white'}`}
+                          >
+                            <DollarSign size={14} /> Valor Fixo (R$)
+                          </button>
                         </div>
+                      </div>
 
-                        <div className="space-y-2">
-                          <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Tipo de Comissionamento</label>
-                          <div className="flex p-1.5 bg-white/5 rounded-3xl border border-white/5">
-                            <button 
-                              onClick={() => setMmnType('percent')}
-                              className={`flex-1 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 ${mmnType === 'percent' ? 'bg-white/10 text-indigo-400 border border-indigo-500/20 shadow-xl shadow-indigo-500/5' : 'text-slate-500'}`}
-                            >
-                              <Percent size={14} /> Percentual (%)
-                            </button>
-                            <button 
-                              onClick={() => setMmnType('fixed')}
-                              className={`flex-1 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 ${mmnType === 'fixed' ? 'bg-white/10 text-indigo-400 border border-indigo-500/20 shadow-xl shadow-indigo-500/5' : 'text-slate-500'}`}
-                            >
-                              <DollarSign size={14} /> Valor Fixo (R$)
-                            </button>
-                          </div>
-                        </div>
+                      <div className="p-4 bg-indigo-500/5 rounded-2xl border border-indigo-500/10 flex items-start gap-3">
+                        <HelpCircle size={16} className="text-indigo-400 shrink-0 mt-0.5" />
+                        <p className="text-[11px] text-slate-400 leading-relaxed">
+                          O administrador pode alterar os percentuais de <strong className="text-white">Cashback Semanal</strong> e <strong className="text-white">Cashback Anual</strong> individualmente para cada geração da rede na tabela abaixo.
+                        </p>
                       </div>
                     </div>
 
-                    <div className="bg-indigo-600/5 border border-indigo-500/10 rounded-[2.5rem] p-8 md:p-10 flex flex-col justify-between">
-                      <div>
-                        <div className="flex items-center justify-between mb-4">
-                          <Zap className="text-indigo-400" size={36} />
-                          <span className="px-3 py-1 bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 rounded-full text-[10px] font-black uppercase tracking-wider">
+                    {/* Right Column: Resumo da Distribuição Total */}
+                    <div className="bg-gradient-to-br from-indigo-950/30 via-[#0a0e17] to-purple-950/20 border border-indigo-500/20 rounded-[2.5rem] p-6 md:p-8 flex flex-col justify-between shadow-2xl relative overflow-hidden">
+                      <div className="space-y-5">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2.5">
+                            <div className="size-10 rounded-2xl bg-indigo-600/20 border border-indigo-500/30 flex items-center justify-center text-indigo-400">
+                              <Zap size={20} />
+                            </div>
+                            <div>
+                              <h4 className="text-sm font-black text-white tracking-wider uppercase italic">
+                                Resumo da Distribuição Total
+                              </h4>
+                              <p className="text-[10px] text-slate-400">
+                                {mmnDepth} Gerações Ativas (G0 a G{mmnDepth - 1})
+                              </p>
+                            </div>
+                          </div>
+                          <span className="px-3 py-1 bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 rounded-full text-[9px] font-black uppercase tracking-wider">
                             Parâmetros Globais
                           </span>
                         </div>
-                        <h4 className="text-lg font-black text-white tracking-tighter uppercase italic mb-2 text-left">
-                          Resumo da Distribuição Total
-                        </h4>
-                        <p className="text-xs text-slate-400 font-medium leading-relaxed mb-6">
-                          Todos os cálculos e comissões do sistema seguem estritamente as porcentagens configuradas nesta tela:
-                        </p>
 
-                        <div className="space-y-3 mb-6 text-xs">
-                          {/* Rede MMN (3 Gerações) */}
-                          <div className="flex items-center justify-between p-3 bg-white/5 rounded-2xl border border-white/5">
+                        {/* Cards breakdown */}
+                        <div className="space-y-2.5 text-xs">
+                          {/* Cashback Semanal Total */}
+                          <div className="flex items-center justify-between p-3.5 bg-white/5 rounded-2xl border border-white/5">
                             <div>
-                              <span className="font-bold text-white uppercase block">Rede MMN ({mmnDepth} Gerações: G0 a G{mmnDepth - 1})</span>
-                              <span className="text-[10px] text-slate-400">{mmnDepth} níveis × {((Number(cashbackMensal) || 0) + (Number(cashbackAnual) || 0)).toFixed(1)}% ({cashbackMensal}% Mensal + {cashbackAnual}% Anual)</span>
+                              <span className="font-bold text-white uppercase block text-xs">Cashback Semanal Total</span>
+                              <span className="text-[10px] text-slate-400">
+                                Repasse às terças-feiras (R$ {(48 * totalCashbackSemanal / 100).toFixed(2)} sobre R$ 48,00)
+                              </span>
                             </div>
-                            <span className="font-mono font-black text-indigo-400 text-sm">
-                              {mmnLevels.slice(0, mmnDepth).reduce((a, b) => a + Number(b.value || 0), 0).toFixed(1)}{mmnType === 'percent' ? '%' : ' R$'}
+                            <span className="font-mono font-black text-indigo-400 text-base">
+                              {totalCashbackSemanal.toFixed(1)}{mmnType === 'percent' ? '%' : ' R$'}
                             </span>
                           </div>
 
-                          {/* Revendedor Regional */}
-                          <div className="flex items-center justify-between p-3 bg-white/5 rounded-2xl border border-white/5">
+                          {/* Cashback Anual Total */}
+                          <div className="flex items-center justify-between p-3.5 bg-white/5 rounded-2xl border border-white/5">
                             <div>
-                              <span className="font-bold text-white uppercase block">Revendedor Regional</span>
-                              <span className="text-[10px] text-slate-400">{commissionRegionalMensal}% Mensal + {commissionRegionalAnual}% Anual</span>
+                              <span className="font-bold text-white uppercase block text-xs">Cashback Anual Total (10/Dez)</span>
+                              <span className="text-[10px] text-slate-400">
+                                Provisão anual acumulada (R$ {(48 * totalCashbackAnual / 100).toFixed(2)} sobre R$ 48,00)
+                              </span>
                             </div>
-                            <span className="font-mono font-black text-purple-400 text-sm">
-                              {((Number(commissionRegionalMensal) || 0) + (Number(commissionRegionalAnual) || 0)).toFixed(1)}{mmnType === 'percent' ? '%' : ' R$'}
+                            <span className="font-mono font-black text-cyan-400 text-base">
+                              {totalCashbackAnual.toFixed(1)}{mmnType === 'percent' ? '%' : ' R$'}
                             </span>
                           </div>
 
-                          {/* Total Geral (Rede + Revendedor = 28%) */}
-                          <div className="flex items-center justify-between p-3.5 bg-gradient-to-r from-indigo-900/40 to-purple-900/40 rounded-2xl border border-indigo-500/30">
+                          {/* Total Distribuído MMN */}
+                          <div className="flex items-center justify-between p-3.5 bg-emerald-500/10 rounded-2xl border border-emerald-500/30">
                             <div>
-                              <span className="font-black text-white uppercase block text-sm">Total Rede + Revendedor</span>
-                              <span className="text-[10px] text-indigo-200 font-medium">Distribuição máxima do ecossistema</span>
+                              <span className="font-black text-white uppercase block text-xs flex items-center gap-1.5">
+                                <span className="size-2 bg-emerald-400 rounded-full animate-pulse" />
+                                Total Distribuído em Comissões (MMN)
+                              </span>
+                              <span className="text-[10px] text-emerald-300/80">
+                                Distribuição aos microfranqueados (R$ {(48 * totalDistribuicaoMMN / 100).toFixed(2)} sobre R$ 48,00)
+                              </span>
                             </div>
-                            <span className="font-mono font-black text-emerald-400 text-base">
-                              {(mmnLevels.slice(0, mmnDepth).reduce((a, b) => a + Number(b.value || 0), 0) + (Number(commissionRegionalMensal) || 0) + (Number(commissionRegionalAnual) || 0)).toFixed(1)}{mmnType === 'percent' ? '%' : ' R$'}
+                            <span className="font-mono font-black text-emerald-400 text-lg">
+                              {totalDistribuicaoMMN.toFixed(1)}{mmnType === 'percent' ? '%' : ' R$'}
                             </span>
+                          </div>
+
+                          {/* Margem Retida pela Empresa */}
+                          <div className="flex items-center justify-between p-3.5 bg-purple-500/10 rounded-2xl border border-purple-500/30">
+                            <div>
+                              <span className="font-black text-white uppercase block text-xs">
+                                Margem Retida pela Empresa
+                              </span>
+                              <span className="text-[10px] text-purple-300/80">
+                                Receita retida para operação (R$ {(48 * margemEmpresa / 100).toFixed(2)} sobre R$ 48,00)
+                              </span>
+                            </div>
+                            <span className="font-mono font-black text-purple-300 text-lg">
+                              {margemEmpresa.toFixed(1)}{mmnType === 'percent' ? '%' : ' R$'}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Dual-color visual progress bar */}
+                        <div className="space-y-1.5 pt-1">
+                          <div className="w-full h-3 bg-white/5 rounded-full overflow-hidden flex border border-white/10">
+                            <div 
+                              style={{ width: `${Math.min(100, Math.max(0, totalDistribuicaoMMN))}%` }} 
+                              className="bg-gradient-to-r from-emerald-500 to-teal-400 h-full transition-all duration-300" 
+                              title={`MMN: ${totalDistribuicaoMMN}%`}
+                            />
+                            <div 
+                              style={{ width: `${Math.min(100, Math.max(0, margemEmpresa))}%` }} 
+                              className="bg-gradient-to-r from-indigo-500 to-purple-500 h-full transition-all duration-300" 
+                              title={`Empresa: ${margemEmpresa}%`}
+                            />
+                          </div>
+                          <div className="flex justify-between text-[9px] font-black uppercase tracking-wider text-slate-400 px-1">
+                            <span className="text-emerald-400">Rede MMN: {totalDistribuicaoMMN.toFixed(1)}%</span>
+                            <span className="text-purple-400">Margem Empresa: {margemEmpresa.toFixed(1)}%</span>
                           </div>
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-3 p-3.5 bg-white/5 rounded-2xl border border-white/10 mt-auto">
-                        <HelpCircle size={16} className="text-indigo-400 shrink-0" />
-                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                          Regra do Sistema: Todos os pedidos e relatórios aplicam estes percentuais ativos.
+                      <div className="flex items-center gap-2.5 p-3 bg-white/5 rounded-2xl border border-white/5 mt-5">
+                        <CheckCircle size={14} className="text-emerald-400 shrink-0" />
+                        <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider leading-relaxed">
+                          Regra do Sistema: Novos pedidos e comissões aplicam rigorosamente estes percentuais ativos.
                         </span>
                       </div>
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-6">
-                    {mmnLevels.slice(0, Math.max(mmnDepth, 6)).map((level, index) => (
-                      <div key={level.level} className={`bg-white/5 p-6 rounded-[2rem] border border-white/5 hover:border-indigo-500/30 transition-colors group ${level.level > mmnDepth ? 'opacity-20 pointer-events-none' : ''}`}>
-                        <div className="flex items-center justify-between mb-4">
-                           <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">{`G${level.level - 1} - Nível ${level.level - 1}`}</p>
-                           {level.level === 1 && <div className="size-2 bg-emerald-500 rounded-full shadow-lg shadow-emerald-500/20 animate-pulse" />}
-                        </div>
-                        <div className="relative">
-                          <input 
-                            type="number" 
-                            step="0.01"
-                            value={level.value}
-                            onChange={(e) => {
-                              const newLevels = [...mmnLevels];
-                              newLevels[index] = { ...newLevels[index], value: Number(e.target.value) };
-                              setMmnLevels(newLevels);
-                            }}
-                            className="w-full bg-[#05070a] border border-white/5 px-4 py-4 rounded-2xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-white font-black text-xl"
-                          />
-                          <span className="absolute right-4 top-1/2 -translate-y-1/2 font-black text-indigo-500/50 text-base">
-                            {mmnType === 'percent' ? '%' : 'R$'}
-                          </span>
-                        </div>
+                  {/* Bottom Section: Interactive Generations Table (G0 to G5) */}
+                  <div className="space-y-4 pt-4 border-t border-white/5">
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                      <div>
+                        <h4 className="text-base font-black text-white tracking-wider uppercase italic flex items-center gap-2">
+                          <Layers size={18} className="text-indigo-400" />
+                          Tabela de Distribuição por Geração MMN
+                        </h4>
+                        <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">
+                          Deixar os percentuais de Cashbacks semanal e anual editáveis para alteração quando necessário
+                        </p>
                       </div>
-                    ))}
+
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] font-bold text-slate-400">Simulação base:</span>
+                        <span className="px-2.5 py-1 bg-white/5 border border-white/10 rounded-xl text-white font-mono font-black text-[10px]">
+                          Plano R$ 48,00
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Generations Table */}
+                    <div className="overflow-x-auto rounded-3xl border border-white/10 bg-[#05070a]/80 shadow-2xl">
+                      <table className="w-full text-left border-collapse">
+                        <thead>
+                          <tr className="border-b border-white/10 bg-white/[0.02] text-[10px] font-black text-slate-400 uppercase tracking-wider">
+                            <th className="py-4 px-6">Geração</th>
+                            <th className="py-4 px-4 text-center">Cashback Semanal (%)</th>
+                            <th className="py-4 px-4 text-center">Cashback Anual (%)</th>
+                            <th className="py-4 px-4 text-center">Total Geração</th>
+                            <th className="py-4 px-6 text-center">Simulação Pedido (R$ 48,00)</th>
+                            <th className="py-4 px-4 text-center">Status</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-white/5 text-xs">
+                          {[
+                            { level: 1, tag: 'G0', title: 'G0 - Venda Direta', subtitle: 'Venda Direta (21% semanal, 2% anual)' },
+                            { level: 2, tag: 'G1', title: 'G1 - Venda do Microfranqueado Indicado Direto', subtitle: 'Microfranqueado Indicado Direto (3% semanal, 2% anual)' },
+                            { level: 3, tag: 'G2', title: 'G2 - Venda do Microfranqueado Indireto', subtitle: 'Microfranqueado Indireto (3% semanal, 2% anual)' },
+                          ].map((gen) => {
+                            const lvl = mmnLevels.find(l => l.level === gen.level) || {
+                              level: gen.level,
+                              cashbackSemanal: gen.level === 1 ? 21 : (gen.level <= 3 ? 3 : 0),
+                              cashbackAnual: gen.level <= 3 ? 2 : 0,
+                              value: gen.level === 1 ? 23 : (gen.level <= 3 ? 5 : 0)
+                            };
+
+                            const isActive = gen.level <= mmnDepth;
+                            const semVal = Number(lvl.cashbackSemanal || 0);
+                            const anuVal = Number(lvl.cashbackAnual || 0);
+                            const totVal = Number((semVal + anuVal).toFixed(2));
+
+                            const simSemanal = Number((48 * semVal / 100).toFixed(2));
+                            const simAnual = Number((48 * anuVal / 100).toFixed(2));
+                            const simTotal = Number((simSemanal + simAnual).toFixed(2));
+
+                            return (
+                              <tr 
+                                key={gen.level}
+                                className={`transition-colors ${isActive ? 'bg-white/[0.01] hover:bg-white/[0.03]' : 'opacity-30 bg-black/20'}`}
+                              >
+                                {/* Geração Column */}
+                                <td className="py-4 px-6">
+                                  <div className="flex items-center gap-3">
+                                    <div className={`size-9 rounded-2xl flex items-center justify-center font-black text-sm shrink-0 shadow-md ${
+                                      gen.level === 1 
+                                        ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' 
+                                        : gen.level <= 3
+                                        ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30'
+                                        : 'bg-white/5 text-slate-400 border border-white/5'
+                                    }`}>
+                                      {gen.tag}
+                                    </div>
+                                    <div>
+                                      <div className="font-black text-white text-xs flex items-center gap-2">
+                                        {gen.title}
+                                        {gen.level === 1 && (
+                                          <span className="size-2 bg-emerald-400 rounded-full animate-pulse shadow-sm shadow-emerald-400/50" />
+                                        )}
+                                      </div>
+                                      <div className="text-[10px] text-slate-400 font-medium">
+                                        {gen.subtitle}
+                                      </div>
+                                    </div>
+                                  </div>
+                                </td>
+
+                                {/* Cashback Semanal Input */}
+                                <td className="py-4 px-4 text-center">
+                                  <div className="relative inline-block w-28">
+                                    <input 
+                                      type="number"
+                                      step="0.01"
+                                      min="0"
+                                      max="100"
+                                      disabled={!isActive}
+                                      value={lvl.cashbackSemanal}
+                                      onChange={(e) => handleLevelChange(gen.level, 'cashbackSemanal', Number(e.target.value))}
+                                      className={`w-full bg-[#0a0e17] border px-3 py-2.5 rounded-xl text-center font-black text-sm transition-all focus:outline-none ${
+                                        isActive 
+                                          ? 'border-indigo-500/30 text-indigo-300 focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500/20' 
+                                          : 'border-white/5 text-slate-500 cursor-not-allowed'
+                                      }`}
+                                    />
+                                    <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] font-black text-indigo-500/50">
+                                      %
+                                    </span>
+                                  </div>
+                                </td>
+
+                                {/* Cashback Anual Input */}
+                                <td className="py-4 px-4 text-center">
+                                  <div className="relative inline-block w-28">
+                                    <input 
+                                      type="number"
+                                      step="0.01"
+                                      min="0"
+                                      max="100"
+                                      disabled={!isActive}
+                                      value={lvl.cashbackAnual}
+                                      onChange={(e) => handleLevelChange(gen.level, 'cashbackAnual', Number(e.target.value))}
+                                      className={`w-full bg-[#0a0e17] border px-3 py-2.5 rounded-xl text-center font-black text-sm transition-all focus:outline-none ${
+                                        isActive 
+                                          ? 'border-cyan-500/30 text-cyan-300 focus:border-cyan-400 focus:ring-2 focus:ring-cyan-500/20' 
+                                          : 'border-white/5 text-slate-500 cursor-not-allowed'
+                                      }`}
+                                    />
+                                    <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] font-black text-cyan-500/50">
+                                      %
+                                    </span>
+                                  </div>
+                                </td>
+
+                                {/* Total Geração Badge */}
+                                <td className="py-4 px-4 text-center">
+                                  <span className={`inline-flex items-center px-3 py-1.5 rounded-xl font-mono font-black text-xs ${
+                                    isActive
+                                      ? gen.level === 1 
+                                        ? 'bg-emerald-500/15 border border-emerald-500/30 text-emerald-400' 
+                                        : 'bg-indigo-500/15 border border-indigo-500/30 text-indigo-300'
+                                      : 'bg-white/5 text-slate-500 border border-white/5'
+                                  }`}>
+                                    {totVal.toFixed(1)}%
+                                  </span>
+                                </td>
+
+                                {/* Simulação Pedido R$ 48 */}
+                                <td className="py-4 px-6 text-center">
+                                  {isActive ? (
+                                    <div className="text-[11px] font-mono leading-tight">
+                                      <span className="text-indigo-300 font-bold">Sem: R$ {simSemanal.toFixed(2)}</span>
+                                      <span className="text-slate-500 mx-1.5">+</span>
+                                      <span className="text-cyan-300 font-bold">Anu: R$ {simAnual.toFixed(2)}</span>
+                                      <span className="text-slate-500 mx-1.5">=</span>
+                                      <span className="text-emerald-400 font-black">R$ {simTotal.toFixed(2)}</span>
+                                    </div>
+                                  ) : (
+                                    <span className="text-[10px] text-slate-600 font-mono italic">
+                                      Nível desativado pela profundidade
+                                    </span>
+                                  )}
+                                </td>
+
+                                {/* Status */}
+                                <td className="py-4 px-4 text-center">
+                                  <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-wider ${
+                                    isActive
+                                      ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                                      : 'bg-white/5 text-slate-500 border border-white/5'
+                                  }`}>
+                                    <span className={`size-1.5 rounded-full ${isActive ? 'bg-emerald-400' : 'bg-slate-500'}`} />
+                                    {isActive ? 'Ativo' : 'Inativo'}
+                                  </span>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+
+                        {/* Totals Summary Footer */}
+                        <tfoot>
+                          <tr className="bg-gradient-to-r from-indigo-950/40 via-purple-950/40 to-indigo-950/40 border-t-2 border-indigo-500/30 font-black">
+                            <td className="py-4 px-6">
+                              <div className="text-xs text-white uppercase tracking-wider">
+                                TOTAL MMN ({mmnDepth} Gerações Ativas)
+                              </div>
+                              <div className="text-[10px] text-slate-400 font-normal">
+                                Distribuição total da rede + margem retida pela empresa
+                              </div>
+                            </td>
+                            <td className="py-4 px-4 text-center">
+                              <span className="font-mono text-indigo-400 text-sm">
+                                {totalCashbackSemanal.toFixed(1)}%
+                              </span>
+                              <div className="text-[9px] font-mono text-slate-400 font-normal">
+                                R$ {(48 * totalCashbackSemanal / 100).toFixed(2)}
+                              </div>
+                            </td>
+                            <td className="py-4 px-4 text-center">
+                              <span className="font-mono text-cyan-400 text-sm">
+                                {totalCashbackAnual.toFixed(1)}%
+                              </span>
+                              <div className="text-[9px] font-mono text-slate-400 font-normal">
+                                R$ {(48 * totalCashbackAnual / 100).toFixed(2)}
+                              </div>
+                            </td>
+                            <td className="py-4 px-4 text-center">
+                              <span className="inline-flex items-center px-3 py-1.5 rounded-xl bg-emerald-500/20 border border-emerald-500/40 font-mono text-emerald-400 text-sm">
+                                {totalDistribuicaoMMN.toFixed(1)}%
+                              </span>
+                              <div className="text-[9px] font-mono text-emerald-400/80 font-normal mt-0.5">
+                                R$ {(48 * totalDistribuicaoMMN / 100).toFixed(2)}
+                              </div>
+                            </td>
+                            <td className="py-4 px-6 text-center">
+                              <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-purple-500/15 border border-purple-500/30 text-purple-300 text-[11px] font-mono">
+                                <span>Margem Empresa:</span>
+                                <strong className="text-white text-xs">{margemEmpresa.toFixed(1)}% (R$ {(48 * margemEmpresa / 100).toFixed(2)})</strong>
+                              </div>
+                            </td>
+                            <td className="py-4 px-4 text-center">
+                              <span className="px-2.5 py-1 bg-indigo-500/20 border border-indigo-500/30 text-indigo-300 rounded-full text-[9px] uppercase tracking-wider">
+                                Ativo
+                              </span>
+                            </td>
+                          </tr>
+                        </tfoot>
+                      </table>
+                    </div>
                   </div>
                 </motion.div>
               )}

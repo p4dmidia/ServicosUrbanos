@@ -35,10 +35,12 @@ import RPAReceiptModal from '../components/RPAReceiptModal';
 import { businessRules, RPAReceipt } from '../lib/businessRules';
 import { useAuth } from '../contexts/AuthContext';
 import { toast } from 'react-hot-toast';
+import { useSubscriptionPlans } from '../lib/subscriptionPlans';
 
 export default function AffiliateDashboard() {
   const navigate = useNavigate();
   const { user, profile } = useAuth();
+  const { minPrice } = useSubscriptionPlans();
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState<any>(null);
   const [activity, setActivity] = useState<any[]>([]);
@@ -193,7 +195,7 @@ export default function AffiliateDashboard() {
                 to="/afiliado/renovacoes" 
                 className="bg-amber-600 hover:bg-amber-700 text-white font-black px-6 py-3 rounded-xl text-xs uppercase tracking-widest transition-all shadow-md shadow-amber-600/20 whitespace-nowrap active:scale-95 shrink-0"
               >
-                Ativar por R$ 5,00/mês
+                Ativar por R$ {minPrice.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}/mês
               </Link>
             </div>
           )}
@@ -511,7 +513,7 @@ export default function AffiliateDashboard() {
                       {apolice?.created_at ? new Date(apolice.created_at).toLocaleDateString('pt-BR') : 'Hoje'}
                     </td>
                     <td className="py-5 text-right font-black text-midnight text-sm">
-                      {isPolicyActive ? 'R$ 5,00/mês' : 'Aguardando'}
+                      {isPolicyActive ? `R$ ${Number(stats?.activeSubscription?.amount || seguradoData?.apolice?.amount || minPrice || 48).toFixed(2).replace('.', ',')}/mês` : 'Aguardando'}
                     </td>
                     <td className="py-5 text-center pr-4">
                       <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black uppercase ${
@@ -677,7 +679,7 @@ export default function AffiliateDashboard() {
                   Sua microfranquia não inclui seguro nem números da sorte
                 </h4>
                 <p className="text-xs text-blue-200/80 font-medium">
-                  Sua licença confere direito exclusivo à comissão em rede. Para ter cobertura de R$ 5.000, telemedicina 24h e concorrer aos sorteios, assine o Seguro Vida Light a partir de R$ 5,00/mês.
+                  Sua licença confere direito exclusivo à comissão em rede. Para ter cobertura de R$ 5.000, telemedicina 24h e concorrer aos sorteios, assine o Seguro Vida Light a partir de R$ {minPrice.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}/mês.
                 </p>
               </div>
             </div>
@@ -686,7 +688,7 @@ export default function AffiliateDashboard() {
               className="bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-black px-6 py-3 rounded-xl text-xs uppercase tracking-widest transition-all shadow-md shadow-emerald-500/20 whitespace-nowrap active:scale-95 shrink-0 flex items-center gap-2"
             >
               <Shield size={16} />
-              Contratar por R$ 5,00/mês
+              Contratar por R$ {minPrice.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}/mês
             </Link>
           </div>
         ) : (
@@ -880,7 +882,7 @@ export default function AffiliateDashboard() {
                   Compartilhe seu <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-sky-300">Link Oficial</span>
                 </h2>
                 <p className="text-slate-300 text-sm font-medium mt-2 max-w-xl leading-relaxed">
-                  Indique clientes para o <strong>Seguro Vida Light</strong> (a partir de R$ 5,00/mês) ou recrute novos <strong>Microfranqueados</strong> para expandir sua equipe e maximizar comissões em 3 níveis.
+                  Indique clientes para o <strong>Seguro Vida Light</strong> (a partir de R$ {minPrice.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}/mês) ou recrute novos <strong>Microfranqueados</strong> para expandir sua equipe e maximizar comissões em 3 níveis.
                 </p>
               </div>
 

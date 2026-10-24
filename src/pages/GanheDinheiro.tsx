@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   LayoutGrid,
   CheckCircle,
@@ -28,10 +28,35 @@ import { motion } from 'motion/react';
 import { Link } from 'react-router-dom';
 import Header from '../components/Header';
 import { calculateTaxDeductions } from '../lib/businessRules';
+import { useSubscriptionPlans } from '../lib/subscriptionPlans';
 
 export default function GanheDinheiro() {
-  // Planos oficiais do Seguro Vida Light (Produto B)
-  const [selectedPlanValue, setSelectedPlanValue] = useState<number>(5.00); // 5, 15, 30, 48
+  const { plans: seguroPlans, minPrice } = useSubscriptionPlans();
+
+  const planOptions = useMemo(() => {
+    if (seguroPlans && seguroPlans.length > 0) {
+      return seguroPlans.map(p => ({
+        label: p.name.replace(/^Plano\s+/i, '').replace(/^Seguro Vida Light\s+/i, ''),
+        price: Number(p.price),
+        desc: `R$ ${Number(p.price).toFixed(2).replace('.', ',')} / ${p.duration_days} dias`
+      }));
+    }
+    return [
+      { label: 'Mensal', price: 6.00, desc: 'R$ 6,00 / 30 dias' },
+      { label: 'Trimestral', price: 15.00, desc: 'R$ 15,00 / 90 dias' },
+      { label: 'Semestral', price: 30.00, desc: 'R$ 30,00 / 180 dias' },
+      { label: 'Anual', price: 90.00, desc: 'R$ 90,00 / 365 dias' },
+    ];
+  }, [seguroPlans]);
+
+  const [selectedPlanValue, setSelectedPlanValue] = useState<number>(6.00);
+
+  useEffect(() => {
+    if (planOptions.length > 0 && !planOptions.some(p => p.price === selectedPlanValue)) {
+      setSelectedPlanValue(planOptions[0].price);
+    }
+  }, [planOptions]);
+
   const [g0MembersStr, setG0MembersStr] = useState('20'); // Clientes Diretos (G0)
   const [g1MembersStr, setG1MembersStr] = useState('100'); // Clientes Nível 1 (G1)
   const [g2MembersStr, setG2MembersStr] = useState('300'); // Clientes Nível 2 (G2)
@@ -74,12 +99,6 @@ export default function GanheDinheiro() {
   const taxesMEI = calculateTaxDeductions(estimativaMensalBruto, true);
   const economiaMEI = Math.max(0, taxesMEI.liquido - taxesPF.liquido);
 
-  const planOptions = [
-    { label: 'Mensal', price: 5.00, desc: 'R$ 5,00 / mês' },
-    { label: 'Trimestral', price: 15.00, desc: 'R$ 15,00 / trim' },
-    { label: 'Semestral', price: 30.00, desc: 'R$ 30,00 / sem' },
-    { label: 'Anual', price: 48.00, desc: 'R$ 48,00 / ano' },
-  ];
 
   return (
     <div className="min-h-screen flex flex-col font-sans bg-midnight text-slate-100 overflow-x-hidden">
@@ -153,7 +172,7 @@ export default function GanheDinheiro() {
                 </div>
                 <h3 className="text-lg font-bold mb-2 text-white">2. Seguro Vida Light</h3>
                 <p className="text-slate-400 text-xs font-medium leading-relaxed">
-                  Ofereça o produto ao público final a partir de <strong>R$ 5,00/mês</strong> com seguro MBM R$ 5.000, telemedicina 24h e sorteios pela Loteria Federal.
+                  Ofereça o produto ao público final a partir de <strong>R$ {minPrice.toFixed(2).replace('.', ',')}/mês</strong> com seguro MBM R$ 5.000, telemedicina 24h e sorteios pela Loteria Federal.
                 </p>
               </div>
 

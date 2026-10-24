@@ -24,7 +24,9 @@ import {
   Layers,
   Tag,
   Copy,
-  Check
+  Check,
+  ChevronDown,
+  ChevronUp
 } from 'lucide-react';
 import AffiliateLayout from '../components/AffiliateLayout';
 import { useAuth } from '../contexts/AuthContext';
@@ -37,6 +39,7 @@ export default function AffiliateFinancialSummary() {
   const { user, profile } = useAuth();
   const [loading, setLoading] = useState(true);
   const [copiedRpa, setCopiedRpa] = useState(false);
+  const [expandedWeeks, setExpandedWeeks] = useState<Record<number, boolean>>({});
 
   // Competência selecionada (Mês e Ano)
   const [currentDate, setCurrentDate] = useState(() => {
@@ -46,6 +49,7 @@ export default function AffiliateFinancialSummary() {
 
   const [statement, setStatement] = useState<any>(null);
   const [archives, setArchives] = useState<any[]>([]);
+  const [networkMembers, setNetworkMembers] = useState<any[]>([]);
   const [activeTab, setActiveTab] = useState<'statement' | 'archives'>('statement');
 
   const selectedYear = currentDate.getFullYear();
@@ -55,16 +59,101 @@ export default function AffiliateFinancialSummary() {
     return currentDate.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
   }, [currentDate]);
 
+  // Ciclos semanais do mês selecionado enriquecidos com os pedidos da competência
+  const weeklyCycles = useMemo(() => {
+    const rawCycles = (businessRules as any).getWeeklyCyclesForMonth(selectedYear, selectedMonth);
+    const orders = statement?.ordersBreakdown || [];
+
+    const parseOrderDate = (dateStr: string): Date | null => {
+      if (!dateStr) return null;
+      if (dateStr.includes('/')) {
+        const parts = dateStr.split('/');
+        if (parts.length === 3) {
+          return new Date(parseInt(parts[2], 10), parseInt(parts[1], 10) - 1, parseInt(parts[0], 10));
+        }
+      }
+      const d = new Date(dateStr);
+      return isNaN(d.getTime()) ? null : d;
+    };
+
+    const now = new Date();
+
+    return rawCycles.map((cycle: any) => {
+      const cycleOrders = orders.filter((o: any) => {
+        const oDate = parseOrderDate(o.date);
+        if (!oDate) return false;
+        return oDate >= cycle.cycleStart && oDate <= cycle.cycleEnd;
+      });
+
+      const bruto = cycleOrders.reduce((sum: number, o: any) => sum + Number(o.commissionAmount || 0), 0);
+      const contractTotal = cycleOrders.reduce((sum: number, o: any) => sum + Number(o.contractAmount || o.orderAmount || 0), 0);
+
+      const baseRpa = statement?.rpaNumber || `RPA Nº ${selectedYear}${String(selectedMonth).padStart(2, '0')}`;
+      const rpaParts = baseRpa.split('-');
+      const rpaWeeklyNumber = rpaParts.length === 2 
+        ? `${rpaParts[0]}-${cycle.rpaSuffix}-${rpaParts[1]}` 
+        : `${baseRpa}-${cycle.rpaSuffix}`;
+
+      const isPaid = statement?.isPaid || (now > cycle.payoutDate && bruto > 0 && !cycleOrders.some((o: any) => o.status === 'Pendente' || o.status === 'pending'));
+      const isCurrentWeek = now >= cycle.cycleStart && now <= cycle.cycleEnd;
+      const isPending = !isPaid && bruto > 0;
+
+      return {
+        ...cycle,
+        orders: cycleOrders,
+        pedidosCount: cycleOrders.length,
+        bruto,
+        liquido: bruto,
+        contractTotal,
+        rpaWeeklyNumber,
+        isPaid,
+        isCurrentWeek,
+        isPending
+      };
+    });
+  }, [selectedYear, selectedMonth, statement]);
+
+  const monthlyWeeklyTotals = useMemo(() => {
+    let totalPago = 0;
+    let totalPrevisto = 0;
+    let totalPedidosMes = 0;
+
+    weeklyCycles.forEach((w: any) => {
+      totalPedidosMes += w.pedidosCount;
+      if (w.isPaid) {
+        totalPago += w.liquido;
+      } else {
+        totalPrevisto += w.liquido;
+      }
+    });
+
+    return {
+      totalPago,
+      totalPrevisto,
+      totalPedidosMes,
+      totalGeralMes: totalPago + totalPrevisto
+    };
+  }, [weeklyCycles]);
+
+  const toggleWeekExpand = (weekNumber: number) => {
+    setExpandedWeeks(prev => ({
+      ...prev,
+      [weekNumber]: !prev[weekNumber]
+    }));
+  };
+
   const loadData = async () => {
     if (!user) return;
     setLoading(true);
     try {
-      const [stmtData, archivesData] = await Promise.all([
+      const [stmtData, archivesData, netMembers] = await Promise.all([
         businessRules.getConsolidatedFinancialStatement(user.id, selectedYear, selectedMonth),
-        businessRules.getMonthlyPayoutArchives({ userId: user.id })
+        businessRules.getMonthlyPayoutArchives({ userId: user.id }),
+        businessRules.getAffiliateNetwork(user.id)
       ]);
       setStatement(stmtData);
       setArchives(archivesData || []);
+      setNetworkMembers(netMembers || []);
     } catch (error) {
       console.error('Erro ao carregar resumo financeiro consolidado:', error);
       toast.error('Erro ao calcular resumo financeiro');
@@ -93,22 +182,173 @@ export default function AffiliateFinancialSummary() {
     setTimeout(() => setCopiedRpa(false), 2500);
   };
 
-  const handlePrintPDF = () => {
+  // Agrupamento hierárquico MMN dos pedidos do RPA: Microfranqueados G0, G1 e G2
+  const mmnHierarchyGroups = useMemo(() => {
+    const rawBreakdown = (statement?.ordersBreakdown || []).filter((t: any) => t.level !== 'REG');
+
+    // 1. G0 - O próprio Microfranqueado autenticado (Vendas Diretas)
+    const g0Mf = {
+      id: user?.id || 'g0',
+      name: profile?.full_name || statement?.beneficiaryName || 'Você (Microfranqueado)',
+      levelTag: 'G0',
+      category: 'MICROFRANQUEADO',
+      date: '0',
+      status: '0'
+    };
+    const g0Orders = rawBreakdown.filter((t: any) => t.level === '0' || t.level === 0 || t.level === 'G0');
+
+    // 2. G1 - Microfranqueados indicados direto por G0
+    const g1Members = (networkMembers || []).filter((m: any) => Number(m.level) === 1);
+    const g1Orders = rawBreakdown.filter((t: any) => t.level === '1' || t.level === 1 || t.level === 'G1');
+
+    const g1Groups: any[] = [];
+    if (g1Members.length > 0) {
+      g1Members.forEach(m => {
+        const orders = g1Orders.filter((t: any) => t.sellerId === m.id || t.referredBy === m.id);
+        const resolvedOrders = orders.length > 0 ? orders : (g1Members.length === 1 ? g1Orders : []);
+        if (resolvedOrders.length > 0) {
+          g1Groups.push({
+            key: `g1-${m.id}`,
+            levelTag: 'G1',
+            microfranqueado: {
+              id: m.id,
+              name: m.name,
+              levelTag: 'G1',
+              category: 'MICROFRANQUEADO',
+              date: '0',
+              status: '0'
+            },
+            orders: resolvedOrders
+          });
+        }
+      });
+    } else if (g1Orders.length > 0) {
+      const seller = g1Orders[0]?.sellerName || g1Orders[0]?.affiliateName || 'Microfranqueado Indicado Direto (G1)';
+      g1Groups.push({
+        key: 'g1-default',
+        levelTag: 'G1',
+        microfranqueado: {
+          id: 'g1-default',
+          name: seller,
+          levelTag: 'G1',
+          category: 'MICROFRANQUEADO',
+          date: '0',
+          status: '0'
+        },
+        orders: g1Orders
+      });
+    }
+
+    // 3. G2 - Microfranqueados indicados diretos de seu G1
+    const g2Members = (networkMembers || []).filter((m: any) => Number(m.level) === 2);
+    const g2Orders = rawBreakdown.filter((t: any) => t.level === '2' || t.level === 2 || t.level === 'G2');
+
+    const g2Groups: any[] = [];
+    if (g2Members.length > 0) {
+      g2Members.forEach(m => {
+        const orders = g2Orders.filter((t: any) => t.sellerId === m.id || t.referredBy === m.id);
+        const resolvedOrders = orders.length > 0 ? orders : (g2Members.length === 1 ? g2Orders : []);
+        if (resolvedOrders.length > 0) {
+          g2Groups.push({
+            key: `g2-${m.id}`,
+            levelTag: 'G2',
+            microfranqueado: {
+              id: m.id,
+              name: m.name,
+              levelTag: 'G2',
+              category: 'MICROFRANQUEADO',
+              date: '0',
+              status: '0'
+            },
+            orders: resolvedOrders
+          });
+        }
+      });
+    } else if (g2Orders.length > 0) {
+      const seller = g2Orders[0]?.sellerName || g2Orders[0]?.affiliateName || 'Microfranqueado Indireto (G2)';
+      g2Groups.push({
+        key: 'g2-default',
+        levelTag: 'G2',
+        microfranqueado: {
+          id: 'g2-default',
+          name: seller,
+          levelTag: 'G2',
+          category: 'MICROFRANQUEADO',
+          date: '0',
+          status: '0'
+        },
+        orders: g2Orders
+      });
+    }
+
+    const allGroups: any[] = [];
+    if (g0Orders.length > 0 || (g1Groups.length === 0 && g2Groups.length === 0)) {
+      allGroups.push({
+        key: 'g0',
+        levelTag: 'G0',
+        microfranqueado: g0Mf,
+        orders: g0Orders
+      });
+    }
+
+    g1Groups.forEach(g => allGroups.push(g));
+    g2Groups.forEach(g => allGroups.push(g));
+
+    return allGroups;
+  }, [user, profile, statement?.ordersBreakdown, statement?.beneficiaryName, networkMembers]);
+
+  // Totais agregados da tabela de pedidos vinculados ao RPA
+  const { totalContratosUnicos, totalComissaoCalculada, mediaPercentual } = useMemo(() => {
+    if (!statement?.ordersBreakdown || statement.ordersBreakdown.length === 0) {
+      return { totalContratosUnicos: 0, totalComissaoCalculada: 0, mediaPercentual: 0 };
+    }
+    const uniqueOrders = new Map<string, number>();
+    let totalComissao = 0;
+
+    statement.ordersBreakdown.forEach((o: any) => {
+      const key = o.orderId && o.orderId !== '---' ? String(o.orderId) : (o.orderNumber || o.id);
+      const amt = Number(o.contractAmount || o.orderAmount || o.amount || 0);
+      if (!uniqueOrders.has(key) || amt > (uniqueOrders.get(key) || 0)) {
+        uniqueOrders.set(key, amt);
+      }
+      totalComissao += Number(o.commissionAmount || o.bruto || 0);
+    });
+
+    const totalContratos = Array.from(uniqueOrders.values()).reduce((a, b) => a + b, 0);
+    const perc = totalContratos > 0 ? (totalComissao / totalContratos) * 100 : 0;
+
+    return {
+      totalContratosUnicos: totalContratos,
+      totalComissaoCalculada: totalComissao,
+      mediaPercentual: perc
+    };
+  }, [statement?.ordersBreakdown]);
+
+  const handlePrintPDF = (specificWeek?: any) => {
     if (!statement) return;
     const doc = new jsPDF();
+
+    const targetPeriodo = specificWeek ? specificWeek.periodoStr : statement.periodoStr;
+    const targetPrevisao = specificWeek ? specificWeek.previsaoPagamentoStr : statement.previsaoPagamentoStr;
+    const targetRpa = specificWeek ? specificWeek.rpaWeeklyNumber : (statement.rpaNumber || 'RPA-PENDENTE');
 
     // Título Principal
     doc.setFontSize(13);
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(220, 38, 38); // Vermelho
-    doc.text('REPASSE MENSAL DE REDE MMN - AFILIADO/REVENDEDOR - RESUMO DO PAGAMENTO', 105, 16, { align: 'center' });
+    doc.text(
+      specificWeek 
+        ? `REPASSE SEMANAL DE REDE MMN - MICROFRANQUEADO (${specificWeek.weekLabel.toUpperCase()})` 
+        : 'REPASSE SEMANAL DE REDE MMN - MICROFRANQUEADO - RESUMO DO PAGAMENTO', 
+      105, 16, { align: 'center' }
+    );
 
     // Subtítulos
     doc.setFontSize(9.5);
     doc.setFont('helvetica', 'normal');
     doc.setTextColor(15, 23, 42);
-    doc.text(`PERIODO DE ${statement.periodoStr}  •  DOCUMENTO / RECIBO: ${statement.rpaNumber || 'RPA-PENDENTE'}`, 105, 23, { align: 'center' });
-    doc.text(`PREVISÃO DE PAGAMENTO DIA ${statement.previsaoPagamentoStr}`, 105, 29, { align: 'center' });
+    doc.text(`PERIODO DE ${targetPeriodo}  •  DOCUMENTO / RECIBO: ${targetRpa}`, 105, 23, { align: 'center' });
+    doc.text(`PREVISÃO DE PAGAMENTO: ${targetPrevisao}`, 105, 29, { align: 'center' });
 
     // Faixa Amarela do Beneficiário
     doc.setFillColor(254, 240, 138); // Amarelo
@@ -116,63 +356,50 @@ export default function AffiliateFinancialSummary() {
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(10.5);
     doc.setTextColor(15, 23, 42);
-    doc.text(`AFILIADO/REVENDEDOR - ${statement.beneficiaryName.toUpperCase()}  |  ${statement.rpaNumber || ''}`, 105, 40, { align: 'center' });
+    doc.text(`MICROFRANQUEADO - ${statement.beneficiaryName.toUpperCase()}  |  ${targetRpa}`, 105, 40, { align: 'center' });
 
     // Chave Pix & Pedidos Vinculados
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(9);
-    doc.text(`CHAVE PIX: ${statement.pixKey}   |   PEDIDOS VINCULADOS: ${(statement.ordersList || []).join(', ') || 'Nenhum'}`, 105, 48, { align: 'center' });
+    const pedidosLabel = specificWeek 
+      ? (specificWeek.orders.map((o: any) => o.orderNumber).join(', ') || 'Nenhum')
+      : ((statement.ordersList || []).join(', ') || 'Nenhum');
+    doc.text(`CHAVE PIX: ${statement.pixKey}   |   PEDIDOS VINCULADOS: ${pedidosLabel}`, 105, 48, { align: 'center' });
 
     // Tabela do Demonstrativo Consolidado
     const tableRows = [
       [
-        'Cashback mensal da Rede de MMN (G0 AO G2)',
+        'Cashback semanal da Rede de MMN (G0 AO G2) do Microfranqueado',
         statement.brutoMensalMmn.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
       ],
       [
-        'Cashback mensal do Revendedor',
-        statement.brutoMensalRevendedor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
-      ],
-      [
-        `Cashbbach anual AFILIADO periodo ${statement.annualPeriodLabel}`,
+        `Cashback anual MICROFRANQUEADO periodo ${statement.annualPeriodLabel}`,
         statement.brutoAnualMmn > 0 
           ? statement.brutoAnualMmn.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) 
-          : '-'
-      ],
-      [
-        `Cashbbach anual REVENDEDOR periodo ${statement.annualPeriodLabel}`,
-        statement.brutoAnualRevendedor > 0 
-          ? statement.brutoAnualRevendedor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) 
-          : '-'
+          : 'R$ 0,00'
       ],
       [
         'TOTAL BRUTO',
         statement.totalBruto.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
       ],
       [
-        `TOTAL A RECEBER ATÉ ${statement.limiteNotaFiscalStr}`,
-        statement.totalBruto.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+        'INSS (0% - INTERMEDIAÇÃO DE NEGÓCIOS) 0% de retenção na fonte. Afiliado autônomo recolhe individualmente',
+        statement.isPJ ? 'Isento (PJ)' : 'R$ 0,00 (0%)'
       ],
       [
-        'INSS (0% - Intermediação de Negócios / Isenção na Fonte)',
-        statement.isPJ ? 'Isento (PJ)' : '0% (Recolhimento individual)'
-      ],
-      [
-        'BASE DE CALCULO DO IRPF (BRUTO - DEDUÇÃO SIMPLIFICADA)',
+        'BASE DE CÁLCULO DO IRPF (BRUTO - DEDUÇÃO) Base de apuração para aplicação da tabela progressiva RFB',
         statement.isPJ ? 'Isento (PJ)' : statement.baseIrrf.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
       ],
       [
-        'IRRF',
-        statement.isPJ || statement.irrf === 0 ? 'Isento' : `- ${statement.irrf.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`
+        'IRRF - Retenção na Fonte conforme faixa de rendimentos da RFB (Tabela 2026 / Lei 15.270)',
+        statement.isPJ || statement.irrf === 0 ? 'R$ 0,00' : `- ${statement.irrf.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`
       ],
-      ...(statement.adiantamento > 0 ? [
-        [
-          `(-) ADIANTAMENTO DE RENDIMENTOS${statement.adiantamentoDate ? ` (Pago em ${statement.adiantamentoDate})` : ''}`,
-          `- ${statement.adiantamento.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`
-        ]
-      ] : []),
       [
-        'LIQUIDO A RECEBER',
+        'LÍQUIDO A RECEBER - Disponível para saque e transferência VIA PIX',
+        statement.liquido.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+      ],
+      [
+        `TOTAL A RECEBER ATÉ ${statement.limiteNotaFiscalStr || statement.previsaoPagamentoStr}`,
         statement.liquido.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
       ]
     ];
@@ -193,32 +420,21 @@ export default function AffiliateFinancialSummary() {
       },
       didParseCell: (data) => {
         // Linhas de cashback anual em vermelho
-        if (data.row.index === 2 || data.row.index === 3) {
+        if (data.row.index === 1) {
           data.cell.styles.textColor = [220, 38, 38];
         }
         // Total Bruto
-        if (data.row.index === 4) {
+        if (data.row.index === 2) {
           data.cell.styles.fontStyle = 'bold';
         }
         // Total a receber em amarelo
-        if (data.row.index === 5) {
+        if (data.row.index === 7) {
           data.cell.styles.fillColor = [254, 240, 138];
           data.cell.styles.textColor = [0, 0, 0];
           data.cell.styles.fontStyle = 'bold';
         }
-        // INSS em vermelho
-        if (data.row.index === 6 && data.column.index === 1 && !statement.isPJ) {
-          data.cell.styles.textColor = [220, 38, 38];
-        }
-        // IRRF em verde claro
-        if (data.row.index === 8) {
-          data.cell.styles.fillColor = [220, 252, 231];
-          if (data.column.index === 1 && !statement.isPJ && statement.irrf > 0) {
-            data.cell.styles.textColor = [220, 38, 38];
-          }
-        }
-        // Líquido em destaque
-        if (data.row.index === 9) {
+        // Líquido em destaque verde
+        if (data.row.index === 6) {
           data.cell.styles.fontStyle = 'bold';
           data.cell.styles.textColor = [5, 150, 105];
           data.cell.styles.fontSize = 9.5;
@@ -228,29 +444,74 @@ export default function AffiliateFinancialSummary() {
 
     let lastY = (doc as any).lastAutoTable.finalY + 8;
 
-    // Tabela Secundária: Discriminação dos Pedidos e Valores
-    if (statement.ordersBreakdown && statement.ordersBreakdown.length > 0) {
+    // Tabela Secundária: Discriminação dos Pedidos e Comissões
+    if (mmnHierarchyGroups && mmnHierarchyGroups.length > 0) {
       doc.setFontSize(10);
       doc.setFont('helvetica', 'bold');
       doc.setTextColor(15, 23, 42);
       doc.text(`DISCRIMINAÇÃO DOS PEDIDOS E COMISSÕES DA COMPETÊNCIA (${statement.rpaNumber || 'RPA'})`, 14, lastY);
 
-      const orderRows = statement.ordersBreakdown.map((item: any) => [
-        item.orderNumber,
-        item.date,
-        item.origin,
-        item.orderAmount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }),
-        `${item.commissionRate}%`,
-        item.commissionAmount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+      const tableRowsGrouped: any[] = [];
+      mmnHierarchyGroups.forEach((group: any) => {
+        // Linha master do microfranqueado
+        tableRowsGrouped.push([
+          '0',
+          group.microfranqueado.name,
+          group.levelTag,
+          'MICROFRANQUEADO',
+          '0',
+          '0',
+          '0',
+          '0',
+          '0'
+        ]);
+        // Pedidos
+        group.orders.forEach((order: any) => {
+          tableRowsGrouped.push([
+            order.orderNumber,
+            order.affiliateName || 'Afiliado',
+            'AF',
+            order.category || 'SEMANAL',
+            order.date,
+            Number(order.contractAmount || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }),
+            order.rate || `${order.percentage || 21}%`,
+            Number(order.commissionAmount || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }),
+            order.status
+          ]);
+        });
+      });
+
+      // Rodapé
+      tableRowsGrouped.push([
+        'TOTAL BRUTO MENSAL APURADO',
+        '',
+        '',
+        '',
+        '',
+        totalContratosUnicos.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }),
+        `${mediaPercentual.toFixed(0)}%`,
+        statement.totalBruto.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }),
+        'BRUTO'
+      ]);
+      tableRowsGrouped.push([
+        '(=) SALDO SEMANAL A RECEBER',
+        '',
+        '',
+        '',
+        '',
+        '',
+        '',
+        statement.liquido.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }),
+        'A RECEBER'
       ]);
 
       autoTable(doc, {
         startY: lastY + 3,
-        head: [['Nº Pedido', 'Data', 'Origem / Nível', 'Valor Base', 'Alíquota (%)', 'Comissão (R$)']],
-        body: orderRows,
+        head: [['ID PEDIDO', 'AFILIADO / ORIGEM', 'NÍVEL', 'CATEGORIA', 'DATA', 'VALOR CONTRATO', 'PERC.', 'VALOR BRUTO', 'STATUS']],
+        body: tableRowsGrouped,
         theme: 'striped',
         styles: {
-          fontSize: 8,
+          fontSize: 7.5,
           cellPadding: 2,
           lineColor: [203, 213, 225],
           lineWidth: 0.1
@@ -261,12 +522,15 @@ export default function AffiliateFinancialSummary() {
           fontStyle: 'bold'
         },
         columnStyles: {
-          0: { fontStyle: 'bold', cellWidth: 28 },
-          1: { cellWidth: 22 },
-          2: { cellWidth: 45 },
-          3: { halign: 'right', cellWidth: 28 },
-          4: { halign: 'center', cellWidth: 22 },
-          5: { halign: 'right', fontStyle: 'bold', textColor: [5, 150, 105], cellWidth: 37 }
+          0: { fontStyle: 'bold', cellWidth: 20 },
+          1: { cellWidth: 35 },
+          2: { halign: 'center', cellWidth: 14 },
+          3: { halign: 'center', cellWidth: 22 },
+          4: { cellWidth: 18 },
+          5: { halign: 'right', cellWidth: 22 },
+          6: { halign: 'center', cellWidth: 14 },
+          7: { halign: 'right', fontStyle: 'bold', textColor: [5, 150, 105], cellWidth: 22 },
+          8: { halign: 'center', cellWidth: 15 }
         }
       });
 
@@ -275,9 +539,10 @@ export default function AffiliateFinancialSummary() {
 
     doc.setFontSize(7.5);
     doc.setTextColor(100, 116, 139);
-    doc.text(`Documento consolidado gerado eletronicamente em ${new Date().toLocaleString('pt-BR')} - Plataforma Serviços Urbanos • ${statement.rpaNumber || ''}`, 105, lastY + 4, { align: 'center' });
-
-    doc.save(`financeiro-resumo-${selectedYear}-${String(selectedMonth).padStart(2, '0')}.pdf`);
+    const pdfFileName = specificWeek 
+      ? `repasse-semanal-${specificWeek.rpaSuffix.toLowerCase()}-${selectedYear}-${String(selectedMonth).padStart(2, '0')}.pdf`
+      : `repasse-semanal-microfranqueado-${selectedYear}-${String(selectedMonth).padStart(2, '0')}.pdf`;
+    doc.save(pdfFileName);
   };
 
   const handleExportCSV = () => {
@@ -290,7 +555,7 @@ export default function AffiliateFinancialSummary() {
     <AffiliateLayout 
       title="Financeiro Resumo"
       customBalance={statement?.isPaid ? 0 : statement?.liquido}
-      customBalanceLabel={statement?.isPaid ? "Competência Quitada" : "Saldo Mensal Disponível (Dia 10)"}
+      customBalanceLabel={statement?.isPaid ? "Competência Quitada" : "Comissão Semanal Disponível (Terça-Feira)"}
     >
       <div className="p-6 md:p-10 lg:p-12 space-y-8 max-w-5xl mx-auto">
         
@@ -306,7 +571,7 @@ export default function AffiliateFinancialSummary() {
               </h2>
             </div>
             <p className="text-xs text-slate-400 font-bold uppercase tracking-wider">
-              Demonstrativo unificado: Rede MMN + Revendedor Regional com apuração fiscal oficial
+              Demonstrativo oficial de repasses semanais: Rede MMN (G0 ao G2) com apuração tributária
             </p>
           </div>
 
@@ -359,7 +624,7 @@ export default function AffiliateFinancialSummary() {
             }`}
           >
             <FolderArchive size={16} />
-            Pasta de Pagamentos Mensais ({archives.length})
+            Pasta de Pagamentos Semanais
           </button>
         </div>
 
@@ -416,14 +681,14 @@ export default function AffiliateFinancialSummary() {
               </div>
             </div>
 
-            {/* GRID DE CARDS MODERNOS: RESUMO CONSOLIDADO */}
-            <div className={`grid grid-cols-1 sm:grid-cols-2 ${statement.isDecemberAnnualPayout ? 'lg:grid-cols-5' : 'lg:grid-cols-4'} gap-6`}>
+            {/* GRID DE 3 CARDS MODERNOS: RESUMO CONSOLIDADO (PRINT 2) */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               
-              {/* Card 1: Cashback Rede MMN */}
+              {/* Card 1: Semanal da Rede MMN */}
               <div className="bg-slate-900 p-6 rounded-3xl border border-white/10 shadow-xl relative overflow-hidden flex flex-col justify-between">
                 <div className="flex items-center justify-between mb-4">
                   <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">
-                    Mensal Rede MMN
+                    SEMANAL DA REDE MMN
                   </span>
                   <div className="size-10 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 flex items-center justify-center">
                     <Users size={18} />
@@ -439,53 +704,11 @@ export default function AffiliateFinancialSummary() {
                 </div>
               </div>
 
-              {/* Card 2: Cashback Revendedor */}
-              <div className="bg-slate-900 p-6 rounded-3xl border border-white/10 shadow-xl relative overflow-hidden flex flex-col justify-between">
-                <div className="flex items-center justify-between mb-4">
-                  <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">
-                    Mensal Revendedor
-                  </span>
-                  <div className="size-10 rounded-2xl bg-purple-500/10 border border-purple-500/20 text-purple-400 flex items-center justify-center">
-                    <TrendingUp size={18} />
-                  </div>
-                </div>
-                <div>
-                  <h3 className="text-2xl lg:text-3xl font-black font-mono text-white tracking-tight">
-                    {statement.brutoMensalRevendedor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                  </h3>
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mt-1">
-                    Comissão de Revenda
-                  </p>
-                </div>
-              </div>
-
-              {/* Card Extra: Bônus Anual Liberado (Apenas na competência de fechamento anual) */}
-              {statement.isDecemberAnnualPayout && (
-                <div className="bg-slate-900 p-6 rounded-3xl border border-blue-500/30 shadow-xl relative overflow-hidden flex flex-col justify-between">
-                  <div className="flex items-center justify-between mb-4">
-                    <span className="text-[10px] font-black uppercase tracking-widest text-blue-300">
-                      Bônus Anual (13º)
-                    </span>
-                    <div className="size-10 rounded-2xl bg-blue-500/10 border border-blue-500/20 text-blue-400 flex items-center justify-center">
-                      <Calendar size={18} />
-                    </div>
-                  </div>
-                  <div>
-                    <h3 className="text-2xl lg:text-3xl font-black font-mono text-blue-400 tracking-tight">
-                      {(statement.brutoAnualMmn + statement.brutoAnualRevendedor).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                    </h3>
-                    <p className="text-[10px] font-bold text-blue-300 uppercase tracking-wider mt-1">
-                      Liberado p/ 10 de Dezembro
-                    </p>
-                  </div>
-                </div>
-              )}
-
-              {/* Card 3: Total Bruto */}
+              {/* Card 2: Total Bruto */}
               <div className="bg-slate-900 p-6 rounded-3xl border border-amber-500/30 shadow-xl relative overflow-hidden flex flex-col justify-between">
                 <div className="flex items-center justify-between mb-4">
                   <span className="text-[10px] font-black uppercase tracking-widest text-amber-300">
-                    Total Bruto
+                    TOTAL BRUTO
                   </span>
                   <div className="size-10 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-400 flex items-center justify-center">
                     <FileText size={18} />
@@ -496,16 +719,16 @@ export default function AffiliateFinancialSummary() {
                     {statement.totalBruto.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                   </h3>
                   <p className="text-[10px] font-bold text-amber-400 uppercase tracking-wider mt-1">
-                    Base de Emissão de NF
+                    Base de Emissão de RPA
                   </p>
                 </div>
               </div>
 
-              {/* Card 4: Líquido a Receber / Quitado */}
+              {/* Card 3: Líquido a Receber / Quitado */}
               <div className="bg-gradient-to-br from-emerald-900/80 via-emerald-950 to-slate-950 p-6 rounded-3xl border border-emerald-500/40 shadow-xl shadow-emerald-950/40 relative overflow-hidden flex flex-col justify-between">
                 <div className="flex items-center justify-between mb-4">
                   <span className="text-[10px] font-black uppercase tracking-widest text-emerald-300">
-                    {statement.isPaid ? 'Líquido Quitado / Pago' : 'Líquido a Receber'}
+                    {statement.isPaid ? 'LÍQUIDO PAGO / QUITADO' : 'LÍQUIDO A RECEBER'}
                   </span>
                   <div className="size-10 rounded-2xl bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 flex items-center justify-center">
                     <CheckCircle2 size={18} />
@@ -516,9 +739,7 @@ export default function AffiliateFinancialSummary() {
                     {statement.liquido.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                   </h3>
                   <p className="text-[10px] font-bold text-emerald-300 uppercase tracking-wider mt-1">
-                    {statement.isPaid 
-                      ? 'Transferência PIX Efetivada' 
-                      : `Transferência PIX Dia ${statement.previsaoPagamentoStr.split('.')[0]}`}
+                    Transferência VIA PIX
                   </p>
                 </div>
               </div>
@@ -546,10 +767,10 @@ export default function AffiliateFinancialSummary() {
                     </button>
                   </div>
                   <h3 className="text-lg md:text-xl font-black text-midnight uppercase tracking-tight">
-                    REPASSE MENSAL DE REDE MMN - AFILIADO/REVENDEDOR
+                    REPASSE SEMANAL DE REDE MMN - MICROFRANQUEADO
                   </h3>
                   <p className="text-xs text-slate-400 font-bold uppercase tracking-wider mt-0.5">
-                    PERÍODO DE {statement.periodoStr} • PREVISÃO DE PAGAMENTO DIA {statement.previsaoPagamentoStr}
+                    PERÍODO DE {statement.periodoStr} • PREVISÃO DE PAGAMENTO: {statement.previsaoPagamentoStr}
                   </p>
                 </div>
 
@@ -575,7 +796,7 @@ export default function AffiliateFinancialSummary() {
                 </div>
               </div>
 
-              {/* Banner Total a Receber ou Quitado */}
+              {/* Banner Total a Receber ou Quitado (Print 2) */}
               {statement.isPaid ? (
                 <div className="bg-emerald-100 border border-emerald-300/80 rounded-2xl p-4 text-emerald-950 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
                   <div className="flex items-center gap-2.5">
@@ -599,10 +820,10 @@ export default function AffiliateFinancialSummary() {
                     <AlertCircle size={20} className="text-amber-700 shrink-0" />
                     <div>
                       <span className="text-xs sm:text-sm font-black uppercase tracking-wide block">
-                        TOTAL A RECEBER ATÉ {statement.limiteNotaFiscalStr}
+                        TOTAL A RECEBER ATÉ {statement.limiteNotaFiscalStr || statement.previsaoPagamentoStr}
                       </span>
                       <span className="text-[10px] text-amber-800 font-bold">
-                        Documento: {statement.rpaNumber} • {(statement.ordersList || []).length} pedido(s) apurado(s)
+                        Documento: {statement.rpaNumber} • {(statement.ordersBreakdown || []).length} pedido(s) apurado(s)
                       </span>
                     </div>
                   </div>
@@ -612,36 +833,29 @@ export default function AffiliateFinancialSummary() {
                 </div>
               )}
 
-              {/* Linhas Discriminatórias Fiscais */}
+              {/* Linhas Discriminatórias Fiscais (Print 3) */}
               <div className="space-y-2 text-xs md:text-sm">
                 
-                {/* 1. Cashback Mensal MMN */}
+                {/* 1. Cashback Semanal da Rede MMN do Microfranqueado */}
                 <div className="flex items-center justify-between p-3.5 rounded-xl bg-slate-50 border border-slate-100">
                   <div>
-                    <span className="font-bold text-slate-800 uppercase block">Cashback mensal da Rede de MMN (G0 AO G2)</span>
-                    <span className="text-[10px] text-slate-400">Comissões de rede ativas apuradas no período</span>
+                    <span className="font-bold text-slate-800 uppercase block">
+                      Cashback semanal da Rede de MMN (G0 AO G2) do Microfranqueado
+                    </span>
+                    <span className="text-[10px] text-slate-400">
+                      Comissões de rede ativas apuradas no período de: {statement.periodoStr}
+                    </span>
                   </div>
                   <span className="font-mono font-black text-midnight">
                     {statement.brutoMensalMmn.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                   </span>
                 </div>
 
-                {/* 2. Cashback Mensal Revendedor */}
-                <div className="flex items-center justify-between p-3.5 rounded-xl bg-slate-50 border border-slate-100">
-                  <div>
-                    <span className="font-bold text-slate-800 uppercase block">Cashback mensal do Revendedor</span>
-                    <span className="text-[10px] text-slate-400">Comissões de vendas diretas e revenda regional</span>
-                  </div>
-                  <span className="font-mono font-black text-midnight">
-                    {statement.brutoMensalRevendedor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                  </span>
-                </div>
-
-                {/* 3. Cashback Anual Afiliado */}
+                {/* 2. Cashback Anual Microfranqueado */}
                 <div className="flex items-center justify-between p-3.5 rounded-xl bg-slate-50 border border-slate-100">
                   <div>
                     <span className="font-bold text-slate-800 uppercase block">
-                      Cashback anual AFILIADO periodo {statement.annualPeriodLabel}
+                      Cashback anual MICROFRANQUEADO periodo {statement.annualPeriodLabel}
                     </span>
                     <span className="text-[10px] text-slate-400">
                       {statement.isDecemberAnnualPayout 
@@ -656,48 +870,25 @@ export default function AffiliateFinancialSummary() {
                       ? (statement.brutoAnualMmn > 0 ? statement.brutoAnualMmn.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : 'R$ 0,00')
                       : (statement.acumuladoAnualMmn > 0 
                           ? `${statement.acumuladoAnualMmn.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} (Poupança)` 
-                          : '-')}
+                          : 'R$ 0,00')}
                   </span>
                 </div>
 
-                {/* 4. Cashback Anual Revendedor */}
-                <div className="flex items-center justify-between p-3.5 rounded-xl bg-slate-50 border border-slate-100">
-                  <div>
-                    <span className="font-bold text-slate-800 uppercase block">
-                      Cashback anual REVENDEDOR periodo {statement.annualPeriodLabel}
-                    </span>
-                    <span className="text-[10px] text-slate-400">
-                      {statement.isDecemberAnnualPayout 
-                        ? 'Acumulado anual de revenda liberado no ciclo de 10 de Dezembro'
-                        : statement.acumuladoAnualRevendedor > 0 
-                          ? 'Acumulado na Poupança de Revenda (liberação em 10 de Dezembro)'
-                          : 'Liberado exclusivamente no ciclo de pagamento de 10 de Dezembro'}
-                    </span>
-                  </div>
-                  <span className={`font-mono font-black ${statement.isDecemberAnnualPayout ? 'text-emerald-600' : 'text-blue-600'}`}>
-                    {statement.isDecemberAnnualPayout
-                      ? (statement.brutoAnualRevendedor > 0 ? statement.brutoAnualRevendedor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : 'R$ 0,00')
-                      : (statement.acumuladoAnualRevendedor > 0 
-                          ? `${statement.acumuladoAnualRevendedor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} (Poupança)` 
-                          : '-')}
-                  </span>
-                </div>
-
-                {/* 5. TOTAL BRUTO */}
+                {/* 3. TOTAL BRUTO */}
                 <div className="flex items-center justify-between p-3.5 rounded-xl bg-slate-100 border border-slate-200">
                   <span className="font-black text-midnight uppercase tracking-wider">
-                    TOTAL BRUTO
+                    Total Bruto
                   </span>
                   <span className="font-mono font-black text-midnight text-base">
                     {statement.totalBruto.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                   </span>
                 </div>
 
-                {/* 6. INSS */}
+                {/* 4. INSS */}
                 <div className="flex items-center justify-between p-3.5 rounded-xl bg-slate-50 border border-slate-100">
                   <div>
                     <span className="font-bold text-slate-800 uppercase block">
-                      INSS (0% - INTERMEDIAÇÃO DE NEGÓCIOS)
+                      INSS (0% - INTERMEDIAÇÃO DE NEGÓCIOS) 0% de retenção na fonte. Afiliado autônomo recolhe individualmente
                     </span>
                     <span className="text-[10px] text-slate-400">
                       {statement.isPJ ? 'Pessoa Jurídica isenta de retenção previdenciária' : '0% de retenção na fonte. Afiliado autônomo recolhe individualmente'}
@@ -708,11 +899,11 @@ export default function AffiliateFinancialSummary() {
                   </span>
                 </div>
 
-                {/* 7. Base de Cálculo IRPF */}
+                {/* 5. Base de Cálculo IRPF */}
                 <div className="flex items-center justify-between p-3.5 rounded-xl bg-slate-50 border border-slate-100">
                   <div>
                     <span className="font-bold text-slate-800 uppercase block">
-                      BASE DE CALCULO DO IRPF (BRUTO - DEDUÇÃO)
+                      BASE DE CÁLCULO DO IRPF (BRUTO - DEDUÇÃO)
                     </span>
                     <span className="text-[10px] text-slate-400">
                       Base de apuração para aplicação da tabela progressiva RFB
@@ -725,48 +916,24 @@ export default function AffiliateFinancialSummary() {
                   </span>
                 </div>
 
-                {/* 8. IRRF */}
+                {/* 6. IRRF */}
                 <div className="flex items-center justify-between p-3.5 rounded-xl bg-emerald-50 border border-emerald-100">
                   <div>
                     <span className="font-bold text-emerald-950 uppercase block">
-                      IRRF
+                      IRRF - Retenção na Fonte conforme faixa de rendimentos da RFB (Tabela 2026 / Lei 15.270)
                     </span>
                     <span className="text-[10px] text-emerald-700">
-                      {statement.isPJ ? 'Isento para Pessoa Jurídica' : 'Retenção na Fonte conforme faixa de rendimentos da RFB (Tabela 2026 / Lei 15.270)'}
+                      {statement.isPJ ? 'Isento para Pessoa Jurídica' : 'Retenção na fonte calculada pela tabela progressiva oficial'}
                     </span>
                   </div>
                   <span className={`font-mono font-black ${statement.isPJ || statement.irrf === 0 ? 'text-emerald-700' : 'text-red-600'}`}>
                     {statement.isPJ || statement.irrf === 0 
-                      ? 'Isento' 
+                      ? 'R$ 0,00' 
                       : `- ${statement.irrf.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`}
                   </span>
                 </div>
 
-                {/* 8.1 (-) ADIANTAMENTO DE RENDIMENTOS */}
-                {statement.adiantamento > 0 && (
-                  <div className="flex items-center justify-between p-3.5 rounded-xl bg-amber-50 border border-amber-200">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="font-bold text-amber-950 uppercase block">
-                          (-) ADIANTAMENTO DE RENDIMENTOS
-                        </span>
-                        {statement.adiantamentoDate && (
-                          <span className="px-2 py-0.5 rounded-md bg-amber-200 text-amber-900 text-[9px] font-black uppercase tracking-wider">
-                            Pago em {statement.adiantamentoDate}
-                          </span>
-                        )}
-                      </div>
-                      <span className="text-[10px] text-amber-700">
-                        Valor antecipado no mês corrente e descontado do acerto final no dia {statement.previsaoPagamentoStr.split('.')[0]}
-                      </span>
-                    </div>
-                    <span className="font-mono font-black text-amber-700">
-                      - {statement.adiantamento.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                    </span>
-                  </div>
-                )}
-
-                {/* 9. LÍQUIDO A RECEBER OU QUITADO */}
+                {/* 7. LÍQUIDO A RECEBER */}
                 <div className={`flex items-center justify-between p-4 rounded-2xl text-white shadow-lg mt-4 ${statement.isPaid ? 'bg-emerald-700' : 'bg-emerald-600'}`}>
                   <div className="flex items-center gap-3">
                     <div className="size-10 rounded-xl bg-white/20 flex items-center justify-center">
@@ -779,7 +946,7 @@ export default function AffiliateFinancialSummary() {
                       <span className="text-[10px] text-emerald-100 font-bold">
                         {statement.isPaid 
                           ? 'Transferência PIX efetivada com sucesso' 
-                          : `Disponível para saque e transferência PIX no dia ${statement.previsaoPagamentoStr.split('.')[0]}`}
+                          : 'Disponível para saque e transferência VIA PIX'}
                       </span>
                     </div>
                   </div>
@@ -788,11 +955,29 @@ export default function AffiliateFinancialSummary() {
                   </span>
                 </div>
 
+                {/* 8. TOTAL A RECEBER ATÉ (Print 3) */}
+                <div className="bg-amber-100 border border-amber-300/80 rounded-2xl p-4 text-amber-950 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mt-2">
+                  <div className="flex items-center gap-2.5">
+                    <AlertCircle size={20} className="text-amber-700 shrink-0" />
+                    <div>
+                      <span className="text-xs sm:text-sm font-black uppercase tracking-wide block">
+                        TOTAL A RECEBER ATÉ {statement.limiteNotaFiscalStr || statement.previsaoPagamentoStr}
+                      </span>
+                      <span className="text-[10px] text-amber-800 font-bold">
+                        Documento: {statement.rpaNumber} • {(statement.ordersBreakdown || []).length} pedido(s) apurado(s)
+                      </span>
+                    </div>
+                  </div>
+                  <span className="font-mono font-black text-sm sm:text-base text-amber-900 shrink-0">
+                    {statement.liquido.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                  </span>
+                </div>
+
               </div>
 
             </div>
 
-            {/* SEÇÃO NOVA: DISCRIMINAÇÃO DOS PEDIDOS E VALORES */}
+            {/* SEÇÃO: DISCRIMINAÇÃO DOS PEDIDOS E COMISSÕES (PRINT 4) */}
             <div className="bg-white rounded-3xl border border-slate-200 shadow-xl p-6 md:p-8 space-y-6">
               
               <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-slate-100">
@@ -815,22 +1000,29 @@ export default function AffiliateFinancialSummary() {
                   </div>
                 </div>
 
-                {/* Badge de Contagem */}
-                <div className="flex items-center gap-2 bg-slate-50 px-3.5 py-2 rounded-2xl border border-slate-200 text-xs">
-                  <Hash size={16} className="text-primary-blue" />
-                  <span className="font-bold text-slate-600">Total de Pedidos:</span>
-                  <span className="font-mono font-black text-midnight">
-                    {statement.ordersList?.length || 0}
-                  </span>
+                {/* Badges de Contagem */}
+                <div className="flex flex-wrap items-center gap-2.5">
+                  <div className="flex items-center gap-2 bg-slate-50 px-3.5 py-2 rounded-2xl border border-slate-200 text-xs">
+                    <Hash size={16} className="text-primary-blue" />
+                    <span className="font-bold text-slate-600">Total de Pedidos:</span>
+                    <span className="font-mono font-black text-midnight">
+                      {statement.ordersBreakdown?.length || 0}
+                    </span>
+                  </div>
                 </div>
               </div>
 
               {/* Lista dos Números de Pedidos Vinculados */}
               {statement.ordersList && statement.ordersList.length > 0 && (
                 <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-4 space-y-2">
-                  <div className="flex items-center gap-2 text-xs font-black uppercase text-slate-600">
-                    <Tag size={14} className="text-amber-500" />
-                    <span>Número dos Pedidos da Competência:</span>
+                  <div className="flex items-center justify-between flex-wrap gap-2">
+                    <div className="flex items-center gap-2 text-xs font-black uppercase text-slate-600">
+                      <Tag size={14} className="text-amber-500" />
+                      <span>Número dos Pedidos da Competência:</span>
+                    </div>
+                    <span className="text-xs font-bold text-emerald-700 bg-emerald-50 px-3 py-1 rounded-xl border border-emerald-200">
+                      {statement.ordersBreakdown?.length || 0} {(statement.ordersBreakdown?.length || 0) === 1 ? 'pedido apurado' : 'pedidos apurados'} Total a Receber: {statement.liquido.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                    </span>
                   </div>
                   <div className="flex flex-wrap gap-2 pt-1">
                     {statement.ordersList.map((orderNum: string, idx: number) => (
@@ -846,7 +1038,7 @@ export default function AffiliateFinancialSummary() {
                 </div>
               )}
 
-              {/* Tabela de Discriminação de Valores */}
+              {/* Tabela de Discriminação de Valores Padrão MMN (Print 4) */}
               {!statement.ordersBreakdown || statement.ordersBreakdown.length === 0 ? (
                 <div className="text-center py-12 bg-slate-50 rounded-2xl border border-dashed border-slate-200 space-y-2">
                   <ShoppingBag size={36} className="mx-auto text-slate-300" />
@@ -854,87 +1046,165 @@ export default function AffiliateFinancialSummary() {
                     Nenhum pedido processado nesta competência
                   </p>
                   <p className="text-[11px] text-slate-400 max-w-sm mx-auto">
-                    Assim que novas vendas de rede ou revenda ocorrerem em {monthLabel}, elas serão discriminadas aqui com seus respectivos números e alíquotas.
+                    Assim que novas vendas da rede de Microfranqueados ocorrerem em {monthLabel}, elas serão discriminadas aqui com seus respectivos números e alíquotas.
                   </p>
                 </div>
               ) : (
                 <div className="overflow-x-auto rounded-2xl border border-slate-200">
-                  <table className="w-full text-left text-xs border-collapse">
+                  <table className="w-full text-left border-separate border-spacing-y-2.5 p-3">
                     <thead>
-                      <tr className="bg-slate-900 text-white font-black uppercase tracking-wider text-[11px]">
-                        <th className="py-3.5 px-4">Nº Pedido</th>
-                        <th className="py-3.5 px-4">Data</th>
-                        <th className="py-3.5 px-4">Origem / Nível</th>
-                        <th className="py-3.5 px-4">Tipo</th>
-                        <th className="py-3.5 px-4 text-right">Valor do Pedido</th>
-                        <th className="py-3.5 px-4 text-center">Alíquota (%)</th>
-                        <th className="py-3.5 px-4 text-right">Comissão Gerada</th>
+                      <tr className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                        <th className="px-4 py-2">ID DO PEDIDO</th>
+                        <th className="px-4 py-2">AFILIADO / ORIGEM</th>
+                        <th className="px-3 py-2 text-center">NÍVEL</th>
+                        <th className="px-4 py-2 text-center">CATEGORIA / PERÍODO</th>
+                        <th className="px-4 py-2">DATA</th>
+                        <th className="px-4 py-2 text-right">VALOR DO CONTRATO</th>
+                        <th className="px-4 py-2 text-center">PERCENTUAL</th>
+                        <th className="px-4 py-2 text-right text-emerald-700">VALOR BRUTO CASHBACK</th>
+                        <th className="px-4 py-2 text-center">STATUS</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
-                      {statement.ordersBreakdown.map((row: any, idx: number) => {
-                        const isRevenda = row.origin.includes('Revenda');
-                        const isG0 = row.origin.includes('G0');
-                        const isG1 = row.origin.includes('G1');
-                        const isG2 = row.origin.includes('G2');
+                    <tbody>
+                      {mmnHierarchyGroups && mmnHierarchyGroups.length > 0 ? (
+                        mmnHierarchyGroups.map((group) => (
+                          <React.Fragment key={group.key}>
+                            {/* Linha Master do Microfranqueado (G0, G1 ou G2) */}
+                            <tr className="bg-slate-100/90 hover:bg-slate-200/70 transition-all rounded-2xl text-xs font-bold border border-slate-200">
+                              <td className="px-4 py-3.5 rounded-l-2xl font-mono text-slate-500 font-bold">
+                                0
+                              </td>
+                              <td className="px-4 py-3.5 font-black text-midnight uppercase tracking-wide">
+                                {group.microfranqueado.name}
+                              </td>
+                              <td className="px-3 py-3.5 text-center">
+                                <span className={`inline-flex items-center justify-center px-2.5 py-0.5 rounded-xl text-[10px] font-black border ${
+                                  group.levelTag === 'G0'
+                                    ? 'bg-amber-100 text-amber-800 border-amber-300'
+                                    : group.levelTag === 'G1'
+                                    ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
+                                    : 'bg-sky-100 text-sky-800 border-sky-300'
+                                }`}>
+                                  {group.levelTag}
+                                </span>
+                              </td>
+                              <td className="px-4 py-3.5 text-center">
+                                <span className="px-2.5 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider bg-slate-200/80 text-slate-700">
+                                  MICROFRANQUEADO
+                                </span>
+                              </td>
+                              <td className="px-4 py-3.5 text-slate-500 font-mono">
+                                0
+                              </td>
+                              <td className="px-4 py-3.5 text-right font-mono text-slate-500">
+                                0
+                              </td>
+                              <td className="px-4 py-3.5 text-center font-mono text-slate-500">
+                                0
+                              </td>
+                              <td className="px-4 py-3.5 text-right font-mono text-slate-500">
+                                0
+                              </td>
+                              <td className="px-4 py-3.5 text-center rounded-r-2xl font-mono text-slate-500">
+                                0
+                              </td>
+                            </tr>
 
-                        const pillColor = isRevenda
-                          ? 'bg-purple-100 text-purple-800 border-purple-200'
-                          : isG0
-                          ? 'bg-emerald-100 text-emerald-800 border-emerald-200'
-                          : isG1
-                          ? 'bg-blue-100 text-blue-800 border-blue-200'
-                          : isG2
-                          ? 'bg-indigo-100 text-indigo-800 border-indigo-200'
-                          : 'bg-slate-100 text-slate-800 border-slate-200';
-
-                        return (
-                          <tr key={idx} className="hover:bg-slate-50/80 transition-colors">
-                            <td className="py-3 px-4 font-mono font-black text-slate-900">
-                              <span className="px-2 py-0.5 rounded-lg bg-slate-100 border border-slate-200">
-                                {row.orderNumber}
-                              </span>
-                            </td>
-                            <td className="py-3 px-4 text-slate-500 font-mono text-[11px]">
-                              {row.date}
-                            </td>
-                            <td className="py-3 px-4">
-                              <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black border ${pillColor}`}>
-                                <Layers size={11} />
-                                {row.origin}
-                              </span>
-                            </td>
-                            <td className="py-3 px-4 text-slate-600 font-bold text-[11px]">
-                              {row.type}
-                            </td>
-                            <td className="py-3 px-4 text-right font-mono font-bold text-slate-700">
-                              {row.orderAmount > 0
-                                ? row.orderAmount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
-                                : '-'}
-                            </td>
-                            <td className="py-3 px-4 text-center font-mono font-bold text-slate-600">
-                              {row.commissionRate > 0 ? `${row.commissionRate}%` : '-'}
-                            </td>
-                            <td className="py-3 px-4 text-right font-mono font-black text-emerald-600 text-sm">
-                              {row.commissionAmount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                            </td>
-                          </tr>
-                        );
-                      })}
+                            {/* Pedidos do Plano Afiliado Premium vendidos por este Microfranqueado */}
+                            {group.orders.map((order: any, orderIdx: number) => (
+                              <tr
+                                key={order.id || `${group.key}-order-${orderIdx}`}
+                                className="bg-white hover:bg-emerald-50/30 transition-all rounded-2xl text-xs font-medium border border-slate-100 shadow-sm"
+                              >
+                                <td className="px-4 py-3.5 rounded-l-2xl font-black text-midnight font-mono">
+                                  {order.orderNumber}
+                                </td>
+                                <td className="px-4 py-3.5 font-bold text-slate-700">
+                                  {order.affiliateName || order.origin || 'Afiliado'}
+                                </td>
+                                <td className="px-3 py-3.5 text-center">
+                                  <span className="inline-flex items-center justify-center px-2.5 py-0.5 rounded-xl text-[10px] font-black bg-emerald-50 text-emerald-700 border border-emerald-200/80" title="Plano Afiliado Premium">
+                                    AF
+                                  </span>
+                                </td>
+                                <td className="px-4 py-3.5 text-center">
+                                  <span className="px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-rose-50 text-rose-600 border border-rose-100">
+                                    {order.category || 'SEMANAL'}
+                                  </span>
+                                </td>
+                                <td className="px-4 py-3.5 text-slate-500 text-[11px]">
+                                  {order.date}
+                                </td>
+                                <td className="px-4 py-3.5 text-right font-mono font-bold text-slate-600 text-xs">
+                                  R$ {Number(order.contractAmount || order.orderAmount || order.amount || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                </td>
+                                <td className="px-4 py-3.5 text-center font-mono font-bold text-indigo-600 text-xs">
+                                  <span className="inline-flex items-center px-2 py-0.5 rounded-lg text-xs font-black bg-indigo-50 text-indigo-700 border border-indigo-100 font-mono">
+                                    {order.rate || (order.percentage ? `${Number(order.percentage).toFixed(0)}%` : '21%')}
+                                  </span>
+                                </td>
+                                <td className="px-4 py-3.5 text-right font-mono font-black text-emerald-600">
+                                  +R$ {Number(order.commissionAmount || order.bruto || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                </td>
+                                <td className="px-4 py-3.5 text-center rounded-r-2xl">
+                                  <span className={`inline-flex items-center gap-1 text-[9px] font-black px-2.5 py-1 rounded-full uppercase tracking-wider ${
+                                    order.status === 'Pago' || order.status === 'completed' || order.status === 'pago' || order.status === 'Concluído'
+                                      ? 'bg-emerald-100 text-emerald-800'
+                                      : 'bg-amber-100 text-amber-800'
+                                  }`}>
+                                    {order.status === 'Pago' || order.status === 'completed' || order.status === 'pago' || order.status === 'Concluído'
+                                      ? 'Pago'
+                                      : 'Pendente'}
+                                  </span>
+                                </td>
+                              </tr>
+                            ))}
+                          </React.Fragment>
+                        ))
+                      ) : (
+                        <tr>
+                          <td colSpan={9} className="py-12 text-center text-slate-400">
+                            Nenhum pedido individual detalhado nesta competência.
+                          </td>
+                        </tr>
+                      )}
                     </tbody>
                     <tfoot>
-                      <tr className="bg-slate-50 border-t-2 border-slate-200 font-black text-midnight text-xs">
-                        <td colSpan={4} className="py-3.5 px-4 uppercase">
-                          Total Discriminado da Competência ({statement.rpaNumber})
+                      {/* Linha 1: Total Bruto Apurado */}
+                      <tr className="bg-slate-900 text-white font-black uppercase tracking-widest text-[10px] border-b border-white/10">
+                        <td colSpan={5} className="px-6 py-3 rounded-l-2xl">
+                          <div className="flex items-center gap-2 text-slate-300">
+                            <span className="size-2 rounded-full bg-slate-400" />
+                            <span>TOTAL BRUTO MENSAL APURADO</span>
+                          </div>
                         </td>
-                        <td className="py-3.5 px-4 text-right font-mono text-slate-700">
-                          {statement.ordersBreakdown
-                            .reduce((acc: number, r: any) => acc + (r.orderAmount || 0), 0)
-                            .toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                        <td className="px-4 py-3 text-right font-mono text-xs text-slate-300">
+                          R$ {totalContratosUnicos.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                         </td>
-                        <td className="py-3.5 px-4 text-center font-mono text-slate-400">-</td>
-                        <td className="py-3.5 px-4 text-right font-mono text-base text-emerald-700">
-                          {statement.totalBruto.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                        <td className="px-4 py-3 text-center font-mono text-xs text-indigo-300">
+                          {mediaPercentual > 0 ? `${mediaPercentual.toFixed(0)}%` : '—'}
+                        </td>
+                        <td className="px-4 py-3 text-right font-mono text-sm text-slate-200 font-bold">
+                          +R$ {statement.totalBruto.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                        </td>
+                        <td className="px-4 py-3 text-center rounded-r-2xl text-[9px] text-slate-400 font-bold">
+                          BRUTO
+                        </td>
+                      </tr>
+
+                      {/* Linha 2: Saldo Semanal a Receber */}
+                      <tr className="bg-slate-950 text-white font-black uppercase tracking-widest text-[10px]">
+                        <td colSpan={7} className="px-6 py-4 rounded-l-2xl">
+                          <div className="flex items-center gap-2">
+                            <span className={`size-2 rounded-full ${statement.liquido > 0 ? 'bg-emerald-400 animate-pulse' : 'bg-slate-400'}`} />
+                            <span>(=) SALDO SEMANAL A RECEBER</span>
+                          </div>
+                        </td>
+                        <td className="px-4 py-4 text-right font-mono text-sm text-emerald-400 font-black">
+                          R$ {statement.liquido.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                        </td>
+                        <td className="px-4 py-4 text-center rounded-r-2xl text-[9px] text-emerald-400 font-bold">
+                          {statement.liquido > 0 ? 'A RECEBER' : 'QUITADO'}
                         </td>
                       </tr>
                     </tfoot>
@@ -942,118 +1212,275 @@ export default function AffiliateFinancialSummary() {
                 </div>
               )}
 
+              {/* Nota de rodapé explicativa */}
+              <p className="text-[11px] text-slate-500 italic mt-3">
+                * Nas discriminações dos Pedidos e comissões, a origem e nível de cada pedido refletem as Gerações G0 (21%), G1 (3%) e G2 (3%) do modelo de Microfranquia MMN, tendo sido descontinuado o cargo de revendedor regional.
+              </p>
+
             </div>
 
           </div>
         ) : activeTab === 'archives' ? (
           
-          /* PASTA DE PAGAMENTOS MENSAIS / ARQUIVADOS */
-          <div className="space-y-6">
+          /* PASTA DE PAGAMENTOS SEMANAIS */
+          <div className="space-y-8">
             
-            {/* Card Superior da Competência Atual em Processamento */}
-            {statement && (
-              <div className="bg-white rounded-3xl border border-slate-200 shadow-xl p-6 md:p-8 space-y-6">
-                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-slate-100">
-                  <div className="flex items-center gap-3">
-                    <div className={`size-11 rounded-2xl ${statement.isPaid ? 'bg-emerald-600' : 'bg-amber-500'} text-white flex items-center justify-center shadow-md`}>
-                      {statement.isPaid ? <CheckCircle2 size={22} /> : <Clock size={22} />}
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <h3 className="text-lg font-black text-midnight uppercase tracking-tight">
-                          {statement.isPaid ? `Competência Quitada & Paga (${monthLabel})` : `Competência Atual em Aberto (${monthLabel})`}
-                        </h3>
-                        <span className={`px-2.5 py-0.5 rounded-full ${statement.isPaid ? 'bg-emerald-100 text-emerald-900' : 'bg-amber-100 text-amber-900'} text-[10px] font-mono font-black`}>
-                          {statement.rpaNumber}
-                        </span>
-                      </div>
-                      <p className="text-xs text-slate-400 font-bold uppercase tracking-wider mt-0.5">
-                        {statement.isPaid 
-                          ? 'Pagamento quitado e creditado na chave PIX cadastrada'
-                          : `Apuração em andamento para quitação dia ${statement.previsaoPagamentoStr}`}
-                      </p>
-                    </div>
+            {/* Header da Pasta de Pagamentos Semanais */}
+            <div className="bg-white rounded-3xl border border-slate-200/90 shadow-xl p-6 md:p-8 space-y-6">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-slate-100">
+                <div className="flex items-center gap-3.5">
+                  <div className="size-12 rounded-2xl bg-slate-900 text-white flex items-center justify-center shadow-md">
+                    <FolderArchive size={24} />
                   </div>
-
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={handlePrintPDF}
-                      className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-black rounded-xl transition-all flex items-center gap-1.5 shadow-sm cursor-pointer"
-                    >
-                      <Printer size={14} /> Imprimir / PDF
-                    </button>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h3 className="text-xl font-black text-midnight uppercase tracking-tight">
+                        Pasta de Pagamentos Semanais
+                      </h3>
+                      <span className="px-2.5 py-0.5 rounded-full bg-primary-blue/10 text-primary-blue text-xs font-black uppercase font-mono">
+                        {monthLabel}
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-400 font-bold uppercase tracking-wider mt-0.5">
+                      Repasses apurados e liquidados semanalmente na rede MMN (G0 ao G2) com quitação toda terça-feira via PIX
+                    </p>
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                  <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200">
-                    <span className="text-[10px] text-slate-400 uppercase font-bold block">Documento Oficial</span>
-                    <span className="font-mono font-black text-midnight text-sm block mt-1">{statement.rpaNumber}</span>
-                    <span className="text-[10px] text-slate-500 font-bold">Ref: {statement.refMonth}</span>
-                  </div>
-                  <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200">
-                    <span className="text-[10px] text-slate-400 uppercase font-bold block">Pedidos da Competência</span>
-                    <span className="font-mono font-black text-midnight text-sm block mt-1">
-                      {statement.ordersList?.length || 0} pedido(s)
-                    </span>
-                    <span className="text-[10px] text-slate-500 font-bold">Apurados no período</span>
-                  </div>
-                  <div className="p-4 bg-emerald-50 rounded-2xl border border-emerald-200">
-                    <span className="text-[10px] text-emerald-700 uppercase font-bold block">
-                      {statement.isPaid ? 'Líquido Pago' : 'Líquido Previsto'}
-                    </span>
-                    <span className="font-mono font-black text-emerald-700 text-lg block mt-1">
-                      {statement.liquido.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                    </span>
-                    <span className="text-[10px] text-emerald-600 font-bold">
-                      {statement.isPaid ? 'Creditado via PIX' : `PIX em ${statement.previsaoPagamentoStr}`}
-                    </span>
-                  </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => handlePrintPDF()}
+                    className="px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-white text-xs font-black rounded-xl transition-all flex items-center gap-2 shadow-sm cursor-pointer"
+                  >
+                    <Printer size={15} /> Imprimir Consolidado
+                  </button>
                 </div>
-
-                {/* Se houver pedidos, mostra a discriminação */}
-                {statement.ordersBreakdown && statement.ordersBreakdown.length > 0 && (
-                  <div className="pt-2">
-                    <h4 className="text-xs font-black text-slate-700 uppercase tracking-wide mb-3 flex items-center gap-2">
-                      <ShoppingBag size={14} className="text-amber-500" />
-                      Discriminação dos Pedidos Vinculados ao RPA ({statement.rpaNumber}):
-                    </h4>
-                    <div className="overflow-x-auto rounded-2xl border border-slate-200">
-                      <table className="w-full text-left text-xs border-collapse">
-                        <thead>
-                          <tr className="bg-slate-900 text-white font-black uppercase tracking-wider text-[10px]">
-                            <th className="py-2.5 px-3">Nº Pedido</th>
-                            <th className="py-2.5 px-3">Data</th>
-                            <th className="py-2.5 px-3">Origem / Nível</th>
-                            <th className="py-2.5 px-3 text-right">Valor Base</th>
-                            <th className="py-2.5 px-3 text-center">Alíquota</th>
-                            <th className="py-2.5 px-3 text-right">Comissão</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-100 text-[11px]">
-                          {statement.ordersBreakdown.map((row: any, idx: number) => (
-                            <tr key={idx} className="hover:bg-slate-50">
-                              <td className="py-2 px-3 font-mono font-black text-slate-800">{row.orderNumber}</td>
-                              <td className="py-2 px-3 text-slate-500 font-mono">{row.date}</td>
-                              <td className="py-2 px-3 font-bold text-slate-700">{row.origin}</td>
-                              <td className="py-2 px-3 text-right font-mono">
-                                {row.orderAmount > 0 ? row.orderAmount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : '-'}
-                              </td>
-                              <td className="py-2 px-3 text-center font-mono">{row.commissionRate}%</td>
-                              <td className="py-2 px-3 text-right font-mono font-black text-emerald-600">
-                                {row.commissionAmount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                )}
               </div>
-            )}
 
-            {/* Histórico de Pagamentos Já Efetivados / Arquivados */}
+              {/* 3 Cards de Resumo do Mês */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="p-4 bg-emerald-50/70 rounded-2xl border border-emerald-200/70">
+                  <span className="text-[10px] text-emerald-800 uppercase font-black tracking-wider block">
+                    Total Já Quitado no Mês
+                  </span>
+                  <span className="font-mono font-black text-emerald-700 text-xl block mt-1">
+                    {monthlyWeeklyTotals.totalPago.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                  </span>
+                  <span className="text-[10px] text-emerald-600 font-bold flex items-center gap-1 mt-0.5">
+                    <CheckCircle2 size={11} /> Ciclos semanais pagos via PIX
+                  </span>
+                </div>
+
+                <div className="p-4 bg-amber-50/70 rounded-2xl border border-amber-200/70">
+                  <span className="text-[10px] text-amber-800 uppercase font-black tracking-wider block">
+                    Previsto / Em Apuração
+                  </span>
+                  <span className="font-mono font-black text-amber-800 text-xl block mt-1">
+                    {monthlyWeeklyTotals.totalPrevisto.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                  </span>
+                  <span className="text-[10px] text-amber-700 font-bold flex items-center gap-1 mt-0.5">
+                    <Clock size={11} /> Quitação na próxima terça-feira
+                  </span>
+                </div>
+
+                <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200">
+                  <span className="text-[10px] text-slate-500 uppercase font-black tracking-wider block">
+                    Total Geral Acumulado no Mês
+                  </span>
+                  <span className="font-mono font-black text-midnight text-xl block mt-1">
+                    {monthlyWeeklyTotals.totalGeralMes.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                  </span>
+                  <span className="text-[10px] text-slate-500 font-bold block mt-0.5">
+                    {monthlyWeeklyTotals.totalPedidosMes} pedido(s) apurado(s) em {weeklyCycles.length} semana(s)
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Lista dos Ciclos Semanais do Mês */}
+            <div className="space-y-4">
+              <div className="flex items-center justify-between px-1">
+                <div>
+                  <h4 className="text-sm font-black text-midnight uppercase tracking-wider flex items-center gap-2">
+                    <Calendar size={16} className="text-primary-blue" />
+                    Ciclos Semanais de Pagamento ({monthLabel})
+                  </h4>
+                  <p className="text-[11px] text-slate-400 font-bold uppercase tracking-wider">
+                    Cada semana compreende vendas de segunda a domingo com transferência via PIX na terça-feira subsequente
+                  </p>
+                </div>
+              </div>
+
+              {weeklyCycles.map((week: any) => {
+                const isExpanded = expandedWeeks[week.weekNumber] ?? (week.pedidosCount > 0);
+                return (
+                  <div 
+                    key={week.weekNumber} 
+                    className={`bg-white rounded-3xl border transition-all overflow-hidden ${
+                      week.isCurrentWeek 
+                        ? 'border-amber-300 shadow-md ring-1 ring-amber-200' 
+                        : week.isPaid 
+                          ? 'border-emerald-200/80 shadow-sm' 
+                          : 'border-slate-200/80 shadow-sm'
+                    }`}
+                  >
+                    {/* Header do Card da Semana */}
+                    <div className="p-6 md:p-7 space-y-5">
+                      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-slate-100">
+                        <div className="flex items-center gap-3.5">
+                          <div className={`size-11 rounded-2xl text-white flex items-center justify-center shadow-md ${
+                            week.isPaid 
+                              ? 'bg-emerald-600' 
+                              : week.isPending 
+                                ? 'bg-amber-500' 
+                                : 'bg-slate-300'
+                          }`}>
+                            {week.isPaid ? (
+                              <CheckCircle2 size={22} />
+                            ) : week.isPending ? (
+                              <Clock size={22} />
+                            ) : (
+                              <Calendar size={22} />
+                            )}
+                          </div>
+                          <div>
+                            <div className="flex flex-wrap items-center gap-2">
+                              <h4 className="text-base font-black text-midnight uppercase tracking-tight">
+                                {week.weekLabel} • {week.periodoStr}
+                              </h4>
+                              <span className="px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-700 text-[10px] font-mono font-black">
+                                {week.rpaWeeklyNumber}
+                              </span>
+                              {week.isPaid ? (
+                                <span className="px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-900 border border-emerald-300 text-[10px] font-black uppercase flex items-center gap-1">
+                                  <CheckCircle2 size={11} /> Quitado
+                                </span>
+                              ) : week.isPending ? (
+                                <span className="px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-300 text-[10px] font-black uppercase flex items-center gap-1">
+                                  <Clock size={11} /> Em Apuração
+                                </span>
+                              ) : (
+                                <span className="px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-500 text-[10px] font-black uppercase">
+                                  Sem Movimentação
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-xs text-slate-400 font-bold uppercase tracking-wider mt-0.5">
+                              {week.isPaid 
+                                ? `Pagamento semanal quitado e creditado na chave PIX cadastrada`
+                                : week.isPending 
+                                  ? `Apuração em andamento para quitação na terça-feira (${week.previsaoPagamentoStr}) via PIX`
+                                  : `Nenhum pedido de afiliados G0 ao G2 registrado neste período`}
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          {week.orders.length > 0 && (
+                            <button
+                              onClick={() => toggleWeekExpand(week.weekNumber)}
+                              className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-black rounded-xl transition-all flex items-center gap-1.5 cursor-pointer"
+                            >
+                              {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                              {isExpanded ? 'Recolher Pedidos' : `Ver Pedidos (${week.pedidosCount})`}
+                            </button>
+                          )}
+                          <button
+                            onClick={() => handlePrintPDF(week)}
+                            className="px-3.5 py-2 bg-slate-900 hover:bg-slate-800 text-white text-xs font-black rounded-xl transition-all flex items-center gap-1.5 shadow-sm cursor-pointer"
+                          >
+                            <Printer size={14} /> Imprimir / PDF
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* 3 Caixas de Indicadores da Semana */}
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                        <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200">
+                          <span className="text-[10px] text-slate-400 uppercase font-bold block">Documento Oficial</span>
+                          <span className="font-mono font-black text-midnight text-sm block mt-1">{week.rpaWeeklyNumber}</span>
+                          <span className="text-[10px] text-slate-500 font-bold">Ciclo: {week.periodoStr}</span>
+                        </div>
+                        <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200">
+                          <span className="text-[10px] text-slate-400 uppercase font-bold block">Pedidos da Semana</span>
+                          <span className="font-mono font-black text-midnight text-sm block mt-1">
+                            {week.pedidosCount} pedido(s)
+                          </span>
+                          <span className="text-[10px] text-slate-500 font-bold">
+                            {week.contractTotal > 0 ? `Contratos: ${week.contractTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}` : 'Sem contratos no ciclo'}
+                          </span>
+                        </div>
+                        <div className={`p-4 rounded-2xl border ${
+                          week.isPaid 
+                            ? 'bg-emerald-50 border-emerald-200' 
+                            : week.isPending 
+                              ? 'bg-amber-50 border-amber-200' 
+                              : 'bg-slate-50 border-slate-200'
+                        }`}>
+                          <span className={`text-[10px] uppercase font-bold block ${
+                            week.isPaid ? 'text-emerald-700' : week.isPending ? 'text-amber-700' : 'text-slate-400'
+                          }`}>
+                            {week.isPaid ? 'Líquido Pago' : 'Líquido Previsto'}
+                          </span>
+                          <span className={`font-mono font-black text-lg block mt-1 ${
+                            week.isPaid ? 'text-emerald-700' : week.isPending ? 'text-amber-800' : 'text-slate-500'
+                          }`}>
+                            {week.liquido.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                          </span>
+                          <span className={`text-[10px] font-bold ${
+                            week.isPaid ? 'text-emerald-600' : week.isPending ? 'text-amber-700' : 'text-slate-400'
+                          }`}>
+                            {week.isPaid ? 'Creditado via PIX' : `PIX em ${week.previsaoPagamentoStr}`}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Tabela de Pedidos da Semana (Expandível) */}
+                      {isExpanded && week.orders.length > 0 && (
+                        <div className="pt-2">
+                          <h4 className="text-xs font-black text-slate-700 uppercase tracking-wide mb-3 flex items-center gap-2">
+                            <ShoppingBag size={14} className="text-amber-500" />
+                            Discriminação dos Pedidos Vinculados ao RPA ({week.rpaWeeklyNumber}):
+                          </h4>
+                          <div className="overflow-x-auto rounded-2xl border border-slate-200">
+                            <table className="w-full text-left text-xs border-collapse">
+                              <thead>
+                                <tr className="bg-slate-900 text-white font-black uppercase tracking-wider text-[10px]">
+                                  <th className="py-2.5 px-3">Nº Pedido</th>
+                                  <th className="py-2.5 px-3">Data</th>
+                                  <th className="py-2.5 px-3">Origem / Nível</th>
+                                  <th className="py-2.5 px-3 text-right">Valor Base</th>
+                                  <th className="py-2.5 px-3 text-center">Alíquota</th>
+                                  <th className="py-2.5 px-3 text-right">Comissão</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-slate-100 text-[11px]">
+                                {week.orders.map((row: any, idx: number) => (
+                                  <tr key={idx} className="hover:bg-slate-50">
+                                    <td className="py-2.5 px-3 font-mono font-black text-slate-800">{row.orderNumber}</td>
+                                    <td className="py-2.5 px-3 text-slate-500 font-mono">{row.date}</td>
+                                    <td className="py-2.5 px-3 font-bold text-slate-700">{row.origin}</td>
+                                    <td className="py-2.5 px-3 text-right font-mono">
+                                      {row.orderAmount > 0 ? row.orderAmount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : '-'}
+                                    </td>
+                                    <td className="py-2.5 px-3 text-center font-mono">{row.commissionRate || row.percentage || 21}%</td>
+                                    <td className="py-2.5 px-3 text-right font-mono font-black text-emerald-600">
+                                      {row.commissionAmount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Histórico Geral de Ciclos Anteriores Arquivados */}
             <div className="bg-white rounded-3xl border border-slate-200 shadow-xl p-6 md:p-8 space-y-6">
               <div className="flex items-center justify-between pb-4 border-b border-slate-100">
                 <div className="flex items-center gap-3">
@@ -1062,7 +1489,7 @@ export default function AffiliateFinancialSummary() {
                   </div>
                   <div>
                     <h3 className="text-lg font-black text-midnight uppercase tracking-tight">
-                      Histórico de Pagamentos Efetivados
+                      Histórico Geral de Pagamentos Efetivados
                     </h3>
                     <p className="text-xs text-slate-400 font-bold uppercase tracking-wider">
                       Demonstrativos arquivados permanentemente após a quitação pela administração
@@ -1078,7 +1505,7 @@ export default function AffiliateFinancialSummary() {
                     Nenhum ciclo anterior arquivado ainda
                   </p>
                   <p className="text-xs text-slate-400 max-w-sm mx-auto">
-                    Assim que a administração efetivar o repasse mensal no dia 10, o comprovante oficial e o demonstrativo consolidado serão armazenados aqui.
+                    Assim que a administração efetivar o repasse semanal toda terça-feira via PIX, o comprovante oficial e o demonstrativo consolidado serão armazenados aqui.
                   </p>
                 </div>
               ) : (

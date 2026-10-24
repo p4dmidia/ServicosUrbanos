@@ -20,9 +20,11 @@ import { useAuth } from '../contexts/AuthContext';
 import { businessRules } from '../lib/businessRules';
 import { toast } from 'react-hot-toast';
 import { Link } from 'react-router-dom';
+import { useSubscriptionPlans } from '../lib/subscriptionPlans';
 
 export default function AffiliatePolicy() {
   const { user, profile } = useAuth();
+  const { minPrice } = useSubscriptionPlans();
   const [loading, setLoading] = useState(true);
   const [seguradoData, setSeguradoData] = useState<any>(null);
   const [microfranqueadoData, setMicrofranqueadoData] = useState<any>(null);
@@ -271,7 +273,7 @@ export default function AffiliatePolicy() {
                 className="bg-emerald-500 hover:bg-emerald-400 text-midnight font-black px-6 py-3.5 rounded-xl text-xs uppercase tracking-widest shadow-lg shadow-emerald-500/20 transition-all flex items-center gap-2"
               >
                 <Sparkles size={16} />
-                Contratar Seguro Vida Light (A partir de R$ 5,00/mês)
+                Contratar Seguro Vida Light (A partir de R$ {minPrice.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}/mês)
                 <ArrowRight size={16} />
               </Link>
             </div>

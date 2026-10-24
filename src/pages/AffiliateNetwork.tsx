@@ -101,7 +101,7 @@ export default function AffiliateNetwork() {
         level: 0,
         joinedDate: profile?.created_at ? new Date(profile.created_at).toLocaleDateString('pt-BR') : '---',
         status: mfRes?.isLicenseActive ? 'Ativo' : 'Pendente',
-        earnings: comissoesRes?.totalBrutoG0 || statsData?.totalEarnings || 0,
+        earnings: 0,
         spillover: false
       };
 
@@ -195,44 +195,6 @@ export default function AffiliateNetwork() {
     return matchesSearch && matchesLevel;
   });
 
-  const levels = [
-    {
-      label: 'G0 (Vendas Diretas)',
-      count: network.filter(item => item.level === 1).length, // Diretos
-      rate: '21% + 2%',
-      splitDesc: '21% terça / 2% anual (23%)',
-      color: 'text-indigo-600',
-      bg: 'bg-indigo-50',
-      border: 'border-indigo-200'
-    },
-    {
-      label: 'G1 (Indiretos 1º Nível)',
-      count: network.filter(item => item.level === 2).length,
-      rate: '3% + 2%',
-      splitDesc: '3% terça / 2% anual (5%)',
-      color: 'text-emerald-600',
-      bg: 'bg-emerald-50',
-      border: 'border-emerald-200'
-    },
-    {
-      label: 'G2 (Indiretos 2º Nível)',
-      count: 0,
-      rate: '3% + 2%',
-      splitDesc: '3% terça / 2% anual (5%)',
-      color: 'text-blue-600',
-      bg: 'bg-blue-50',
-      border: 'border-blue-200'
-    },
-    {
-      label: 'Comissão Total Rede',
-      count: network.filter(item => item.level > 0).length,
-      rate: '33%',
-      splitDesc: '27% semanal / 6% anual',
-      color: 'text-amber-700',
-      bg: 'bg-amber-50',
-      border: 'border-amber-200'
-    }
-  ];
 
   return (
     <AffiliateLayout title="Rede MMN">
@@ -340,30 +302,6 @@ export default function AffiliateNetwork() {
           </div>
         </div>
 
-        {/* Network Levels Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-          {levels.map((level, i) => (
-            <div
-              key={i}
-              className={`bg-white p-6 rounded-3xl border ${level.border} shadow-sm space-y-3 relative overflow-hidden`}
-            >
-              <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">
-                {level.label}
-              </span>
-              <div className="flex items-baseline justify-between">
-                <span className={`text-3xl font-black font-mono ${level.color}`}>
-                  {level.rate}
-                </span>
-                <span className="text-xs font-bold text-slate-500">
-                  {level.count} {level.count === 1 ? 'membro' : 'membros'}
-                </span>
-              </div>
-              <p className="text-[10px] text-slate-400 font-bold border-t border-slate-100 pt-2">
-                {level.splitDesc}
-              </p>
-            </div>
-          ))}
-        </div>
 
         {/* Search & List */}
         <div className="bg-white rounded-[2.5rem] border border-slate-200/80 shadow-sm p-6 sm:p-8 space-y-6">
@@ -386,9 +324,9 @@ export default function AffiliateNetwork() {
                 className="bg-slate-50 border border-slate-200 px-4 py-3 rounded-2xl text-xs font-black text-slate-600 uppercase tracking-wider cursor-pointer focus:outline-hidden"
               >
                 <option value={0}>Todos os Níveis (G0, G1, G2)</option>
-                <option value={-1}>G0 (Você - 21% sem + 2% anual)</option>
-                <option value={1}>G1 (Indiretos 1º Nível - 3% sem + 2% anual)</option>
-                <option value={2}>G2 (Indiretos 2º Nível - 3% sem + 2% anual)</option>
+                <option value={-1}>G0 (Microfranqueado Titular)</option>
+                <option value={1}>G1 (Microfranqueados 1º Nível)</option>
+                <option value={2}>G2 (Microfranqueados 2º Nível)</option>
               </select>
             </div>
           </div>
@@ -402,7 +340,7 @@ export default function AffiliateNetwork() {
                   <th className="pb-3 px-2">Nível</th>
                   <th className="pb-3 px-2">Data Adesão</th>
                   <th className="pb-3 px-2">Status</th>
-                  <th className="pb-3 px-2 text-right">Comissões Geradas</th>
+                  <th className="pb-3 px-2 text-right">Comissão Semanal</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-xs">
@@ -420,7 +358,7 @@ export default function AffiliateNetwork() {
                             ? 'bg-emerald-50 text-emerald-700' 
                             : 'bg-blue-50 text-blue-700'
                       }`}>
-                        {member.level === 0 ? 'G0 (Titular)' : `G${member.level}`}
+                        {member.level === 0 ? 'G0 (Microfranqueado)' : member.level === 1 ? 'G1 (Microfranqueado)' : 'G2 (Microfranqueado)'}
                       </span>
                     </td>
                     <td className="py-4 px-2 text-slate-500 font-medium">

@@ -30,9 +30,11 @@ import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import { businessRules } from '../lib/businessRules';
 import { motion } from 'framer-motion';
+import { useSubscriptionPlans } from '../lib/subscriptionPlans';
 
 export default function AffiliateLuckyNumber() {
   const { user, profile } = useAuth();
+  const { minPrice } = useSubscriptionPlans();
   const [subscription, setSubscription] = useState<any>(null);
   const [seguradoData, setSeguradoData] = useState<any>(null);
   const [microfranqueadoData, setMicrofranqueadoData] = useState<any>(null);
@@ -413,7 +415,7 @@ export default function AffiliateLuckyNumber() {
                   Aviso ao Microfranqueado: Sorteios são Exclusivos do Afiliado Premium
                 </h4>
                 <p className="text-xs text-amber-900 leading-relaxed max-w-2xl font-medium">
-                  Sua conta de <strong>Microfranqueado</strong> é voltada à gestão de rede e comissões MMN. O Número da Sorte e a participação nos sorteios semanais de R$ 5.000,00 da Loteria Federal são vinculados à contratação do plano de Seguro Vida Light (a partir de R$ 5,00/mês).
+                  Sua conta de <strong>Microfranqueado</strong> é voltada à gestão de rede e comissões MMN. O Número da Sorte e a participação nos sorteios semanais de R$ 5.000,00 da Loteria Federal são vinculados à contratação do plano de Seguro Vida Light (a partir de R$ {minPrice.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}/mês).
                 </p>
               </div>
             </div>

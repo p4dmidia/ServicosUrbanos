@@ -200,7 +200,7 @@ export default function AffiliateLayout({ children, title, customBalance, custom
   // Itens de Proteção Pessoal para Microfranqueado (apenas se tiver Seguro Ativo)
   const microfranqueadoSeguroItems = userRoles.isPolicyActive ? [
     { path: '/afiliado/apolice', icon: Shield, label: 'Minha Apólice MBM' },
-    { path: '/afiliado/numero-sorte', icon: Ticket, label: 'Meus Números Sorte' },
+    { path: '/afiliado/numero-sorte', icon: Ticket, label: 'Meus Números da Sorte' },
     { path: '/afiliado/telemedicina', icon: HeartPulse, label: 'Telemedicina 24/7' },
     { path: '/afiliado/sinistros', icon: AlertCircle, label: 'Sinistros' },
   ] : [];
@@ -682,6 +682,31 @@ export default function AffiliateLayout({ children, title, customBalance, custom
                       </div>
                     );
                   })}
+
+                  {/* Seção adicional para Microfranqueado que também tem Seguro Ativo (Mobile) */}
+                  {userRoles.isMicrofranqueado && microfranqueadoSeguroItems.length > 0 && (
+                    <div className="pt-4 mt-2 border-t border-slate-100">
+                      <p className="px-6 text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">
+                        Meu Seguro & Benefícios
+                      </p>
+                      {microfranqueadoSeguroItems.map((item) => {
+                        const isActive = location.pathname === item.path;
+                        return (
+                          <Link
+                            key={item.path}
+                            to={item.path}
+                            onClick={() => setIsMobileMenuOpen(false)}
+                            className={`flex items-center gap-4 px-6 py-3.5 rounded-2xl font-bold transition-all ${
+                              isActive ? 'bg-emerald-50 text-emerald-700' : 'text-slate-400'
+                            }`}
+                          >
+                            <item.icon size={20} className={isActive ? 'text-emerald-600' : 'text-slate-400'} />
+                            <span>{item.label}</span>
+                          </Link>
+                        );
+                      })}
+                    </div>
+                  )}
 
                   <div className="pt-4 mt-2 border-t border-slate-100">
                     <button 

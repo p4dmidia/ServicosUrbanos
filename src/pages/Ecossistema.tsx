@@ -22,8 +22,10 @@ import {
 import { motion } from 'motion/react';
 import Header from '../components/Header';
 import { Link } from 'react-router-dom';
+import { useSubscriptionPlans } from '../lib/subscriptionPlans';
 
 export default function Ecossistema() {
+  const { minPrice } = useSubscriptionPlans();
   return (
     <div className="min-h-screen flex flex-col font-sans bg-midnight text-slate-100 overflow-x-hidden">
       <Header />
@@ -242,7 +244,7 @@ export default function Ecossistema() {
                 <div className="text-xs font-black text-accent uppercase tracking-widest mb-4">Passo 02</div>
                 <h4 className="text-xl font-black text-white mb-4">Seguro Vida Light</h4>
                 <p className="text-slate-400 text-sm font-medium leading-relaxed">
-                  Os clientes contratam proteção real por apenas R$ 5,00/mês, contando com seguro MBM R$ 5.000, telemedicina 24h e sorteios federais.
+                  Os clientes contratam proteção real por apenas R$ {minPrice.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}/mês, contando com seguro MBM R$ 5.000, telemedicina 24h e sorteios federais.
                 </p>
               </div>
 

@@ -63,6 +63,7 @@ export default function AffiliateInvoice() {
   const [rpaReceipt, setRpaReceipt] = useState<RPAReceipt | null>(null);
   const [allUserRpas, setAllUserRpas] = useState<RPAReceipt[]>([]);
   const [isRPAModalOpen, setIsRPAModalOpen] = useState(false);
+  const [networkMembers, setNetworkMembers] = useState<any[]>([]);
 
   // Estados de Adiantamento Mensal (PF)
   const [advanceRequests, setAdvanceRequests] = useState<any[]>([]);
@@ -134,6 +135,121 @@ export default function AffiliateInvoice() {
     };
   }, [rpaReceipt?.ordersBreakdown]);
 
+  // Agrupamento hierárquico MMN dos pedidos do RPA: Microfranqueados G0, G1 e G2
+  const mmnHierarchyGroups = useMemo(() => {
+    const rawBreakdown = (rpaReceipt?.ordersBreakdown || []).filter((t: any) => t.level !== 'REG');
+
+    // 1. G0 - O próprio Microfranqueado autenticado (Vendas Diretas)
+    const g0Mf = {
+      id: user?.id || 'g0',
+      name: profile?.full_name || 'Você (Microfranqueado)',
+      levelTag: 'G0',
+      category: 'MICROFRANQUEADO',
+      date: '0',
+      status: '0'
+    };
+    const g0Orders = rawBreakdown.filter((t: any) => t.level === '0' || t.level === 0 || t.level === 'G0');
+
+    // 2. G1 - Microfranqueados indicados direto por G0
+    const g1Members = networkMembers.filter((m: any) => Number(m.level) === 1);
+    const g1Orders = rawBreakdown.filter((t: any) => t.level === '1' || t.level === 1 || t.level === 'G1');
+
+    const g1Groups: any[] = [];
+    if (g1Members.length > 0) {
+      g1Members.forEach(m => {
+        const orders = g1Orders.filter((t: any) => t.sellerId === m.id || t.referredBy === m.id);
+        const resolvedOrders = orders.length > 0 ? orders : (g1Members.length === 1 ? g1Orders : []);
+        if (resolvedOrders.length > 0) {
+          g1Groups.push({
+            key: `g1-${m.id}`,
+            levelTag: 'G1',
+            microfranqueado: {
+              id: m.id,
+              name: m.name,
+              levelTag: 'G1',
+              category: 'MICROFRANQUEADO',
+              date: '0',
+              status: '0'
+            },
+            orders: resolvedOrders
+          });
+        }
+      });
+    } else if (g1Orders.length > 0) {
+      const seller = g1Orders[0]?.sellerName || 'Microfranqueado Indicado Direto (G1)';
+      g1Groups.push({
+        key: 'g1-default',
+        levelTag: 'G1',
+        microfranqueado: {
+          id: 'g1-default',
+          name: seller,
+          levelTag: 'G1',
+          category: 'MICROFRANQUEADO',
+          date: '0',
+          status: '0'
+        },
+        orders: g1Orders
+      });
+    }
+
+    // 3. G2 - Microfranqueados indicados diretos de seu G1
+    const g2Members = networkMembers.filter((m: any) => Number(m.level) === 2);
+    const g2Orders = rawBreakdown.filter((t: any) => t.level === '2' || t.level === 2 || t.level === 'G2');
+
+    const g2Groups: any[] = [];
+    if (g2Members.length > 0) {
+      g2Members.forEach(m => {
+        const orders = g2Orders.filter((t: any) => t.sellerId === m.id || t.referredBy === m.id);
+        const resolvedOrders = orders.length > 0 ? orders : (g2Members.length === 1 ? g2Orders : []);
+        if (resolvedOrders.length > 0) {
+          g2Groups.push({
+            key: `g2-${m.id}`,
+            levelTag: 'G2',
+            microfranqueado: {
+              id: m.id,
+              name: m.name,
+              levelTag: 'G2',
+              category: 'MICROFRANQUEADO',
+              date: '0',
+              status: '0'
+            },
+            orders: resolvedOrders
+          });
+        }
+      });
+    } else if (g2Orders.length > 0) {
+      const seller = g2Orders[0]?.sellerName || 'Microfranqueado Indireto (G2)';
+      g2Groups.push({
+        key: 'g2-default',
+        levelTag: 'G2',
+        microfranqueado: {
+          id: 'g2-default',
+          name: seller,
+          levelTag: 'G2',
+          category: 'MICROFRANQUEADO',
+          date: '0',
+          status: '0'
+        },
+        orders: g2Orders
+      });
+    }
+
+    const allGroups: any[] = [];
+    if (g0Orders.length > 0 || (g1Groups.length === 0 && g2Groups.length === 0)) {
+      allGroups.push({
+        key: 'g0',
+        levelTag: 'G0',
+        microfranqueado: g0Mf,
+        orders: g0Orders
+      });
+    }
+
+    g1Groups.forEach(g => allGroups.push(g));
+    g2Groups.forEach(g => allGroups.push(g));
+
+    return allGroups;
+  }, [user, profile, networkMembers, rpaReceipt?.ordersBreakdown]);
+
   // Inicializa a cidade e o tipo tributário com base no perfil do afiliado
   useEffect(() => {
     if (profile) {
@@ -184,16 +300,16 @@ export default function AffiliateInvoice() {
           }
         }
       } else {
-        // Pessoa Física: Carrega Recibo RPA para o mês selecionado e solicitações de adiantamento
-        const [currentRpa, rpasList, advList] = await Promise.all([
+        // Pessoa Física: Carrega Recibo RPA para o mês selecionado
+        const [currentRpa, rpasList, netMembers] = await Promise.all([
           businessRules.generateMonthlyRPAReceipt(user.id, activeRefMonth),
           businessRules.getAffiliateRPAReceipts(user.id),
-          businessRules.getAffiliateAdvanceRequests(activeRefMonth, user.id)
+          businessRules.getAffiliateNetwork(user.id)
         ]);
 
         setRpaReceipt(currentRpa);
         setAllUserRpas(rpasList || []);
-        setAdvanceRequests(advList || []);
+        setNetworkMembers(netMembers || []);
       }
     } catch (error) {
       console.error('Erro ao carregar dados fiscais:', error);
@@ -381,7 +497,7 @@ export default function AffiliateInvoice() {
               </div>
             </div>
             <div className="shrink-0 bg-emerald-100/80 px-4 py-2 rounded-xl border border-emerald-300 text-[10px] font-black uppercase tracking-wider text-emerald-800 shadow-sm">
-              Depósito Todo Dia 10 via PIX
+              Pagamentos Semanais (Toda Terça-Feira)
             </div>
           </div>
 
@@ -448,83 +564,6 @@ export default function AffiliateInvoice() {
             </div>
           </div>
 
-          {/* Card de Solicitação de Adiantamento Mensal de Rendimentos */}
-          <div className="bg-gradient-to-r from-amber-500/15 via-orange-500/10 to-amber-500/5 border border-amber-500/30 rounded-3xl p-6 flex flex-col md:flex-row items-start md:items-center justify-between gap-6 shadow-sm">
-            <div className="flex items-start gap-4">
-              <div className="size-12 rounded-2xl bg-amber-500/20 text-amber-600 border border-amber-500/30 flex items-center justify-center shrink-0 shadow-sm">
-                <DollarSign size={24} />
-              </div>
-              <div className="space-y-1">
-                <div className="flex flex-wrap items-center gap-2">
-                  <h4 className="text-sm font-black text-midnight uppercase tracking-tight">
-                    Adiantamento Mensal de Rendimentos
-                  </h4>
-                  <span className="px-2.5 py-0.5 rounded-full bg-amber-200/70 text-amber-900 text-[9px] font-black uppercase tracking-wider">
-                    1 Solicitação por Mês
-                  </span>
-                  <span className="px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-900 border border-emerald-300 text-[9px] font-black uppercase tracking-wider flex items-center gap-1">
-                    <Clock size={11} /> Recebimento no Dia Útil Seguinte
-                  </span>
-                </div>
-                <p className="text-xs text-slate-600 max-w-2xl leading-relaxed">
-                  Todo afiliado tem direito a solicitar a antecipação de seus rendimentos apurados no mês. O valor antecipado é transferido para sua chave PIX <strong>no dia útil seguinte</strong> e <strong>descontado automaticamente no acerto do dia 10</strong>.
-                </p>
-                {advanceRequests && advanceRequests.length > 0 && (
-                  <div className="pt-2 flex flex-wrap items-center gap-2">
-                    {advanceRequests.map((adv: any) => (
-                      <div 
-                        key={adv.id} 
-                        className={`inline-flex items-center gap-2 px-3 py-1 rounded-xl text-xs font-bold border ${
-                          adv.status === 'paid' 
-                            ? 'bg-emerald-100/80 text-emerald-800 border-emerald-300' 
-                            : adv.status === 'rejected'
-                            ? 'bg-rose-100/80 text-rose-800 border-rose-300'
-                            : 'bg-amber-100 text-amber-800 border-amber-300'
-                        }`}
-                      >
-                        <span>
-                          {adv.status === 'paid' ? '✅ Adiantamento Pago:' : adv.status === 'rejected' ? '❌ Adiantamento Recusado:' : '⏳ Em Análise:'} R$ {adv.amount.toFixed(2).replace('.', ',')}
-                        </span>
-                        {adv.paid_at && <span className="text-[10px] text-emerald-700 font-normal">({adv.paid_at})</span>}
-                        {adv.receipt_url && (
-                          <a 
-                            href={adv.receipt_url} 
-                            target="_blank" 
-                            rel="noopener noreferrer" 
-                            className="text-[10px] text-emerald-900 underline font-black ml-1"
-                          >
-                            Ver Comprovante PIX
-                          </a>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-
-            <div className="shrink-0 flex items-center gap-3 w-full md:w-auto justify-end">
-              {(!advanceRequests || !advanceRequests.some((a: any) => a.status === 'pending' || a.status === 'paid')) ? (
-                <button
-                  onClick={() => {
-                    const maxNet = rpaReceipt?.financial?.liquido_total || 0;
-                    setAdvanceAmountInput(maxNet > 0 ? maxNet.toFixed(2).replace('.', ',') : '');
-                    setIsAdvanceModalOpen(true);
-                  }}
-                  disabled={(rpaReceipt?.financial?.liquido_total || 0) <= 0}
-                  className="w-full md:w-auto px-6 py-3.5 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 disabled:opacity-50 text-white rounded-2xl font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2 shadow-lg shadow-amber-600/20 transition-all cursor-pointer"
-                >
-                  <DollarSign size={16} />
-                  Solicitar Adiantamento
-                </button>
-              ) : (
-                <span className="text-xs font-bold text-amber-800 bg-amber-100 px-4 py-2 rounded-xl border border-amber-300">
-                  {advanceRequests.some((a: any) => a.status === 'paid') ? 'Adiantamento Concedido' : 'Solicitação em Análise'}
-                </span>
-              )}
-            </div>
-          </div>
-
           {/* Grid Principal do RPA Atual */}
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
             {/* Card de Rendimentos da Competência Fechada */}
@@ -547,7 +586,7 @@ export default function AffiliateInvoice() {
                 </h2>
 
                 <p className="text-xs text-slate-500 font-medium mb-6 leading-relaxed">
-                  Este valor será depositado diretamente na sua chave PIX no <strong>dia {rpaReceipt?.financial.payment_forecast_date ? rpaReceipt.financial.payment_forecast_date.split('/')[0] : '10'}</strong>. O documento oficial de RPA foi preenchido automaticamente pelo sistema.
+                  Este valor será depositado diretamente na sua chave PIX <strong>toda terça-feira</strong> (comissões semanais). O documento oficial de RPA foi preenchido automaticamente pelo sistema.
                 </p>
 
                 {/* Discriminação */}
@@ -570,13 +609,6 @@ export default function AffiliateInvoice() {
                     <span className="font-semibold">Nível G2:</span>
                     <span className="font-mono font-bold text-midnight">
                       R$ {(rpaReceipt?.financial.rede_g2 || 0).toFixed(2).replace('.', ',')}
-                    </span>
-                  </div>
-
-                  <div className="flex justify-between items-center text-slate-600">
-                    <span className="font-semibold">Revendedor:</span>
-                    <span className="font-mono font-bold text-midnight">
-                      R$ {(rpaReceipt?.financial.vendas_revendedor || 0).toFixed(2).replace('.', ',')}
                     </span>
                   </div>
 
@@ -625,21 +657,6 @@ export default function AffiliateInvoice() {
                         : 'R$ 0,00 (Isento / PJ)'}
                     </span>
                   </div>
-
-                  {/* (-) Adiantamento de Rendimentos se houver */}
-                  {(rpaReceipt?.financial?.adiantamento || 0) > 0 && (
-                    <div className="flex justify-between items-center text-slate-600 bg-amber-500/10 p-2.5 rounded-xl border border-amber-500/20">
-                      <div>
-                        <span className="font-bold text-amber-900 block">(-) Adiantamento de Rendimentos:</span>
-                        {rpaReceipt?.financial?.adiantamento_date && (
-                          <span className="text-[9px] text-amber-700 font-medium">Pago em {rpaReceipt.financial.adiantamento_date}</span>
-                        )}
-                      </div>
-                      <span className="font-mono font-black text-amber-700">
-                        - R$ {(rpaReceipt?.financial?.adiantamento || 0).toFixed(2).replace('.', ',')}
-                      </span>
-                    </div>
-                  )}
 
                   <div className="pt-2.5 border-t border-slate-200 flex justify-between items-center font-black text-midnight text-sm">
                     <span>Total Líquido do Recibo:</span>
@@ -758,84 +775,100 @@ export default function AffiliateInvoice() {
                   </tr>
                 </thead>
                 <tbody>
-                  {rpaReceipt?.ordersBreakdown && rpaReceipt.ordersBreakdown.length > 0 ? (
-                    rpaReceipt.ordersBreakdown.map((order: any, idx: number) => (
-                      <tr
-                        key={order.id || idx}
-                        className="bg-slate-50/70 hover:bg-white hover:shadow-lg hover:shadow-slate-100 transition-all rounded-2xl text-xs font-medium"
-                      >
-                        <td className="px-5 py-4 rounded-l-2xl font-black text-midnight font-mono">
-                          {order.orderNumber}
-                        </td>
-                        <td className="px-5 py-4 font-bold text-slate-700">
-                          {order.affiliateName || order.origin || 'Afiliado'}
-                        </td>
-                        <td className="px-3 py-4 text-center">
-                          {order.level === 'REG' ? (
-                            <span className="inline-flex items-center justify-center px-2.5 py-1 rounded-xl text-[10px] font-black bg-purple-100 text-purple-700 border border-purple-200/60" title="Revendedor Regional">
-                              🏢 REG
+                  {mmnHierarchyGroups && mmnHierarchyGroups.length > 0 ? (
+                    mmnHierarchyGroups.map((group) => (
+                      <React.Fragment key={group.key}>
+                        {/* Linha Master do Microfranqueado (G0, G1 ou G2) */}
+                        <tr className="bg-slate-100/90 hover:bg-slate-200/70 transition-all rounded-2xl text-xs font-bold border border-slate-200">
+                          <td className="px-5 py-3.5 rounded-l-2xl font-mono text-slate-500 font-bold">
+                            0
+                          </td>
+                          <td className="px-5 py-3.5 font-black text-midnight uppercase tracking-wide">
+                            {group.microfranqueado.name}
+                          </td>
+                          <td className="px-3 py-3.5 text-center">
+                            <span className={`inline-flex items-center justify-center px-2.5 py-0.5 rounded-xl text-[10px] font-black border ${
+                              group.levelTag === 'G0'
+                                ? 'bg-amber-100 text-amber-800 border-amber-300'
+                                : group.levelTag === 'G1'
+                                ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
+                                : 'bg-sky-100 text-sky-800 border-sky-300'
+                            }`}>
+                              {group.levelTag}
                             </span>
-                          ) : order.level === '0' || order.level === 'G0' ? (
-                            <span className="inline-flex items-center justify-center px-2 py-0.5 rounded-xl text-[10px] font-black bg-amber-100 text-amber-800 border border-amber-200" title="Titular da Compra (G0)">
-                              🟡 G0
+                          </td>
+                          <td className="px-4 py-3.5 text-center">
+                            <span className="px-2.5 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider bg-slate-200/80 text-slate-700">
+                              MICROFRANQUEADO
                             </span>
-                          ) : order.level === '1' || order.level === 'G1' ? (
-                            <span className="inline-flex items-center justify-center px-2 py-0.5 rounded-xl text-[10px] font-black bg-emerald-100 text-emerald-800 border border-emerald-200" title="1º Nível (G1)">
-                              🟢 G1
-                            </span>
-                          ) : order.level === '2' || order.level === 'G2' ? (
-                            <span className="inline-flex items-center justify-center px-2 py-0.5 rounded-xl text-[10px] font-black bg-sky-100 text-sky-800 border border-sky-200" title="2º Nível (G2)">
-                              🔵 G2
-                            </span>
-                          ) : order.level === '3' || order.level === 'G3' ? (
-                            <span className="inline-flex items-center justify-center px-2 py-0.5 rounded-xl text-[10px] font-black bg-indigo-100 text-indigo-800 border border-indigo-200" title="3º Nível (G3)">
-                              🟣 G3
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center justify-center px-2 py-0.5 rounded-xl text-[10px] font-black bg-slate-200 text-slate-600">
-                              {order.level || '—'}
-                            </span>
-                          )}
-                        </td>
-                        <td className="px-4 py-4 text-center">
-                          <span className={`px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-wider ${
-                            (order.category || '').toUpperCase().includes('MENSAL')
-                              ? 'bg-rose-50 text-rose-600 border border-rose-100'
-                              : 'bg-amber-50 text-amber-600 border border-amber-100'
-                          }`}>
-                            {order.category || 'MENSAL'}
-                          </span>
-                        </td>
-                        <td className="px-4 py-4 text-slate-500 text-[11px]">
-                          {order.date}
-                        </td>
-                        <td className="px-5 py-4 text-right font-mono font-bold text-slate-600 text-xs">
-                          R$ {Number(order.contractAmount || order.amount || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                        </td>
-                        <td className="px-4 py-4 text-center font-mono font-bold text-indigo-600 text-xs">
-                          <span className="inline-flex items-center px-2 py-0.5 rounded-lg text-xs font-black bg-indigo-50 text-indigo-700 border border-indigo-100 font-mono">
-                            {order.rate || (order.percentage ? `${Number(order.percentage).toFixed(2)}%` : '5.00%')}
-                          </span>
-                        </td>
-                        <td className="px-5 py-4 text-right font-mono font-black text-emerald-600">
-                          +R$ {Number(order.commissionAmount || order.bruto || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                        </td>
-                        <td className="px-4 py-4 text-center rounded-r-2xl">
-                          <span className={`inline-flex items-center gap-1 text-[9px] font-black px-2.5 py-1 rounded-full uppercase tracking-wider ${
-                            order.status === 'Pago' || order.status === 'completed' || order.status === 'pago' || order.status === 'Concluído'
-                              ? 'bg-emerald-100 text-emerald-800'
-                              : (rpaReceipt?.financial.adiantamentos_total || 0) >= (rpaReceipt?.financial.bruto_total || 0) && (rpaReceipt?.financial.bruto_total || 0) > 0
-                              ? 'bg-amber-100 text-amber-900 border border-amber-300'
-                              : 'bg-amber-100 text-amber-800'
-                          }`}>
-                            {order.status === 'Pago' || order.status === 'completed' || order.status === 'pago' || order.status === 'Concluído'
-                              ? 'Pago'
-                              : (rpaReceipt?.financial.adiantamentos_total || 0) >= (rpaReceipt?.financial.bruto_total || 0) && (rpaReceipt?.financial.bruto_total || 0) > 0
-                              ? 'Adiantado'
-                              : 'Pendente'}
-                          </span>
-                        </td>
-                      </tr>
+                          </td>
+                          <td className="px-4 py-3.5 text-slate-500 font-mono">
+                            0
+                          </td>
+                          <td className="px-5 py-3.5 text-right font-mono text-slate-500">
+                            0
+                          </td>
+                          <td className="px-4 py-3.5 text-center font-mono text-slate-500">
+                            0
+                          </td>
+                          <td className="px-5 py-3.5 text-right font-mono text-slate-500">
+                            0
+                          </td>
+                          <td className="px-4 py-3.5 text-center rounded-r-2xl font-mono text-slate-500">
+                            0
+                          </td>
+                        </tr>
+
+                        {/* Pedidos do Plano Afiliado Premium vendidos por este Microfranqueado */}
+                        {group.orders.map((order: any, orderIdx: number) => (
+                          <tr
+                            key={order.id || `${group.key}-order-${orderIdx}`}
+                            className="bg-white hover:bg-emerald-50/30 transition-all rounded-2xl text-xs font-medium border border-slate-100 shadow-sm"
+                          >
+                            <td className="px-5 py-3.5 rounded-l-2xl font-black text-midnight font-mono">
+                              {order.orderNumber}
+                            </td>
+                            <td className="px-5 py-3.5 font-bold text-slate-700">
+                              {order.affiliateName || order.origin || 'Afiliado'}
+                            </td>
+                            <td className="px-3 py-3.5 text-center">
+                              <span className="inline-flex items-center justify-center px-2.5 py-0.5 rounded-xl text-[10px] font-black bg-emerald-50 text-emerald-700 border border-emerald-200/80" title="Plano Afiliado Premium">
+                                AF
+                              </span>
+                            </td>
+                            <td className="px-4 py-3.5 text-center">
+                              <span className="px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-rose-50 text-rose-600 border border-rose-100">
+                                {order.category || 'SEMANAL'}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3.5 text-slate-500 text-[11px]">
+                              {order.date}
+                            </td>
+                            <td className="px-5 py-3.5 text-right font-mono font-bold text-slate-600 text-xs">
+                              R$ {Number(order.contractAmount || order.amount || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                            </td>
+                            <td className="px-4 py-3.5 text-center font-mono font-bold text-indigo-600 text-xs">
+                              <span className="inline-flex items-center px-2 py-0.5 rounded-lg text-xs font-black bg-indigo-50 text-indigo-700 border border-indigo-100 font-mono">
+                                {order.rate || (order.percentage ? `${Number(order.percentage).toFixed(0)}%` : '21%')}
+                              </span>
+                            </td>
+                            <td className="px-5 py-3.5 text-right font-mono font-black text-emerald-600">
+                              +R$ {Number(order.commissionAmount || order.bruto || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                            </td>
+                            <td className="px-4 py-3.5 text-center rounded-r-2xl">
+                              <span className={`inline-flex items-center gap-1 text-[9px] font-black px-2.5 py-1 rounded-full uppercase tracking-wider ${
+                                order.status === 'Pago' || order.status === 'completed' || order.status === 'pago' || order.status === 'Concluído'
+                                  ? 'bg-emerald-100 text-emerald-800'
+                                  : 'bg-amber-100 text-amber-800'
+                              }`}>
+                                {order.status === 'Pago' || order.status === 'completed' || order.status === 'pago' || order.status === 'Concluído'
+                                  ? 'Pago'
+                                  : 'Pendente'}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </React.Fragment>
                     ))
                   ) : (
                     <tr>
@@ -858,44 +891,22 @@ export default function AffiliateInvoice() {
                       R$ {totalContratosUnicos.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                     </td>
                     <td className="px-4 py-3 text-center font-mono text-xs text-indigo-300">
-                      {mediaPercentual > 0 ? `${mediaPercentual.toFixed(2)}%` : '—'}
+                      {mediaPercentual > 0 ? `${mediaPercentual.toFixed(0)}%` : '—'}
                     </td>
                     <td className="px-5 py-3 text-right font-mono text-sm text-slate-200 font-bold">
-                      R$ {(rpaReceipt?.financial.bruto_total || totalComissaoCalculada || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                      +R$ {(rpaReceipt?.financial.bruto_total || totalComissaoCalculada || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                     </td>
                     <td className="px-4 py-3 text-center rounded-r-2xl text-[9px] text-slate-400 font-bold">
                       BRUTO
                     </td>
                   </tr>
 
-                  {/* Linha 2: (-) Adiantamento de Rendimentos se houver */}
-                  {(rpaReceipt?.financial.adiantamentos_total || 0) > 0 && (
-                    <tr className="bg-amber-950/80 text-amber-300 font-black uppercase tracking-widest text-[10px] border-b border-white/10">
-                      <td colSpan={7} className="px-6 py-2.5 rounded-l-2xl">
-                        <div className="flex items-center gap-2">
-                          <span className="size-2 rounded-full bg-amber-400 animate-pulse" />
-                          <span>(-) ADIANTAMENTO DE RENDIMENTOS (PAGO VIA PIX)</span>
-                        </div>
-                      </td>
-                      <td className="px-5 py-2.5 text-right font-mono text-sm text-rose-400 font-bold">
-                        - R$ {(rpaReceipt?.financial.adiantamentos_total || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                      </td>
-                      <td className="px-4 py-2.5 text-center rounded-r-2xl text-[9px] text-amber-300 font-bold">
-                        ADIANTADO
-                      </td>
-                    </tr>
-                  )}
-
-                  {/* Linha 3: Total Líquido a Receber via PIX */}
+                  {/* Linha 2: Saldo Semanal a Receber */}
                   <tr className="bg-slate-950 text-white font-black uppercase tracking-widest text-[10px]">
                     <td colSpan={7} className="px-6 py-4 rounded-l-2xl">
                       <div className="flex items-center gap-2">
                         <span className={`size-2 rounded-full ${(rpaReceipt?.financial.liquido_total || 0) > 0 ? 'bg-emerald-400 animate-pulse' : 'bg-slate-400'}`} />
-                        <span>
-                          {(rpaReceipt?.financial.liquido_total || 0) > 0 
-                            ? '(=) SALDO RESTANTE A RECEBER VIA PIX (NO DIA 10)'
-                            : '(=) SALDO RESTANTE A RECEBER NO DIA 10 (TOTALMENTE QUITADO VIA ADIANTAMENTO)'}
-                        </span>
+                        <span>(=) SALDO SEMANAL A RECEBER</span>
                       </div>
                     </td>
                     <td className="px-5 py-4 text-right font-mono text-sm text-emerald-400 font-black">
@@ -922,140 +933,6 @@ export default function AffiliateInvoice() {
                 setIsRPAModalOpen(false);
               }}
             />
-          )}
-
-          {/* Modal de Solicitação de Adiantamento Mensal */}
-          {isAdvanceModalOpen && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-200">
-              <motion.div 
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
-                className="bg-slate-900 border border-slate-700/80 rounded-3xl max-w-lg w-full overflow-hidden shadow-2xl text-white"
-              >
-                <div className="p-6 border-b border-slate-800 flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="size-10 rounded-xl bg-amber-500/20 text-amber-400 border border-amber-500/30 flex items-center justify-center">
-                      <DollarSign size={20} />
-                    </div>
-                    <div>
-                      <h3 className="text-base font-black text-white uppercase tracking-tight">
-                        Solicitar Adiantamento Mensal
-                      </h3>
-                      <p className="text-xs text-slate-400">
-                        Competência: {rpaReceipt?.month_label || monthLabel}
-                      </p>
-                    </div>
-                  </div>
-                  <button 
-                    onClick={() => setIsAdvanceModalOpen(false)}
-                    className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
-                  >
-                    <AlertCircle size={20} className="rotate-45" />
-                  </button>
-                </div>
-
-                <form onSubmit={handleRequestAdvance} className="p-6 space-y-5">
-                  <div className="bg-amber-500/10 border border-amber-500/20 p-4 rounded-2xl space-y-2">
-                    <div className="flex items-center justify-between">
-                      <span className="text-[10px] font-black uppercase tracking-wider text-amber-300 block">
-                        Saldo Líquido Disponível (Pós-IRPF):
-                      </span>
-                      <span className="text-[10px] font-bold text-amber-400/80 uppercase">
-                        Limite Máximo
-                      </span>
-                    </div>
-                    <span className="text-2xl font-mono font-black text-amber-200 block">
-                      R$ {(rpaReceipt?.financial?.liquido_total || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                    </span>
-                    <div className="pt-2 border-t border-amber-500/20 grid grid-cols-2 gap-2 text-[11px] text-amber-200/80">
-                      <div>
-                        <span className="text-slate-400 block text-[9px] uppercase font-bold">Bruto Apurado:</span>
-                        <span className="font-mono font-bold text-white">
-                          R$ {(rpaReceipt?.financial?.bruto_total || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                        </span>
-                      </div>
-                      <div>
-                        <span className="text-slate-400 block text-[9px] uppercase font-bold">(-) IRPF na Fonte:</span>
-                        <span className="font-mono font-bold text-rose-300">
-                          - R$ {(rpaReceipt?.financial?.deducao_irrf || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                        </span>
-                      </div>
-                    </div>
-                    <p className="text-[10px] text-amber-200/70 mt-1">
-                      O adiantamento é sempre pelo valor integral do saldo líquido disponível. O valor será transferido para sua chave PIX <strong>no dia útil seguinte</strong> e abatido na liquidação do dia 10.
-                    </p>
-                  </div>
-
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <label className="text-xs font-bold text-slate-300 uppercase tracking-wider block">
-                        Valor Integral a Antecipar:
-                      </label>
-                      <span className="text-[10px] font-black uppercase text-amber-400 bg-amber-500/20 px-2.5 py-0.5 rounded-md border border-amber-500/30">
-                        100% do Saldo Líquido
-                      </span>
-                    </div>
-                    <div className="relative">
-                      <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-sm">
-                        R$
-                      </span>
-                      <input 
-                        type="text"
-                        readOnly
-                        value={advanceAmountInput}
-                        className="w-full pl-12 pr-4 py-3.5 bg-slate-800/90 border border-amber-500/40 rounded-2xl text-amber-300 font-mono font-black text-xl cursor-not-allowed select-all"
-                      />
-                    </div>
-                    <p className="text-[11px] text-slate-400">
-                      🔒 <strong>Regra de Antecipação Integral:</strong> O adiantamento é sempre pelo valor total líquido disponível naquele momento. Não são permitidos valores picados.
-                    </p>
-                  </div>
-
-                  <div className="bg-slate-800/60 p-4 rounded-2xl border border-slate-700/60 space-y-1">
-                    <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block">
-                      Chave PIX Cadastrada para Recebimento:
-                    </span>
-                    <span className="text-xs font-mono font-bold text-emerald-400 block truncate">
-                      {profile?.pix_key || 'Chave PIX não cadastrada no perfil'}
-                    </span>
-                    <p className="text-[10px] text-slate-400">
-                      Tipo: {profile?.pix_type || 'CPF'} • Titular: {profile?.full_name || 'Afiliado'}
-                    </p>
-                  </div>
-
-                  <div className="space-y-2">
-                    <label className="text-xs font-bold text-slate-300 uppercase tracking-wider block">
-                      Observações / Justificativa (Opcional):
-                    </label>
-                    <textarea 
-                      rows={2}
-                      value={advanceNotesInput}
-                      onChange={(e) => setAdvanceNotesInput(e.target.value)}
-                      placeholder="Ex: Solicitação de antecipação referente às vendas da 1ª quinzena."
-                      className="w-full p-3.5 bg-slate-800/80 border border-slate-700 rounded-2xl text-white text-xs focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-all resize-none"
-                    />
-                  </div>
-
-                  <div className="pt-2 flex items-center justify-end gap-3">
-                    <button
-                      type="button"
-                      onClick={() => setIsAdvanceModalOpen(false)}
-                      className="px-5 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs uppercase tracking-wider transition-all"
-                    >
-                      Cancelar
-                    </button>
-                    <button
-                      type="submit"
-                      disabled={submittingAdvance}
-                      className="px-6 py-3 rounded-xl bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white font-black text-xs uppercase tracking-wider flex items-center gap-2 shadow-lg shadow-amber-600/30 transition-all disabled:opacity-50 cursor-pointer"
-                    >
-                      {submittingAdvance ? <Loader2 size={16} className="animate-spin" /> : <DollarSign size={16} />}
-                      Confirmar Solicitação
-                    </button>
-                  </div>
-                </form>
-              </motion.div>
-            </div>
           )}
         </div>
       </AffiliateLayout>
@@ -1139,77 +1016,6 @@ export default function AffiliateInvoice() {
                 <ChevronRight size={16} />
               </button>
             </div>
-          </div>
-        </div>
-
-        {/* Card de Adiantamento / Solicitação de Saque PJ */}
-        <div className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-          <div className="flex items-center gap-4">
-            <div className="size-12 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-600 flex items-center justify-center shrink-0">
-              <DollarSign size={24} />
-            </div>
-            <div>
-              <div className="flex flex-wrap items-center gap-2">
-                <h4 className="text-sm font-black text-midnight uppercase tracking-tight">
-                  Adiantamento / Solicitação de Saque PJ
-                </h4>
-                <span className="text-[10px] bg-amber-100 text-amber-800 border border-amber-300 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">
-                  1 por mês
-                </span>
-                <span className="px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-900 border border-emerald-300 text-[9px] font-black uppercase tracking-wider flex items-center gap-1">
-                  <Clock size={11} /> Recebimento no Dia Útil Seguinte
-                </span>
-              </div>
-              <p className="text-xs text-slate-500 mt-0.5">
-                Você pode solicitar até 1 adiantamento por competência do seu faturamento acumulado via PIX, com <strong>pagamento no dia útil seguinte</strong>.
-              </p>
-              {advanceRequests && advanceRequests.length > 0 && (
-                <div className="mt-2 flex flex-wrap gap-2">
-                  {advanceRequests.map((adv: any) => (
-                    <div key={adv.id} className="inline-flex items-center gap-2 px-3 py-1 rounded-xl bg-slate-50 border border-slate-200 text-xs">
-                      <span className="font-mono font-bold text-slate-700">
-                        R$ {Number(adv.amount).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                      </span>
-                      <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full ${
-                        adv.status === 'paid' || adv.status === 'completed' 
-                          ? 'bg-emerald-100 text-emerald-800' 
-                          : adv.status === 'pending'
-                          ? 'bg-amber-100 text-amber-800'
-                          : 'bg-rose-100 text-rose-800'
-                      }`}>
-                        {adv.status === 'paid' || adv.status === 'completed' ? 'Pago via PIX' : adv.status === 'pending' ? 'Em Análise' : 'Recusado'}
-                      </span>
-                      {adv.receipt_url && (
-                        <a href={adv.receipt_url} target="_blank" rel="noreferrer" className="text-[10px] text-emerald-600 font-bold underline">
-                          Comprovante
-                        </a>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-
-          <div className="shrink-0 flex items-center gap-3 w-full md:w-auto justify-end">
-            {(!advanceRequests || !advanceRequests.some((a: any) => a.status === 'pending' || a.status === 'paid' || a.status === 'completed')) ? (
-              <button
-                onClick={() => {
-                  const maxNet = summary?.totalGross || summary?.monthlyGross || 0;
-                  setAdvanceAmountInput(maxNet > 0 ? maxNet.toFixed(2).replace('.', ',') : '');
-                  setIsAdvanceModalOpen(true);
-                }}
-                disabled={(summary?.totalGross || summary?.monthlyGross || 0) <= 0}
-                className="w-full md:w-auto px-6 py-3.5 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 disabled:opacity-50 text-white rounded-2xl font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2 shadow-lg shadow-amber-600/20 transition-all cursor-pointer"
-              >
-                <DollarSign size={16} />
-                Solicitar Adiantamento PJ
-              </button>
-            ) : (
-              <span className="text-xs font-bold text-amber-800 bg-amber-100 px-4 py-2 rounded-xl border border-amber-300">
-                {advanceRequests.some((a: any) => a.status === 'paid' || a.status === 'completed') ? 'Adiantamento Concedido' : 'Solicitação em Análise'}
-              </span>
-            )}
           </div>
         </div>
 
@@ -1774,126 +1580,6 @@ export default function AffiliateInvoice() {
             </div>
           </form>
         </div>
-
-        {/* Modal de Solicitação de Adiantamento PJ */}
-        {isAdvanceModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-200">
-            <motion.div 
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              className="bg-slate-900 border border-slate-700/80 rounded-3xl max-w-lg w-full overflow-hidden shadow-2xl text-white"
-            >
-              <div className="p-6 border-b border-slate-800 flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="size-10 rounded-xl bg-amber-500/20 text-amber-400 border border-amber-500/30 flex items-center justify-center">
-                    <DollarSign size={20} />
-                  </div>
-                  <div>
-                    <h3 className="text-base font-black text-white uppercase tracking-tight">
-                      Solicitar Adiantamento / Saque PJ
-                    </h3>
-                    <p className="text-xs text-slate-400">
-                      Competência: {summary?.monthLabel || monthLabel}
-                    </p>
-                  </div>
-                </div>
-                <button 
-                  onClick={() => setIsAdvanceModalOpen(false)}
-                  className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
-                >
-                  <AlertCircle size={20} className="rotate-45" />
-                </button>
-              </div>
-
-              <form onSubmit={handleRequestAdvance} className="p-6 space-y-5">
-                <div className="bg-amber-500/10 border border-amber-500/20 p-4 rounded-2xl space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[10px] font-black uppercase tracking-wider text-amber-300 block">
-                      Saldo Disponível Acumulado (PJ):
-                    </span>
-                    <span className="text-[10px] font-bold text-amber-400/80 uppercase">
-                      Isenção de Retenção
-                    </span>
-                  </div>
-                  <span className="text-2xl font-mono font-black text-amber-200 block">
-                    R$ {(summary?.totalGross || summary?.monthlyGross || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                  </span>
-                  <p className="text-[10px] text-amber-200/70 mt-1">
-                    Como Pessoa Jurídica (PJ/MEI), não há retenções na fonte de INSS ou IRPF. O adiantamento será transferido via PIX para a conta da sua empresa e abatido na apuração do dia 10.
-                  </p>
-                </div>
-
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <label className="text-xs font-bold text-slate-300 uppercase tracking-wider block">
-                      Valor Integral a Antecipar:
-                    </label>
-                    <span className="text-[10px] font-black uppercase text-amber-400 bg-amber-500/20 px-2.5 py-0.5 rounded-md border border-amber-500/30">
-                      100% do Saldo Disponível
-                    </span>
-                  </div>
-                  <div className="relative">
-                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-sm">
-                      R$
-                    </span>
-                    <input 
-                      type="text"
-                      readOnly
-                      value={advanceAmountInput}
-                      className="w-full pl-12 pr-4 py-3.5 bg-slate-800/90 border border-amber-500/40 rounded-2xl text-amber-300 font-mono font-black text-xl cursor-not-allowed select-all"
-                    />
-                  </div>
-                  <p className="text-[11px] text-slate-400">
-                    🔒 <strong>Regra de Antecipação Integral:</strong> O adiantamento é sempre pelo valor total disponível da empresa naquele momento. Não são permitidos valores picados.
-                  </p>
-                </div>
-
-                <div className="bg-slate-800/60 p-4 rounded-2xl border border-slate-700/60 space-y-1">
-                  <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block">
-                    Chave PIX Cadastrada da Empresa:
-                  </span>
-                  <span className="text-xs font-mono font-bold text-emerald-400 block truncate">
-                    {profile?.pix_key || 'Chave PIX não cadastrada no perfil'}
-                  </span>
-                  <p className="text-[10px] text-slate-400">
-                    Tipo: {profile?.pix_type || 'CNPJ'} • Empresa: {profile?.company_name || profile?.full_name || 'Afiliado PJ'}
-                  </p>
-                </div>
-
-                <div className="space-y-2">
-                  <label className="text-xs font-bold text-slate-300 uppercase tracking-wider block">
-                    Observações / Justificativa (Opcional):
-                  </label>
-                  <textarea 
-                    rows={2}
-                    value={advanceNotesInput}
-                    onChange={(e) => setAdvanceNotesInput(e.target.value)}
-                    placeholder="Ex: Solicitação de antecipação referente às vendas da 1ª quinzena."
-                    className="w-full p-3.5 bg-slate-800/80 border border-slate-700 rounded-2xl text-white text-xs focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-all resize-none"
-                  />
-                </div>
-
-                <div className="pt-2 flex items-center justify-end gap-3">
-                  <button
-                    type="button"
-                    onClick={() => setIsAdvanceModalOpen(false)}
-                    className="px-5 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs uppercase tracking-wider transition-all"
-                  >
-                    Cancelar
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={submittingAdvance}
-                    className="px-6 py-3 rounded-xl bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white font-black text-xs uppercase tracking-wider flex items-center gap-2 shadow-lg shadow-amber-600/30 transition-all disabled:opacity-50 cursor-pointer"
-                  >
-                    {submittingAdvance ? <Loader2 size={16} className="animate-spin" /> : <DollarSign size={16} />}
-                    Confirmar Solicitação
-                  </button>
-                </div>
-              </form>
-            </motion.div>
-          </div>
-        )}
 
       </div>
     </AffiliateLayout>

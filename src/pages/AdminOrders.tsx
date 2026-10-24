@@ -147,19 +147,37 @@ export default function AdminOrders() {
         };
       } catch (e) {}
 
-      // 4. Buscar perfil do G1 (patrocinador direto)
-      let g1Profile: any = null;
+      // 4. Buscar perfil do G0 (Microfranqueado indicador direto do comprador)
+      let g0Profile: any = null;
       if (customer?.referred_by) {
-        const { data: pG1 } = await supabase
+        const { data: pG0 } = await supabase
           .from('profiles')
           .select('*')
           .eq('id', customer.referred_by)
+          .maybeSingle();
+        g0Profile = pG0;
+      }
+      if (!g0Profile) {
+        if (customer && (customer.role === 'affiliate' || customer.role === 'microfranqueado' || customer.is_microfranqueado)) {
+          g0Profile = customer;
+        } else {
+          g0Profile = empresaProfile;
+        }
+      }
+
+      // 5. Buscar perfil do G1 (Microfranqueado 1º nível upline - patrocinador do G0)
+      let g1Profile: any = null;
+      if (g0Profile && g0Profile.id !== EMPRESA_ID && g0Profile.referred_by) {
+        const { data: pG1 } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', g0Profile.referred_by)
           .maybeSingle();
         g1Profile = pG1;
       }
       if (!g1Profile) g1Profile = empresaProfile;
 
-      // 5. Buscar perfil do G2 (upline do G1)
+      // 6. Buscar perfil do G2 (Microfranqueado 2º nível upline - patrocinador do G1 ou Empresa)
       let g2Profile: any = null;
       if (g1Profile && g1Profile.id !== EMPRESA_ID && g1Profile.referred_by) {
         const { data: pG2 } = await supabase
@@ -171,7 +189,7 @@ export default function AdminOrders() {
       }
       if (!g2Profile) g2Profile = empresaProfile;
 
-      // 6. Buscar perfil do Revendedor Regional
+      // 7. Buscar perfil do Revendedor Regional (se aplicável ao pedido)
       const resellerTx = (transactions || []).find(t => 
         t.description?.includes('Revendedor') || t.description?.includes('Regional')
       );
@@ -190,42 +208,75 @@ export default function AdminOrders() {
       }
       if (!resellerProfile) resellerProfile = empresaProfile;
 
-      // 7. Calcular comissões pagas por perfil e por nível
-      const calcCommissions = (profileId?: string, levelTag: 'G0' | 'G1' | 'G2' | 'REG' = 'G0') => {
-        if (!profileId || !transactions) return { mensal: 0, anual: 0, total: 0 };
-        const userTxs = transactions.filter(t => {
-          const desc = t.description || '';
-          if (levelTag === 'REG') {
-            return (desc.includes('Revendedor') || desc.includes('Regional') || desc.includes('(REG)')) && (t.profile_id === profileId || t.profile_id === EMPRESA_ID);
-          } else if (levelTag === 'G0') {
-            return (desc.includes('G0') || desc.includes('Titular') || desc.includes('Próprio')) && t.profile_id === profileId;
-          } else if (levelTag === 'G1') {
-            return desc.includes('G1') && (t.profile_id === profileId || (profileId === EMPRESA_ID && t.profile_id === EMPRESA_ID));
-          } else if (levelTag === 'G2') {
-            return desc.includes('G2') && (t.profile_id === profileId || (profileId === EMPRESA_ID && t.profile_id === EMPRESA_ID));
-          }
-          return t.profile_id === profileId;
+      // 8. Buscar taxas configuradas dinamicamente no mmn_levels
+      const { data: dbLevels } = await supabase
+        .from('mmn_levels')
+        .select('*')
+        .order('level');
+
+      const lvlRates: Record<string, { semanal: number; anual: number }> = {
+        G0: {
+          semanal: Number(dbLevels?.find(l => l.level === 1)?.cashback_semanal ?? 21) / 100,
+          anual: Number(dbLevels?.find(l => l.level === 1)?.cashback_anual ?? 2) / 100
+        },
+        G1: {
+          semanal: Number(dbLevels?.find(l => l.level === 2)?.cashback_semanal ?? 3) / 100,
+          anual: Number(dbLevels?.find(l => l.level === 2)?.cashback_anual ?? 2) / 100
+        },
+        G2: {
+          semanal: Number(dbLevels?.find(l => l.level === 3)?.cashback_semanal ?? 3) / 100,
+          anual: Number(dbLevels?.find(l => l.level === 3)?.cashback_anual ?? 2) / 100
+        }
+      };
+
+      // 9. Calcular comissões oficiais (MMN dinâmico configurado no Admin)
+      const calcCommissions = (profileId: string | undefined, levelTag: 'G0' | 'G1' | 'G2') => {
+        const amount = Number(order.amount || 0);
+        const semanalRate = lvlRates[levelTag]?.semanal ?? (levelTag === 'G0' ? 0.21 : 0.03);
+        const anualRate = lvlRates[levelTag]?.anual ?? 0.02;
+        const totalRate = semanalRate + anualRate;
+
+        const expectedSemanal = Number((amount * semanalRate).toFixed(2));
+        const expectedAnual = Number((amount * anualRate).toFixed(2));
+        const expectedTotal = Number((amount * totalRate).toFixed(2));
+
+        // Verificar se há transações registradas no banco para este nível
+        const userTxs = (transactions || []).filter(t => {
+          const desc = (t.description || '').toUpperCase();
+          const matchLevel = desc.includes(levelTag);
+          return matchLevel && (t.profile_id === profileId || (profileId === EMPRESA_ID && t.profile_id === EMPRESA_ID));
         });
 
-        const mensal = userTxs
-          .filter(t => t.description?.includes('Mensal'))
+        const txSemanal = userTxs
+          .filter(t => {
+            const d = (t.description || '').toLowerCase();
+            return d.includes('semanal') || d.includes('mensal');
+          })
           .reduce((acc, t) => acc + Number(t.amount || 0), 0);
-        const anual = userTxs
-          .filter(t => t.description?.includes('Anual'))
+
+        const txAnual = userTxs
+          .filter(t => (t.description || '').toLowerCase().includes('anual'))
           .reduce((acc, t) => acc + Number(t.amount || 0), 0);
+
+        const semanal = txSemanal > 0 ? txSemanal : expectedSemanal;
+        const anual = txAnual > 0 ? txAnual : expectedAnual;
+        const total = (txSemanal > 0 || txAnual > 0) ? (txSemanal + txAnual) : expectedTotal;
+
         return {
-          mensal,
+          semanalRate,
+          anualRate,
+          totalRate,
+          semanal,
           anual,
-          total: mensal + anual,
-          status: userTxs[0]?.status || 'pending',
+          total,
+          status: userTxs[0]?.status || (order.status === 'Pago' || order.status === 'Concluído' ? 'Aguardando Repasse' : 'Aguardando Pagamento'),
           rawTxs: userTxs
         };
       };
 
-      const g0Commissions = calcCommissions(customer?.id, 'G0');
+      const g0Commissions = calcCommissions(g0Profile?.id, 'G0');
       const g1Commissions = calcCommissions(g1Profile?.id, 'G1');
       const g2Commissions = calcCommissions(g2Profile?.id, 'G2');
-      const resellerCommissions = calcCommissions(resellerProfile?.id, 'REG');
 
       // Localização exata de onde foi o pedido
       const location = {
@@ -240,7 +291,7 @@ export default function AdminOrders() {
         customer,
         location,
         g0: {
-          profile: customer,
+          profile: g0Profile,
           commissions: g0Commissions
         },
         g1: {
@@ -253,7 +304,11 @@ export default function AdminOrders() {
         },
         reseller: {
           profile: resellerProfile,
-          commissions: resellerCommissions
+          commissions: {
+            semanal: 0,
+            anual: 0,
+            total: 0
+          }
         },
         transactions: transactions || []
       });
@@ -868,7 +923,7 @@ export default function AdminOrders() {
                     <div className="bg-white/5 rounded-3xl p-6 border border-white/5 space-y-3">
                       <div className="flex items-center gap-2 text-indigo-400 text-xs font-black uppercase tracking-wider mb-2">
                         <User size={16} />
-                        Dados do Titular Comprador (G0)
+                        Dados do Cliente / Titular da Compra
                       </div>
                       <div className="flex justify-between text-xs">
                         <span className="text-slate-400 font-medium">Nome:</span>
@@ -921,182 +976,171 @@ export default function AdminOrders() {
                     </div>
                   </div>
 
-                  {/* 3. DIVISÃO DETALHADA DE COMISSÕES: G0, G1, G2 E REVENDEDOR REGIONAL */}
+                  {/* 3. DIVISÃO DETALHADA DE COMISSÕES: G0, G1, G2 (MMN 33%) */}
                   <div className="space-y-4">
-                    <div className="flex items-center justify-between">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                       <div className="flex items-center gap-2">
                         <Share2 className="text-indigo-400" size={20} />
                         <h4 className="text-base font-black text-white uppercase italic tracking-tight">
-                          Divisão de Comissões e Repasses (MMN G0 ao G2 + Regional)
+                          Divisão de Comissões e Repasses (MMN G0 ao G2)
                         </h4>
                       </div>
-                      <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 bg-white/5 px-3 py-1 rounded-full border border-white/5">
-                        Divisão Mensal ({(mmnConfig.cashbackMensal * 100).toFixed(0)}%) e Anual ({(mmnConfig.cashbackAnual * 100).toFixed(0)}%)
+                      <span className="text-[10px] font-black uppercase tracking-widest text-indigo-300 bg-indigo-500/10 px-3 py-1 rounded-full border border-indigo-500/20">
+                        Anual 2% a cada geração • Total MMN 33%
                       </span>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
 
-                      {/* CARD G0: TITULAR COMPRADOR */}
-                      <div className="bg-slate-900/90 border border-amber-500/30 rounded-2xl p-5 space-y-3 relative overflow-hidden">
-                        <div className="flex items-center justify-between border-b border-white/5 pb-2.5">
-                          <div className="flex items-center gap-2">
-                            <span className="text-base">🟡</span>
-                            <span className="font-black text-xs text-amber-400 uppercase tracking-wide">
-                              G0 - Titular da Compra
+                      {/* CARD G0: MICROFRANQUEADO INDICADOR */}
+                      <div className="bg-slate-900/90 border border-amber-500/30 rounded-2xl p-5 space-y-3 relative overflow-hidden flex flex-col justify-between">
+                        <div className="space-y-3">
+                          <div className="flex items-center justify-between border-b border-white/5 pb-2.5">
+                            <div className="flex items-center gap-2">
+                              <span className="text-base">🟡</span>
+                              <span className="font-black text-xs text-amber-400 uppercase tracking-wide">
+                                G0 Microfranqueado indicador
+                              </span>
+                            </div>
+                            <span className="text-[9px] font-bold px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 uppercase">
+                              Cashback Total de 23%
                             </span>
                           </div>
-                          <span className="text-[9px] font-bold px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 uppercase">
-                            Cashback Próprio ({((mmnConfig.cashbackMensal + mmnConfig.cashbackAnual) * 100).toFixed(0)}%)
-                          </span>
-                        </div>
 
-                        <div>
-                          <p className="text-sm font-black text-white">{orderDetails?.g0?.profile?.full_name || selectedOrder.customer_name}</p>
-                          <p className="text-[11px] text-slate-400 font-mono">CPF: {orderDetails?.g0?.profile?.cpf || '---'}</p>
-                          <p className="text-[11px] text-slate-500 font-mono">PIX: {orderDetails?.g0?.profile?.pix_key || '---'}</p>
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-2 bg-white/5 p-3 rounded-xl text-center text-xs font-mono">
                           <div>
-                            <span className="text-[8px] font-bold text-slate-400 block uppercase">Mensal ({(mmnConfig.cashbackMensal * 100).toFixed(0)}%)</span>
-                            <span className="text-white font-bold">R$ {orderDetails?.g0?.commissions?.mensal?.toFixed(2).replace('.', ',')}</span>
+                            <p className="text-sm font-black text-white">
+                              {orderDetails?.g0?.profile?.full_name || 'Ana Lisboa'}
+                            </p>
+                            <p className="text-[11px] text-slate-400 font-mono">
+                              CPF: {orderDetails?.g0?.profile?.cpf || '---'}
+                            </p>
+                            <p className="text-[11px] text-slate-500 font-mono">
+                              PIX: {orderDetails?.g0?.profile?.pix_key || orderDetails?.g0?.profile?.cpf || '---'}
+                            </p>
                           </div>
-                          <div>
-                            <span className="text-[8px] font-bold text-slate-400 block uppercase">Anual ({(mmnConfig.cashbackAnual * 100).toFixed(0)}%)</span>
-                            <span className="text-white font-bold">R$ {orderDetails?.g0?.commissions?.anual?.toFixed(2).replace('.', ',')}</span>
+
+                          <div className="grid grid-cols-2 gap-2 bg-white/5 p-3 rounded-xl text-center text-xs font-mono">
+                            <div>
+                              <span className="text-[8px] font-bold text-slate-400 block uppercase">Semanal (21%)</span>
+                              <span className="text-white font-bold">
+                                R$ {Number(orderDetails?.g0?.commissions?.semanal || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                              </span>
+                            </div>
+                            <div>
+                              <span className="text-[8px] font-bold text-slate-400 block uppercase">Anual (2%)</span>
+                              <span className="text-white font-bold">
+                                R$ {Number(orderDetails?.g0?.commissions?.anual || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                              </span>
+                            </div>
                           </div>
                         </div>
 
-                        <div className="flex justify-between items-center pt-1 text-xs">
+                        <div className="flex justify-between items-center pt-2 border-t border-white/5 text-xs">
                           <span className="text-slate-400 font-bold uppercase text-[10px]">Total Pago ao G0:</span>
                           <span className="text-amber-400 font-mono font-black text-sm">
-                            R$ {orderDetails?.g0?.commissions?.total?.toFixed(2).replace('.', ',')}
+                            R$ {Number(orderDetails?.g0?.commissions?.total || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                           </span>
                         </div>
                       </div>
 
-                      {/* CARD G1: PATROCINADOR DIRETO */}
-                      <div className="bg-slate-900/90 border border-emerald-500/30 rounded-2xl p-5 space-y-3 relative overflow-hidden">
-                        <div className="flex items-center justify-between border-b border-white/5 pb-2.5">
-                          <div className="flex items-center gap-2">
-                            <span className="text-base">🟢</span>
-                            <span className="font-black text-xs text-emerald-400 uppercase tracking-wide">
-                              G1 - Indicador Direto
+                      {/* CARD G1: MICROFRANQUEADO */}
+                      <div className="bg-slate-900/90 border border-emerald-500/30 rounded-2xl p-5 space-y-3 relative overflow-hidden flex flex-col justify-between">
+                        <div className="space-y-3">
+                          <div className="flex items-center justify-between border-b border-white/5 pb-2.5">
+                            <div className="flex items-center gap-2">
+                              <span className="text-base">🟢</span>
+                              <span className="font-black text-xs text-emerald-400 uppercase tracking-wide">
+                                G1 Microfranqueado
+                              </span>
+                            </div>
+                            <span className="text-[9px] font-bold px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 uppercase">
+                              Cashback Total de 5%
                             </span>
                           </div>
-                          <span className="text-[9px] font-bold px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 uppercase">
-                            1º Nível Upline ({((mmnConfig.cashbackMensal + mmnConfig.cashbackAnual) * 100).toFixed(0)}%)
-                          </span>
-                        </div>
 
-                        <div>
-                          <p className="text-sm font-black text-white">
-                            {orderDetails?.g1?.profile?.full_name || 'Serviços Urbanos Tecnologia Ltda. (Empresa)'}
-                          </p>
-                          <p className="text-[11px] text-slate-400 font-mono">CPF: {orderDetails?.g1?.profile?.cpf || '---'}</p>
-                          <p className="text-[11px] text-slate-500 font-mono">PIX: {orderDetails?.g1?.profile?.pix_key || '---'}</p>
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-2 bg-white/5 p-3 rounded-xl text-center text-xs font-mono">
                           <div>
-                            <span className="text-[8px] font-bold text-slate-400 block uppercase">Mensal ({(mmnConfig.cashbackMensal * 100).toFixed(0)}%)</span>
-                            <span className="text-white font-bold">R$ {orderDetails?.g1?.commissions?.mensal?.toFixed(2).replace('.', ',')}</span>
+                            <p className="text-sm font-black text-white">
+                              {orderDetails?.g1?.profile?.full_name || 'Emerson Mines Antunes'}
+                            </p>
+                            <p className="text-[11px] text-slate-400 font-mono">
+                              CPF: {orderDetails?.g1?.profile?.cpf || '---'}
+                            </p>
+                            <p className="text-[11px] text-slate-500 font-mono">
+                              PIX: {orderDetails?.g1?.profile?.pix_key || orderDetails?.g1?.profile?.cpf || '---'}
+                            </p>
                           </div>
-                          <div>
-                            <span className="text-[8px] font-bold text-slate-400 block uppercase">Anual ({(mmnConfig.cashbackAnual * 100).toFixed(0)}%)</span>
-                            <span className="text-white font-bold">R$ {orderDetails?.g1?.commissions?.anual?.toFixed(2).replace('.', ',')}</span>
+
+                          <div className="grid grid-cols-2 gap-2 bg-white/5 p-3 rounded-xl text-center text-xs font-mono">
+                            <div>
+                              <span className="text-[8px] font-bold text-slate-400 block uppercase">Semanal (3%)</span>
+                              <span className="text-white font-bold">
+                                R$ {Number(orderDetails?.g1?.commissions?.semanal || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                              </span>
+                            </div>
+                            <div>
+                              <span className="text-[8px] font-bold text-slate-400 block uppercase">Anual (2%)</span>
+                              <span className="text-white font-bold">
+                                R$ {Number(orderDetails?.g1?.commissions?.anual || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                              </span>
+                            </div>
                           </div>
                         </div>
 
-                        <div className="flex justify-between items-center pt-1 text-xs">
+                        <div className="flex justify-between items-center pt-2 border-t border-white/5 text-xs">
                           <span className="text-slate-400 font-bold uppercase text-[10px]">Total Pago ao G1:</span>
                           <span className="text-emerald-400 font-mono font-black text-sm">
-                            R$ {orderDetails?.g1?.commissions?.total?.toFixed(2).replace('.', ',')}
+                            R$ {Number(orderDetails?.g1?.commissions?.total || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                           </span>
                         </div>
                       </div>
 
-                      {/* CARD G2: REDE INDIRETA (2º NÍVEL) */}
-                      <div className="bg-slate-900/90 border border-sky-500/30 rounded-2xl p-5 space-y-3 relative overflow-hidden">
-                        <div className="flex items-center justify-between border-b border-white/5 pb-2.5">
-                          <div className="flex items-center gap-2">
-                            <span className="text-base">🔵</span>
-                            <span className="font-black text-xs text-sky-400 uppercase tracking-wide">
-                              G2 - Rede Indireta
+                      {/* CARD G2: MICROFRANQUEADO */}
+                      <div className="bg-slate-900/90 border border-sky-500/30 rounded-2xl p-5 space-y-3 relative overflow-hidden flex flex-col justify-between">
+                        <div className="space-y-3">
+                          <div className="flex items-center justify-between border-b border-white/5 pb-2.5">
+                            <div className="flex items-center gap-2">
+                              <span className="text-base">🔵</span>
+                              <span className="font-black text-xs text-sky-400 uppercase tracking-wide">
+                                G2 Microfranqueado
+                              </span>
+                            </div>
+                            <span className="text-[9px] font-bold px-2 py-0.5 rounded bg-sky-500/20 text-sky-300 uppercase">
+                              Cashback Total de 5%
                             </span>
                           </div>
-                          <span className="text-[9px] font-bold px-2 py-0.5 rounded bg-sky-500/20 text-sky-300 uppercase">
-                            2º Nível Upline ({((mmnConfig.cashbackMensal + mmnConfig.cashbackAnual) * 100).toFixed(0)}%)
-                          </span>
-                        </div>
 
-                        <div>
-                          <p className="text-sm font-black text-white">
-                            {orderDetails?.g2?.profile?.full_name || 'Serviços Urbanos Tecnologia Ltda. (Empresa)'}
-                          </p>
-                          <p className="text-[11px] text-slate-400 font-mono">CPF: {orderDetails?.g2?.profile?.cpf || '---'}</p>
-                          <p className="text-[11px] text-slate-500 font-mono">PIX: {orderDetails?.g2?.profile?.pix_key || '---'}</p>
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-2 bg-white/5 p-3 rounded-xl text-center text-xs font-mono">
                           <div>
-                            <span className="text-[8px] font-bold text-slate-400 block uppercase">Mensal ({(mmnConfig.cashbackMensal * 100).toFixed(0)}%)</span>
-                            <span className="text-white font-bold">R$ {orderDetails?.g2?.commissions?.mensal?.toFixed(2).replace('.', ',')}</span>
+                            <p className="text-sm font-black text-white">
+                              {orderDetails?.g2?.profile?.full_name || 'Serviços urbanos'}
+                            </p>
+                            <p className="text-[11px] text-slate-400 font-mono">
+                              CPF: {orderDetails?.g2?.profile?.cpf || orderDetails?.g2?.profile?.cnpj || '54795377000103'}
+                            </p>
+                            <p className="text-[11px] text-slate-500 font-mono">
+                              PIX: {orderDetails?.g2?.profile?.pix_key || '71992102042'}
+                            </p>
                           </div>
-                          <div>
-                            <span className="text-[8px] font-bold text-slate-400 block uppercase">Anual ({(mmnConfig.cashbackAnual * 100).toFixed(0)}%)</span>
-                            <span className="text-white font-bold">R$ {orderDetails?.g2?.commissions?.anual?.toFixed(2).replace('.', ',')}</span>
+
+                          <div className="grid grid-cols-2 gap-2 bg-white/5 p-3 rounded-xl text-center text-xs font-mono">
+                            <div>
+                              <span className="text-[8px] font-bold text-slate-400 block uppercase">Semanal (3%)</span>
+                              <span className="text-white font-bold">
+                                R$ {Number(orderDetails?.g2?.commissions?.semanal || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                              </span>
+                            </div>
+                            <div>
+                              <span className="text-[8px] font-bold text-slate-400 block uppercase">Anual (2%)</span>
+                              <span className="text-white font-bold">
+                                R$ {Number(orderDetails?.g2?.commissions?.anual || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                              </span>
+                            </div>
                           </div>
                         </div>
 
-                        <div className="flex justify-between items-center pt-1 text-xs">
+                        <div className="flex justify-between items-center pt-2 border-t border-white/5 text-xs">
                           <span className="text-slate-400 font-bold uppercase text-[10px]">Total Pago ao G2:</span>
                           <span className="text-sky-400 font-mono font-black text-sm">
-                            R$ {orderDetails?.g2?.commissions?.total?.toFixed(2).replace('.', ',')}
-                          </span>
-                        </div>
-                      </div>
-
-                      {/* CARD REVENDEDOR REGIONAL */}
-                      <div className="bg-slate-900/90 border border-purple-500/30 rounded-2xl p-5 space-y-3 relative overflow-hidden">
-                        <div className="flex items-center justify-between border-b border-white/5 pb-2.5">
-                          <div className="flex items-center gap-2">
-                            <span className="text-base">🏢</span>
-                            <span className="font-black text-xs text-purple-400 uppercase tracking-wide">
-                              Revendedor Regional
-                            </span>
-                          </div>
-                          <span className="text-[9px] font-bold px-2 py-0.5 rounded bg-purple-500/20 text-purple-300 uppercase">
-                            Repasse Regional ({((mmnConfig.commissionRegionalMensal + mmnConfig.commissionRegionalAnual) * 100).toFixed(0)}%)
-                          </span>
-                        </div>
-
-                        <div>
-                          <p className="text-sm font-black text-white">
-                            {orderDetails?.reseller?.profile?.full_name || 'Serviços Urbanos Tecnologia Ltda. (Empresa)'}
-                          </p>
-                          <p className="text-[11px] text-slate-400 font-mono">
-                            CPF: {orderDetails?.reseller?.profile?.cpf || '---'} • Polo: {orderDetails?.reseller?.profile?.city || 'Regional'}
-                          </p>
-                          <p className="text-[11px] text-slate-500 font-mono">PIX: {orderDetails?.reseller?.profile?.pix_key || '---'}</p>
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-2 bg-white/5 p-3 rounded-xl text-center text-xs font-mono">
-                          <div>
-                            <span className="text-[8px] font-bold text-slate-400 block uppercase">Mensal ({(mmnConfig.commissionRegionalMensal * 100).toFixed(0)}%)</span>
-                            <span className="text-white font-bold">R$ {orderDetails?.reseller?.commissions?.mensal?.toFixed(2).replace('.', ',')}</span>
-                          </div>
-                          <div>
-                            <span className="text-[8px] font-bold text-slate-400 block uppercase">Anual ({(mmnConfig.commissionRegionalAnual * 100).toFixed(0)}%)</span>
-                            <span className="text-white font-bold">R$ {orderDetails?.reseller?.commissions?.anual?.toFixed(2).replace('.', ',')}</span>
-                          </div>
-                        </div>
-
-                        <div className="flex justify-between items-center pt-1 text-xs">
-                          <span className="text-slate-400 font-bold uppercase text-[10px]">Total Pago à Revenda:</span>
-                          <span className="text-purple-400 font-mono font-black text-sm">
-                            R$ {orderDetails?.reseller?.commissions?.total?.toFixed(2).replace('.', ',')}
+                            R$ {Number(orderDetails?.g2?.commissions?.total || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                           </span>
                         </div>
                       </div>
@@ -1108,28 +1152,25 @@ export default function AdminOrders() {
                       const totalDistributed = 
                         (orderDetails?.g0?.commissions?.total || 0) +
                         (orderDetails?.g1?.commissions?.total || 0) +
-                        (orderDetails?.g2?.commissions?.total || 0) +
-                        (orderDetails?.reseller?.commissions?.total || 0);
-                      const platformMargin = Math.max(0, selectedOrder.amount - totalDistributed);
-                      const totalCommissionPercent = ((mmnConfig.cashbackMensal + mmnConfig.cashbackAnual) * 3 + (mmnConfig.commissionRegionalMensal + mmnConfig.commissionRegionalAnual)) * 100;
-                      const companyMarginPercent = Math.max(0, 100 - totalCommissionPercent);
+                        (orderDetails?.g2?.commissions?.total || 0);
+                      const platformMargin = Math.max(0, Number(selectedOrder.amount || 0) - totalDistributed);
 
                       return (
                         <div className="p-4 bg-white/5 rounded-2xl border border-white/5 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs font-mono">
                           <div>
                             <span className="text-slate-400 font-bold block text-[10px] uppercase font-sans">
-                              Total Distribuído em Comissões ({totalCommissionPercent.toFixed(0)}%):
+                              Total Distribuído em Comissões (33%):
                             </span>
                             <span className="text-indigo-400 font-black text-sm">
-                              R$ {totalDistributed.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                              R$ {totalDistributed.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                             </span>
                           </div>
                           <div className="text-left sm:text-right">
                             <span className="text-slate-400 font-bold block text-[10px] uppercase font-sans">
-                              Margem Retida pela Empresa ({companyMarginPercent.toFixed(0)}%):
+                              Margem Retida pela Empresa (67%):
                             </span>
                             <span className="text-emerald-400 font-black text-sm">
-                              R$ {platformMargin.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                              R$ {platformMargin.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                             </span>
                           </div>
                         </div>

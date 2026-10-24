@@ -26,8 +26,10 @@ import { motion } from 'motion/react';
 import { Link } from 'react-router-dom';
 import Header from '../components/Header';
 import PWAInstallPrompt from '../components/PWAInstallPrompt';
+import { useSubscriptionPlans } from '../lib/subscriptionPlans';
 
 export default function Home() {
+  const { minPrice } = useSubscriptionPlans();
   const containerVariants = {
     hidden: { opacity: 0 },
     visible: {
@@ -572,7 +574,7 @@ export default function Home() {
                         <CheckCircle2 size={14} />
                       </div>
                       <span className="text-slate-300 font-medium text-base">
-                        Os clientes do Seguro Vida Light contam com seguro MBM R$ 5.000, telemedicina e sorteios a partir de R$ 5,00/mês.
+                        Os clientes do Seguro Vida Light contam com seguro MBM R$ 5.000, telemedicina e sorteios a partir de R$ {minPrice.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}/mês.
                       </span>
                     </li>
                   </ul>

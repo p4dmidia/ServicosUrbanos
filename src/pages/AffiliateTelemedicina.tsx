@@ -18,9 +18,11 @@ import { Link } from 'react-router-dom';
 import AffiliateLayout from '../components/AffiliateLayout';
 import { businessRules } from '../lib/businessRules';
 import { useAuth } from '../contexts/AuthContext';
+import { useSubscriptionPlans } from '../lib/subscriptionPlans';
 
 export default function AffiliateTelemedicina() {
   const { user, profile } = useAuth();
+  const { minPrice } = useSubscriptionPlans();
   const [loading, setLoading] = useState(true);
   const [isEligible, setIsEligible] = useState(false);
   const [seguradoData, setSeguradoData] = useState<any>(null);
@@ -102,7 +104,7 @@ export default function AffiliateTelemedicina() {
               <p className="text-slate-600 leading-relaxed max-w-lg mx-auto text-sm">
                 {isOnlyMicrofranqueado ? (
                   <>
-                    Sua conta está cadastrada como <strong>Microfranqueado</strong>, cujo foco é o plano de expansão e comissões de rede MMN. A telemedicina 24/7 (Racca Saúde ilimitada para você e dependentes) está disponível contratando o plano <strong>Seguro Vida Light a partir de apenas R$ 5,00/mês</strong>.
+                    Sua conta está cadastrada como <strong>Microfranqueado</strong>, cujo foco é o plano de expansão e comissões de rede MMN. A telemedicina 24/7 (Racca Saúde ilimitada para você e dependentes) está disponível contratando o plano <strong>Seguro Vida Light a partir de apenas R$ {minPrice.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}/mês</strong>.
                   </>
                 ) : (
                   <>
@@ -119,7 +121,7 @@ export default function AffiliateTelemedicina() {
                 to="/afiliado/renovacoes"
                 className="w-full sm:w-auto bg-emerald-600 hover:bg-emerald-500 text-white px-8 py-4 rounded-2xl font-black text-xs uppercase tracking-widest transition-all shadow-xl shadow-emerald-600/20 flex items-center justify-center gap-2"
               >
-                {isOnlyMicrofranqueado ? 'Contratar Seguro Vida Light (R$ 5/mês)' : 'Ativar Minha Assinatura'}
+                {isOnlyMicrofranqueado ? `Contratar Seguro Vida Light (R$ ${minPrice.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}/mês)` : 'Ativar Minha Assinatura'}
                 <ArrowUpRight size={16} />
               </Link>
               <a 

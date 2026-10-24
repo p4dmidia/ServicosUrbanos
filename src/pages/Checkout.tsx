@@ -89,6 +89,50 @@ export default function Checkout() {
     }
   }, [cartItems]);
 
+  useEffect(() => {
+    async function syncSubscriptionPrices() {
+      if (!cartItems.length) return;
+      const hasSub = cartItems.some(item => item.is_subscription);
+      if (!hasSub) return;
+
+      try {
+        const { data: dbProducts } = await supabase
+          .from('products')
+          .select('id, name, price, plan_type')
+          .eq('is_subscription', true);
+
+        if (!dbProducts || dbProducts.length === 0) return;
+
+        let changed = false;
+        const synced = cartItems.map(item => {
+          if (!item.is_subscription) return item;
+          if (item.id === 'sub-microfranqueado' || item.plan_type === 'microfranqueado' || (item.name && item.name.toLowerCase().includes('microfranqueado'))) {
+            return item;
+          }
+          const matched = dbProducts.find(p => p.id === item.id || (item.plan_type && p.plan_type === item.plan_type));
+          if (matched && (Number(matched.price) !== Number(item.price) || matched.id !== item.id)) {
+            changed = true;
+            return {
+              ...item,
+              id: matched.id,
+              price: Number(matched.price),
+              name: matched.name || item.name
+            };
+          }
+          return item;
+        });
+
+        if (changed) {
+          setCartItems(synced);
+          localStorage.setItem('urbashop_cart', JSON.stringify(synced));
+        }
+      } catch (err) {
+        console.warn('Erro ao sincronizar preços do carrinho:', err);
+      }
+    }
+    syncSubscriptionPrices();
+  }, []);
+
   const markAllAsRead = () => {
     setNotifications(notifications.map(n => ({ ...n, read: true })));
   };

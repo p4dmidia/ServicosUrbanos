@@ -1533,11 +1533,11 @@ export const businessRules = {
         t.description?.includes('(REG)');
 
       // Cálculo baseado no modelo consolidado: 4% Mensal (disponível dia 10) + 2% Anual (13º)
-      // Cashback Mensal da Rede: soma de todas as comissões mensais
+      // Cashback Mensal e Semanal da Rede: soma de todas as comissões mensais e semanais
       const monthlyBonus = transactions
         .filter(t => t.type === 'commission' && 
                 !isResellerTx(t) &&
-                t.description?.includes('Mensal') && 
+                (t.description?.includes('Mensal') || t.description?.includes('Semanal')) && 
                 (t.status === 'completed' || t.status === 'pago' || t.status === 'pending'))
         .reduce((acc, t) => acc + Number(t.amount || 0), 0);
 
@@ -1573,12 +1573,19 @@ export const businessRules = {
       const walletBonus = 0; // Ciclo semanal zerado e excluído
       const totalEarnings = monthlyBonus + annualBonus;
 
-      // Buscar todas as assinaturas do usuário
-      const { data: userSubs } = await supabase
-        .from('subscriptions')
-        .select('*')
-        .eq('profile_id', userId)
-        .order('end_date', { ascending: false });
+      // Buscar todas as assinaturas do usuário e cadastro de microfranqueado
+      const [{ data: userSubs }, { data: mfData }] = await Promise.all([
+        supabase
+          .from('subscriptions')
+          .select('*')
+          .eq('profile_id', userId)
+          .order('end_date', { ascending: false }),
+        supabase
+          .from('microfranqueados')
+          .select('*, licencas_mmn(*)')
+          .eq('profile_id', userId)
+          .maybeSingle()
+      ]);
 
       const SIC_COMERCIO_ID = '194e5265-cdb6-431f-9f77-8888b1ee74ae';
       const isSicComercio = userId === SIC_COMERCIO_ID;
@@ -1587,6 +1594,11 @@ export const businessRules = {
       // Priorizar assinatura ativa e vigente (não expirada)
       const activeSub = (userSubs || []).find(s => s.status === 'active' && new Date(s.end_date) >= now);
       const targetSub = activeSub || (userSubs && userSubs.length > 0 ? userSubs[0] : null);
+
+      const isMfActive = !!mfData && mfData.status === 'ativo' && (
+        !!mfData.limit_100_free ||
+        (mfData.licencas_mmn || []).some((l: any) => l.status === 'ativa' && new Date(l.data_fim) >= now)
+      );
 
       let hasActiveSub = isSicComercio || !!activeSub;
       let activeSubData = isSicComercio ? {
@@ -1607,8 +1619,21 @@ export const businessRules = {
         isActive: hasActiveSub
       } : null);
 
+      if (!hasActiveSub && isMfActive && mfData) {
+        const lic = (mfData.licencas_mmn || []).find((l: any) => l.status === 'ativa' && new Date(l.data_fim) >= now) || (mfData.licencas_mmn || [])[0];
+        activeSubData = {
+          id: lic?.id || mfData.id,
+          planType: 'Microfranquia (Licença Anual Ativa)',
+          amount: Number(lic?.valor || 0),
+          status: 'active',
+          startDate: lic?.data_inicio || mfData.created_at,
+          endDate: lic?.data_fim || new Date(now.getFullYear() + 1, now.getMonth(), now.getDate()).toISOString(),
+          isActive: true
+        };
+      }
+
       // Fallback para LocalStorage se não houver assinatura ativa no Supabase
-      if (!hasActiveSub && typeof window !== 'undefined' && typeof localStorage !== 'undefined') {
+      if (!hasActiveSub && !isMfActive && typeof window !== 'undefined' && typeof localStorage !== 'undefined') {
         try {
           const savedMock = localStorage.getItem(`mock_subscription_${userId}`);
           if (savedMock) {
@@ -1631,11 +1656,13 @@ export const businessRules = {
         }
       }
 
+      const isEligible = isSicComercio || hasActiveSub || isMfActive;
+
       // Apuração consolidada líquida do mês atual (MMN + Revendedor com apuração fiscal oficial para o Dia 10)
       const pendingMonthlyMmn = transactions
         .filter(t => t.type === 'commission' && 
                 !isResellerTx(t) &&
-                t.description?.includes('Mensal') && 
+                (t.description?.includes('Mensal') || t.description?.includes('Semanal')) && 
                 t.status === 'pending')
         .reduce((acc, t) => acc + Number(t.amount || 0), 0);
 
@@ -1677,7 +1704,7 @@ export const businessRules = {
         isCurrentMonthPaid,
         cashbackBalance: 0,
         consumptionCount,
-        isEligible: !!hasActiveSub,
+        isEligible: !!isEligible,
         activeSubscription: activeSubData,
         networkSummary: nSummary,
         rank: nSummary.rank
@@ -2082,17 +2109,20 @@ export const businessRules = {
         const isAdvance = t.type === 'advance' || desc.toLowerCase().includes('adiantamento');
         const isWithdrawal = t.type === 'withdrawal' && !isAdvance;
 
-        // Classificar saques, adiantamentos e comissões como 'Mensal' ou 'Anual' baseado na descrição
+        // Classificar saques, adiantamentos e comissões como 'Mensal', 'Semanal' ou 'Anual' baseado na descrição
         let cashbackType = 'Outros';
-        const typeMatch = desc.match(/(Mensal|Anual)/i);
+        const typeMatch = desc.match(/(Mensal|Semanal|Anual)/i);
         if (isAdvance) {
           cashbackType = 'Adiantamento';
         } else if (isWithdrawal) {
           cashbackType = 'Resgate';
         } else if (typeMatch) {
           const matched = typeMatch[1].toLowerCase();
-          if (matched === 'mensal') cashbackType = isReseller ? 'Mensal (REG)' : 'Mensal';
-          else if (matched === 'anual') cashbackType = isReseller ? 'Anual (REG)' : 'Anual';
+          if (matched === 'mensal' || matched === 'semanal') {
+            cashbackType = isReseller ? 'Mensal (REG)' : (matched === 'semanal' ? 'Semanal' : 'Mensal');
+          } else if (matched === 'anual') {
+            cashbackType = isReseller ? 'Anual (REG)' : 'Anual';
+          }
         } else {
           cashbackType = isReseller ? 'Comissão (REG)' : 'Cashback';
         }
@@ -3749,7 +3779,7 @@ export const businessRules = {
 
   getPayableBalances: async (filterCategory: 'all' | 'network' | 'reseller' = 'all') => {
     // 1. Buscar todos os perfis
-    const [{ data: profiles, error: pError }, { data: subsData }, { data: ordersData }, { data: transactions, error: tError }] = await Promise.all([
+    const [{ data: profiles, error: pError }, { data: subsData }, { data: ordersData }, { data: transactions, error: tError }, { data: mfList }] = await Promise.all([
       supabase
         .from('profiles')
         .select('id, full_name, email, pix_key, bank_name, bank_branch, bank_account, whatsapp, role, city, state, cpf, cnpj'),
@@ -3762,7 +3792,10 @@ export const businessRules = {
         .in('status', ['Pago', 'Pago, Aguardando Retirada', 'Concluído']),
       supabase
         .from('transactions')
-        .select('*')
+        .select('*'),
+      supabase
+        .from('microfranqueados')
+        .select('*, licencas_mmn(*)')
     ]);
     
     if (pError) throw pError;
@@ -3823,8 +3856,14 @@ export const businessRules = {
         });
       });
 
+      const userMf = (mfList || []).find((m: any) => m.profile_id === profile.id);
+      const isMfActive = !!userMf && userMf.status === 'ativo' && (
+        !!userMf.limit_100_free ||
+        (userMf.licencas_mmn || []).some((l: any) => l.status === 'ativa' && new Date(l.data_fim) >= now)
+      );
+
       const isSicComercio = profile.id === '194e5265-cdb6-431f-9f77-8888b1ee74ae';
-      const isEligible = isSicComercio || hasActiveSub || hasPaidSubOrder;
+      const isEligible = isSicComercio || hasActiveSub || hasPaidSubOrder || isMfActive;
 
       // Extrai níveis e pedidos das transações do usuário
       const levels: string[] = [];
@@ -3853,7 +3892,7 @@ export const businessRules = {
       }
 
       const monthlyBonus = userTransactions
-        .filter(t => t.type === 'commission' && t.description?.includes('Mensal') && (t.status === 'completed' || t.status === 'pago' || t.status === 'pending'))
+        .filter(t => t.type === 'commission' && (t.description?.includes('Mensal') || t.description?.includes('Semanal')) && (t.status === 'completed' || t.status === 'pago' || t.status === 'pending'))
         .reduce((acc, t) => acc + Number(t.amount || 0), 0);
 
       const annualBonus = userTransactions
@@ -4330,7 +4369,7 @@ export const businessRules = {
 
             let originLabel = 'Comissão Semanal MMN';
             let level = '1';
-            if (desc.includes('g0') || desc.includes('próprio') || desc.includes('titular') || (order?.customer_id === userId) || (order?.buyer_referred_by === userId)) {
+            if (desc.includes('g0') || desc.includes('próprio') || desc.includes('titular') || (order?.buyer_referred_by === userId)) {
               originLabel = 'Vendas Diretas (G0)';
               level = '0';
             } else if (desc.includes('g1') || desc.includes('nível 1') || desc.includes('nivel 1') || desc.includes('1º nível')) {
@@ -4427,7 +4466,10 @@ export const businessRules = {
         const sponsorId = buyer?.referred_by || null;
         const buyerName = buyer?.full_name || o.customer_name || 'Afiliado';
 
-        const isG0 = o.customer_id === userId || sponsorId === userId;
+        // Regra Geral: Microfranqueados não ganham comissões sobre compras próprias
+        if (o.customer_id === userId) return;
+
+        const isG0 = sponsorId === userId;
         const isG1 = !isG0 && directReferrals.includes(sponsorId || '');
         const isG2 = !isG0 && !isG1 && secondReferrals.includes(sponsorId || '');
 

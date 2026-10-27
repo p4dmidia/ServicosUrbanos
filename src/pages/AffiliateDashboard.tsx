@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { 
   TrendingUp, 
   Users, 
@@ -119,6 +119,51 @@ export default function AffiliateDashboard() {
     });
   };
 
+  const isMicrofranqueado = !!microfranqueadoData?.isMicrofranqueado;
+  const isSegurado = !!seguradoData?.isSegurado;
+  const isPolicyActive = !!seguradoData?.isPolicyActive;
+  const isLicenseActive = !!microfranqueadoData?.isLicenseActive;
+  const isLimit100Free = !!microfranqueadoData?.isLimit100Free || !!microfranqueadoData?.microfranqueado?.limit_100_free;
+
+  const weeklyCommissionTotal = useMemo(() => {
+    return (activity || [])
+      .filter(t => 
+        !t.cashbackType?.includes('Anual') && 
+        !t.description?.includes('Anual') && 
+        t.status !== 'Cancelado' && 
+        t.status !== 'Recusado' && 
+        t.status !== 'cancelled' && 
+        t.status !== 'failed' && 
+        Number(t.bruto || t.amount || 0) > 0
+      )
+      .reduce((acc, t) => acc + Number(t.bruto || t.amount || 0), 0);
+  }, [activity]);
+
+  const annualCommissionTotal = useMemo(() => {
+    return (activity || [])
+      .filter(t => 
+        (t.cashbackType?.includes('Anual') || t.description?.includes('Anual')) && 
+        t.status !== 'Cancelado' && 
+        t.status !== 'Recusado' && 
+        t.status !== 'cancelled' && 
+        t.status !== 'failed' && 
+        Number(t.bruto || t.amount || 0) > 0
+      )
+      .reduce((acc, t) => acc + Number(t.bruto || t.amount || 0), 0);
+  }, [activity]);
+
+  const displayWeeklyCommission = weeklyCommissionTotal > 0 
+    ? weeklyCommissionTotal 
+    : (Number(comissoesData?.semanalPendente || 0) > 0 
+        ? Number(comissoesData?.semanalPendente) 
+        : Number(stats?.networkAvailableBalance || 0));
+
+  const displayAnnualCommission = annualCommissionTotal > 0
+    ? annualCommissionTotal
+    : (Number(comissoesData?.anualAcumulado || 0) > 0
+        ? Number(comissoesData?.anualAcumulado)
+        : Number(stats?.annualBonus || 0));
+
   if (loading) {
     return (
       <AffiliateLayout title="Painel">
@@ -128,12 +173,6 @@ export default function AffiliateDashboard() {
       </AffiliateLayout>
     );
   }
-
-  const isMicrofranqueado = !!microfranqueadoData?.isMicrofranqueado;
-  const isSegurado = !!seguradoData?.isSegurado;
-  const isPolicyActive = !!seguradoData?.isPolicyActive;
-  const isLicenseActive = !!microfranqueadoData?.isLicenseActive;
-  const isLimit100Free = !!microfranqueadoData?.microfranqueado?.is_primeiros_100;
 
   // =========================================================================
   // CENÁRIO 1: AFILIADO PREMIUM (CONSUMIDOR DE PROTEÇÃO, TELEMEDICINA E SORTEIOS - ZERO MMN)
@@ -769,13 +808,13 @@ export default function AffiliateDashboard() {
               </div>
             </div>
             <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">
-              Repasse Terça ({comissoesData?.proximaTerca || 'Próxima Terça'})
+              A Receber (Semanal)
             </p>
             <h3 className="text-2xl font-black text-emerald-600 tracking-tighter">
-              R$ {Number(comissoesData?.semanalPendente || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              R$ {displayWeeklyCommission.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </h3>
             <p className="text-[11px] text-slate-400 mt-2 font-medium">
-              Vendas de Segunda a Sábado.
+              Repasse Terça ({comissoesData?.proximaTerca || 'Toda Terça-feira'}) • Vendas Seg a Sáb
             </p>
           </motion.div>
 
@@ -795,13 +834,13 @@ export default function AffiliateDashboard() {
               </div>
             </div>
             <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">
-              Pagamento em 10/12 ({comissoesData?.proximoDezembro || '10/12'})
+              Bônus Anual Acumulado
             </p>
             <h3 className="text-2xl font-black text-indigo-600 tracking-tighter">
-              R$ {Number(comissoesData?.anualAcumulado || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              R$ {displayAnnualCommission.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </h3>
             <p className="text-[11px] text-slate-400 mt-2 font-medium">
-              Acumulado no fundo anual.
+              Pagamento em 10/12 ({comissoesData?.proximoDezembro || '10/12'}) • Fundo Anual
             </p>
           </motion.div>
 

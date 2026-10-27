@@ -196,6 +196,24 @@ export default function AffiliateRenewals() {
   const isSeguradoAtivo = seguradoData?.isPolicyActive;
   const mfRenewalPrice = microfranqueadoPlan ? Number(microfranqueadoPlan.price) : 250;
 
+  const proximaRenovacaoDate = useMemo(() => {
+    const mf = microfranqueadoData?.microfranqueado;
+    const lic = microfranqueadoData?.licenca;
+    if (lic?.data_fim) {
+      const d = new Date(lic.data_fim);
+      if (!isNaN(d.getTime())) return d.toLocaleDateString('pt-BR');
+    }
+    const adesaoStr = mf?.data_adesao || mf?.data_contratacao || mf?.created_at;
+    if (adesaoStr) {
+      const d = new Date(adesaoStr);
+      if (!isNaN(d.getTime())) {
+        d.setFullYear(d.getFullYear() + 1);
+        return d.toLocaleDateString('pt-BR');
+      }
+    }
+    return null;
+  }, [microfranqueadoData]);
+
   return (
     <AffiliateLayout title="Renovações & Licenciamento">
       <div className="max-w-5xl mx-auto p-4 sm:p-6 md:p-10 space-y-10 pb-20">
@@ -296,27 +314,63 @@ export default function AffiliateRenewals() {
                       </div>
                     )}
 
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 pt-2">
-                      <div className="bg-white/5 border border-white/10 rounded-2xl p-4">
-                        <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 block mb-1">
-                          Comissão Direta (G0)
-                        </span>
-                        <span className="text-xl font-black text-white font-mono">21% + 2%</span>
-                        <span className="text-[10px] text-slate-400 block mt-0.5">21% terça / 2% dez (23%)</span>
+                    {/* Informações de Regras de Comissionamento e Renovação da Licença */}
+                    <div className="bg-white/5 border border-white/10 rounded-2xl p-6 space-y-6">
+                      {/* Próxima Renovação */}
+                      <div>
+                        <p className="text-sm font-medium text-white">
+                          <strong className="text-amber-400 font-bold">Próxima renovação:</strong> a partir de{' '}
+                          <span className="font-mono font-bold text-amber-300">
+                            {proximaRenovacaoDate || '___/___/____'}
+                          </span>.
+                        </p>
                       </div>
-                      <div className="bg-white/5 border border-white/10 rounded-2xl p-4">
-                        <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 block mb-1">
-                          Comissão Indireta (G1)
-                        </span>
-                        <span className="text-xl font-black text-white font-mono">3% + 2%</span>
-                        <span className="text-[10px] text-slate-400 block mt-0.5">3% terça / 2% dez (5%)</span>
+
+                      {/* Período de Gratuidade & Gerações */}
+                      <div className="space-y-3">
+                        <p className="text-xs text-slate-300 leading-relaxed">
+                          Durante o período de gratuidade, sua rede permanecerá ativa e você receberá comissões sobre as vendas realizadas nas seguintes gerações:
+                        </p>
+                        
+                        <div className="space-y-2 pt-1">
+                          <div className="flex items-start gap-2.5 bg-white/[0.03] border border-white/5 rounded-xl p-3">
+                            <span className="text-emerald-400 text-sm shrink-0 mt-0.5">✅</span>
+                            <div className="text-xs text-slate-200 leading-relaxed">
+                              <strong className="text-white font-bold">G0 - Microfranqueado:</strong> vendas realizadas diretamente por você;
+                            </div>
+                          </div>
+                          
+                          <div className="flex items-start gap-2.5 bg-white/[0.03] border border-white/5 rounded-xl p-3">
+                            <span className="text-emerald-400 text-sm shrink-0 mt-0.5">✅</span>
+                            <div className="text-xs text-slate-200 leading-relaxed">
+                              <strong className="text-white font-bold">G1 - Rede Direta:</strong> vendas realizadas pelos Microfranqueados indicados diretamente por você;
+                            </div>
+                          </div>
+                          
+                          <div className="flex items-start gap-2.5 bg-white/[0.03] border border-white/5 rounded-xl p-3">
+                            <span className="text-emerald-400 text-sm shrink-0 mt-0.5">✅</span>
+                            <div className="text-xs text-slate-200 leading-relaxed">
+                              <strong className="text-white font-bold">G2 - Rede Indireta:</strong> vendas realizadas pelos Microfranqueados indicados pelos integrantes da sua G1.
+                            </div>
+                          </div>
+                        </div>
                       </div>
-                      <div className="bg-white/5 border border-white/10 rounded-2xl p-4">
-                        <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 block mb-1">
-                          Comissão Indireta (G2)
-                        </span>
-                        <span className="text-xl font-black text-white font-mono">3% + 2%</span>
-                        <span className="text-[10px] text-slate-400 block mt-0.5">3% terça / 2% dez (5%)</span>
+
+                      {/* Renovação Anual */}
+                      <div className="pt-4 border-t border-white/10 space-y-2.5">
+                        <h4 className="text-sm font-black uppercase tracking-wider text-amber-400">
+                          Renovação Anual
+                        </h4>
+                        <p className="text-xs text-slate-300 leading-relaxed">
+                          Após o período inicial de 12 meses, será necessária a renovação anual da sua Licença de Microfranqueado para manter sua operação, sua rede e o recebimento das comissões ativas.
+                        </p>
+                        <p className="text-xs text-white">
+                          <strong className="font-bold">Valor da renovação anual:</strong>{' '}
+                          <span className="text-emerald-400 font-mono font-black text-sm">R$ 249,90</span>.
+                        </p>
+                        <p className="text-xs text-slate-400 leading-relaxed">
+                          A cobrança da anuidade somente ocorrerá após o encerramento do período gratuito de 12 meses, contado a partir da sua data de adesão.
+                        </p>
                       </div>
                     </div>
                   </div>

@@ -216,24 +216,24 @@ export default function AdminOrders() {
 
       const lvlRates: Record<string, { semanal: number; anual: number }> = {
         G0: {
-          semanal: Number(dbLevels?.find(l => l.level === 1)?.cashback_semanal ?? 21) / 100,
-          anual: Number(dbLevels?.find(l => l.level === 1)?.cashback_anual ?? 2) / 100
+          semanal: Number(dbLevels?.find(l => l.level === 1)?.cashback_semanal ?? 8) / 100,
+          anual: Number(dbLevels?.find(l => l.level === 1)?.cashback_anual ?? 3) / 100
         },
         G1: {
-          semanal: Number(dbLevels?.find(l => l.level === 2)?.cashback_semanal ?? 3) / 100,
-          anual: Number(dbLevels?.find(l => l.level === 2)?.cashback_anual ?? 2) / 100
+          semanal: Number(dbLevels?.find(l => l.level === 2)?.cashback_semanal ?? 8) / 100,
+          anual: Number(dbLevels?.find(l => l.level === 2)?.cashback_anual ?? 3) / 100
         },
         G2: {
-          semanal: Number(dbLevels?.find(l => l.level === 3)?.cashback_semanal ?? 3) / 100,
-          anual: Number(dbLevels?.find(l => l.level === 3)?.cashback_anual ?? 2) / 100
+          semanal: Number(dbLevels?.find(l => l.level === 3)?.cashback_semanal ?? 8) / 100,
+          anual: Number(dbLevels?.find(l => l.level === 3)?.cashback_anual ?? 3) / 100
         }
       };
 
       // 9. Calcular comissões oficiais (MMN dinâmico configurado no Admin)
       const calcCommissions = (profileId: string | undefined, levelTag: 'G0' | 'G1' | 'G2') => {
         const amount = Number(order.amount || 0);
-        const semanalRate = lvlRates[levelTag]?.semanal ?? (levelTag === 'G0' ? 0.21 : 0.03);
-        const anualRate = lvlRates[levelTag]?.anual ?? 0.02;
+        const semanalRate = lvlRates[levelTag]?.semanal ?? 0.08;
+        const anualRate = lvlRates[levelTag]?.anual ?? 0.03;
         const totalRate = semanalRate + anualRate;
 
         const expectedSemanal = Number((amount * semanalRate).toFixed(2));
@@ -986,7 +986,7 @@ export default function AdminOrders() {
                         </h4>
                       </div>
                       <span className="text-[10px] font-black uppercase tracking-widest text-indigo-300 bg-indigo-500/10 px-3 py-1 rounded-full border border-indigo-500/20">
-                        Anual 2% a cada geração • Total MMN 33%
+                        {`Anual ${((orderDetails?.g0?.commissions?.anualRate || 0.03) * 100).toFixed(0)}% a cada geração • Total MMN ${(((orderDetails?.g0?.commissions?.totalRate || 0.11) + (orderDetails?.g1?.commissions?.totalRate || 0.11) + (orderDetails?.g2?.commissions?.totalRate || 0.11)) * 100).toFixed(0)}%`}
                       </span>
                     </div>
 
@@ -1003,7 +1003,7 @@ export default function AdminOrders() {
                               </span>
                             </div>
                             <span className="text-[9px] font-bold px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 uppercase">
-                              Cashback Total de 23%
+                              {`Cashback Total de ${((orderDetails?.g0?.commissions?.totalRate || 0.11) * 100).toFixed(0)}%`}
                             </span>
                           </div>
 
@@ -1021,13 +1021,13 @@ export default function AdminOrders() {
 
                           <div className="grid grid-cols-2 gap-2 bg-white/5 p-3 rounded-xl text-center text-xs font-mono">
                             <div>
-                              <span className="text-[8px] font-bold text-slate-400 block uppercase">Semanal (21%)</span>
+                              <span className="text-[8px] font-bold text-slate-400 block uppercase">Semanal ({`${((orderDetails?.g0?.commissions?.semanalRate || 0.08) * 100).toFixed(0)}%`})</span>
                               <span className="text-white font-bold">
                                 R$ {Number(orderDetails?.g0?.commissions?.semanal || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                               </span>
                             </div>
                             <div>
-                              <span className="text-[8px] font-bold text-slate-400 block uppercase">Anual (2%)</span>
+                              <span className="text-[8px] font-bold text-slate-400 block uppercase">Anual ({`${((orderDetails?.g0?.commissions?.anualRate || 0.03) * 100).toFixed(0)}%`})</span>
                               <span className="text-white font-bold">
                                 R$ {Number(orderDetails?.g0?.commissions?.anual || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                               </span>
@@ -1054,7 +1054,7 @@ export default function AdminOrders() {
                               </span>
                             </div>
                             <span className="text-[9px] font-bold px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 uppercase">
-                              Cashback Total de 5%
+                              {`Cashback Total de ${((orderDetails?.g1?.commissions?.totalRate || 0.11) * 100).toFixed(0)}%`}
                             </span>
                           </div>
 
@@ -1072,13 +1072,13 @@ export default function AdminOrders() {
 
                           <div className="grid grid-cols-2 gap-2 bg-white/5 p-3 rounded-xl text-center text-xs font-mono">
                             <div>
-                              <span className="text-[8px] font-bold text-slate-400 block uppercase">Semanal (3%)</span>
+                              <span className="text-[8px] font-bold text-slate-400 block uppercase">Semanal ({`${((orderDetails?.g1?.commissions?.semanalRate || 0.08) * 100).toFixed(0)}%`})</span>
                               <span className="text-white font-bold">
                                 R$ {Number(orderDetails?.g1?.commissions?.semanal || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                               </span>
                             </div>
                             <div>
-                              <span className="text-[8px] font-bold text-slate-400 block uppercase">Anual (2%)</span>
+                              <span className="text-[8px] font-bold text-slate-400 block uppercase">Anual ({`${((orderDetails?.g1?.commissions?.anualRate || 0.03) * 100).toFixed(0)}%`})</span>
                               <span className="text-white font-bold">
                                 R$ {Number(orderDetails?.g1?.commissions?.anual || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                               </span>
@@ -1105,7 +1105,7 @@ export default function AdminOrders() {
                               </span>
                             </div>
                             <span className="text-[9px] font-bold px-2 py-0.5 rounded bg-sky-500/20 text-sky-300 uppercase">
-                              Cashback Total de 5%
+                              {`Cashback Total de ${((orderDetails?.g2?.commissions?.totalRate || 0.11) * 100).toFixed(0)}%`}
                             </span>
                           </div>
 
@@ -1123,7 +1123,7 @@ export default function AdminOrders() {
 
                           <div className="grid grid-cols-2 gap-2 bg-white/5 p-3 rounded-xl text-center text-xs font-mono">
                             <div>
-                              <span className="text-[8px] font-bold text-slate-400 block uppercase">Semanal (3%)</span>
+                              <span className="text-[8px] font-bold text-slate-400 block uppercase">Semanal ({`${((orderDetails?.g2?.commissions?.semanalRate || 0.08) * 100).toFixed(0)}%`})</span>
                               <span className="text-white font-bold">
                                 R$ {Number(orderDetails?.g2?.commissions?.semanal || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                               </span>
@@ -1159,7 +1159,7 @@ export default function AdminOrders() {
                         <div className="p-4 bg-white/5 rounded-2xl border border-white/5 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs font-mono">
                           <div>
                             <span className="text-slate-400 font-bold block text-[10px] uppercase font-sans">
-                              Total Distribuído em Comissões (33%):
+                              {`Total Distribuído em Comissões (${(((orderDetails?.g0?.commissions?.totalRate || 0.11) + (orderDetails?.g1?.commissions?.totalRate || 0.11) + (orderDetails?.g2?.commissions?.totalRate || 0.11)) * 100).toFixed(0)}%):`}
                             </span>
                             <span className="text-indigo-400 font-black text-sm">
                               R$ {totalDistributed.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
@@ -1167,7 +1167,7 @@ export default function AdminOrders() {
                           </div>
                           <div className="text-left sm:text-right">
                             <span className="text-slate-400 font-bold block text-[10px] uppercase font-sans">
-                              Margem Retida pela Empresa (67%):
+                              {`Margem Retida pela Empresa (${(100 - (((orderDetails?.g0?.commissions?.totalRate || 0.11) + (orderDetails?.g1?.commissions?.totalRate || 0.11) + (orderDetails?.g2?.commissions?.totalRate || 0.11)) * 100)).toFixed(0)}%):`}
                             </span>
                             <span className="text-emerald-400 font-black text-sm">
                               R$ {platformMargin.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}

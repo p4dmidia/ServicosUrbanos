@@ -849,7 +849,7 @@ export default function AffiliateInvoice() {
                             </td>
                             <td className="px-4 py-3.5 text-center font-mono font-bold text-indigo-600 text-xs">
                               <span className="inline-flex items-center px-2 py-0.5 rounded-lg text-xs font-black bg-indigo-50 text-indigo-700 border border-indigo-100 font-mono">
-                                {order.rate || (order.percentage ? `${Number(order.percentage).toFixed(0)}%` : '21%')}
+                                {order.rate || (order.percentage ? `${Number(order.percentage).toFixed(0)}%` : '8%')}
                               </span>
                             </td>
                             <td className="px-5 py-3.5 text-right font-mono font-black text-emerald-600">

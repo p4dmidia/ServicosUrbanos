@@ -866,7 +866,7 @@ export default function Cadastro() {
                                                 Microfranqueado Oficial
                                             </h4>
                                             <p className="text-[10px] font-bold text-indigo-600 uppercase tracking-wider mt-0.5">
-                                                Comissões em Rede (G0 21%+2%, G1 3%+2%, G2 3%+2%)
+                                                Comissões em Rede (G0 8%+3%, G1 8%+3%, G2 8%+3%)
                                             </p>
                                             <p className="text-[11px] text-slate-500 font-medium leading-relaxed mt-2">
                                                 Construa sua rede comercial com comissões de até 33%. 1º ano 100% gratuito (R$ 0,00). Renovação anual de R$ 150,00 somente a partir do 2º ano.
@@ -1500,13 +1500,13 @@ export default function Cadastro() {
                                         <li className="flex gap-3 items-start">
                                             <div className="size-2 rounded-full bg-indigo-600 mt-2 shrink-0" />
                                             <span>
-                                                <strong className="text-midnight font-bold">2. Tabela de Comissionamento em 3 Níveis:</strong> O Microfranqueado recebe 33% de comissão oficial total sobre as vendas de seguros da sua rede: G0 (21% semanal / 2% anual = 23%), G1 (3% semanal / 2% anual = 5%) e G2 (3% semanal / 2% anual = 5%).
+                                                <strong className="text-midnight font-bold">2. Tabela de Comissionamento em 3 Níveis:</strong> O Microfranqueado recebe 33% de comissão oficial total sobre as vendas de seguros da sua rede: G0 (8% semanal / 3% anual = 11%), G1 (8% semanal / 3% anual = 11%) e G2 (8% semanal / 3% anual = 11%).
                                             </span>
                                         </li>
                                         <li className="flex gap-3 items-start">
                                             <div className="size-2 rounded-full bg-indigo-600 mt-2 shrink-0" />
                                             <span>
-                                                <strong className="text-midnight font-bold">3. Pagamento Operacional:</strong> Repasse semanal de 27% pago toda terça-feira (referente a vendas confirmadas e pagas de segunda a sábado da semana anterior) e 6% anual referente ao ciclo 01.11.25 a 30.11.26 pago em 10 de Dezembro.
+                                                <strong className="text-midnight font-bold">3. Pagamento Operacional:</strong> Repasse semanal de 24% pago toda terça-feira (referente a vendas confirmadas e pagas de segunda a sábado da semana anterior) e 9% anual referente ao ciclo 01.11.25 a 30.11.26 pago em 10 de Dezembro.
                                             </span>
                                         </li>
                                         <li className="flex gap-3 items-start">

@@ -50,6 +50,7 @@ export default function AffiliateDashboard() {
   const [seguradoData, setSeguradoData] = useState<any>(null);
   const [comissoesData, setComissoesData] = useState<any>(null);
   const [pjRequirement, setPjRequirement] = useState<any>(null);
+  const [mmnLevels, setMmnLevels] = useState<any[]>([]);
   const [rpaLock, setRpaLock] = useState<{
     isLocked: boolean;
     pendingRpa: RPAReceipt | null;
@@ -63,14 +64,16 @@ export default function AffiliateDashboard() {
     
     try {
       setLoading(true);
-      const [statsData, activityData, rpaStatus, mfRes, segRes, pjReq] = await Promise.all([
+      const [statsData, activityData, rpaStatus, mfRes, segRes, pjReq, levelsRes] = await Promise.all([
         businessRules.getAffiliateStats(user.id),
         businessRules.getEcosystemActivity(user.id),
         businessRules.checkAffiliateRPALockStatus(user.id),
         businessRules.getMicrofranqueadoData(user.id),
         businessRules.getSeguradoData(user.id),
-        businessRules.checkMicrofranqueadoPjRequirement(user.id)
+        businessRules.checkMicrofranqueadoPjRequirement(user.id),
+        businessRules.getMMNLevels()
       ]);
+      setMmnLevels(levelsRes || []);
       
       setStats(statsData);
       setActivity(activityData);
@@ -118,6 +121,14 @@ export default function AffiliateDashboard() {
       },
     });
   };
+
+  const g0Config = mmnLevels.find(l => l.level === 1) || { cashbackSemanal: 8, cashbackAnual: 3 };
+  const g1Config = mmnLevels.find(l => l.level === 2) || { cashbackSemanal: 8, cashbackAnual: 3 };
+  const g2Config = mmnLevels.find(l => l.level === 3) || { cashbackSemanal: 8, cashbackAnual: 3 };
+
+  const totalSemanalPct = (Number(g0Config.cashbackSemanal) || 0) + (Number(g1Config.cashbackSemanal) || 0) + (Number(g2Config.cashbackSemanal) || 0);
+  const totalAnualPct = (Number(g0Config.cashbackAnual) || 0) + (Number(g1Config.cashbackAnual) || 0) + (Number(g2Config.cashbackAnual) || 0);
+  const totalMmnPct = totalSemanalPct + totalAnualPct;
 
   const isMicrofranqueado = !!microfranqueadoData?.isMicrofranqueado;
   const isSegurado = !!seguradoData?.isSegurado;
@@ -466,22 +477,22 @@ export default function AffiliateDashboard() {
                   </h3>
                   <p className="text-slate-300 text-xs font-medium mt-3 leading-relaxed">
                     Você sabia que pode montar uma equipe de vendas e ganhar comissões em rede? 
-                    Microfranqueados recebem <strong>33% de comissão</strong> (G0 21%+2%, G1 3%+2%, G2 3%+2%) sobre vendas do Seguro Vida Light!
+                    Microfranqueados recebem <strong>{totalMmnPct || 33}% de comissão</strong> (G0 {g0Config.cashbackSemanal}%+{g0Config.cashbackAnual}%, G1 {g1Config.cashbackSemanal}%+{g1Config.cashbackAnual}%, G2 {g2Config.cashbackSemanal}%+{g2Config.cashbackAnual}%) sobre vendas do Seguro Vida Light!
                   </p>
                 </div>
 
                 <div className="bg-white/10 border border-white/15 p-4 rounded-2xl space-y-2 backdrop-blur-md">
                   <div className="flex justify-between items-center text-xs">
                     <span className="text-slate-300">Comissão Direta (G0):</span>
-                    <span className="font-mono font-black text-emerald-400">21% + 2%</span>
+                    <span className="font-mono font-black text-emerald-400">{g0Config.cashbackSemanal}% + {g0Config.cashbackAnual}%</span>
                   </div>
                   <div className="flex justify-between items-center text-xs">
                     <span className="text-slate-300">Comissão Indireta (G1 e G2):</span>
-                    <span className="font-mono font-black text-sky-300">3%+2% / 3%+2%</span>
+                    <span className="font-mono font-black text-sky-300">{g1Config.cashbackSemanal}%+{g1Config.cashbackAnual}% / {g2Config.cashbackSemanal}%+{g2Config.cashbackAnual}%</span>
                   </div>
                   <div className="flex justify-between items-center text-xs pt-1 border-t border-white/10">
                     <span className="text-slate-300">Pagamento:</span>
-                    <span className="font-black text-amber-300">27% Semanal / 6% Anual</span>
+                    <span className="font-black text-amber-300">{totalSemanalPct}% Semanal / {totalAnualPct}% Anual</span>
                   </div>
                 </div>
 
@@ -866,7 +877,7 @@ export default function AffiliateDashboard() {
               {stats?.networkSummary?.total || 0} <span className="text-sm font-normal text-slate-400">membros</span>
             </h3>
             <p className="text-[11px] text-slate-400 mt-2 font-medium">
-              G0: 21%+2% | G1: 3%+2% | G2: 3%+2%
+              G0: {g0Config.cashbackSemanal}%+{g0Config.cashbackAnual}% | G1: {g1Config.cashbackSemanal}%+{g1Config.cashbackAnual}% | G2: {g2Config.cashbackSemanal}%+{g2Config.cashbackAnual}%
             </p>
           </motion.div>
 
@@ -963,9 +974,9 @@ export default function AffiliateDashboard() {
                
                <div className="space-y-6">
                  {[
-                   { label: 'G0 Direto (21% + 2%)', value: stats?.networkSummary?.g1 || 0, max: 100, color: 'bg-emerald-500' },
-                   { label: 'G1 Indireto (3% + 2%)', value: stats?.networkSummary?.g2 || 0, max: 200, color: 'bg-primary-blue' },
-                   { label: 'G2 Indireto (3% + 2%)', value: stats?.networkSummary?.g3 || 0, max: 300, color: 'bg-indigo-400' },
+                   { label: `G0 Direto (${g0Config.cashbackSemanal}% + ${g0Config.cashbackAnual}%)`, value: stats?.networkSummary?.g1 || 0, max: 100, color: 'bg-emerald-500' },
+                   { label: `G1 Indireto (${g1Config.cashbackSemanal}% + ${g1Config.cashbackAnual}%)`, value: stats?.networkSummary?.g2 || 0, max: 200, color: 'bg-primary-blue' },
+                   { label: `G2 Indireto (${g2Config.cashbackSemanal}% + ${g2Config.cashbackAnual}%)`, value: stats?.networkSummary?.g3 || 0, max: 300, color: 'bg-indigo-400' },
                  ].map((item, i) => (
                    <div key={i} className="space-y-2">
                      <div className="flex justify-between text-xs font-bold uppercase tracking-widest">
@@ -1078,16 +1089,16 @@ export default function AffiliateDashboard() {
                         </td>
                         <td className="py-6 text-center pr-4">
                           {item.level === '0' || item.level === 0 ? (
-                            <span className="inline-flex items-center justify-center px-2.5 py-1 rounded-xl text-[10px] font-black bg-emerald-100 text-emerald-800 border border-emerald-200" title="G0 Direto (21% + 2%)">
-                              🟢 G0 (21% + 2%)
+                            <span className="inline-flex items-center justify-center px-2.5 py-1 rounded-xl text-[10px] font-black bg-emerald-100 text-emerald-800 border border-emerald-200" title={`G0 Direto (${g0Config.cashbackSemanal}% + ${g0Config.cashbackAnual}%)`}>
+                              🟢 G0 ({g0Config.cashbackSemanal}% + {g0Config.cashbackAnual}%)
                             </span>
                           ) : item.level === '1' || item.level === 1 ? (
-                            <span className="inline-flex items-center justify-center px-2.5 py-1 rounded-xl text-[10px] font-black bg-blue-100 text-blue-800 border border-blue-200" title="G1 Indireto (3% + 2%)">
-                              🔵 G1 (3% + 2%)
+                            <span className="inline-flex items-center justify-center px-2.5 py-1 rounded-xl text-[10px] font-black bg-blue-100 text-blue-800 border border-blue-200" title={`G1 Indireto (${g1Config.cashbackSemanal}% + ${g1Config.cashbackAnual}%)`}>
+                              🔵 G1 ({g1Config.cashbackSemanal}% + {g1Config.cashbackAnual}%)
                             </span>
                           ) : item.level === '2' || item.level === 2 ? (
-                            <span className="inline-flex items-center justify-center px-2.5 py-1 rounded-xl text-[10px] font-black bg-purple-100 text-purple-800 border border-purple-200" title="G2 Indireto (3% + 2%)">
-                              🟣 G2 (3% + 2%)
+                            <span className="inline-flex items-center justify-center px-2.5 py-1 rounded-xl text-[10px] font-black bg-purple-100 text-purple-800 border border-purple-200" title={`G2 Indireto (${g2Config.cashbackSemanal}% + ${g2Config.cashbackAnual}%)`}>
+                              🟣 G2 ({g2Config.cashbackSemanal}% + {g2Config.cashbackAnual}%)
                             </span>
                           ) : (
                             <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-emerald-50 text-emerald-600 rounded-full text-[10px] font-black uppercase">

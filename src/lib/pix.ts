@@ -1,21 +1,22 @@
 /**
  * Utilitário para geração de payload PIX (BRCode) estático
- * Versão com Padronização Automática de Chaves
+ * Versão com Padronização Automática e Conforme Normas do BACEN
  */
 
-interface PixOptions {
+export interface PixOptions {
   key: string;
   amount: number;
   description: string;
   name?: string;
   city?: string;
+  keyType?: string;
 }
 
-export function generatePixPayload({ key, amount, description, name, city }: PixOptions) {
+export function generatePixPayload({ key, amount, description, name, city, keyType }: PixOptions) {
   // 1. Sanitização rigorosa
-  const cleanKey = sanitizeKey(key);
+  const cleanKey = sanitizeKey(key, keyType);
   const cleanName = sanitizeText(name || 'URBASHOP').substring(0, 25).toUpperCase();
-  const cleanCity = sanitizeText(city || 'SAO PAULO').substring(0, 15).toUpperCase();
+  const cleanCity = sanitizeText(city || 'SALVADOR').substring(0, 15).toUpperCase();
   const cleanDesc = sanitizeText(description || 'REPASSE').substring(0, 25).toUpperCase();
   
   const amountStr = Number(amount).toFixed(2);
@@ -28,7 +29,12 @@ export function generatePixPayload({ key, amount, description, name, city }: Pix
   const gui = 'br.gov.bcb.pix';
   const merchantInfo = f('00', gui) + f('01', cleanKey);
   
-  const txid = '***';
+  const rawTxid = (description || 'PAG')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-zA-Z0-9]/g, '')
+    .substring(0, 25);
+  const txid = rawTxid.length > 0 ? rawTxid : 'PAG';
   const additionalData = f('05', txid);
 
   let payload = '';
@@ -63,35 +69,69 @@ function sanitizeText(text: string): string {
  * PADRONIZAÇÃO AUTOMÁTICA DE CHAVES PIX
  * Segue as normas do Manual de Padrões para Iniciação do Pix (BACEN)
  */
-function sanitizeKey(key: string): string {
+export function sanitizeKey(key: string, keyType?: string): string {
   if (!key) return '';
   const val = key.trim();
   
   // 1. E-MAIL: Mantém original mas em minúsculas
-  if (val.includes('@')) return val.toLowerCase();
+  if (val.includes('@') || keyType?.toLowerCase() === 'email') return val.toLowerCase();
   
   // 2. CHAVE ALEATÓRIA: Mantém o formato UUID (com hífens)
   if (val.length > 30 && val.includes('-')) return val.toLowerCase();
 
-  // 3. TELEFONE, CPF ou CNPJ (apenas números inicialmente)
   const numeric = val.replace(/\D/g, '');
-  
-  // 4. TELEFONE (Formato E.164 obrigatório: +55...)
-  // Se tem 10 ou 11 dígitos, é um celular/fixo do Brasil
-  if (numeric.length === 10 || numeric.length === 11) {
+  const kt = (keyType || '').toLowerCase();
+
+  // 3. Se explicitamente informado o tipo
+  if (kt === 'cpf' || kt.includes('cpf')) {
+    return numeric;
+  }
+  if (kt === 'cnpj' || kt.includes('cnpj') || numeric.length === 14) {
+    return numeric;
+  }
+  if (kt === 'telefone' || kt === 'phone' || kt.includes('tel')) {
+    if (numeric.startsWith('55') && (numeric.length === 12 || numeric.length === 13)) {
+      return `+${numeric}`;
+    }
     return `+55${numeric}`;
   }
-  // Se já tem 55 no início e 12/13 dígitos, adiciona o +
+
+  // 4. Se a chave foi digitada com máscara de CPF (000.000.000-00)
+  if (/^\d{3}\.\d{3}\.\d{3}-\d{2}$/.test(val)) {
+    return numeric;
+  }
+
+  // 5. Se a chave foi digitada com máscara de CNPJ (00.000.000/0000-00)
+  if (/^\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}$/.test(val)) {
+    return numeric;
+  }
+
+  // 6. Se tem 10 dígitos (DDD + 8 dígitos de fixo)
+  if (numeric.length === 10) {
+    return `+55${numeric}`;
+  }
+
+  // 7. Se tem 11 dígitos:
+  // Se veio com máscara explícita de telefone: (XX) 9XXXX-XXXX
+  if (/^\(?\d{2}\)?\s*9\d{4}-?\d{4}$/.test(val)) {
+    return `+55${numeric}`;
+  }
+
+  // Se o 3º dígito NÃO for '9', é obrigatoriamente CPF (pois no Brasil todo celular após o DDD tem 9)
+  // Exemplo: 435.608.030-04 -> DDD 43, terceiro dígito 5 -> CPF puro!
+  if (numeric.length === 11) {
+    return numeric;
+  }
+
+  // 8. Se já tem +55 ou começa com 55 e tem 12 ou 13 dígitos
+  if (val.startsWith('+55')) {
+    return val;
+  }
   if ((numeric.length === 12 || numeric.length === 13) && numeric.startsWith('55')) {
     return `+${numeric}`;
   }
-  
-  // 5. CPF ou CNPJ: Apenas números
-  if (numeric.length === 11 || numeric.length === 14) {
-    return numeric;
-  }
-  
-  return val; // Fallback
+
+  return numeric || val;
 }
 
 function calculateCRC16(payload: string): string {

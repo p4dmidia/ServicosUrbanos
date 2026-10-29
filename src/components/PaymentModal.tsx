@@ -29,7 +29,11 @@ const detectKeyType = (key: string) => {
   if (!key) return 'Chave';
   if (key.includes('@')) return 'E-mail';
   const numeric = key.replace(/\D/g, '');
-  if (numeric.length === 11) return 'CPF ou Telefone';
+  if (numeric.length === 11) {
+    if (/^\(?\d{2}\)?\s*9\d{4}-?\d{4}$/.test(key)) return 'Telefone';
+    return 'CPF';
+  }
+  if (numeric.length === 10) return 'Telefone';
   if (numeric.length === 14) return 'CNPJ';
   if (key.length > 30) return 'Chave Aleatória';
   return 'Chave';
@@ -39,7 +43,6 @@ export default function PaymentModal({ isOpen, onClose, selectedRecords, onConfi
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isProcessing, setIsProcessing] = useState(false);
   const [manualPixKey, setManualPixKey] = useState('');
-  const [editingPix, setEditingPix] = useState(false);
   const [receiptFile, setReceiptFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -65,13 +68,6 @@ export default function PaymentModal({ isOpen, onClose, selectedRecords, onConfi
       // Prioridade: Chave PIX cadastrada > CPF cadastrado > Vazio
       const initialKey = currentRecord.payeePixKey || currentRecord.payeeCpf || '';
       setManualPixKey(initialKey);
-      
-      // Só entra em modo de edição se a chave estiver vazia
-      if (initialKey && initialKey.trim() !== '' && initialKey !== '000.000.000-00') {
-        setEditingPix(false);
-      } else {
-        setEditingPix(true);
-      }
       setReceiptFile(null);
     }
   }, [currentIndex, currentRecord]);
@@ -79,11 +75,16 @@ export default function PaymentModal({ isOpen, onClose, selectedRecords, onConfi
   const qrCodePayload = useMemo(() => {
     if (!currentRecord || !manualPixKey) return null;
     try {
+      const keyType = currentRecord.payeePixType || currentRecord.pixType || detectKeyType(manualPixKey);
+      const cleanOrderId = (currentRecord.orderId || 'PAG')
+        .replace(/[^a-zA-Z0-9]/g, '')
+        .substring(0, 20);
       return generatePixPayload({
         key: manualPixKey,
         amount: currentRecord.repasse,
-        description: `PAG ${currentRecord.orderId}`,
-        name: currentRecord.payeeName
+        description: `PAG${cleanOrderId}`,
+        name: currentRecord.payeeName,
+        keyType
       });
     } catch (e) {
       return null;
@@ -256,55 +257,24 @@ export default function PaymentModal({ isOpen, onClose, selectedRecords, onConfi
               </div>
             </div>
 
-           {/* Input de Chave PIX */}
+           {/* Chave PIX Destinatário (Somente Leitura - Proteção Antifraude) */}
            <div className="bg-slate-50 border border-slate-100 rounded-[2.5rem] p-8 space-y-4">
               <div className="flex items-center justify-between">
                  <div className="flex items-center gap-2 text-indigo-600">
                     <QrCode size={18} />
                     <span className="text-[10px] font-black uppercase tracking-[0.2em]">Chave PIX Destinatário</span>
                  </div>
-                 <button 
-                   onClick={() => setEditingPix(!editingPix)}
-                   className="text-[10px] font-black text-indigo-600 uppercase tracking-widest hover:underline"
-                 >
-                   {editingPix ? 'Salvar' : 'Editar'}
-                 </button>
               </div>
 
-              {editingPix ? (
-                <div className="space-y-3">
-                  <div className="relative">
-                    <input 
-                      type="text"
-                      value={manualPixKey}
-                      onChange={(e) => setManualPixKey(e.target.value)}
-                      placeholder="E-mail, CPF, Telefone ou Chave Aleatória"
-                      className="w-full bg-white border border-slate-200 rounded-2xl px-6 py-4 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all shadow-sm"
-                      autoFocus
-                    />
-                    {manualPixKey && (
-                      <div className="absolute right-4 top-1/2 -translate-y-1/2">
-                        <span className="px-2 py-1 bg-indigo-100 text-indigo-600 rounded-lg text-[8px] font-black uppercase tracking-widest">
-                          {detectKeyType(manualPixKey)}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                  <p className="text-[9px] text-slate-400 font-bold italic px-2 uppercase tracking-tight">
-                    O sistema formatará {detectKeyType(manualPixKey)} automaticamente seguindo o padrão BACEN.
-                  </p>
-                </div>
-              ) : (
-                <div className="flex items-center justify-between bg-white rounded-2xl px-6 py-4 border border-slate-100 shadow-sm">
-                   <div className="flex flex-col">
-                      <span className="text-[8px] text-slate-400 font-black uppercase tracking-widest mb-0.5">{detectKeyType(manualPixKey)}</span>
-                      <span className="font-black text-midnight tracking-tight">
-                        {manualPixKey || <span className="text-red-400 italic">Chave não informada</span>}
-                      </span>
-                   </div>
-                   {manualPixKey ? <CheckCircle2 size={16} className="text-emerald-500" /> : <Shield size={16} className="text-slate-200" />}
-                </div>
-              )}
+              <div className="flex items-center justify-between bg-white rounded-2xl px-6 py-4 border border-slate-100 shadow-sm">
+                 <div className="flex flex-col">
+                    <span className="text-[8px] text-slate-400 font-black uppercase tracking-widest mb-0.5">{detectKeyType(manualPixKey)}</span>
+                    <span className="font-black text-midnight tracking-tight">
+                      {manualPixKey || <span className="text-red-400 italic">Chave não informada</span>}
+                    </span>
+                 </div>
+                 {manualPixKey ? <CheckCircle2 size={16} className="text-emerald-500" /> : <Shield size={16} className="text-slate-200" />}
+              </div>
            </div>
 
            {/* Área do QR Code */}

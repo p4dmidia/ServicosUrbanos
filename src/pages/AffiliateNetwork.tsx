@@ -33,6 +33,7 @@ export default function AffiliateNetwork() {
   const [comissoesData, setComissoesData] = useState<any>(null);
   const [levelFilter, setLevelFilter] = useState<number>(0);
   const [regularizing, setRegularizing] = useState(false);
+  const [mmnLevels, setMmnLevels] = useState<any[]>([]);
 
   const handleInvite = () => {
     if (!user) return;
@@ -78,11 +79,13 @@ export default function AffiliateNetwork() {
     if (!user) return;
     try {
       setLoading(true);
-      const [networkData, statsData, mfRes] = await Promise.all([
+      const [networkData, statsData, mfRes, levelsRes] = await Promise.all([
         businessRules.getAffiliateNetwork(user.id),
         businessRules.getAffiliateStats(user.id),
-        businessRules.getMicrofranqueadoData(user.id)
+        businessRules.getMicrofranqueadoData(user.id),
+        businessRules.getMMNLevels()
       ]);
+      setMmnLevels(levelsRes || []);
 
       setMicrofranqueadoData(mfRes);
 
@@ -129,6 +132,13 @@ export default function AffiliateNetwork() {
     );
   }
 
+  const g0 = mmnLevels.find(l => l.level === 1) || { cashbackSemanal: 8, cashbackAnual: 3 };
+  const g1 = mmnLevels.find(l => l.level === 2) || { cashbackSemanal: 8, cashbackAnual: 3 };
+  const g2 = mmnLevels.find(l => l.level === 3) || { cashbackSemanal: 8, cashbackAnual: 3 };
+  const totalSem = (Number(g0.cashbackSemanal) || 0) + (Number(g1.cashbackSemanal) || 0) + (Number(g2.cashbackSemanal) || 0);
+  const totalAnu = (Number(g0.cashbackAnual) || 0) + (Number(g1.cashbackAnual) || 0) + (Number(g2.cashbackAnual) || 0);
+  const totalAll = totalSem + totalAnu;
+
   const isMicrofranqueado = microfranqueadoData?.isMicrofranqueado;
   const isLicenseActive = microfranqueadoData?.isLicenseActive;
   const isPrimeiros100 = microfranqueadoData?.isPrimeiros100;
@@ -151,22 +161,22 @@ export default function AffiliateNetwork() {
                 Rede MMN & Comissões
               </h2>
               <p className="text-slate-600 leading-relaxed max-w-lg mx-auto text-sm">
-                Sua conta atual é de <strong>Afiliado Premium (Seguro Vida Light)</strong>, que dá direito a apólice MBM R$ 5.000, telemedicina 24h e sorteios da Loteria Federal. A formação de rede e recebimento de comissões (<strong>33% no modelo oficial: 27% semanal na terça e 6% anual</strong>) é restrita aos Microfranqueados.
+                Sua conta atual é de <strong>Afiliado Premium (Seguro Vida Light)</strong>, que dá direito a apólice MBM R$ 5.000, telemedicina 24h e sorteios da Loteria Federal. A formação de rede e recebimento de comissões (<strong>{totalAll}% no modelo oficial: {totalSem}% semanal na terça e {totalAnu}% anual</strong>) é restrita aos Microfranqueados.
               </p>
             </div>
 
             <div className="grid grid-cols-3 gap-4 border-y border-slate-100 py-6 text-center">
               <div>
                 <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">G0 Direto</span>
-                <span className="text-xl font-black text-midnight font-mono">21% + 2%</span>
+                <span className="text-xl font-black text-midnight font-mono">{g0.cashbackSemanal}% + {g0.cashbackAnual}%</span>
               </div>
               <div>
                 <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">G1 Indireto</span>
-                <span className="text-xl font-black text-midnight font-mono">3% + 2%</span>
+                <span className="text-xl font-black text-midnight font-mono">{g1.cashbackSemanal}% + {g1.cashbackAnual}%</span>
               </div>
               <div>
                 <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">G2 Indireto</span>
-                <span className="text-xl font-black text-midnight font-mono">3% + 2%</span>
+                <span className="text-xl font-black text-midnight font-mono">{g2.cashbackSemanal}% + {g2.cashbackAnual}%</span>
               </div>
             </div>
 

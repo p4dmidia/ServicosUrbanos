@@ -658,7 +658,7 @@ export default function AffiliateWallet() {
                   Comissões de Rede são Exclusivas de Microfranqueados
                 </h4>
                 <p className="text-xs text-amber-900 leading-relaxed max-w-2xl font-medium">
-                  Seu cadastro atual é de <strong>Afiliado Premium (Seguro Vida Light)</strong>. O Seguro Vida Light contempla cobertura MBM de R$ 5.000, telemedicina 24h e sorteios da Loteria Federal, sem comissões de rede. Para ativar sua carteira financeira e receber até 33% de comissão (split 80% semanal / 20% anual), ative sua Licença de Microfranqueado.
+                  Seu cadastro atual é de <strong>Afiliado Premium (Seguro Vida Light)</strong>. O Seguro Vida Light contempla cobertura MBM de R$ 5.000, telemedicina 24h e sorteios da Loteria Federal, sem comissões de rede. Para ativar sua carteira financeira e receber até 33% de comissão (split 24% semanal / 9% anual), ative sua Licença de Microfranqueado.
                 </p>
               </div>
             </div>

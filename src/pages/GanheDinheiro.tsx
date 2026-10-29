@@ -27,7 +27,7 @@ import {
 import { motion } from 'motion/react';
 import { Link } from 'react-router-dom';
 import Header from '../components/Header';
-import { calculateTaxDeductions } from '../lib/businessRules';
+import { businessRules, calculateTaxDeductions } from '../lib/businessRules';
 import { useSubscriptionPlans } from '../lib/subscriptionPlans';
 
 export default function GanheDinheiro() {
@@ -68,28 +68,47 @@ export default function GanheDinheiro() {
   const totalVendasRede = g0 + g1 + g2;
   const faturamentoTotalRede = totalVendasRede * selectedPlanValue;
 
-  // Regra Oficial de Comissionamento Microfranqueado (33% no total)
-  // G0 (Direto): 21% Semanal + 2% Anual = 23% Total
-  // G1 (Indireto 1): 3% Semanal + 2% Anual = 5% Total
-  // G2 (Indireto 2): 3% Semanal + 2% Anual = 5% Total
-  const semanalG0 = g0 * selectedPlanValue * 0.21;
-  const anualG0 = g0 * selectedPlanValue * 0.02;
+  const [mmnLevels, setMmnLevels] = useState<any[]>([]);
+
+  useEffect(() => {
+    businessRules.getMMNLevels().then(setMmnLevels).catch(() => {});
+  }, []);
+
+  const g0Config = mmnLevels.find(l => l.level === 1) || { cashbackSemanal: 8, cashbackAnual: 3 };
+  const g1Config = mmnLevels.find(l => l.level === 2) || { cashbackSemanal: 8, cashbackAnual: 3 };
+  const g2Config = mmnLevels.find(l => l.level === 3) || { cashbackSemanal: 8, cashbackAnual: 3 };
+
+  const semG0Rate = Number(g0Config.cashbackSemanal || 8);
+  const anuG0Rate = Number(g0Config.cashbackAnual || 3);
+  const totalG0Rate = semG0Rate + anuG0Rate;
+
+  const semG1Rate = Number(g1Config.cashbackSemanal || 8);
+  const anuG1Rate = Number(g1Config.cashbackAnual || 3);
+  const totalG1Rate = semG1Rate + anuG1Rate;
+
+  const semG2Rate = Number(g2Config.cashbackSemanal || 8);
+  const anuG2Rate = Number(g2Config.cashbackAnual || 3);
+  const totalG2Rate = semG2Rate + anuG2Rate;
+
+  const totalSemanal = semG0Rate + semG1Rate + semG2Rate;
+  const totalAnual = anuG0Rate + anuG1Rate + anuG2Rate;
+  const totalMmn = totalSemanal + totalAnual;
+
+  const semanalG0 = g0 * selectedPlanValue * (semG0Rate / 100);
+  const anualG0 = g0 * selectedPlanValue * (anuG0Rate / 100);
   const comissaoBrutaG0 = semanalG0 + anualG0;
 
-  const semanalG1 = g1 * selectedPlanValue * 0.03;
-  const anualG1 = g1 * selectedPlanValue * 0.02;
+  const semanalG1 = g1 * selectedPlanValue * (semG1Rate / 100);
+  const anualG1 = g1 * selectedPlanValue * (anuG1Rate / 100);
   const comissaoBrutaG1 = semanalG1 + anualG1;
 
-  const semanalG2 = g2 * selectedPlanValue * 0.03;
-  const anualG2 = g2 * selectedPlanValue * 0.02;
+  const semanalG2 = g2 * selectedPlanValue * (semG2Rate / 100);
+  const anualG2 = g2 * selectedPlanValue * (anuG2Rate / 100);
   const comissaoBrutaG2 = semanalG2 + anualG2;
 
-  // Totais Oficiais:
-  // Semanal: 21% + 3% + 3% = 27% (pago na terça-feira das vendas de seg a sáb)
-  // Anual: 2% + 2% + 2% = 6% (pago em 10 de Dezembro, ciclo 01.11.25 a 30.11.26)
-  const splitSemanal80 = semanalG0 + semanalG1 + semanalG2; // 27%
-  const splitAnual20 = anualG0 + anualG1 + anualG2; // 6%
-  const comissaoBrutaTotal = splitSemanal80 + splitAnual20; // 33%
+  const splitSemanal80 = semanalG0 + semanalG1 + semanalG2;
+  const splitAnual20 = anualG0 + anualG1 + anualG2;
+  const comissaoBrutaTotal = splitSemanal80 + splitAnual20;
 
   // Base para cálculo tributário (mensal estimada baseada no repasse semanal * 4)
   const estimativaMensalBruto = splitSemanal80 * 4;
@@ -121,7 +140,7 @@ export default function GanheDinheiro() {
               Ganhe até <span className="bg-gradient-to-r from-accent via-emerald-400 to-teal-300 bg-clip-text text-transparent">33% de comissão</span> distribuindo o Seguro Vida Light.
             </h1>
             <p className="text-lg md:text-xl text-slate-400 max-w-3xl mx-auto font-medium">
-              Como Microfranqueado você constrói uma carteira comercial rentável com <strong>21% semanal + 2% anual direto (G0)</strong> e <strong>3% semanal + 2% anual em rede (G1 e G2)</strong>. Repasses: <strong>27% semanalmente na terça-feira</strong> e <strong>6% no bônus anual em 10 de dezembro</strong>.
+              Como Microfranqueado você constrói uma carteira comercial rentável com <strong>{semG0Rate}% semanal + {anuG0Rate}% anual direto (G0)</strong> e <strong>{semG1Rate}% semanal + {anuG1Rate}% anual em rede (G1 e G2)</strong>. Repasses: <strong>{totalSemanal}% semanalmente na terça-feira</strong> e <strong>{totalAnual}% no bônus anual em 10 de dezembro</strong>.
             </p>
             
             <div className="pt-4 flex flex-col sm:flex-row items-center justify-center gap-4">
@@ -180,9 +199,9 @@ export default function GanheDinheiro() {
                 <div className="size-16 bg-accent/10 border border-accent/20 rounded-2xl flex items-center justify-center text-accent mb-6">
                   <TrendingUp size={28} />
                 </div>
-                <h3 className="text-lg font-bold mb-2 text-white">3. G0 21%+2% | G1 3%+2% | G2 3%+2%</h3>
+                <h3 className="text-lg font-bold mb-2 text-white">3. G0 {semG0Rate}%+{anuG0Rate}% | G1 {semG1Rate}%+{anuG1Rate}% | G2 {semG2Rate}%+{anuG2Rate}%</h3>
                 <p className="text-slate-400 text-xs font-medium leading-relaxed">
-                  Receba 21% semanal + 2% anual nas vendas diretas (G0) e 3% semanal + 2% anual na equipe (G1 e G2), totalizando 33% de comissão oficial.
+                  Receba {semG0Rate}% semanal + {anuG0Rate}% anual nas vendas diretas (G0) e {semG1Rate}% semanal + {anuG1Rate}% anual na equipe (G1 e G2), totalizando {totalMmn}% de comissão oficial.
                 </p>
               </div>
 
@@ -190,9 +209,9 @@ export default function GanheDinheiro() {
                 <div className="size-16 bg-accent/10 border border-accent/20 rounded-2xl flex items-center justify-center text-accent mb-6">
                   <Wallet size={28} />
                 </div>
-                <h3 className="text-lg font-bold mb-2 text-white">4. 27% Semanal / 6% Anual</h3>
+                <h3 className="text-lg font-bold mb-2 text-white">4. {totalSemanal}% Semanal / {totalAnual}% Anual</h3>
                 <p className="text-slate-400 text-xs font-medium leading-relaxed">
-                  <strong>27% semanal</strong> liberado toda terça-feira (vendas seg a sáb) e <strong>6% anual</strong> pago em 10 de dezembro (ciclo 01.11.25 a 30.11.26).
+                  <strong>{totalSemanal}% semanal</strong> liberado toda terça-feira (vendas seg a sáb) e <strong>{totalAnual}% anual</strong> pago em 10 de dezembro (ciclo 01.11.25 a 30.11.26).
                 </p>
               </div>
             </div>
@@ -250,7 +269,7 @@ export default function GanheDinheiro() {
                   <div className="flex justify-between items-center">
                     <div>
                       <label className="text-xs font-black text-white uppercase tracking-wider block">Vendas Diretas G0</label>
-                      <span className="text-[10px] text-emerald-400 font-bold">21% Semanal + 2% Anual (23% Total)</span>
+                      <span className="text-[10px] text-emerald-400 font-bold">{semG0Rate}% Semanal + {anuG0Rate}% Anual ({totalG0Rate}% Total)</span>
                     </div>
                     <input
                       type="text"
@@ -362,19 +381,19 @@ export default function GanheDinheiro() {
                   {/* Detalhamento por Nível G0, G1, G2 */}
                   <div className="grid grid-cols-3 gap-3 my-6">
                     <div className="bg-slate-950/60 p-4 rounded-2xl border border-emerald-500/20">
-                      <p className="text-[9px] text-emerald-400 font-black uppercase tracking-wider mb-1">G0 Direto (21% + 2%)</p>
+                      <p className="text-[9px] text-emerald-400 font-black uppercase tracking-wider mb-1">G0 Direto ({semG0Rate}% + {anuG0Rate}%)</p>
                       <p className="text-base font-black text-white">R$ {comissaoBrutaG0.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                       <p className="text-[10px] text-slate-500 mt-0.5">{g0} clientes</p>
                     </div>
 
                     <div className="bg-slate-950/60 p-4 rounded-2xl border border-sky-500/20">
-                      <p className="text-[9px] text-sky-400 font-black uppercase tracking-wider mb-1">G1 Nível 1 (3% + 2%)</p>
+                      <p className="text-[9px] text-sky-400 font-black uppercase tracking-wider mb-1">G1 Nível 1 ({semG1Rate}% + {anuG1Rate}%)</p>
                       <p className="text-base font-black text-white">R$ {comissaoBrutaG1.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                       <p className="text-[10px] text-slate-500 mt-0.5">{g1} clientes</p>
                     </div>
 
                     <div className="bg-slate-950/60 p-4 rounded-2xl border border-purple-500/20">
-                      <p className="text-[9px] text-purple-400 font-black uppercase tracking-wider mb-1">G2 Nível 2 (3% + 2%)</p>
+                      <p className="text-[9px] text-purple-400 font-black uppercase tracking-wider mb-1">G2 Nível 2 ({semG2Rate}% + {anuG2Rate}%)</p>
                       <p className="text-base font-black text-white">R$ {comissaoBrutaG2.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                       <p className="text-[10px] text-slate-500 mt-0.5">{g2} clientes</p>
                     </div>
@@ -383,8 +402,8 @@ export default function GanheDinheiro() {
                   {/* Total Bruto Geral */}
                   <div className="bg-gradient-to-r from-emerald-950/40 to-slate-950/80 p-5 rounded-2xl border border-emerald-500/30 flex justify-between items-center mb-6">
                     <div>
-                      <p className="text-[10px] text-emerald-400 font-black uppercase tracking-wider">Comissão Oficial Total (33%)</p>
-                      <p className="text-xs text-slate-400">G0 (23%) + G1 (5%) + G2 (5%)</p>
+                      <p className="text-[10px] text-emerald-400 font-black uppercase tracking-wider">Comissão Oficial Total ({totalMmn}%)</p>
+                      <p className="text-xs text-slate-400">G0 ({totalG0Rate}%) + G1 ({totalG1Rate}%) + G2 ({totalG2Rate}%)</p>
                     </div>
                     <span className="text-2xl font-black text-emerald-400">
                       R$ {comissaoBrutaTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
@@ -397,7 +416,7 @@ export default function GanheDinheiro() {
                     <div className="bg-slate-950/70 p-5 rounded-2xl border border-emerald-500/20 space-y-2">
                       <div className="flex items-center justify-between">
                         <span className="text-[10px] font-black uppercase text-emerald-400 tracking-wider">
-                          Repasse Semanal (27%)
+                          Repasse Semanal ({totalSemanal}%)
                         </span>
                         <span className="text-[9px] bg-emerald-500/10 text-emerald-400 px-2 py-0.5 rounded font-bold uppercase">
                           Toda Terça-Feira

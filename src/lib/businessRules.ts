@@ -1295,9 +1295,9 @@ export const businessRules = {
       return { 
         depth: 3, 
         paymentType: 'percent' as const,
-        cashbackMensal: 27.00,
+        cashbackMensal: 24.00,
         cashbackDigital: 0.00,
-        cashbackAnual: 6.00,
+        cashbackAnual: 9.00,
         commissionRegionalSemanal: 0.00,
         commissionRegionalMensal: 0.00,
         commissionRegionalAnual: 0.00
@@ -1307,9 +1307,9 @@ export const businessRules = {
     return {
       depth: data.depth ?? 3,
       paymentType: (data.payment_type || 'percent') as 'percent' | 'fixed',
-      cashbackMensal: Number(data.cashback_mensal ?? 27.00),
+      cashbackMensal: Number(data.cashback_mensal ?? 24.00),
       cashbackDigital: 0.00,
-      cashbackAnual: Number(data.cashback_anual ?? 6.00),
+      cashbackAnual: Number(data.cashback_anual ?? 9.00),
       commissionRegionalSemanal: 0.00,
       commissionRegionalMensal: Number(data.commission_regional_mensal ?? 0.00),
       commissionRegionalAnual: Number(data.commission_regional_anual ?? 0.00)
@@ -1330,8 +1330,12 @@ export const businessRules = {
     return data.map(l => ({ 
       level: l.level, 
       value: Number(l.value ?? 0),
-      cashbackSemanal: Number((l.cashback_semanal !== undefined && l.cashback_semanal !== null && Number(l.cashback_semanal) > 0) ? l.cashback_semanal : (l.level === 1 ? 21 : (l.level <= 3 ? 3 : 0))),
-      cashbackAnual: Number((l.cashback_anual !== undefined && l.cashback_anual !== null && Number(l.cashback_anual) > 0) ? l.cashback_anual : (l.level <= 3 ? 2 : 0))
+      cashbackSemanal: (l.cashback_semanal !== undefined && l.cashback_semanal !== null && !isNaN(Number(l.cashback_semanal))) 
+        ? Number(l.cashback_semanal) 
+        : (l.level === 1 ? 8 : (l.level <= 3 ? 8 : 0)),
+      cashbackAnual: (l.cashback_anual !== undefined && l.cashback_anual !== null && !isNaN(Number(l.cashback_anual))) 
+        ? Number(l.cashback_anual) 
+        : (l.level <= 3 ? 3 : 0)
     }));
   },
 
@@ -1360,6 +1364,7 @@ export const businessRules = {
         updated_at: new Date().toISOString()
       });
     
+    clearAffiliateDataCache();
     if (error) throw error;
   },
 
@@ -1381,6 +1386,7 @@ export const businessRules = {
       .from('mmn_levels')
       .upsert(payload, { onConflict: 'level' });
     
+    clearAffiliateDataCache();
     if (error) throw error;
   },
 
@@ -3779,23 +3785,24 @@ export const businessRules = {
 
   getPayableBalances: async (filterCategory: 'all' | 'network' | 'reseller' = 'all') => {
     // 1. Buscar todos os perfis
-    const [{ data: profiles, error: pError }, { data: subsData }, { data: ordersData }, { data: transactions, error: tError }, { data: mfList }] = await Promise.all([
+    const [{ data: profiles, error: pError }, { data: subsData }, { data: ordersData }, { data: transactions, error: tError }, { data: mfList }, mmnLevels] = await Promise.all([
       supabase
         .from('profiles')
-        .select('id, full_name, email, pix_key, bank_name, bank_branch, bank_account, whatsapp, role, city, state, cpf, cnpj'),
+        .select('id, full_name, email, pix_key, pix_type, bank_name, bank_branch, bank_account, whatsapp, role, city, state, cpf, cnpj, referred_by'),
       supabase
         .from('subscriptions')
         .select('profile_id, status, end_date, plan_type'),
       supabase
         .from('orders')
-        .select('id, customer_id, status, created_at, order_date, items')
+        .select('id, customer_id, customer_name, status, created_at, order_date, items, amount')
         .in('status', ['Pago', 'Pago, Aguardando Retirada', 'Concluído']),
       supabase
         .from('transactions')
         .select('*'),
       supabase
         .from('microfranqueados')
-        .select('*, licencas_mmn(*)')
+        .select('*, licencas_mmn(*)'),
+      businessRules.getMMNLevels()
     ]);
     
     if (pError) throw pError;
@@ -3808,8 +3815,54 @@ export const businessRules = {
     const invoices = await businessRules.getAffiliateInvoices(undefined, currentRefMonth);
     const invoiceMap = new Map(invoices.map((inv: any) => [inv.profile_id, inv]));
 
+    // Mapeamento dinâmico de comissões para Microfranqueados
+    const g0Config = (mmnLevels || []).find((l: any) => l.level === 1) || { cashbackSemanal: 8, cashbackAnual: 3 };
+    const g1Config = (mmnLevels || []).find((l: any) => l.level === 2) || { cashbackSemanal: 8, cashbackAnual: 3 };
+    const g2Config = (mmnLevels || []).find((l: any) => l.level === 3) || { cashbackSemanal: 8, cashbackAnual: 3 };
+
+    const profileMap = new Map((profiles || []).map((p: any) => [p.id, p]));
+    const dynamicBreakdownsMap = new Map<string, { monthly: number; annual: number; levels: Set<string>; orderNumbers: Set<string> }>();
+
+    (ordersData || []).forEach((o: any) => {
+      const amt = Number(o.amount || 0);
+      if (amt <= 0) return;
+
+      const buyer = profileMap.get(o.customer_id);
+      const g0Id = buyer?.referred_by || null;
+      if (!g0Id) return;
+
+      const g0Profile = profileMap.get(g0Id);
+      const g1Id = g0Profile?.referred_by || null;
+      const g1Profile = g1Id ? profileMap.get(g1Id) : null;
+      const g2Id = g1Profile?.referred_by || null;
+
+      const addComm = (uid: string, levelTag: string, semRate: number, anuRate: number) => {
+        if (!dynamicBreakdownsMap.has(uid)) {
+          dynamicBreakdownsMap.set(uid, { monthly: 0, annual: 0, levels: new Set(), orderNumbers: new Set() });
+        }
+        const b = dynamicBreakdownsMap.get(uid)!;
+        b.monthly += parseFloat((amt * (semRate / 100)).toFixed(2));
+        b.annual += parseFloat((amt * (anuRate / 100)).toFixed(2));
+        b.levels.add(levelTag);
+        b.orderNumbers.add(String(o.id));
+      };
+
+      addComm(g0Id, 'G0', Number(g0Config.cashbackSemanal || 8), Number(g0Config.cashbackAnual || 3));
+      if (g1Id) {
+        addComm(g1Id, 'G1', Number(g1Config.cashbackSemanal || 8), Number(g1Config.cashbackAnual || 3));
+      }
+      if (g2Id) {
+        addComm(g2Id, 'G2', Number(g2Config.cashbackSemanal || 8), Number(g2Config.cashbackAnual || 3));
+      }
+    });
+
     // Helper para verificar se o usuário atua como Revendedor Regional
     const isUserReseller = (profile: any) => {
+      // Excluir expressamente a conta matriz da empresa da rede MMN
+      if (profile.id === '194e5265-cdb6-431f-9f77-8888b1ee74ae') return true;
+      if (profile.role === 'affiliate') return false;
+      const isMf = (mfList || []).some((m: any) => m.profile_id === profile.id);
+      if (isMf) return false;
       if (profile.role === 'regional_reseller') return true;
       return (transactions || []).some(t => {
         if (t.profile_id !== profile.id) return false;
@@ -3891,13 +3944,25 @@ export const businessRules = {
         levels.unshift('REG');
       }
 
-      const monthlyBonus = userTransactions
+      let monthlyBonus = userTransactions
         .filter(t => t.type === 'commission' && (t.description?.includes('Mensal') || t.description?.includes('Semanal')) && (t.status === 'completed' || t.status === 'pago' || t.status === 'pending'))
         .reduce((acc, t) => acc + Number(t.amount || 0), 0);
 
-      const annualBonus = userTransactions
+      let annualBonus = userTransactions
         .filter(t => t.type === 'commission' && t.description?.includes('Anual') && (t.status === 'completed' || t.status === 'pago' || t.status === 'pending'))
         .reduce((acc, t) => acc + Number(t.amount || 0), 0);
+
+      const dynamicBd = dynamicBreakdownsMap.get(profile.id);
+      if (monthlyBonus === 0 && annualBonus === 0 && dynamicBd) {
+        monthlyBonus = dynamicBd.monthly;
+        annualBonus = dynamicBd.annual;
+        dynamicBd.levels.forEach(lvl => {
+          if (!levels.includes(lvl)) levels.push(lvl);
+        });
+        dynamicBd.orderNumbers.forEach(num => {
+          if (!orderNumbers.includes(num)) orderNumbers.push(num);
+        });
+      }
 
       const walletBonus = 0; // Semanal excluído
 
@@ -4060,6 +4125,7 @@ export const businessRules = {
         userName: profile.full_name || 'N/A',
         userEmail: profile.email || 'N/A',
         pixKey: profile.pix_key || 'Não informado',
+        pixType: profile.pix_type || (isPJ ? 'CNPJ' : 'CPF'),
         bankDetails: profile.bank_name ? `${profile.bank_name} / Ag: ${profile.bank_branch} / CC: ${profile.bank_account}` : 'Apenas PIX',
         whatsapp: profile.whatsapp || '',
         cpf: profile.cpf || profile.cnpj || '',
@@ -4260,6 +4326,7 @@ export const businessRules = {
     try {
       const isDecember = targetRefMonth ? targetRefMonth.endsWith('-12') : false;
       const targetYear = targetRefMonth ? parseInt(targetRefMonth.split('-')[0], 10) : new Date().getFullYear();
+      const mmnLevelsData = await businessRules.getMMNLevels();
 
       // 1. Tentar obter via transactions registradas para o usuário
       const { data: userTxs } = await supabase
@@ -4387,14 +4454,18 @@ export const businessRules = {
             const orderNumber = rawOrderId.startsWith('#') ? rawOrderId : (rawOrderId.length > 10 ? `#${rawOrderId.substring(0, 8)}` : `#${rawOrderId}`);
             const contractAmount = Number(order?.order_amount || item.metadata?.order_amount || (Number(item.amount) > 0 ? (Number(item.amount) / 0.05) : 0));
             
-            let percentage = level === '0' ? 21 : 3;
+            const g0Cfg = (mmnLevelsData || []).find((l: any) => l.level === 1) || { cashbackSemanal: 8, cashbackAnual: 3 };
+            const g1Cfg = (mmnLevelsData || []).find((l: any) => l.level === 2) || { cashbackSemanal: 8, cashbackAnual: 3 };
+            const g2Cfg = (mmnLevelsData || []).find((l: any) => l.level === 3) || { cashbackSemanal: 8, cashbackAnual: 3 };
+            const levelCfg = level === '0' ? g0Cfg : (level === '1' ? g1Cfg : g2Cfg);
+            
+            let defaultRate = isAnual ? Number(levelCfg.cashbackAnual || 3) : Number(levelCfg.cashbackSemanal || 8);
+            let percentage = defaultRate;
             const pctMatch = (item.description || '').match(/(\d+(\.\d+)?)%/);
             if (pctMatch) {
               percentage = parseFloat(pctMatch[1]);
             } else if (contractAmount > 0 && Number(item.amount) > 0) {
               percentage = Number(((Number(item.amount) / contractAmount) * 100).toFixed(0));
-            } else if (isAnual) {
-              percentage = 2;
             }
 
             const rateStr = `${percentage.toFixed(0)}%`;
@@ -4475,8 +4546,15 @@ export const businessRules = {
 
         if (!isG0 && !isG1 && !isG2) return;
 
+        const g0Cfg = (mmnLevelsData || []).find((l: any) => l.level === 1) || { cashbackSemanal: 8, cashbackAnual: 3 };
+        const g1Cfg = (mmnLevelsData || []).find((l: any) => l.level === 2) || { cashbackSemanal: 8, cashbackAnual: 3 };
+        const g2Cfg = (mmnLevelsData || []).find((l: any) => l.level === 3) || { cashbackSemanal: 8, cashbackAnual: 3 };
+        const levelCfg = isG0 ? g0Cfg : (isG1 ? g1Cfg : g2Cfg);
+        const weeklyPct = Number(levelCfg.cashbackSemanal || 8);
+        const annualPct = Number(levelCfg.cashbackAnual || 3);
+
         const level = isG0 ? '0' : (isG1 ? '1' : '2');
-        const percentage = isG0 ? 21 : 3;
+        const percentage = weeklyPct;
         const commAmt = parseFloat((amt * (percentage / 100)).toFixed(2));
         const sellerId = isG0 ? userId : sponsorId;
         const sellerName = isG0 
@@ -4507,9 +4585,9 @@ export const businessRules = {
           });
         }
 
-        // Provisão Anual (2%): em Dezembro, discrimina todos os pedidos do ciclo anual (01/12 a 30/11)
+        // Provisão Anual: em Dezembro, discrimina todos os pedidos do ciclo anual (01/12 a 30/11)
         if (isDecember && inAnnualCycle) {
-          const annualCommAmt = parseFloat((amt * 0.02).toFixed(2));
+          const annualCommAmt = parseFloat((amt * (annualPct / 100)).toFixed(2));
           breakdown.push({
             id: `ord-${o.id}-g${level}-anual`,
             orderId: String(o.id),
@@ -4518,11 +4596,11 @@ export const businessRules = {
             level: level,
             category: 'ANUAL',
             date: orderDateBR,
-            origin: `Provisão Anual (2% - Ciclo 01/12/${cycleStartYear} a 30/11/${cycleEndYear})`,
+            origin: `Provisão Anual (${annualPct}% - Ciclo 01/12/${cycleStartYear} a 30/11/${cycleEndYear})`,
             amount: amt,
             contractAmount: amt,
-            rate: '2%',
-            percentage: 2,
+            rate: `${annualPct}%`,
+            percentage: annualPct,
             commissionAmount: annualCommAmt,
             bruto: annualCommAmt,
             status: o.status === 'Pago' || o.status === 'Concluído' ? 'Pago' : 'Pendente',

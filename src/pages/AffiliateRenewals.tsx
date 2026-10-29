@@ -285,7 +285,7 @@ export default function AffiliateRenewals() {
                           Licença de Microfranqueado Ativa • 1º Ano Gratuito!
                         </h4>
                         <p className="text-xs text-emerald-200/90 leading-relaxed mt-1">
-                          Sua licença comercial de Microfranqueado é 100% gratuita durante o primeiro ano. Sua rede e seus repasses semanais de comissão (até 33%) estão ativos. A anuidade de R$ {mfRenewalPrice.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} só será devida após o término de 12 meses.
+                          Sua licença comercial de Microfranqueado é 100% gratuita durante o primeiro ano. Sua rede e seus repasses semanais de comissão estão ativos. A anuidade de R$ {mfRenewalPrice.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} só será devida após o término de 12 meses.
                         </p>
                       </div>
                     </div>
@@ -300,7 +300,7 @@ export default function AffiliateRenewals() {
                               Comissões de Rede Bloqueadas por Inadimplência
                             </h4>
                             <p className="text-xs text-rose-200/90 leading-relaxed mt-1">
-                              Sua taxa de licença anual está pendente. Enquanto não regularizada, as comissões da sua rede (G0 21%+2%, G1 3%+2%, G2 3%+2%) ficam retidas.
+                              Sua taxa de licença anual está pendente. Enquanto não regularizada, as comissões da sua rede (G0, G1 e G2) ficam retidas.
                             </p>
                           </div>
                         </div>
@@ -378,7 +378,7 @@ export default function AffiliateRenewals() {
                   <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6 pt-2">
                     <div className="space-y-2 max-w-xl">
                       <p className="text-xs text-slate-300 leading-relaxed">
-                        Torne-se um <strong>Microfranqueado CaZa dos Sorteios</strong> para construir sua rede e receber <strong>até 33% de comissão</strong> (G0 21%+2%, G1 3%+2%, G2 3%+2%) sobre as vendas de seguros da sua equipe.
+                        Torne-se um <strong>Microfranqueado CaZa dos Sorteios</strong> para construir sua rede e receber <strong>até 33% de comissão</strong> (G0 8%+3%, G1 8%+3%, G2 8%+3%) sobre as vendas de seguros da sua equipe.
                       </p>
                       <div className="flex flex-wrap items-center gap-2">
                         <span className="text-[11px] font-mono font-bold text-emerald-400 bg-emerald-500/15 border border-emerald-500/30 px-3 py-1 rounded-xl">

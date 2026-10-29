@@ -1474,7 +1474,7 @@ export default function Checkout() {
                   <div className="text-[10px] font-bold text-slate-500 leading-relaxed uppercase tracking-tight">
                     {isOnlyMicrofranqueado ? (
                       <>
-                        Li e concordo com os <span className="text-primary-blue font-black underline">Termos de Adesão do Microfranqueado</span> (Licença Comercial MMN, regras de expansão e comissionamento G0 21%+2%, G1 3%+2%, G2 3%+2%, totalizando 27% semanal e 6% anual).
+                        Li e concordo com os <span className="text-primary-blue font-black underline">Termos de Adesão do Microfranqueado</span> (Licença Comercial MMN, regras de expansão e comissionamento G0 8%+3%, G1 8%+3%, G2 8%+3%, totalizando 24% semanal e 9% anual).
                       </>
                     ) : (
                       <>

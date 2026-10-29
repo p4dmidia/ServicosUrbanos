@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   ShieldCheck,
   Gift,
@@ -23,9 +23,38 @@ import { motion } from 'motion/react';
 import Header from '../components/Header';
 import { Link } from 'react-router-dom';
 import { useSubscriptionPlans } from '../lib/subscriptionPlans';
+import { businessRules } from '../lib/businessRules';
 
 export default function Ecossistema() {
   const { minPrice } = useSubscriptionPlans();
+  const [mmnLevels, setMmnLevels] = useState<any[]>([]);
+
+  useEffect(() => {
+    businessRules.getMMNLevels()
+      .then(levels => {
+        if (levels && levels.length > 0) {
+          setMmnLevels(levels);
+        }
+      })
+      .catch(err => {
+        console.error('Erro ao carregar níveis MMN no Ecossistema:', err);
+      });
+  }, []);
+
+  const g0Config = mmnLevels.find((l: any) => l.level === 1) || { cashbackSemanal: 8, cashbackAnual: 3 };
+  const g1Config = mmnLevels.find((l: any) => l.level === 2) || { cashbackSemanal: 8, cashbackAnual: 3 };
+  const g2Config = mmnLevels.find((l: any) => l.level === 3) || { cashbackSemanal: 8, cashbackAnual: 3 };
+
+  const g0Sem = Number(g0Config.cashbackSemanal ?? 8);
+  const g0Anu = Number(g0Config.cashbackAnual ?? 3);
+  const g1Sem = Number(g1Config.cashbackSemanal ?? 8);
+  const g1Anu = Number(g1Config.cashbackAnual ?? 3);
+  const g2Sem = Number(g2Config.cashbackSemanal ?? 8);
+  const g2Anu = Number(g2Config.cashbackAnual ?? 3);
+
+  const totalSem = g0Sem + g1Sem + g2Sem;
+  const totalAnu = g0Anu + g1Anu + g2Anu;
+  const totalMmn = totalSem + totalAnu;
   return (
     <div className="min-h-screen flex flex-col font-sans bg-midnight text-slate-100 overflow-x-hidden">
       <Header />
@@ -202,12 +231,12 @@ export default function Ecossistema() {
                   </div>
                   <h3 className="text-xl font-bold text-white mb-3">4. Microfranquia Comercial</h3>
                   <p className="text-slate-400 text-sm leading-relaxed font-medium">
-                    Canal exclusivo para empreendedores. Com a licença de Microfranqueado, monte sua equipe e receba 33% de comissão em 3 níveis (G0 21%+2%, G1 3%+2%, G2 3%+2%) com repasses semanais (27%) e bônus anual (6%).
+                    Canal exclusivo para empreendedores. Com a licença de Microfranqueado, monte sua equipe e receba {totalMmn}% de comissão em 3 níveis (G0 {g0Sem}%+{g0Anu}%, G1 {g1Sem}%+{g1Anu}%, G2 {g2Sem}%+{g2Anu}%) com repasses semanais ({totalSem}%) e bônus anual ({totalAnu}%).
                   </p>
                 </div>
                 <div className="pt-6 border-t border-white/5 mt-6 text-xs text-slate-500 font-bold uppercase flex justify-between">
                   <span>Microfranquia MMN</span>
-                  <span className="text-accent flex items-center gap-0.5">27% Semanal / 6% Anual <ArrowUpRight size={12} /></span>
+                  <span className="text-accent flex items-center gap-0.5">{totalSem}% Semanal / {totalAnu}% Anual <ArrowUpRight size={12} /></span>
                 </div>
               </motion.div>
             </div>
@@ -255,7 +284,7 @@ export default function Ecossistema() {
                 <div className="text-xs font-black text-accent uppercase tracking-widest mb-4">Passo 03</div>
                 <h4 className="text-xl font-black text-white mb-4">Repasses Semanais e Anuais</h4>
                 <p className="text-slate-400 text-sm font-medium leading-relaxed">
-                  O Microfranqueado recebe 80% das comissões toda terça-feira via PIX e 20% retidos no bônus anual pago em 10 de dezembro.
+                  O Microfranqueado recebe repasses semanais toda terça-feira via PIX e bônus anual acumulado em 10 de dezembro.
                 </p>
               </div>
             </div>

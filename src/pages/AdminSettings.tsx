@@ -58,9 +58,9 @@ export default function AdminSettings() {
   const [mmnDepth, setMmnDepth] = useState(3);
   const [mmnType, setMmnType] = useState<'percent' | 'fixed'>('percent');
   const [mmnLevels, setMmnLevels] = useState<any[]>([
-    { level: 1, cashbackSemanal: 21.00, cashbackAnual: 2.00, value: 23.00 },
-    { level: 2, cashbackSemanal: 3.00, cashbackAnual: 2.00, value: 5.00 },
-    { level: 3, cashbackSemanal: 3.00, cashbackAnual: 2.00, value: 5.00 },
+    { level: 1, cashbackSemanal: 8.00, cashbackAnual: 3.00, value: 11.00 },
+    { level: 2, cashbackSemanal: 8.00, cashbackAnual: 3.00, value: 11.00 },
+    { level: 3, cashbackSemanal: 8.00, cashbackAnual: 3.00, value: 11.00 },
   ]);
 
   const handleLevelChange = (levelNum: number, field: 'cashbackSemanal' | 'cashbackAnual', newValue: number) => {
@@ -115,17 +115,17 @@ export default function AdminSettings() {
         setMmnType(mmnConfig.paymentType || 'percent');
 
         const defaultLevels = [
-          { level: 1, cashbackSemanal: 21.00, cashbackAnual: 2.00, value: 23.00 },
-          { level: 2, cashbackSemanal: 3.00, cashbackAnual: 2.00, value: 5.00 },
-          { level: 3, cashbackSemanal: 3.00, cashbackAnual: 2.00, value: 5.00 },
+          { level: 1, cashbackSemanal: 8.00, cashbackAnual: 3.00, value: 11.00 },
+          { level: 2, cashbackSemanal: 8.00, cashbackAnual: 3.00, value: 11.00 },
+          { level: 3, cashbackSemanal: 8.00, cashbackAnual: 3.00, value: 11.00 },
         ];
 
         if (levelsData && levelsData.length > 0) {
           const merged = defaultLevels.map(def => {
             const found = levelsData.find((l: any) => l.level === def.level);
             if (found) {
-              const sem = Number(found.cashbackSemanal && Number(found.cashbackSemanal) > 0 ? found.cashbackSemanal : def.cashbackSemanal);
-              const anu = Number(found.cashbackAnual && Number(found.cashbackAnual) > 0 ? found.cashbackAnual : def.cashbackAnual);
+              const sem = Number(found.cashbackSemanal !== undefined && found.cashbackSemanal !== null ? found.cashbackSemanal : def.cashbackSemanal);
+              const anu = Number(found.cashbackAnual !== undefined && found.cashbackAnual !== null ? found.cashbackAnual : def.cashbackAnual);
               return {
                 level: def.level,
                 cashbackSemanal: sem,
@@ -606,15 +606,15 @@ export default function AdminSettings() {
                         </thead>
                         <tbody className="divide-y divide-white/5 text-xs">
                           {[
-                            { level: 1, tag: 'G0', title: 'G0 - Venda Direta', subtitle: 'Venda Direta (21% semanal, 2% anual)' },
-                            { level: 2, tag: 'G1', title: 'G1 - Venda do Microfranqueado Indicado Direto', subtitle: 'Microfranqueado Indicado Direto (3% semanal, 2% anual)' },
-                            { level: 3, tag: 'G2', title: 'G2 - Venda do Microfranqueado Indireto', subtitle: 'Microfranqueado Indireto (3% semanal, 2% anual)' },
+                            { level: 1, tag: 'G0', title: 'G0 - Venda Direta', subtitle: `Venda Direta (${mmnLevels.find(l => l.level === 1)?.cashbackSemanal ?? 8}% semanal, ${mmnLevels.find(l => l.level === 1)?.cashbackAnual ?? 3}% anual)` },
+                            { level: 2, tag: 'G1', title: 'G1 - Venda do Microfranqueado Indicado Direto', subtitle: `Microfranqueado Indicado Direto (${mmnLevels.find(l => l.level === 2)?.cashbackSemanal ?? 8}% semanal, ${mmnLevels.find(l => l.level === 2)?.cashbackAnual ?? 3}% anual)` },
+                            { level: 3, tag: 'G2', title: 'G2 - Venda do Microfranqueado Indireto', subtitle: `Microfranqueado Indireto (${mmnLevels.find(l => l.level === 3)?.cashbackSemanal ?? 8}% semanal, ${mmnLevels.find(l => l.level === 3)?.cashbackAnual ?? 3}% anual)` },
                           ].map((gen) => {
                             const lvl = mmnLevels.find(l => l.level === gen.level) || {
                               level: gen.level,
-                              cashbackSemanal: gen.level === 1 ? 21 : (gen.level <= 3 ? 3 : 0),
-                              cashbackAnual: gen.level <= 3 ? 2 : 0,
-                              value: gen.level === 1 ? 23 : (gen.level <= 3 ? 5 : 0)
+                              cashbackSemanal: 8,
+                              cashbackAnual: 3,
+                              value: 11
                             };
 
                             const isActive = gen.level <= mmnDepth;

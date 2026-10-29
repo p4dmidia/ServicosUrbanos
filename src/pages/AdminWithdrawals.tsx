@@ -425,6 +425,7 @@ export default function AdminWithdrawals() {
       payeeName: adv.user_name || 'Afiliado',
       payeeCpf: adv.cpf || '',
       payeePixKey: adv.pix_key || adv.cpf || '',
+      payeePixType: adv.pix_type,
       payeeWhatsapp: adv.whatsapp || '',
       orderId: `ADV-${adv.id ? String(adv.id).substring(0, 6) : '001'}`,
       repasse: numAmount,
@@ -532,6 +533,7 @@ export default function AdminWithdrawals() {
       payeeName: userItem.userName,
       payeeCpf: userItem.cpf,
       payeePixKey: userItem.pixKey,
+      payeePixType: userItem.pixType,
       payeeWhatsapp: userItem.whatsapp,
       orderId: userItem.orderNumber ? `PED-${userItem.orderNumber}` : `SAQUE-${userItem.profileId.substring(0, 5)}`,
       repasse: amountToPay,
@@ -2815,7 +2817,7 @@ export default function AdminWithdrawals() {
                     CASHBACK ANUAL A PAGAR (Ciclo {selectedAnnualCycleYear === 2025 ? '01/11/2025 a 30/11/2026' : `${selectedAnnualCycleYear} a ${selectedAnnualCycleYear + 1}`})
                   </h3>
                   <p className="text-xs text-slate-400 mt-1">
-                    Apuração de 2% de Rede MMN e 2% de Revendedor Regional acumulados mês a mês para pagamento anual em 10 de Dezembro.
+                    Apuração de Cashback Anual da Rede MMN e de Revendedor Regional acumulados mês a mês para pagamento anual em 10 de Dezembro.
                   </p>
                 </div>
 

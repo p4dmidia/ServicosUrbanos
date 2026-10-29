@@ -247,7 +247,7 @@ export default function AffiliateClaims() {
                   Benefício Exclusivo do Afiliado Premium (Seguro Vida Light)
                 </h4>
                 <p className="text-xs text-amber-900 leading-relaxed max-w-2xl font-medium">
-                  Sua conta atual é de <strong>Microfranqueado (MMN)</strong>, focada na expansão da rede e recebimento de comissões (33% no split 80% semanal / 20% anual). A cobertura securitária de R$ 5.000,00, assistência médica e sorteios são exclusivos dos titulares do plano Seguro Vida Light.
+                  Sua conta atual é de <strong>Microfranqueado (MMN)</strong>, focada na expansão da rede e recebimento de comissões (33% no split 24% semanal / 9% anual). A cobertura securitária de R$ 5.000,00, assistência médica e sorteios são exclusivos dos titulares do plano Seguro Vida Light.
                 </p>
               </div>
             </div>

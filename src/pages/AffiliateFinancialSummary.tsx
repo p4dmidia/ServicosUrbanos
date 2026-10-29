@@ -1140,7 +1140,7 @@ export default function AffiliateFinancialSummary() {
                                 </td>
                                 <td className="px-4 py-3.5 text-center font-mono font-bold text-indigo-600 text-xs">
                                   <span className="inline-flex items-center px-2 py-0.5 rounded-lg text-xs font-black bg-indigo-50 text-indigo-700 border border-indigo-100 font-mono">
-                                    {order.rate || (order.percentage ? `${Number(order.percentage).toFixed(0)}%` : '21%')}
+                                    {order.rate || (order.percentage ? `${Number(order.percentage).toFixed(0)}%` : '8%')}
                                   </span>
                                 </td>
                                 <td className="px-4 py-3.5 text-right font-mono font-black text-emerald-600">
@@ -1214,7 +1214,7 @@ export default function AffiliateFinancialSummary() {
 
               {/* Nota de rodapé explicativa */}
               <p className="text-[11px] text-slate-500 italic mt-3">
-                * Nas discriminações dos Pedidos e comissões, a origem e nível de cada pedido refletem as Gerações G0 (21%), G1 (3%) e G2 (3%) do modelo de Microfranquia MMN, tendo sido descontinuado o cargo de revendedor regional.
+                * Nas discriminações dos Pedidos e comissões, a origem e nível de cada pedido refletem as Gerações G0, G1 e G2 do modelo de Microfranquia MMN configuradas pelo Administrador.
               </p>
 
             </div>

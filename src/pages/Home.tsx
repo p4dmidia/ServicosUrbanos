@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react';
 import {
   LayoutGrid,
   ExternalLink,
@@ -27,9 +28,36 @@ import { Link } from 'react-router-dom';
 import Header from '../components/Header';
 import PWAInstallPrompt from '../components/PWAInstallPrompt';
 import { useSubscriptionPlans } from '../lib/subscriptionPlans';
+import { businessRules } from '../lib/businessRules';
 
 export default function Home() {
   const { minPrice } = useSubscriptionPlans();
+  const [mmnLevels, setMmnLevels] = useState<any[]>([]);
+
+  useEffect(() => {
+    businessRules.getMMNLevels()
+      .then(levels => {
+        if (levels && levels.length > 0) {
+          setMmnLevels(levels);
+        }
+      })
+      .catch(err => {
+        console.error('Erro ao carregar níveis MMN na Home:', err);
+      });
+  }, []);
+
+  const g0Config = mmnLevels.find((l: any) => l.level === 1) || { cashbackSemanal: 8, cashbackAnual: 3 };
+  const g1Config = mmnLevels.find((l: any) => l.level === 2) || { cashbackSemanal: 8, cashbackAnual: 3 };
+  const g2Config = mmnLevels.find((l: any) => l.level === 3) || { cashbackSemanal: 8, cashbackAnual: 3 };
+
+  const g0Sem = Number(g0Config.cashbackSemanal ?? 8);
+  const g0Anu = Number(g0Config.cashbackAnual ?? 3);
+  const g1Sem = Number(g1Config.cashbackSemanal ?? 8);
+  const g1Anu = Number(g1Config.cashbackAnual ?? 3);
+  const g2Sem = Number(g2Config.cashbackSemanal ?? 8);
+  const g2Anu = Number(g2Config.cashbackAnual ?? 3);
+
+  const totalMmn = (g0Sem + g0Anu) + (g1Sem + g1Anu) + (g2Sem + g2Anu);
   const containerVariants = {
     hidden: { opacity: 0 },
     visible: {
@@ -558,7 +586,7 @@ export default function Home() {
                         <CheckCircle2 size={14} />
                       </div>
                       <span className="text-slate-300 font-medium text-base">
-                        Comissionamento de 33% em 3 níveis: G0 (21%+2%), G1 (3%+2%) e G2 (3%+2%).
+                        Comissionamento de {totalMmn}% em 3 níveis: G0 ({g0Sem}%+{g0Anu}%), G1 ({g1Sem}%+{g1Anu}%) e G2 ({g2Sem}%+{g2Anu}%).
                       </span>
                     </li>
                     <li className="flex items-start gap-3">
@@ -566,7 +594,7 @@ export default function Home() {
                         <CheckCircle2 size={14} />
                       </div>
                       <span className="text-slate-300 font-medium text-base">
-                        Repasses oficiais: 27% semanal toda terça-feira e 6% no bônus anual em 10 de dezembro.
+                        Repasses oficiais: semanal toda terça-feira e bônus anual acumulado em 10 de dezembro.
                       </span>
                     </li>
                     <li className="flex items-start gap-3">

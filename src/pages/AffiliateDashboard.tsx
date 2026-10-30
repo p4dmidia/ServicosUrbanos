@@ -191,7 +191,7 @@ export default function AffiliateDashboard() {
   if (!isMicrofranqueado) {
     const apolice = seguradoData?.apolice;
     const numerosSorte = seguradoData?.numerosDaSorte || [];
-    const numeroPrincipal = numerosSorte[0]?.numero_sorte || 'Aguardando Sorteio';
+    const numeroPrincipal = numerosSorte[0]?.numero || numerosSorte[0]?.numero_sorte || 'Aguardando Emissão';
 
     return (
       <AffiliateLayout title="Painel do Segurado">

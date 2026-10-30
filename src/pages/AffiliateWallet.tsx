@@ -150,7 +150,7 @@ export default function AffiliateWallet() {
 
   const weeklyCommissionTotal = useMemo(() => {
     return enrichedTransactions
-      .filter(t => !t.cashbackType?.includes('Anual') && t.status !== 'Cancelado' && t.status !== 'Recusado' && Number(t.bruto || t.amount || 0) > 0)
+      .filter(t => !t.cashbackType?.includes('Anual') && t.status !== 'Cancelado' && t.status !== 'Recusado' && t.status !== 'Pago' && t.status !== 'completed' && Number(t.bruto || t.amount || 0) > 0)
       .reduce((acc, t) => acc + Number(t.bruto || t.amount || 0), 0);
   }, [enrichedTransactions]);
 
@@ -347,7 +347,7 @@ export default function AffiliateWallet() {
 
   const globalAdvances = useMemo(() => {
     return transactions.filter(t => 
-      (t.originalType === 'advance' || t.cashbackType?.includes('Adiantamento') || t.category === 'withdrawal' || t.description?.toLowerCase().includes('adiantamento')) &&
+      (t.originalType === 'advance' || t.cashbackType?.includes('Adiantamento') || t.description?.toLowerCase().includes('adiantamento')) &&
       Number(t.amount || 0) < 0
     );
   }, [transactions]);
@@ -384,7 +384,7 @@ export default function AffiliateWallet() {
       const totalContratos = Array.from(uniqueOrders.values()).reduce((acc, v) => acc + v, 0);
       const totalBruto = commissionItems.reduce((acc, t) => acc + Number(t.bruto || t.amount || 0), 0);
       const totalMensal = commissionItems
-        .filter(t => t.cashbackType?.includes('Mensal'))
+        .filter(t => t.cashbackType?.includes('Mensal') || t.cashbackType?.includes('Semanal'))
         .reduce((acc, t) => acc + Number(t.bruto || t.amount || 0), 0);
       const totalAnual = commissionItems
         .filter(t => t.cashbackType?.includes('Anual'))

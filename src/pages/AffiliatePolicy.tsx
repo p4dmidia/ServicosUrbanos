@@ -59,9 +59,9 @@ export default function AffiliatePolicy() {
       let insuredPerson = seguradoData?.segurado?.nome_completo || profile?.full_name || 'Segurado Oficial';
       let insuredPersonCpf = seguradoData?.segurado?.cpf || profile?.cpf || '---';
 
-      const certNum = apolice?.numero_certificado || (profile as any)?.certificate_number || `MBM-${user?.id.substring(0, 8).toUpperCase()}`;
+      const certNum = apolice?.numero_certificado || (profile as any)?.certificate_number || null;
       const policyNum = apolice?.numero_apolice || '11-0982-000058940-0001';
-      const luckyNum = seguradoData?.numerosDaSorte?.[0]?.numero || (profile as any)?.lucky_number || 'Conforme extração';
+      const luckyNum = seguradoData?.numerosDaSorte?.[0]?.numero || (profile as any)?.lucky_number || null;
 
       const issueDate = apolice?.vigencia_inicio 
         ? new Date(apolice.vigencia_inicio).toLocaleDateString('pt-BR') 
@@ -109,10 +109,10 @@ export default function AffiliatePolicy() {
         body: [
           ['Segurado Titular', insuredPerson.toUpperCase()],
           ['CPF do Titular do Seguro', insuredPersonCpf],
-          ['Numero do Certificado', certNum],
+          ['Numero do Certificado', certNum ? `#${certNum}` : 'Aguardando Emissao MBM'],
           ['Apolice Coletiva MBM', policyNum],
           ['Seguradora Parceira', 'MBM SEGURADORA S/A (CNPJ: 87.883.807/0001-06)'],
-          ['Numero da Sorte (Loteria Federal)', luckyNum],
+          ['Numero da Sorte (Loteria Federal)', luckyNum ? String(luckyNum) : 'Aguardando Envio da Seguradora'],
           ['Inicio da Vigencia / Cobertura', issueDate],
           ['Fim da Vigencia', endDate],
           ['Capital Segurado Global', 'R$ 5.000,00'],
@@ -324,14 +324,20 @@ export default function AffiliatePolicy() {
                   Certificado & Apólice
                 </p>
                 <p className="text-base font-black font-mono text-white">
-                  {apolice?.numero_certificado || (profile as any)?.certificate_number || `MBM-${user?.id.substring(0, 8).toUpperCase()}`}
+                  {apolice?.numero_certificado || (profile as any)?.certificate_number 
+                    ? `Certificado #${apolice?.numero_certificado || (profile as any)?.certificate_number}` 
+                    : 'Aguardando Emissão MBM'}
                 </p>
                 <p className="text-xs text-slate-400 mt-1 font-mono">
                   Apólice: {apolice?.numero_apolice || '11-0982-000058940-0001'}
                 </p>
-                {seguradoData?.numerosDaSorte?.[0]?.numero && (
+                {seguradoData?.numerosDaSorte?.[0]?.numero ? (
                   <p className="text-[10px] text-amber-300 font-black uppercase mt-1.5 tracking-wider">
                     Nº da Sorte: <span className="font-mono text-xs">{seguradoData.numerosDaSorte[0].numero}</span>
+                  </p>
+                ) : (
+                  <p className="text-[10px] text-amber-400 font-bold uppercase mt-1.5 tracking-wider">
+                    Nº da Sorte: Aguardando envio da seguradora
                   </p>
                 )}
               </div>

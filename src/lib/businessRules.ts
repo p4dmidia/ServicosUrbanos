@@ -2184,7 +2184,7 @@ export const businessRules = {
           displayStatus = 'Pago';
         } else if (isAdvance) {
           displayStatus = t.status === 'pending' ? 'Pendente' : 'Pago';
-        } else if (cashbackType?.includes('Mensal') && paidAdvancesTotal > 0) {
+        } else if ((cashbackType?.includes('Mensal') || cashbackType?.includes('Semanal')) && paidAdvancesTotal > 0) {
           displayStatus = 'Adiantado';
         } else if (cashbackType?.includes('Anual')) {
           displayStatus = 'Acumulando';
@@ -6453,12 +6453,17 @@ export const businessRules = {
         if (!isReseller && isResellerTx) return;
 
         // Verifica o ciclo do pagamento
-        if (type === 'mensal' && desc.includes('Mensal')) {
-          txIdsToComplete.push(tx.id);
-        } else if (type === 'anual' && desc.includes('Anual')) {
-          txIdsToComplete.push(tx.id);
+        if (type === 'mensal') {
+          // Repasses periódicos quitam comissões semanais e mensais da rede (não anuais)
+          if ((desc.includes('Mensal') || desc.includes('Semanal')) && !desc.includes('Anual')) {
+            txIdsToComplete.push(tx.id);
+          }
+        } else if (type === 'anual') {
+          if (desc.includes('Anual')) {
+            txIdsToComplete.push(tx.id);
+          }
         } else if (type === 'total') {
-          if (desc.includes('Mensal')) {
+          if ((desc.includes('Mensal') || desc.includes('Semanal')) && !desc.includes('Anual')) {
             txIdsToComplete.push(tx.id);
           }
         }
@@ -8999,10 +9004,10 @@ export const businessRules = {
             };
           }
 
-          // Extrair dados MBM do perfil se houver
-          let certNum = '10';
+          // Extrair dados MBM do perfil se houver (somente quando emitidos oficialmente pela seguradora)
+          let certNum: string | null = null;
           let policyNum = '11-0982-000058940-0001';
-          let luckyNum = '000110';
+          let luckyNum: string | null = null;
           if (profile?.description) {
             const cMatch = profile.description.match(/\[MBM_CERTIFICATE:([^\]]+)\]/);
             if (cMatch && cMatch[1]) certNum = cMatch[1].trim();
@@ -9036,7 +9041,7 @@ export const businessRules = {
             isSegurado: true,
             segurado: fallbackSegurado,
             apolice: fallbackApolice,
-            numerosDaSorte: [{ numero: luckyNum, status: 'ativo' }],
+            numerosDaSorte: luckyNum ? [{ numero: luckyNum, status: 'ativo' }] : [],
             telemedicina: { provedor: 'Racca Saúde', status: 'ativo', url_acesso: 'https://raccasaude.com.br/parceiro/servicos-urbanos' },
             isPolicyActive: true,
             status: 'ativo'
@@ -9051,7 +9056,7 @@ export const businessRules = {
         if (!isPolicyActive && (isSubActive || hasMbmTag)) {
           isPolicyActive = true;
           if (!activeApolice) {
-            let certNum = '10';
+            let certNum: string | null = null;
             let policyNum = '11-0982-000058940-0001';
             if (profile?.description) {
               const cMatch = profile.description.match(/\[MBM_CERTIFICATE:([^\]]+)\]/);

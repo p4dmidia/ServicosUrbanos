@@ -451,7 +451,7 @@ export default function AffiliateLuckyNumber() {
                     {luckyNumber ? 'Bilhete Ativo na Seguradora' : 'Aguardando Emissão MBM'}
                   </span>
                   <span className="text-[10px] font-mono text-slate-400">
-                    Apólice: {mbmCertificate.policy} {mbmCertificate.cert ? `• Certificado #${mbmCertificate.cert}` : ''}
+                    Apólice: {mbmCertificate.policy} {mbmCertificate.cert ? `• Certificado #${mbmCertificate.cert}` : '• Certificado em Processamento'}
                   </span>
                 </div>
 

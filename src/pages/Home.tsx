@@ -586,7 +586,7 @@ export default function Home() {
                         <CheckCircle2 size={14} />
                       </div>
                       <span className="text-slate-300 font-medium text-base">
-                        Comissionamento de {totalMmn}% em 3 níveis: G0 ({g0Sem}%+{g0Anu}%), G1 ({g1Sem}%+{g1Anu}%) e G2 ({g2Sem}%+{g2Anu}%).
+                        Comissionamento em cada geração: G0 ({g0Sem}%+{g0Anu}%), G1 ({g1Sem}%+{g1Anu}%) e G2 ({g2Sem}%+{g2Anu}%).
                       </span>
                     </li>
                     <li className="flex items-start gap-3">

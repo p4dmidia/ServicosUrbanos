@@ -345,6 +345,19 @@ export default function AdminOrders() {
         .eq('id', orderId);
 
       if (error) throw error;
+
+      if (newStatus === 'Cancelado') {
+        try {
+          await supabase
+            .from('transactions')
+            .update({ status: 'cancelled' })
+            .eq('order_id', orderId)
+            .eq('type', 'commission');
+        } catch (e) {
+          console.warn('Aviso ao cancelar comissões do pedido:', e);
+        }
+      }
+
       toast.success(`Status do pedido atualizado para: ${newStatus}`);
       
       // Se tiver o modal aberto, atualiza o item selecionado

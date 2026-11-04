@@ -461,8 +461,10 @@ export default function AdminWithdrawals() {
       return;
     }
 
-    if (payoutType === 'mensal' && !isMonthlyPayoutWindow) {
-      toast.error('Pagamento Mensal bloqueado: liberado a partir do dia 10 de cada mês!');
+    const isNetworkPayout = viewTab === 'network' || userItem.viewCategory === 'network';
+
+    if (payoutType === 'mensal' && !isMonthlyPayoutWindow && !isNetworkPayout) {
+      toast.error('Pagamento Mensal de Revendedor bloqueado: liberado a partir do dia 10 de cada mês!');
       return;
     }
 
@@ -480,7 +482,9 @@ export default function AdminWithdrawals() {
 
     if (payoutType === 'mensal') {
       if ((userItem.monthlyLiquid || 0) <= 0 || (userItem.monthlyPending || 0) <= 0) {
-        toast.error('Este repasse mensal já foi quitado/adiantado e não possui saldo pendente.');
+        toast.error(isNetworkPayout 
+          ? 'Este repasse semanal já foi quitado/adiantado e não possui saldo pendente.' 
+          : 'Este repasse mensal já foi quitado/adiantado e não possui saldo pendente.');
         return;
       }
       if (userItem.hasPendingAdvance) {
@@ -491,7 +495,7 @@ export default function AdminWithdrawals() {
       grossAmount = userItem.monthlyPending;
       inssAmount = userItem.monthlyInss || 0;
       irrfAmount = userItem.monthlyIrrf || 0;
-      descLabel = 'Cashback Mensal';
+      descLabel = isNetworkPayout ? 'Cashback Semanal' : 'Cashback Mensal';
     } else if (payoutType === 'anual') {
       amountToPay = userItem.annualLiquid !== undefined ? userItem.annualLiquid : userItem.annualPending;
       grossAmount = userItem.annualPending;
@@ -499,7 +503,7 @@ export default function AdminWithdrawals() {
       irrfAmount = userItem.annualIrrf || 0;
       descLabel = 'Cashback Anual';
     } else {
-      // Payout total / liberados hoje (Mensal somado no mês com NF)
+      // Payout total / liberados hoje (Mensal somado no mês com NF ou Semanal na rede)
       const payableLiq = userItem.liberadoLiquid !== undefined 
         ? userItem.liberadoLiquid 
         : (userItem.canPayMonthly ? (userItem.monthlyLiquid || 0) : 0);
@@ -516,7 +520,7 @@ export default function AdminWithdrawals() {
       inssAmount = userItem.liberadoInss || 0;
       irrfAmount = userItem.liberadoIrrf || 0;
       
-      descLabel = 'Pagamento Liberado (Mensal)';
+      descLabel = isNetworkPayout ? 'Pagamento Liberado (Semanal)' : 'Pagamento Liberado (Mensal)';
 
       splitDetails = {
         monthly: userItem.canPayMonthly && (userItem.monthlyPending || 0) > 0 ? {
@@ -1223,7 +1227,9 @@ export default function AdminWithdrawals() {
                 <Calendar size={28} />
               </div>
               <div>
-                <p className="text-[10px] font-black text-emerald-400 uppercase tracking-widest mb-1">Mensal (Dia 10 - Exige NF)</p>
+                <p className="text-[10px] font-black text-emerald-400 uppercase tracking-widest mb-1">
+                  {viewTab === 'network' ? 'Semanal (Toda Terça-feira)' : 'Mensal (Dia 10 - Exige NF)'}
+                </p>
                 <h3 className="text-2xl font-black text-white tracking-tight">
                   R$ {totalMonthlyPending.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                 </h3>
@@ -1287,7 +1293,7 @@ export default function AdminWithdrawals() {
                     cycleFilter === 'monthly' ? 'bg-emerald-600 text-white shadow-sm' : 'text-slate-400 hover:text-white'
                   }`}
                 >
-                  🔵 Mensal
+                  🔵 {viewTab === 'network' ? 'Semanal' : 'Mensal'}
                 </button>
                 <button
                   onClick={() => setCycleFilter('annual')}
@@ -1555,13 +1561,13 @@ export default function AdminWithdrawals() {
                     {/* Blocos de Valores por Ciclo */}
                     <div className="flex flex-wrap items-center gap-4 w-full xl:w-auto justify-between xl:justify-end border-t xl:border-t-0 pt-4 xl:pt-0 border-white/5">
                       
-                      {/* 1. Mensal (Liberado a partir do dia 10 de cada mês) */}
+                      {/* 1. Semanal (MMN) ou Mensal (Revendedor) */}
                       <div className="bg-white/5 p-4 rounded-2xl border border-white/5 text-center min-w-[130px]">
                         <div className="flex items-center justify-center gap-1 mb-1">
                           <span className="text-[9px] font-black text-emerald-400 uppercase tracking-wider block">
-                            Mensal Líquido
+                            {viewTab === 'network' ? 'Semanal Líquido' : 'Mensal Líquido'}
                           </span>
-                          {!isMonthlyPayoutWindow && (
+                          {viewTab !== 'network' && !isMonthlyPayoutWindow && (
                             <span title="Bloqueado: Liberado a partir do dia 10 de cada mês">
                               <Lock size={10} className="text-amber-400" />
                             </span>
@@ -1576,19 +1582,19 @@ export default function AdminWithdrawals() {
                           </span>
                         )}
                         <button
-                          disabled={!w.isEligible || (w.monthlyLiquid || 0) <= 0 || !isMonthlyPayoutWindow || w.hasPendingAdvance}
+                          disabled={!w.isEligible || (w.monthlyLiquid || 0) <= 0 || (viewTab !== 'network' && !isMonthlyPayoutWindow) || w.hasPendingAdvance}
                           onClick={() => handleOpenPaymentModal(w, 'mensal')}
                           title={
-                            !isMonthlyPayoutWindow
+                            viewTab !== 'network' && !isMonthlyPayoutWindow
                               ? 'Bloqueado: Liberado a partir do dia 10 de cada mês (antes disso apenas via Adiantamento)'
                               : w.hasPendingAdvance
                                 ? 'Há uma solicitação de adiantamento pendente na aba Adiantamentos'
                                 : (w.monthlyLiquid || 0) <= 0
-                                  ? 'Saldo mensal quitado / adiantado'
-                                  : 'Pagar Repasse Mensal'
+                                  ? (viewTab === 'network' ? 'Saldo semanal quitado / adiantado' : 'Saldo mensal quitado / adiantado')
+                                  : (viewTab === 'network' ? 'Pagar Repasse Semanal' : 'Pagar Repasse Mensal')
                           }
                           className={`mt-2 w-full py-1.5 px-3 rounded-xl text-[9px] font-black uppercase tracking-wider transition-all cursor-pointer flex items-center justify-center gap-1 ${
-                            !isMonthlyPayoutWindow
+                            viewTab !== 'network' && !isMonthlyPayoutWindow
                               ? 'bg-slate-800/90 text-slate-400 border border-slate-700/60 cursor-not-allowed opacity-75'
                               : (w.monthlyLiquid || 0) <= 0
                                 ? 'bg-slate-800/60 text-slate-500 cursor-not-allowed opacity-50'
@@ -1597,7 +1603,7 @@ export default function AdminWithdrawals() {
                                   : 'bg-emerald-600 hover:bg-emerald-500 text-white disabled:opacity-30 disabled:pointer-events-none shadow-sm'
                           }`}
                         >
-                          {!isMonthlyPayoutWindow ? (
+                          {viewTab !== 'network' && !isMonthlyPayoutWindow ? (
                             <>
                               <Lock size={10} /> Libera Dia 10
                             </>
@@ -1606,7 +1612,7 @@ export default function AdminWithdrawals() {
                           ) : w.hasPendingAdvance ? (
                             'Adiant. Pendente'
                           ) : (
-                            'Pagar Mensal'
+                            viewTab === 'network' ? 'Pagar Semanal' : 'Pagar Mensal'
                           )}
                         </button>
                       </div>
@@ -1646,12 +1652,13 @@ export default function AdminWithdrawals() {
                         </button>
                       </div>
 
-                      {/* 3. Total Consolidado (Liberado Hoje: Mensal a partir do dia 10 e Anual em 10/Dez) */}
+                      {/* 3. Total Consolidado (Liberado Hoje: Semanal imediato para MMN, Mensal a partir do dia 10 para Revendedores, e Anual em 10/Dez) */}
                       {(() => {
-                        const monthlyPartLiquid = isMonthlyPayoutWindow ? (w.monthlyLiquid || 0) : 0;
-                        const monthlyPartGross = isMonthlyPayoutWindow ? (w.monthlyPending || 0) : 0;
-                        const monthlyPartInss = isMonthlyPayoutWindow ? (w.monthlyInss || 0) : 0;
-                        const monthlyPartIrrf = isMonthlyPayoutWindow ? (w.monthlyIrrf || 0) : 0;
+                        const isNetworkTab = viewTab === 'network';
+                        const monthlyPartLiquid = (isNetworkTab || isMonthlyPayoutWindow) ? (w.monthlyLiquid || 0) : 0;
+                        const monthlyPartGross = (isNetworkTab || isMonthlyPayoutWindow) ? (w.monthlyPending || 0) : 0;
+                        const monthlyPartInss = (isNetworkTab || isMonthlyPayoutWindow) ? (w.monthlyInss || 0) : 0;
+                        const monthlyPartIrrf = (isNetworkTab || isMonthlyPayoutWindow) ? (w.monthlyIrrf || 0) : 0;
 
                         const annualPartLiquid = isDecemberAnnualWindow ? (w.annualLiquid || 0) : 0;
                         const annualPartGross = isDecemberAnnualWindow ? (w.annualPending || 0) : 0;
@@ -1683,7 +1690,7 @@ export default function AdminWithdrawals() {
                                 PJ Isento
                               </span>
                             )}
-                            {!isMonthlyPayoutWindow && (w.monthlyLiquid || 0) > 0 && (
+                            {!isNetworkTab && !isMonthlyPayoutWindow && (w.monthlyLiquid || 0) > 0 && (
                               <span className="text-[8px] text-emerald-400/90 block mt-1 font-medium">
                                 + R$ {(w.monthlyLiquid || 0).toFixed(2).replace('.', ',')} libera dia 10
                               </span>
@@ -1702,7 +1709,7 @@ export default function AdminWithdrawals() {
                                   : 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-indigo-600/30'
                               }`}
                             >
-                              {liquidPayableToday <= 0 && !isMonthlyPayoutWindow ? (
+                              {liquidPayableToday <= 0 && !isNetworkTab && !isMonthlyPayoutWindow ? (
                                 <>
                                   <Lock size={10} /> Libera Dia 10
                                 </>
@@ -1730,7 +1737,7 @@ export default function AdminWithdrawals() {
                         <th className="py-2 px-2 text-center">Tipo</th>
                         <th className="py-2 px-2">Chave PIX</th>
                         <th className="py-2 px-2">Banco</th>
-                        <th className="py-2 px-2 text-right">Mensal Líquido</th>
+                        <th className="py-2 px-2 text-right">{viewTab === 'network' ? 'Semanal Líquido' : 'Mensal Líquido'}</th>
                         <th className="py-2 px-2 text-right">Anual Provisão</th>
                         <th className="py-2 px-2 text-right">Total a Pagar</th>
                         <th className="py-2 px-2 text-center">Situação Fiscal</th>

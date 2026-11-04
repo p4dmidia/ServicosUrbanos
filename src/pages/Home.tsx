@@ -619,7 +619,7 @@ export default function Home() {
                       to="/cadastro"
                       className="bg-white/10 hover:bg-white/15 text-white px-6 py-3.5 rounded-xl font-bold text-sm transition-all border border-white/10"
                     >
-                      Contratar Seguro (R$ 5,00/mês)
+                      Contratar Seguro (R$ {minPrice.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}/mês)
                     </Link>
                   </div>
                 </motion.div>

@@ -24,10 +24,12 @@ import { Link } from 'react-router-dom';
 import AffiliateLayout from '../components/AffiliateLayout';
 import { useAuth } from '../contexts/AuthContext';
 import { businessRules } from '../lib/businessRules';
+import { useSubscriptionPlans } from '../lib/subscriptionPlans';
 import { toast } from 'react-hot-toast';
 
 export default function AffiliateClaims() {
   const { user, profile } = useAuth();
+  const { minPrice } = useSubscriptionPlans();
   const [loading, setLoading] = useState(true);
   const [seguradoData, setSeguradoData] = useState<any>(null);
   const [microfranqueadoData, setMicrofranqueadoData] = useState<any>(null);
@@ -255,7 +257,7 @@ export default function AffiliateClaims() {
               to="/afiliado/renovacoes"
               className="bg-amber-500 hover:bg-amber-400 text-midnight font-black px-6 py-3 rounded-xl text-xs uppercase tracking-widest shrink-0 transition-all shadow-md flex items-center gap-2"
             >
-              Contratar Seguro R$ 5,00/mês
+              Contratar Seguro R$ {minPrice.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}/mês
               <ArrowRight size={14} />
             </Link>
           </div>

@@ -32,6 +32,7 @@ import {
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { businessRules } from '../lib/businessRules';
+import { useSubscriptionPlans } from '../lib/subscriptionPlans';
 import { useAuth } from '../contexts/AuthContext';
 import { toast } from 'react-hot-toast';
 import { useNotifications } from '../contexts/NotificationContext';
@@ -46,6 +47,7 @@ interface AffiliateLayoutProps {
 }
 
 export default function AffiliateLayout({ children, title, customBalance, customBalanceLabel }: AffiliateLayoutProps) {
+  const { minPrice } = useSubscriptionPlans();
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
@@ -377,7 +379,7 @@ export default function AffiliateLayout({ children, title, customBalance, custom
                 <span>Seguro Vida Light</span>
               </div>
               <p className="text-[10px] text-slate-600 mb-2.5 leading-relaxed font-medium">
-                Sua franquia não inclui seguro. Contrate a partir de <strong>R$ 5,00/mês</strong> para cobertura de R$ 5.000 + Sorteios + Telemedicina.
+                Sua franquia não inclui seguro. Contrate a partir de <strong>R$ {minPrice.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}/mês</strong> para cobertura de R$ 5.000 + Sorteios + Telemedicina.
               </p>
               <Link 
                 to="/afiliado/renovacoes" 

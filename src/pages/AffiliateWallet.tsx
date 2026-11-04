@@ -446,7 +446,7 @@ export default function AffiliateWallet() {
     
     doc.setFontSize(9);
     doc.setFont('helvetica', 'normal');
-    doc.text(`Categoria: Rede MMN (${mmnLevelFilter === 'all' ? 'G0 ao G2' : 'Nível G' + mmnLevelFilter}) | Tipo: ${activeFilter === 'all' ? 'Todos' : activeFilter === 'mensal' ? 'Mensal' : 'Anual'}`, 14, 59);
+    doc.text(`Categoria: Rede MMN (${mmnLevelFilter === 'all' ? 'G0 ao G2' : 'Nível G' + mmnLevelFilter}) | Tipo: ${activeFilter === 'all' ? 'Todos' : activeFilter === 'mensal' ? 'Semanal' : 'Anual'}`, 14, 59);
     doc.text(`Total Valor dos Contratos: ${totalsSummary.all.totalContratos.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`, 14, 65);
     doc.text(`Percentual de Repasse: ${totalsSummary.all.percentualRepasse.toFixed(2)}%`, 14, 71);
     
@@ -1250,8 +1250,8 @@ export default function AffiliateWallet() {
                                 <span className={`size-2 rounded-full ${totalsSummary.saldoMensalAReceber > 0 ? 'bg-amber-400 animate-pulse' : 'bg-slate-400'}`} />
                                 <span>
                                   {totalsSummary.saldoMensalAReceber > 0 
-                                    ? '(=) SALDO MENSAL A RECEBER (NO DIA 10)'
-                                    : '(=) SALDO MENSAL A RECEBER NO DIA 10 (QUITADO VIA ADIANTAMENTO)'}
+                                    ? `(=) SALDO SEMANAL A RECEBER (TERÇA-FEIRA • ${nextTuesdayFormatted})`
+                                    : '(=) SALDO SEMANAL QUITADO (VIA ADIANTAMENTO / REPASSE)'}
                                 </span>
                               </div>
                             </td>
@@ -1275,7 +1275,7 @@ export default function AffiliateWallet() {
                               <td colSpan={7} className="px-6 py-3 rounded-l-2xl">
                                 <div className="flex items-center gap-2 text-indigo-300">
                                   <span className="size-2 rounded-full bg-indigo-400" />
-                                  <span>PROVISÃO / POUPANÇA ANUAL (2% - ACUMULANDO PARA 10/DEZ)</span>
+                                  <span>PROVISÃO / BÔNUS ANUAL (ACUMULANDO PARA 10/DEZ)</span>
                                 </div>
                               </td>
                               <td className="px-5 py-3 text-right font-mono text-sm text-indigo-300 font-black">

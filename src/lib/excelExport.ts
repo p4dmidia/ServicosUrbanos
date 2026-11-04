@@ -342,7 +342,7 @@ export async function exportBalancesExcel(records: any[], category: 'network' | 
     title: isReseller ? 'Repasses Pendentes — Revendedores Regionais' : 'Comissões Pendentes — Rede MMN',
     subtitle: 'Saldos apurados para quitação de comissões e repasses',
     summaryCards: [
-      { label: 'Mensal Líquido', value: totMonthly },
+      { label: isReseller ? 'Mensal Líquido' : 'Semanal Líquido', value: totMonthly },
       { label: 'Anual Acumulado', value: totAnnual },
       { label: 'Total Líquido', value: totTotal }
     ],
@@ -353,7 +353,7 @@ export async function exportBalancesExcel(records: any[], category: 'network' | 
       { header: 'E-mail', key: 'userEmail', width: 24 },
       { header: 'Chave PIX', key: 'pixKey', width: 22 },
       { header: 'Dados Bancários', key: 'bankDetails', width: 28 },
-      { header: 'Mensal Líquido', key: 'monthlyLiquid', width: 16, isCurrency: true },
+      { header: isReseller ? 'Mensal Líquido' : 'Semanal Líquido', key: 'monthlyLiquid', width: 16, isCurrency: true },
       { header: 'Anual (Provisão)', key: 'annualPending', width: 16, isCurrency: true },
       { header: 'Total Líquido', key: 'totalLiquid', width: 18, isCurrency: true },
       { header: 'Status Fiscal', key: 'statusLabel', width: 18, align: 'center' }

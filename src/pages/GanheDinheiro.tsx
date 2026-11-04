@@ -27,6 +27,7 @@ import {
 import { motion } from 'motion/react';
 import { Link } from 'react-router-dom';
 import Header from '../components/Header';
+import { supabase } from '../lib/supabase';
 import { businessRules, calculateTaxDeductions } from '../lib/businessRules';
 import { useSubscriptionPlans } from '../lib/subscriptionPlans';
 
@@ -71,7 +72,32 @@ export default function GanheDinheiro() {
   const [mmnLevels, setMmnLevels] = useState<any[]>([]);
 
   useEffect(() => {
-    businessRules.getMMNLevels().then(setMmnLevels).catch(() => {});
+    const fetchLevels = () => {
+      businessRules.getMMNLevels().then(levels => {
+        if (levels && levels.length > 0) {
+          setMmnLevels(levels);
+        }
+      }).catch(err => {
+        console.error('Erro ao carregar níveis MMN no GanheDinheiro:', err);
+      });
+    };
+
+    fetchLevels();
+
+    const channelName = `mmn-levels-sync-${Math.random().toString(36).slice(2, 9)}`;
+    const channel = supabase
+      .channel(channelName)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'mmn_levels' }, fetchLevels)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'mmn_config' }, fetchLevels)
+      .subscribe();
+
+    const onFocus = () => fetchLevels();
+    window.addEventListener('focus', onFocus);
+
+    return () => {
+      supabase.removeChannel(channel);
+      window.removeEventListener('focus', onFocus);
+    };
   }, []);
 
   const g0Config = mmnLevels.find(l => l.level === 1) || { cashbackSemanal: 8, cashbackAnual: 3 };
@@ -137,7 +163,11 @@ export default function GanheDinheiro() {
               Programa Oficial de Microfranqueados
             </span>
             <h1 className="text-4xl md:text-7xl font-extrabold text-white leading-tight max-w-5xl mx-auto">
-              Ganhe até <span className="bg-gradient-to-r from-accent via-emerald-400 to-teal-300 bg-clip-text text-transparent">33% de comissão</span> distribuindo o Seguro Vida Light.
+              Com o Seguro Vida Light será distribuído até{' '}
+              <span className="bg-gradient-to-r from-accent via-emerald-400 to-teal-300 bg-clip-text text-transparent">
+                {totalMmn}% de comissão
+              </span>{' '}
+              no total, divididos entre G0, G1 e G2!
             </h1>
             <p className="text-lg md:text-xl text-slate-400 max-w-3xl mx-auto font-medium">
               Como Microfranqueado você constrói uma carteira comercial rentável com <strong>{semG0Rate}% semanal + {anuG0Rate}% anual direto (G0)</strong> e <strong>{semG1Rate}% semanal + {anuG1Rate}% anual em rede (G1 e G2)</strong>. Repasses: <strong>{totalSemanal}% semanalmente na terça-feira</strong> e <strong>{totalAnual}% no bônus anual em 10 de dezembro</strong>.
@@ -155,7 +185,7 @@ export default function GanheDinheiro() {
                 to="/cadastro"
                 className="bg-white/10 hover:bg-white/15 text-white px-8 py-5 rounded-2xl text-base font-bold transition-all border border-white/15 flex items-center gap-2"
               >
-                Apenas Contratar Seguro (R$ 5/mês)
+                Apenas Contratar Seguro (R$ {minPrice.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}/mês)
               </Link>
             </div>
 
@@ -521,7 +551,7 @@ export default function GanheDinheiro() {
                   to="/cadastro"
                   className="bg-white/10 hover:bg-white/15 text-white px-8 py-4 rounded-2xl font-bold text-sm transition-all border border-white/10"
                 >
-                  Quero apenas o Seguro R$ 5,00/mês
+                  Quero apenas o Seguro R$ {minPrice.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}/mês
                 </Link>
               </div>
             </div>

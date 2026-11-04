@@ -146,45 +146,100 @@ export async function fetchSubscriptionPlans() {
   }
 }
 
-export function useSubscriptionPlans() {
-  const [plans, setPlans] = useState<FormattedSubscriptionPlan[]>(DEFAULT_SEGURO_PLANS);
-  const [allPlans, setAllPlans] = useState<FormattedSubscriptionPlan[]>(DEFAULT_SEGURO_PLANS);
-  const [microfranqueadoPlan, setMicrofranqueadoPlan] = useState<FormattedSubscriptionPlan | null>(null);
-  const [minPrice, setMinPrice] = useState<number>(6.00);
-  const [loading, setLoading] = useState(true);
+interface SubscriptionData {
+  allPlans: FormattedSubscriptionPlan[];
+  seguroPlans: FormattedSubscriptionPlan[];
+  microfranqueadoPlan: FormattedSubscriptionPlan | null;
+  minMonthlyPrice: number;
+}
 
-  const load = useCallback(async () => {
+const DEFAULT_SUBSCRIPTION_DATA: SubscriptionData = {
+  allPlans: DEFAULT_SEGURO_PLANS,
+  seguroPlans: DEFAULT_SEGURO_PLANS,
+  microfranqueadoPlan: null,
+  minMonthlyPrice: 6.00
+};
+
+let cachedSubscriptionData: SubscriptionData | null = null;
+const subscribers = new Set<(data: SubscriptionData) => void>();
+let globalChannel: any = null;
+let isFetching = false;
+
+async function syncSubscriptionPlans() {
+  if (isFetching) return;
+  isFetching = true;
+  try {
     const res = await fetchSubscriptionPlans();
-    setPlans(res.seguroPlans);
-    setAllPlans(res.allPlans);
-    setMicrofranqueadoPlan(res.microfranqueadoPlan);
-    setMinPrice(res.minMonthlyPrice);
-    setLoading(false);
-  }, []);
+    cachedSubscriptionData = res;
+    subscribers.forEach(cb => cb(res));
+  } catch (e) {
+    console.warn('Erro ao sincronizar planos de assinatura:', e);
+  } finally {
+    isFetching = false;
+  }
+}
+
+function initRealtimeChannel() {
+  if (globalChannel) return;
+  const channelName = `products-sub-sync-${Math.random().toString(36).slice(2, 9)}`;
+  globalChannel = supabase
+    .channel(channelName)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'products' }, () => {
+      syncSubscriptionPlans();
+    })
+    .subscribe();
+}
+
+function disposeRealtimeChannel() {
+  if (globalChannel) {
+    supabase.removeChannel(globalChannel);
+    globalChannel = null;
+  }
+}
+
+export function useSubscriptionPlans() {
+  const [data, setData] = useState<SubscriptionData>(() => cachedSubscriptionData || DEFAULT_SUBSCRIPTION_DATA);
+  const [loading, setLoading] = useState<boolean>(() => !cachedSubscriptionData);
 
   useEffect(() => {
-    load();
+    const handleUpdate = (updated: SubscriptionData) => {
+      if (updated) {
+        setData(updated);
+        setLoading(false);
+      }
+    };
 
-    const channel = supabase
-      .channel('products-subscription-sync')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'products' }, () => {
-        load();
-      })
-      .subscribe();
+    subscribers.add(handleUpdate);
 
-    const onFocus = () => load();
+    if (subscribers.size === 1) {
+      initRealtimeChannel();
+    }
+
+    syncSubscriptionPlans();
+
+    const onFocus = () => syncSubscriptionPlans();
     window.addEventListener('focus', onFocus);
     const onVisibility = () => {
-      if (document.visibilityState === 'visible') load();
+      if (document.visibilityState === 'visible') syncSubscriptionPlans();
     };
     window.addEventListener('visibilitychange', onVisibility);
 
     return () => {
-      supabase.removeChannel(channel);
+      subscribers.delete(handleUpdate);
+      if (subscribers.size === 0) {
+        disposeRealtimeChannel();
+      }
       window.removeEventListener('focus', onFocus);
       window.removeEventListener('visibilitychange', onVisibility);
     };
-  }, [load]);
+  }, []);
 
-  return { plans, allPlans, microfranqueadoPlan, minPrice, loading, refreshPlans: load };
+  return {
+    plans: data.seguroPlans,
+    allPlans: data.allPlans,
+    microfranqueadoPlan: data.microfranqueadoPlan,
+    minPrice: data.minMonthlyPrice,
+    loading,
+    refreshPlans: syncSubscriptionPlans
+  };
 }

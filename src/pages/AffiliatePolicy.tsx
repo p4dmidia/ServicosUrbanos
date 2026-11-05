@@ -24,7 +24,7 @@ import { useSubscriptionPlans } from '../lib/subscriptionPlans';
 
 export default function AffiliatePolicy() {
   const { user, profile } = useAuth();
-  const { minPrice } = useSubscriptionPlans();
+  const { minPrice, cycleSuffix } = useSubscriptionPlans();
   const [loading, setLoading] = useState(true);
   const [seguradoData, setSeguradoData] = useState<any>(null);
   const [microfranqueadoData, setMicrofranqueadoData] = useState<any>(null);
@@ -273,7 +273,7 @@ export default function AffiliatePolicy() {
                 className="bg-emerald-500 hover:bg-emerald-400 text-midnight font-black px-6 py-3.5 rounded-xl text-xs uppercase tracking-widest shadow-lg shadow-emerald-500/20 transition-all flex items-center gap-2"
               >
                 <Sparkles size={16} />
-                Contratar Seguro Vida Light (A partir de R$ {minPrice.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}/mês)
+                Contratar Seguro Vida Light (A partir de R$ {minPrice.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}{cycleSuffix})
                 <ArrowRight size={16} />
               </Link>
             </div>

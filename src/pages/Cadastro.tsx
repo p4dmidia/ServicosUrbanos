@@ -20,7 +20,6 @@ import {
     Info,
     AlertTriangle,
     X,
-    Target,
     Building2,
     Sparkles,
     Briefcase
@@ -41,7 +40,7 @@ const SIC_COMERCIO_NAME = 'Sic Comercio de Produtos Alimentícios e Serviços Lt
 
 export default function Cadastro() {
     const navigate = useNavigate();
-    const { minPrice } = useSubscriptionPlans();
+    const { minPrice, cycleSuffix } = useSubscriptionPlans();
     const [searchParams] = useSearchParams();
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -820,7 +819,7 @@ export default function Cadastro() {
                                                 Produto B • Seguro & Sorteios
                                             </span>
                                             <span className="text-xs font-black text-emerald-700 font-mono">
-                                                A partir de R$ {minPrice.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}/mês
+                                                A partir de R$ {minPrice.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}{cycleSuffix}
                                             </span>
                                         </div>
 
@@ -1265,17 +1264,17 @@ export default function Cadastro() {
                                 </div>
                             </div>
 
-                            {/* Seção 5: Código Ganha & Ganha e Liderança Regional (visível apenas quando há indicação ativa via link) */}
+                            {/* Seção 5: Código Ganha & Ganha (visível apenas quando há indicação ativa via link) */}
                             {isIndicatedViaLink && referrerName && (
                                 <div className="pt-4 space-y-6">
                                     <div className="flex items-center gap-3 mb-2">
                                         <div className="size-1.5 rounded-full bg-emerald-500" />
-                                        <h3 className="text-[11px] font-black uppercase tracking-widest text-midnight">05. Código Ganha & Ganha e Liderança Regional</h3>
+                                        <h3 className="text-[11px] font-black uppercase tracking-widest text-midnight">05. Código Ganha & Ganha</h3>
                                     </div>
 
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                        {/* Card 1: Patrocinador Confirmado */}
-                                        <div className="p-4 bg-emerald-500/5 border border-emerald-500/15 rounded-2xl flex items-center gap-3.5 shadow-sm">
+                                    <div>
+                                        {/* Card: Patrocinador Confirmado */}
+                                        <div className="p-4 bg-emerald-500/5 border border-emerald-500/15 rounded-2xl flex items-center gap-3.5 shadow-sm max-w-xl">
                                             <div className="size-10 rounded-xl bg-emerald-500 text-midnight flex items-center justify-center shadow-md shadow-emerald-500/20 shrink-0">
                                                 <User size={18} />
                                             </div>
@@ -1287,23 +1286,6 @@ export default function Cadastro() {
                                                 <p className="text-sm font-black text-midnight uppercase truncate">{referrerName}</p>
                                                 {referralCode && (
                                                     <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Cód Ganha & Ganha: {referralCode}</p>
-                                                )}
-                                            </div>
-                                        </div>
-
-                                        {/* Card 2: Polo Regional Confirmado */}
-                                        <div className="p-4 bg-purple-500/5 border border-purple-500/15 rounded-2xl flex items-center gap-3.5 shadow-sm">
-                                            <div className="size-10 rounded-xl bg-purple-500 text-white flex items-center justify-center shadow-md shadow-purple-500/20 shrink-0">
-                                                <Target size={18} />
-                                            </div>
-                                            <div className="min-w-0">
-                                                <div className="flex items-center gap-2 mb-0.5">
-                                                    <span className="text-[8px] font-black text-purple-600 uppercase tracking-widest leading-none">Polo Regional Responsável</span>
-                                                    <span className="text-[7px] bg-purple-500/10 text-purple-700 px-1.5 py-0.5 rounded font-black uppercase">Oficial</span>
-                                                </div>
-                                                <p className="text-sm font-black text-midnight uppercase truncate">{resellerName || 'Polo Regional Oficial'}</p>
-                                                {resellerCode && (
-                                                    <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Cód: {resellerCode}</p>
                                                 )}
                                             </div>
                                         </div>

@@ -28,11 +28,6 @@ export default function AffiliateNetLiquido() {
   const { user, profile } = useAuth();
   const [loading, setLoading] = useState(true);
 
-  // Redireciona revendedores regionais para o financeiro de revendedor
-  if (profile?.role === 'regional_reseller') {
-    return <Navigate to="/afiliado/financeiro-revendedor" replace />;
-  }
-
   // Competência selecionada (Mês e Ano)
   const [currentDate, setCurrentDate] = useState(() => {
     const now = new Date();

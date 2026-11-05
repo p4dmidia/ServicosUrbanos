@@ -97,6 +97,40 @@ export function formatProductToPlan(product: any): FormattedSubscriptionPlan {
   };
 }
 
+export function getPlanCycleSuffix(plan?: { plan_type?: string; duration_days?: number; name?: string } | null): string {
+  if (!plan) return '/mês';
+  const type = (plan.plan_type || '').toLowerCase();
+  const name = (plan.name || '').toLowerCase();
+  const days = Number(plan.duration_days) || 0;
+
+  if (type.includes('semestr') || name.includes('semestr')) return '/semestre';
+  if (type.includes('trimestr') || name.includes('trimestr')) return '/trimestre';
+  if (type.includes('anual') || type.includes('ano') || name.includes('anual') || name.includes('ano')) return '/ano';
+  if (type.includes('mensal') || type.includes('mes') || name.includes('mensal') || name.includes('mês')) return '/mês';
+
+  if (days >= 300) return '/ano';
+  if (days >= 150) return '/semestre';
+  if (days >= 60) return '/trimestre';
+  return '/mês';
+}
+
+export function getPlanCycleLabel(plan?: { plan_type?: string; duration_days?: number; name?: string } | null): string {
+  if (!plan) return 'mensal';
+  const type = (plan.plan_type || '').toLowerCase();
+  const name = (plan.name || '').toLowerCase();
+  const days = Number(plan.duration_days) || 0;
+
+  if (type.includes('semestr') || name.includes('semestr')) return 'semestral';
+  if (type.includes('trimestr') || name.includes('trimestr')) return 'trimestral';
+  if (type.includes('anual') || type.includes('ano') || name.includes('anual') || name.includes('ano')) return 'anual';
+  if (type.includes('mensal') || type.includes('mes') || name.includes('mensal') || name.includes('mês')) return 'mensal';
+
+  if (days >= 300) return 'anual';
+  if (days >= 150) return 'semestral';
+  if (days >= 60) return 'trimestral';
+  return 'mensal';
+}
+
 export async function fetchSubscriptionPlans() {
   try {
     const { data, error } = await supabase
@@ -107,11 +141,16 @@ export async function fetchSubscriptionPlans() {
 
     if (error) throw error;
     if (!data || data.length === 0) {
+      const minPlan = DEFAULT_SEGURO_PLANS[0];
       return {
         allPlans: DEFAULT_SEGURO_PLANS,
         seguroPlans: DEFAULT_SEGURO_PLANS,
         microfranqueadoPlan: null,
-        minMonthlyPrice: 6.00
+        minMonthlyPrice: minPlan.price,
+        minPrice: minPlan.price,
+        minPlan,
+        cycleSuffix: getPlanCycleSuffix(minPlan),
+        cycleLabel: getPlanCycleLabel(minPlan)
       };
     }
 
@@ -126,38 +165,58 @@ export async function fetchSubscriptionPlans() {
       p => p.plan_type === 'revendedor' || p.plan_type === 'microfranqueado'
     ) || null;
 
-    const mensalPlan = seguroPlans.find(p => p.plan_type === 'mensal');
-    const minMonthlyPrice = mensalPlan ? mensalPlan.price : (seguroPlans[0]?.price || 6.00);
+    const sortedSeguro = [...seguroPlans].sort((a, b) => a.price - b.price);
+    const minPlan = sortedSeguro[0] || DEFAULT_SEGURO_PLANS[0];
+    const minPrice = minPlan ? minPlan.price : 6.00;
+    const cycleSuffix = getPlanCycleSuffix(minPlan);
+    const cycleLabel = getPlanCycleLabel(minPlan);
 
     return {
       allPlans: allFormatted,
       seguroPlans: seguroPlans.length > 0 ? seguroPlans : DEFAULT_SEGURO_PLANS,
       microfranqueadoPlan,
-      minMonthlyPrice
+      minMonthlyPrice: minPrice,
+      minPrice,
+      minPlan,
+      cycleSuffix,
+      cycleLabel
     };
   } catch (err) {
     console.warn('Erro ao carregar planos do banco, usando padrões:', err);
+    const minPlan = DEFAULT_SEGURO_PLANS[0];
     return {
       allPlans: DEFAULT_SEGURO_PLANS,
       seguroPlans: DEFAULT_SEGURO_PLANS,
       microfranqueadoPlan: null,
-      minMonthlyPrice: 6.00
+      minMonthlyPrice: minPlan.price,
+      minPrice: minPlan.price,
+      minPlan,
+      cycleSuffix: getPlanCycleSuffix(minPlan),
+      cycleLabel: getPlanCycleLabel(minPlan)
     };
   }
 }
 
-interface SubscriptionData {
+export interface SubscriptionData {
   allPlans: FormattedSubscriptionPlan[];
   seguroPlans: FormattedSubscriptionPlan[];
   microfranqueadoPlan: FormattedSubscriptionPlan | null;
   minMonthlyPrice: number;
+  minPrice: number;
+  minPlan: FormattedSubscriptionPlan | null;
+  cycleSuffix: string;
+  cycleLabel: string;
 }
 
 const DEFAULT_SUBSCRIPTION_DATA: SubscriptionData = {
   allPlans: DEFAULT_SEGURO_PLANS,
   seguroPlans: DEFAULT_SEGURO_PLANS,
   microfranqueadoPlan: null,
-  minMonthlyPrice: 6.00
+  minMonthlyPrice: 6.00,
+  minPrice: 6.00,
+  minPlan: DEFAULT_SEGURO_PLANS[0],
+  cycleSuffix: '/mês',
+  cycleLabel: 'mensal'
 };
 
 let cachedSubscriptionData: SubscriptionData | null = null;
@@ -238,7 +297,10 @@ export function useSubscriptionPlans() {
     plans: data.seguroPlans,
     allPlans: data.allPlans,
     microfranqueadoPlan: data.microfranqueadoPlan,
-    minPrice: data.minMonthlyPrice,
+    minPrice: data.minPrice ?? data.minMonthlyPrice,
+    minPlan: data.minPlan,
+    cycleSuffix: data.cycleSuffix || '/mês',
+    cycleLabel: data.cycleLabel || 'mensal',
     loading,
     refreshPlans: syncSubscriptionPlans
   };

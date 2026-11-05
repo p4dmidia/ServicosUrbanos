@@ -26,7 +26,7 @@ import { useSubscriptionPlans } from '../lib/subscriptionPlans';
 import { businessRules } from '../lib/businessRules';
 
 export default function Ecossistema() {
-  const { minPrice } = useSubscriptionPlans();
+  const { minPrice, cycleSuffix } = useSubscriptionPlans();
   const [mmnLevels, setMmnLevels] = useState<any[]>([]);
 
   useEffect(() => {
@@ -236,7 +236,7 @@ export default function Ecossistema() {
                 </div>
                 <div className="pt-6 border-t border-white/5 mt-6 text-xs text-slate-500 font-bold uppercase flex justify-between">
                   <span>Microfranquia MMN</span>
-                  <span className="text-accent flex items-center gap-0.5">{totalSem}% Semanal / {totalAnu}% Anual <ArrowUpRight size={12} /></span>
+                  <span className="text-accent flex items-center gap-0.5">Semanal / Anual <ArrowUpRight size={12} /></span>
                 </div>
               </motion.div>
             </div>
@@ -273,7 +273,7 @@ export default function Ecossistema() {
                 <div className="text-xs font-black text-accent uppercase tracking-widest mb-4">Passo 02</div>
                 <h4 className="text-xl font-black text-white mb-4">Seguro Vida Light</h4>
                 <p className="text-slate-400 text-sm font-medium leading-relaxed">
-                  Os clientes contratam proteção real por apenas R$ {minPrice.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}/mês, contando com seguro MBM R$ 5.000, telemedicina 24h e sorteios federais.
+                  Os clientes contratam proteção real por apenas R$ {minPrice.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}{cycleSuffix}, contando com seguro MBM R$ 5.000, telemedicina 24h e sorteios federais.
                 </p>
               </div>
 

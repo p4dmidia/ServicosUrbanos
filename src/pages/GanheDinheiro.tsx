@@ -3,7 +3,6 @@ import {
   LayoutGrid,
   CheckCircle,
   Users,
-  Wallet,
   ShieldCheck,
   ChevronRight,
   TrendingUp,
@@ -32,7 +31,7 @@ import { businessRules, calculateTaxDeductions } from '../lib/businessRules';
 import { useSubscriptionPlans } from '../lib/subscriptionPlans';
 
 export default function GanheDinheiro() {
-  const { plans: seguroPlans, minPrice } = useSubscriptionPlans();
+  const { plans: seguroPlans, minPrice, cycleSuffix } = useSubscriptionPlans();
 
   const planOptions = useMemo(() => {
     if (seguroPlans && seguroPlans.length > 0) {
@@ -100,20 +99,20 @@ export default function GanheDinheiro() {
     };
   }, []);
 
-  const g0Config = mmnLevels.find(l => l.level === 1) || { cashbackSemanal: 8, cashbackAnual: 3 };
-  const g1Config = mmnLevels.find(l => l.level === 2) || { cashbackSemanal: 8, cashbackAnual: 3 };
-  const g2Config = mmnLevels.find(l => l.level === 3) || { cashbackSemanal: 8, cashbackAnual: 3 };
+  const g0Config = mmnLevels.find(l => l.level === 1) || { cashbackSemanal: 10, cashbackAnual: 2 };
+  const g1Config = mmnLevels.find(l => l.level === 2) || { cashbackSemanal: 10, cashbackAnual: 2 };
+  const g2Config = mmnLevels.find(l => l.level === 3) || { cashbackSemanal: 10, cashbackAnual: 2 };
 
-  const semG0Rate = Number(g0Config.cashbackSemanal || 8);
-  const anuG0Rate = Number(g0Config.cashbackAnual || 3);
+  const semG0Rate = Number(g0Config.cashbackSemanal ?? 10);
+  const anuG0Rate = Number(g0Config.cashbackAnual ?? 2);
   const totalG0Rate = semG0Rate + anuG0Rate;
 
-  const semG1Rate = Number(g1Config.cashbackSemanal || 8);
-  const anuG1Rate = Number(g1Config.cashbackAnual || 3);
+  const semG1Rate = Number(g1Config.cashbackSemanal ?? 10);
+  const anuG1Rate = Number(g1Config.cashbackAnual ?? 2);
   const totalG1Rate = semG1Rate + anuG1Rate;
 
-  const semG2Rate = Number(g2Config.cashbackSemanal || 8);
-  const anuG2Rate = Number(g2Config.cashbackAnual || 3);
+  const semG2Rate = Number(g2Config.cashbackSemanal ?? 10);
+  const anuG2Rate = Number(g2Config.cashbackAnual ?? 2);
   const totalG2Rate = semG2Rate + anuG2Rate;
 
   const totalSemanal = semG0Rate + semG1Rate + semG2Rate;
@@ -185,7 +184,7 @@ export default function GanheDinheiro() {
                 to="/cadastro"
                 className="bg-white/10 hover:bg-white/15 text-white px-8 py-5 rounded-2xl text-base font-bold transition-all border border-white/15 flex items-center gap-2"
               >
-                Apenas Contratar Seguro (R$ {minPrice.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}/mês)
+                Apenas Contratar Seguro (R$ {minPrice.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}{cycleSuffix})
               </Link>
             </div>
 
@@ -204,7 +203,7 @@ export default function GanheDinheiro() {
               <div className="w-20 h-1.5 bg-accent mx-auto rounded-full"></div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
               <div className="bg-slate-900/40 p-8 rounded-3xl border border-white/5 flex flex-col items-center text-center">
                 <div className="size-16 bg-accent/10 border border-accent/20 rounded-2xl flex items-center justify-center text-accent mb-6">
                   <Briefcase size={28} />
@@ -221,7 +220,7 @@ export default function GanheDinheiro() {
                 </div>
                 <h3 className="text-lg font-bold mb-2 text-white">2. Seguro Vida Light</h3>
                 <p className="text-slate-400 text-xs font-medium leading-relaxed">
-                  Ofereça o produto ao público final a partir de <strong>R$ {minPrice.toFixed(2).replace('.', ',')}/mês</strong> com seguro MBM R$ 5.000, telemedicina 24h e sorteios pela Loteria Federal.
+                  Ofereça o produto ao público final a partir de <strong>R$ {minPrice.toFixed(2).replace('.', ',')}{cycleSuffix}</strong> com seguro MBM R$ 5.000, telemedicina 24h e sorteios pela Loteria Federal.
                 </p>
               </div>
 
@@ -232,16 +231,6 @@ export default function GanheDinheiro() {
                 <h3 className="text-lg font-bold mb-2 text-white">3. G0 {semG0Rate}%+{anuG0Rate}% | G1 {semG1Rate}%+{anuG1Rate}% | G2 {semG2Rate}%+{anuG2Rate}%</h3>
                 <p className="text-slate-400 text-xs font-medium leading-relaxed">
                   Receba {semG0Rate}% semanal + {anuG0Rate}% anual nas vendas diretas (G0) e {semG1Rate}% semanal + {anuG1Rate}% anual na equipe (G1 e G2), totalizando {totalMmn}% de comissão oficial.
-                </p>
-              </div>
-
-              <div className="bg-slate-900/40 p-8 rounded-3xl border border-white/5 flex flex-col items-center text-center">
-                <div className="size-16 bg-accent/10 border border-accent/20 rounded-2xl flex items-center justify-center text-accent mb-6">
-                  <Wallet size={28} />
-                </div>
-                <h3 className="text-lg font-bold mb-2 text-white">4. {totalSemanal}% Semanal / {totalAnual}% Anual</h3>
-                <p className="text-slate-400 text-xs font-medium leading-relaxed">
-                  <strong>{totalSemanal}% semanal</strong> liberado toda terça-feira (vendas seg a sáb) e <strong>{totalAnual}% anual</strong> pago em 10 de dezembro (ciclo 01.11.25 a 30.11.26).
                 </p>
               </div>
             </div>
@@ -294,7 +283,7 @@ export default function GanheDinheiro() {
                   </div>
                 </div>
 
-                {/* Vendas Diretas G0 (21% semanal + 2% anual) */}
+                {/* Vendas Diretas G0 */}
                 <div className="space-y-3 pt-2">
                   <div className="flex justify-between items-center">
                     <div>
@@ -325,12 +314,12 @@ export default function GanheDinheiro() {
                   </div>
                 </div>
 
-                {/* Equipe Nível 1 - G1 (3% semanal + 2% anual) */}
+                {/* Equipe Nível 1 - G1 */}
                 <div className="space-y-3">
                   <div className="flex justify-between items-center">
                     <div>
                       <label className="text-xs font-black text-white uppercase tracking-wider block">Equipe Nível 1 (G1)</label>
-                      <span className="text-[10px] text-sky-400 font-bold">3% Semanal + 2% Anual (5% Total)</span>
+                      <span className="text-[10px] text-sky-400 font-bold">{semG1Rate}% Semanal + {anuG1Rate}% Anual ({totalG1Rate}% Total)</span>
                     </div>
                     <input
                       type="text"
@@ -356,12 +345,12 @@ export default function GanheDinheiro() {
                   </div>
                 </div>
 
-                {/* Equipe Nível 2 - G2 (3% semanal + 2% anual) */}
+                {/* Equipe Nível 2 - G2 */}
                 <div className="space-y-3">
                   <div className="flex justify-between items-center">
                     <div>
                       <label className="text-xs font-black text-white uppercase tracking-wider block">Equipe Nível 2 (G2)</label>
-                      <span className="text-[10px] text-purple-400 font-bold">3% Semanal + 2% Anual (5% Total)</span>
+                      <span className="text-[10px] text-purple-400 font-bold">{semG2Rate}% Semanal + {anuG2Rate}% Anual ({totalG2Rate}% Total)</span>
                     </div>
                     <input
                       type="text"
@@ -464,7 +453,7 @@ export default function GanheDinheiro() {
                     <div className="bg-slate-950/70 p-5 rounded-2xl border border-indigo-500/20 space-y-2">
                       <div className="flex items-center justify-between">
                         <span className="text-[10px] font-black uppercase text-indigo-400 tracking-wider">
-                          Bônus Anual (6%)
+                          Bônus Anual ({totalAnual}%)
                         </span>
                         <span className="text-[9px] bg-indigo-500/10 text-indigo-400 px-2 py-0.5 rounded font-bold uppercase">
                           Pago em 10/12
@@ -551,7 +540,7 @@ export default function GanheDinheiro() {
                   to="/cadastro"
                   className="bg-white/10 hover:bg-white/15 text-white px-8 py-4 rounded-2xl font-bold text-sm transition-all border border-white/10"
                 >
-                  Quero apenas o Seguro R$ {minPrice.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}/mês
+                  Quero apenas o Seguro R$ {minPrice.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}{cycleSuffix}
                 </Link>
               </div>
             </div>

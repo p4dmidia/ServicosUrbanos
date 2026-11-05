@@ -19,8 +19,6 @@ import {
   Package,
   RefreshCw,
   HeartPulse,
-  Target,
-  CircleDollarSign,
   Receipt,
   BarChart3,
   Gift,
@@ -47,7 +45,7 @@ interface AffiliateLayoutProps {
 }
 
 export default function AffiliateLayout({ children, title, customBalance, customBalanceLabel }: AffiliateLayoutProps) {
-  const { minPrice } = useSubscriptionPlans();
+  const { minPrice, cycleSuffix } = useSubscriptionPlans();
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
@@ -183,14 +181,8 @@ export default function AffiliateLayout({ children, title, customBalance, custom
     { path: '/afiliado/dashboard', icon: LayoutGrid, label: 'Dashboard MMN' },
     { path: '/afiliado/codigo-ganha-ganha', icon: Gift, label: 'Código Ganha & Ganha' },
     { path: '/afiliado/materiais', icon: FolderDown, label: 'Materiais de Divulgação' },
-    ...(profile?.role === 'regional_reseller' ? [
-      { path: '/afiliado/revendedor', icon: Target, label: 'Liderança Regional' }
-    ] : []),
     { path: '/afiliado/rede', icon: Users, label: 'Rede MMN (3 Níveis)' },
     { path: '/afiliado/financeiro', icon: Wallet, label: 'Comissões & Carteira' },
-    ...(profile?.role === 'regional_reseller' ? [
-      { path: '/afiliado/financeiro-revendedor', icon: CircleDollarSign, label: 'Financeiro Revendedor' }
-    ] : []),
     { path: '/afiliado/financeiro-resumo', icon: BarChart3, label: 'Extrato Consolidado' },
     { path: '/afiliado/nota-fiscal', icon: Receipt, label: isPJ ? 'Nota Fiscal (PJ)' : 'Recibo RPA (PF)' },
     { path: '/afiliado/pedidos', icon: ShoppingBag, label: 'Pedidos da Rede' },
@@ -379,7 +371,7 @@ export default function AffiliateLayout({ children, title, customBalance, custom
                 <span>Seguro Vida Light</span>
               </div>
               <p className="text-[10px] text-slate-600 mb-2.5 leading-relaxed font-medium">
-                Sua franquia não inclui seguro. Contrate a partir de <strong>R$ {minPrice.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}/mês</strong> para cobertura de R$ 5.000 + Sorteios + Telemedicina.
+                Sua franquia não inclui seguro. Contrate a partir de <strong>R$ {minPrice.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}{cycleSuffix}</strong> para cobertura de R$ 5.000 + Sorteios + Telemedicina.
               </p>
               <Link 
                 to="/afiliado/renovacoes" 

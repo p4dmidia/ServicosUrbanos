@@ -31,7 +31,7 @@ import { useSubscriptionPlans } from '../lib/subscriptionPlans';
 import { businessRules } from '../lib/businessRules';
 
 export default function Home() {
-  const { minPrice } = useSubscriptionPlans();
+  const { minPrice, cycleSuffix } = useSubscriptionPlans();
   const [mmnLevels, setMmnLevels] = useState<any[]>([]);
 
   useEffect(() => {
@@ -602,7 +602,7 @@ export default function Home() {
                         <CheckCircle2 size={14} />
                       </div>
                       <span className="text-slate-300 font-medium text-base">
-                        Os clientes do Seguro Vida Light contam com seguro MBM R$ 5.000, telemedicina e sorteios a partir de R$ {minPrice.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}/mês.
+                        Os clientes do Seguro Vida Light contam com seguro MBM R$ 5.000, telemedicina e sorteios a partir de R$ {minPrice.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}{cycleSuffix}.
                       </span>
                     </li>
                   </ul>
@@ -619,7 +619,7 @@ export default function Home() {
                       to="/cadastro"
                       className="bg-white/10 hover:bg-white/15 text-white px-6 py-3.5 rounded-xl font-bold text-sm transition-all border border-white/10"
                     >
-                      Contratar Seguro (R$ {minPrice.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}/mês)
+                      Contratar Seguro (R$ {minPrice.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}{cycleSuffix})
                     </Link>
                   </div>
                 </motion.div>

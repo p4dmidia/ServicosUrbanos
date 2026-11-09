@@ -25,7 +25,8 @@ import {
   FolderDown,
   AlertCircle,
   Briefcase,
-  ArrowRight
+  ArrowRight,
+  CalendarClock
 } from 'lucide-react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
@@ -185,7 +186,7 @@ export default function AffiliateLayout({ children, title, customBalance, custom
     { path: '/afiliado/financeiro', icon: Wallet, label: 'Comissões & Carteira' },
     { path: '/afiliado/financeiro-resumo', icon: BarChart3, label: 'Extrato Consolidado' },
     { path: '/afiliado/nota-fiscal', icon: Receipt, label: isPJ ? 'Nota Fiscal (PJ)' : 'Recibo RPA (PF)' },
-    { path: '/afiliado/pedidos', icon: ShoppingBag, label: 'Pedidos da Rede' },
+    { path: '/afiliado/pedidos', icon: CalendarClock, label: 'Minhas Renovações' },
     { path: '/afiliado/renovacoes', icon: RefreshCw, label: 'Licença da Franquia' },
     { path: '/afiliado/perfil', icon: User, label: 'Dados da Franquia' },
     { path: '/afiliado/termo-adesao', icon: FileText, label: 'Termo de Franquia' },

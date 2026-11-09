@@ -589,80 +589,107 @@ export default function AffiliateInvoice() {
                   Este valor será depositado diretamente na sua chave PIX <strong>toda terça-feira</strong> (comissões semanais). O documento oficial de RPA foi preenchido automaticamente pelo sistema.
                 </p>
 
-                {/* Discriminação */}
+                {/* Discriminação Oficial Conforme Diretriz Fiscal */}
                 <div className="space-y-3 bg-slate-50 p-5 rounded-2xl border border-slate-100 text-xs">
-                  <div className="flex justify-between items-center text-slate-600">
-                    <span className="font-semibold">Nível G0:</span>
+                  {/* Cashback Semanal Total */}
+                  <div className="flex justify-between items-center text-slate-700 font-bold">
+                    <span>Cashback Semanal da Rede (G0 ao G2):</span>
                     <span className="font-mono font-bold text-midnight">
-                      R$ {(rpaReceipt?.financial.rede_g0 || rpaReceipt?.financial.cashback_mensal || 0).toFixed(2).replace('.', ',')}
+                      R$ {(rpaReceipt?.financial.cashback_semanal_total ?? (
+                        (rpaReceipt?.financial.rede_g0 || 0) + (rpaReceipt?.financial.rede_g1 || 0) + (rpaReceipt?.financial.rede_g2 || 0) + (rpaReceipt?.financial.cashback_mensal || 0)
+                      )).toFixed(2).replace('.', ',')}
                     </span>
                   </div>
 
-                  <div className="flex justify-between items-center text-slate-600">
-                    <span className="font-semibold">Nível G1:</span>
-                    <span className="font-mono font-bold text-midnight">
-                      R$ {(rpaReceipt?.financial.rede_g1 || 0).toFixed(2).replace('.', ',')}
-                    </span>
-                  </div>
+                  {/* Terças-feiras se houver */}
+                  {rpaReceipt?.weeklyPayouts && rpaReceipt.weeklyPayouts.length > 0 && (
+                    <div className="space-y-1 pl-3 border-l-2 border-rose-300 py-1">
+                      {rpaReceipt.weeklyPayouts.map((t, idx) => (
+                        <div key={idx} className="flex justify-between items-center text-[11px] text-rose-600">
+                          <span>• Terça-feira ({t.date}):</span>
+                          <span className="font-mono font-bold">R$ {t.amount.toFixed(2).replace('.', ',')}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
 
-                  <div className="flex justify-between items-center text-slate-600">
-                    <span className="font-semibold">Nível G2:</span>
-                    <span className="font-mono font-bold text-midnight">
-                      R$ {(rpaReceipt?.financial.rede_g2 || 0).toFixed(2).replace('.', ',')}
-                    </span>
-                  </div>
-
-                  <div className="text-slate-600">
+                  {/* Cashback Anual */}
+                  <div className="text-slate-600 pt-1 border-t border-slate-200/60">
                     <div className="flex justify-between items-center">
                       <div className="flex items-center gap-1.5">
-                        <span className="font-semibold">Cashback / Provisão Anual (2%):</span>
+                        <span className="font-semibold">Cashback Anual Microfranqueado:</span>
                         <span className="text-[9px] bg-indigo-50 text-indigo-600 border border-indigo-200 px-1.5 py-0.5 rounded font-bold uppercase tracking-wider">
-                          {refMonthStr.endsWith('-12') ? 'Liberado no Total' : 'Pago em 10/Dez'}
+                          {rpaReceipt?.financial.is_annual_settlement ? 'Liberado em 10/Dez' : 'Acumulado ciclo 10/Dez'}
                         </span>
                       </div>
                       <span className="font-mono font-bold text-midnight">
                         R$ {(rpaReceipt?.financial.cashback_anual || 0).toFixed(2).replace('.', ',')}
                       </span>
                     </div>
-                    <p className="text-[10px] text-indigo-600/80 mt-1 pl-2 border-l-2 border-indigo-200 font-medium">
-                      Período de Apuração: <strong>{rpaReceipt?.financial.annual_cycle_period || '01/12 a 30/11'}</strong> (Acumulado)
+                    <p className="text-[10px] text-indigo-600/80 mt-0.5 pl-2 border-l border-indigo-200 font-medium">
+                      Ciclo: <strong>{rpaReceipt?.financial.annual_cycle_period || '01/12 a 30/11'}</strong>
                     </p>
                   </div>
 
+                  {/* Total Bruto */}
+                  <div className="flex justify-between items-center text-slate-800 font-bold pt-1 border-t border-slate-200/60">
+                    <span>{rpaReceipt?.financial.is_annual_settlement ? 'Total Bruto (Semanal + Anual):' : 'Total Bruto Pago Semanalmente:'}</span>
+                    <span className="font-mono text-midnight">
+                      R$ {(rpaReceipt?.financial.bruto_total || 0).toFixed(2).replace('.', ',')}
+                    </span>
+                  </div>
+
+                  {/* INSS 0% */}
+                  <div className="flex justify-between items-center text-slate-500">
+                    <span>INSS (0% - Intermediação):</span>
+                    <span className="font-mono font-bold text-slate-400">R$ 0,00 (0%)</span>
+                  </div>
+
+                  {/* Base de Cálculo IRPF */}
+                  <div className="flex justify-between items-center text-slate-600">
+                    <span>Base de Cálculo IRPF (Bruto - Dedução):</span>
+                    <span className="font-mono font-bold text-slate-700">
+                      R$ {(rpaReceipt?.financial.base_irpf ?? ((rpaReceipt?.financial.bruto_total || 0) - (rpaReceipt?.financial.deducao_legal || 0))).toFixed(2).replace('.', ',')}
+                    </span>
+                  </div>
+
+                  {/* IRRF */}
                   <div className="flex justify-between items-center text-slate-600">
                     <div className="flex items-center gap-1.5">
-                      <span>Desconto de IRPF na Fonte:</span>
+                      <span>IRRF Retido na Fonte:</span>
                       {(rpaReceipt?.financial?.deducao_irrf || 0) > 0 ? (
-                        <span className="text-[9px] bg-amber-50 text-amber-700 border border-amber-200 px-1.5 py-0.5 rounded font-bold uppercase tracking-wider">
-                          Tabela Progressiva
+                        <span className="text-[9px] bg-rose-50 text-rose-700 border border-rose-200 px-1.5 py-0.5 rounded font-bold uppercase tracking-wider">
+                          Tabela 2026
                         </span>
                       ) : (
                         <span className="text-[9px] bg-emerald-50 text-emerald-700 border border-emerald-200 px-1.5 py-0.5 rounded font-bold uppercase tracking-wider">
-                          Isento na Fonte
+                          Isento
                         </span>
                       )}
                     </div>
                     <span className={`font-mono font-bold ${(rpaReceipt?.financial?.deducao_irrf || 0) > 0 ? 'text-rose-600' : 'text-emerald-600'}`}>
                       {(rpaReceipt?.financial?.deducao_irrf || 0) > 0
                         ? `- R$ ${(rpaReceipt?.financial?.deducao_irrf || 0).toFixed(2).replace('.', ',')}`
-                        : 'R$ 0,00 (Isento na Fonte)'}
+                        : 'R$ 0,00'}
                     </span>
                   </div>
 
-                  <div className="flex justify-between items-center text-slate-600">
-                    <span>Desconto de INSS na Fonte (11%):</span>
-                    <span className={`font-mono font-bold ${(rpaReceipt?.financial?.deducao_inss || 0) > 0 ? 'text-indigo-600' : 'text-emerald-600'}`}>
-                      {(rpaReceipt?.financial?.deducao_inss || 0) > 0
-                        ? `- R$ ${(rpaReceipt?.financial?.deducao_inss || 0).toFixed(2).replace('.', ',')}`
-                        : 'R$ 0,00 (Isento / PJ)'}
-                    </span>
-                  </div>
-
+                  {/* Total Líquido */}
                   <div className="pt-2.5 border-t border-slate-200 flex justify-between items-center font-black text-midnight text-sm">
-                    <span>Total Líquido do Recibo:</span>
+                    <span>Líquido a Receber:</span>
                     <span className="font-mono text-emerald-600 text-base">
                       R$ {(rpaReceipt?.financial.liquido_total || 0).toFixed(2).replace('.', ',')}
                     </span>
+                  </div>
+
+                  {/* Nota explicativa de regime de caixa */}
+                  <div className="mt-2 p-2.5 bg-amber-50/70 border border-amber-200/80 rounded-xl text-[10px] text-amber-900 leading-tight space-y-1">
+                    <p className="font-bold uppercase tracking-tight text-amber-950">
+                      • O Imposto de Renda mensal é descontado sobre os valores pagos dentro do mês.
+                    </p>
+                    <p className="font-medium text-amber-800">
+                      • O Imposto de Renda sobre o Cashback Anual é descontado somado aos recebimentos de Novembro (pagamento em 10 de Dezembro).
+                    </p>
                   </div>
                 </div>
               </div>

@@ -55,6 +55,69 @@ export default function RPAReceiptModal({
     }
   }, [rpa?.reference_month]);
 
+  const {
+    lastDayStr,
+    weeklyTotal,
+    isAnnual,
+    baseIrpf,
+    irrfVal,
+    orderCount,
+    tuesdaysList,
+    mNum,
+    yNum
+  } = useMemo(() => {
+    const [yStr, mStr] = (rpa?.reference_month || '2026-11').split('-');
+    const y = parseInt(yStr, 10) || 2026;
+    const m = parseInt(mStr, 10) || 11;
+    const daysInMonth = new Date(y, m, 0).getDate();
+    const lastDay = `${String(daysInMonth).padStart(2, '0')}.${String(m).padStart(2, '0')}.${y}`;
+    const weekly = rpa?.financial?.cashback_semanal_total ?? (
+      rpa?.financial?.rede_mmn || (
+        (rpa?.financial?.rede_g0 || 0) + 
+        (rpa?.financial?.rede_g1 || 0) + 
+        (rpa?.financial?.rede_g2 || 0) + 
+        (rpa?.financial?.cashback_mensal || 0)
+      )
+    );
+    const annualSettlement = Boolean(rpa?.financial?.is_annual_settlement);
+    const base = rpa?.financial?.base_irpf ?? (
+      (rpa?.financial?.bruto_total || 0) - (rpa?.financial?.deducao_legal || 0)
+    );
+    const irrf = rpa?.financial?.deducao_irrf || 0;
+    const count = rpa?.ordersBreakdown?.length || rpa?.ordersList?.length || 0;
+
+    let tuesdays = rpa?.weeklyPayouts || [];
+    if (!tuesdays || tuesdays.length === 0) {
+      const generated: Array<{ date: string; amount: number; orderCount?: number }> = [];
+      for (let d = 1; d <= daysInMonth; d++) {
+        const cDate = new Date(y, m - 1, d);
+        if (cDate.getDay() === 2) {
+          generated.push({
+            date: `${String(d).padStart(2, '0')}.${String(m).padStart(2, '0')}.${y}`,
+            amount: 0,
+            orderCount: 0
+          });
+        }
+      }
+      if (generated.length > 0 && weekly > 0) {
+        generated[0].amount = weekly;
+      }
+      tuesdays = generated;
+    }
+
+    return {
+      lastDayStr: lastDay,
+      weeklyTotal: weekly,
+      isAnnual: annualSettlement,
+      baseIrpf: base,
+      irrfVal: irrf,
+      orderCount: count,
+      tuesdaysList: tuesdays,
+      mNum: m,
+      yNum: y
+    };
+  }, [rpa]);
+
   if (!isOpen || !rpa) return null;
 
   const isLockMode = mode === 'quitacao';
@@ -161,42 +224,127 @@ export default function RPAReceiptModal({
       doc.setFillColor(241, 245, 249);
       doc.rect(14, y, 182, 6, 'FD');
       doc.setFont('helvetica', 'bold');
-      doc.setFontSize(8);
-      const inssVal = rpa.financial.deducao_inss || 0;
-      const irrfVal = rpa.financial.deducao_irrf || 0;
+      doc.setFontSize(7.5);
+      doc.setTextColor(15, 23, 42);
+      doc.text(`TOTAL A RECEBER ATÉ ${lastDayStr} • DOC: ${rpa.rpa_number} • ${orderCount} PEDIDO(S)`, 16, y + 4.5);
+      doc.text(`R$ ${weeklyTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, 194, y + 4.5, { align: 'right' });
 
-      const items = [
-        { desc: '01. Nível G0 (Comissões Vendas Diretas)', val: rpa.financial.rede_g0 || rpa.financial.cashback_mensal || 0 },
-        { desc: '02. Nível G1 (Comissão Indicados Diretos)', val: rpa.financial.rede_g1 || 0 },
-        { desc: '03. Nível G2 (Comissão Indicados Indiretos)', val: rpa.financial.rede_g2 || 0 },
-        { desc: rpa.reference_month?.endsWith('-12') ? `04. Cashback Anual (Ciclo ${rpa.financial.annual_cycle_period || '01/12 a 30/11'} - Liberado)` : `04. Provisão Anual Acumulada (Ciclo ${rpa.financial.annual_cycle_period || '01/12 a 30/11'} - Pago em 10/Dez)`, val: rpa.financial.cashback_anual },
-        { desc: '05. TOTAL DOS RENDIMENTOS BRUTOS', val: rpa.financial.bruto_total, isBold: true },
-        { desc: '06. INSS na Fonte (0% - Recolhimento Individual pelo Afiliado)', val: 0.00 },
-        { desc: '07. (-) Retenção de IRPF na Fonte (Tabela Progressiva)', val: irrfVal > 0 ? -irrfVal : 0.00, isDeduction: irrfVal > 0 },
-        { desc: '08. VALOR LÍQUIDO EFETIVAMENTE PAGO / A PAGAR', val: rpa.financial.liquido_total, isHighlight: true }
+      y += 7.5;
+
+      const pdfItems: Array<{
+        desc: string;
+        subDesc?: string;
+        val: number;
+        valText?: string;
+        isBold?: boolean;
+        isHighlight?: boolean;
+        isRed?: boolean;
+        isDeduction?: boolean;
+      }> = [
+        {
+          desc: 'Cashback semanal da Rede de MMN (G0 AO G2) do Microfranqueado',
+          subDesc: `Comissões de rede ativas apuradas no período de: ${rpa.financial.weekly_period_label || `01.${String(mNum).padStart(2, '0')}.${yNum} a ${lastDayStr}`}`,
+          val: weeklyTotal,
+          isBold: true
+        },
+        ...tuesdaysList.map(t => ({
+          desc: 'Cashback semanal da Rede de MMN (G0 AO G2) do Microfranqueado',
+          subDesc: `Comissões de rede pagas em: ${t.date}`,
+          val: t.amount,
+          isRed: true
+        })),
+        {
+          desc: `Cashback anual MICROFRANQUEADO período ${rpa.financial.annual_cycle_period || `01.12.${yNum - 1} a 30.11.${yNum}`}`,
+          subDesc: 'Acumulado anual liberado no ciclo de 10 de Dezembro',
+          val: rpa.financial.cashback_anual || 0
+        },
+        {
+          desc: isAnnual ? 'TOTAL BRUTO PAGO SEMANALMENTE + CASH BACK ANUAL ACUMULADO' : 'TOTAL BRUTO PAGO SEMANALMENTE',
+          val: rpa.financial.bruto_total,
+          isBold: true
+        },
+        {
+          desc: 'INSS (0% - INTERMEDIAÇÃO DE NEGÓCIOS)',
+          subDesc: '0% de retenção na fonte. Afiliado autônomo recolhe individualmente',
+          val: 0.00,
+          valText: 'R$ 0,00 (0%)'
+        },
+        {
+          desc: 'BASE DE CÁLCULO DO IRPF (BRUTO - DEDUÇÃO)',
+          subDesc: 'Base de apuração para aplicação da tabela progressiva RFB',
+          val: baseIrpf
+        },
+        {
+          desc: 'IRRF - Retenção na Fonte conforme faixa de rendimentos da RFB (Tabela 2026 / Lei 15.270)',
+          subDesc: 'Retenção na fonte calculada pela tabela progressiva oficial',
+          val: irrfVal > 0 ? -irrfVal : 0.00,
+          valText: irrfVal > 0 ? `- R$ ${irrfVal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : 'R$ 0,00',
+          isDeduction: irrfVal > 0
+        },
+        {
+          desc: 'LÍQUIDO A RECEBER',
+          val: rpa.financial.liquido_total,
+          isHighlight: true
+        }
       ];
 
-      y += 6;
-      items.forEach(it => {
+      pdfItems.forEach(it => {
+        const itemHeight = it.subDesc ? 7 : 5.8;
         if (it.isHighlight) {
           doc.setFillColor(236, 253, 245); // emerald-50
-          doc.rect(14, y, 142, 7.5, 'FD');
-          doc.rect(156, y, 40, 7.5, 'FD');
-          doc.setFont('helvetica', 'bold');
-          doc.setFontSize(8);
-          doc.setTextColor(4, 120, 87);
+          doc.rect(14, y, 142, itemHeight, 'FD');
+          doc.rect(156, y, 40, itemHeight, 'FD');
+        } else if (it.isRed) {
+          doc.setFillColor(254, 242, 242); // rose-50
+          doc.rect(14, y, 142, itemHeight, 'FD');
+          doc.rect(156, y, 40, itemHeight, 'FD');
         } else {
-          doc.rect(14, y, 142, 6.5);
-          doc.rect(156, y, 40, 6.5);
-          doc.setFont('helvetica', it.isBold ? 'bold' : 'normal');
-          doc.setFontSize(7);
-          doc.setTextColor(15, 23, 42);
+          doc.setFillColor(255, 255, 255);
+          doc.rect(14, y, 142, itemHeight);
+          doc.rect(156, y, 40, itemHeight);
         }
 
-        doc.text(it.desc, 16, y + 4.5);
-        doc.text(`R$ ${it.val.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, 194, y + 4.5, { align: 'right' });
-        y += it.isHighlight ? 8 : 6.5;
+        if (it.subDesc) {
+          doc.setFont('helvetica', it.isBold ? 'bold' : 'normal');
+          doc.setFontSize(it.isHighlight ? 7 : 6.5);
+          if (it.isRed) doc.setTextColor(220, 38, 38);
+          else if (it.isHighlight) doc.setTextColor(4, 120, 87);
+          else doc.setTextColor(15, 23, 42);
+          doc.text(it.desc, 16, y + 2.8);
+
+          doc.setFont('helvetica', 'normal');
+          doc.setFontSize(5);
+          if (it.isRed) doc.setTextColor(239, 68, 68);
+          else doc.setTextColor(100, 116, 139);
+          doc.text(it.subDesc, 16, y + 5.8);
+        } else {
+          doc.setFont('helvetica', it.isBold || it.isHighlight ? 'bold' : 'normal');
+          doc.setFontSize(it.isHighlight ? 7.5 : 6.5);
+          if (it.isHighlight) doc.setTextColor(4, 120, 87);
+          else doc.setTextColor(15, 23, 42);
+          doc.text(it.desc, 16, y + 4);
+        }
+
+        doc.setFont('helvetica', it.isBold || it.isHighlight ? 'bold' : 'normal');
+        doc.setFontSize(it.isHighlight ? 7.5 : 6.5);
+        if (it.isHighlight) doc.setTextColor(4, 120, 87);
+        else if (it.isRed) doc.setTextColor(220, 38, 38);
+        else if (it.isDeduction) doc.setTextColor(185, 28, 28);
+        else doc.setTextColor(15, 23, 42);
+
+        const textVal = it.valText || `R$ ${it.val.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+        doc.text(textVal, 194, y + 4, { align: 'right' });
+        y += itemHeight;
       });
+
+      y += 3;
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(5.5);
+      doc.setTextColor(30, 41, 59);
+      doc.text('O IMPOSTO DE RENDA MENSAL SERÁ DESCONTADO SOBRE OS VALORES PAGOS DENTRO DO MÊS.', 105, y, { align: 'center' });
+      y += 3;
+      doc.text('O IMPOSTO DE RENDA SOBRE O CASHBACK ANUAL SERÁ DESCONTADO SOMADO JUNTO AOS RECEBIMENTOS SEMANAIS DE NOVEMBRO E AÍ SERÁ DESCONTADO.', 105, y, { align: 'center' });
+      y += 4;
 
       y += 3;
 
@@ -432,90 +580,150 @@ export default function RPAReceiptModal({
             </div>
           </div>
 
-          {/* Tabela de Discriminação dos Rendimentos */}
-          <div className="bg-white/5 rounded-2xl border border-white/5 overflow-hidden">
-            <div className="px-5 py-3.5 bg-white/5 border-b border-white/5 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <DollarSign size={15} className="text-indigo-400" />
-                <span className="font-black text-[10px] uppercase tracking-wider text-slate-300">
-                  Discriminação dos Rendimentos & Isenção de Retenção
+          {/* Tabela de Discriminação dos Rendimentos - Layout Oficial Émerson Antunes */}
+          <div className="bg-white/5 rounded-2xl border border-white/10 overflow-hidden shadow-xl">
+            {/* Box Header do Topo */}
+            <div className="px-5 py-3.5 bg-white/[0.04] border-b border-white/10 flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <span className="text-[11px] font-black uppercase tracking-wider text-white">
+                  TOTAL A RECEBER ATÉ {lastDayStr}
+                </span>
+                <span className="text-[10px] text-slate-400 ml-2 font-mono">
+                  Documento: <strong className="text-indigo-300">{rpa.rpa_number}</strong> • {orderCount} pedido(s) apurado(s)
                 </span>
               </div>
-              <span className="text-[10px] font-bold text-indigo-400">100% Repasse Bruto</span>
+              <span className="font-mono text-base font-black text-white">
+                R$ {weeklyTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+              </span>
             </div>
 
-            <div className="divide-y divide-white/5">
-              <div className="px-5 py-2.5 flex items-center justify-between">
-                <span className="text-slate-300 font-semibold">Nível G0</span>
-                <span className="font-mono font-bold text-white">R$ {(rpa.financial.rede_g0 || rpa.financial.cashback_mensal || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+            <div className="divide-y divide-white/5 text-xs">
+              {/* Linha 1: Total Cashback Semanal Apurado */}
+              <div className="px-5 py-3 flex items-center justify-between bg-white/[0.01]">
+                <div>
+                  <p className="text-white font-bold text-xs">
+                    Cashback semanal da Rede de MMN (G0 AO G2) do Microfranqueado
+                  </p>
+                  <p className="text-[10px] text-slate-400 font-medium">
+                    Comissões de rede ativas apuradas no período de: <strong className="text-slate-300">{rpa.financial.weekly_period_label || `01.${String(mNum).padStart(2, '0')}.${yNum} a ${lastDayStr}`}</strong>
+                  </p>
+                </div>
+                <span className="font-mono font-bold text-white text-sm">
+                  R$ {weeklyTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                </span>
               </div>
-              <div className="px-5 py-2.5 flex items-center justify-between">
-                <span className="text-slate-300 font-semibold">Nível G1</span>
-                <span className="font-mono font-bold text-white">R$ {(rpa.financial.rede_g1 || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
-              </div>
-              <div className="px-5 py-2.5 flex items-center justify-between">
-                <span className="text-slate-300 font-semibold">Nível G2</span>
-                <span className="font-mono font-bold text-white">R$ {(rpa.financial.rede_g2 || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
-              </div>
-              <div className="px-5 py-2.5">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-slate-300 font-semibold">Cashback / Provisão Anual (2%)</span>
-                    <span className="text-[8px] bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 px-1.5 py-0.5 rounded font-bold uppercase tracking-wider">
-                      {rpa.reference_month?.endsWith('-12') ? 'Liberado no Total' : 'Pago em 10/Dez'}
+
+              {/* Linhas das Terças-feiras do Mês (Destaque avermelhado como na planilha) */}
+              {tuesdaysList.map((t, idx) => (
+                <div key={idx} className="px-5 py-2 pl-8 flex items-center justify-between bg-rose-500/[0.04] border-l-4 border-rose-500/50">
+                  <div>
+                    <p className="text-rose-400 font-bold text-xs">
+                      Cashback semanal da Rede de MMN (G0 AO G2) do Microfranqueado
+                    </p>
+                    <p className="text-[10px] text-rose-300/70">
+                      Comissões de rede pagas em: <strong className="text-rose-200">{t.date}</strong>
+                    </p>
+                  </div>
+                  <span className="font-mono font-bold text-rose-300">
+                    R$ {t.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                  </span>
+                </div>
+              ))}
+
+              {/* Linha Cashback Anual */}
+              <div className="px-5 py-3 flex items-center justify-between bg-white/[0.01]">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <p className="text-white font-bold text-xs">
+                      Cashback anual MICROFRANQUEADO período {rpa.financial.annual_cycle_period || `01.12.${yNum - 1} a 30.11.${yNum}`}
+                    </p>
+                    <span className="text-[9px] bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 px-2 py-0.5 rounded font-bold uppercase tracking-wider">
+                      {isAnnual ? 'Liberado no Total' : 'Pago em 10/Dez'}
                     </span>
                   </div>
-                  <span className="font-mono font-bold text-white">R$ {rpa.financial.cashback_anual.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                  <p className="text-[10px] text-slate-400 font-medium">
+                    Acumulado anual liberado no ciclo de 10 de Dezembro
+                  </p>
                 </div>
-                <p className="text-[10px] text-indigo-300/80 mt-1 pl-2 border-l border-indigo-500/30 font-medium">
-                  Vigência do Ciclo: <strong>{rpa.financial.annual_cycle_period || '01/12 a 30/11'}</strong> (Acumulado)
-                </p>
+                <span className="font-mono font-bold text-white">
+                  R$ {(rpa.financial.cashback_anual || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                </span>
               </div>
 
               {/* Total Bruto */}
-              <div className="px-5 py-3 bg-white/[0.03] flex items-center justify-between font-bold">
-                <span className="text-slate-200">TOTAL DOS RENDIMENTOS BRUTOS</span>
-                <span className="font-mono text-sm text-white">R$ {rpa.financial.bruto_total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
-              </div>
-
-              {/* Deduções Fiscais: INSS 11% e IRPF Tabela Progressiva */}
-              <div className="px-5 py-2.5 flex items-center justify-between text-slate-400 bg-white/[0.02]">
-                <div className="flex items-center gap-2">
-                  <span>INSS na Fonte (0% - Recolhimento Individual pelo Afiliado)</span>
-                  <span className="text-[9px] bg-slate-500/10 text-slate-400 border border-slate-500/20 px-2 py-0.5 rounded-md font-bold">
-                    Por conta do afiliado
-                  </span>
-                </div>
-                <span className="font-mono font-bold text-slate-400">
-                  R$ 0,00
+              <div className="px-5 py-3.5 bg-white/[0.05] flex items-center justify-between font-black text-xs">
+                <span className="text-white uppercase tracking-wider">
+                  {isAnnual ? 'TOTAL BRUTO PAGO SEMANALMENTE + CASH BACK ANUAL ACUMULADO' : 'TOTAL BRUTO PAGO SEMANALMENTE'}
+                </span>
+                <span className="font-mono text-sm text-white">
+                  R$ {rpa.financial.bruto_total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                 </span>
               </div>
 
-              <div className="px-5 py-2.5 flex items-center justify-between text-slate-400 bg-white/[0.02]">
-                <div className="flex items-center gap-2">
-                  <span>(-) Retenção de IRPF na Fonte (Tabela Progressiva Mensal)</span>
-                  {(rpa.financial.deducao_irrf || 0) > 0 ? (
-                    <span className="text-[9px] bg-rose-500/10 text-rose-400 border border-rose-500/20 px-2 py-0.5 rounded-md font-bold">
-                      Progressivo
-                    </span>
-                  ) : (
-                    <span className="text-[9px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2 py-0.5 rounded-md font-bold">
-                      Faixa Isenta
-                    </span>
-                  )}
+              {/* INSS 0% */}
+              <div className="px-5 py-3 flex items-center justify-between text-slate-400 bg-white/[0.01]">
+                <div>
+                  <p className="font-bold text-slate-300 text-xs">
+                    INSS (0% - INTERMEDIAÇÃO DE NEGÓCIOS)
+                  </p>
+                  <p className="text-[10px] text-slate-400">
+                    0% de retenção na fonte. Afiliado autônomo recolhe individualmente
+                  </p>
                 </div>
-                <span className={`font-mono font-bold ${(rpa.financial.deducao_irrf || 0) > 0 ? 'text-rose-400' : 'text-emerald-400'}`}>
-                  {(rpa.financial.deducao_irrf || 0) > 0
-                    ? `- R$ ${(rpa.financial.deducao_irrf || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
-                    : 'R$ 0,00 (Isento na Fonte)'}
+                <div className="text-right">
+                  <span className="font-mono font-bold text-slate-400 block">R$ 0,00</span>
+                  <span className="text-[10px] text-slate-500 font-bold">0%</span>
+                </div>
+              </div>
+
+              {/* Base de Cálculo IRPF */}
+              <div className="px-5 py-3 flex items-center justify-between text-slate-300 bg-white/[0.02]">
+                <div>
+                  <p className="font-bold text-slate-200 text-xs">
+                    BASE DE CÁLCULO DO IRPF (BRUTO - DEDUÇÃO)
+                  </p>
+                  <p className="text-[10px] text-slate-400">
+                    Base de apuração para aplicação da tabela progressiva RFB
+                  </p>
+                </div>
+                <span className="font-mono font-bold text-slate-200">
+                  R$ {baseIrpf.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                </span>
+              </div>
+
+              {/* IRRF */}
+              <div className="px-5 py-3 flex items-center justify-between bg-white/[0.01]">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <p className="font-bold text-slate-200 text-xs">
+                      IRRF - Retenção na Fonte conforme faixa de rendimentos da RFB (Tabela 2026 / Lei 15.270)
+                    </p>
+                    {irrfVal > 0 ? (
+                      <span className="text-[9px] bg-rose-500/10 text-rose-400 border border-rose-500/20 px-2 py-0.5 rounded-md font-bold">
+                        Progressivo
+                      </span>
+                    ) : (
+                      <span className="text-[9px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2 py-0.5 rounded-md font-bold">
+                        Isento
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-[10px] text-slate-400">
+                    Retenção na fonte calculada pela tabela progressiva oficial
+                  </p>
+                </div>
+                <span className={`font-mono font-bold ${irrfVal > 0 ? 'text-rose-400' : 'text-emerald-400'}`}>
+                  {irrfVal > 0
+                    ? `- R$ ${irrfVal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
+                    : 'R$ 0,00'}
                 </span>
               </div>
 
               {/* Total Líquido a Receber */}
               <div className="px-5 py-4 bg-emerald-500/10 border-t border-emerald-500/20 flex items-center justify-between">
                 <div>
-                  <span className="text-[11px] font-black text-emerald-400 uppercase tracking-widest block">
-                    VALOR LÍQUIDO A RECEBER VIA PIX
+                  <span className="text-xs font-black text-emerald-400 uppercase tracking-widest block">
+                    LÍQUIDO A RECEBER
                   </span>
                   <span className="text-[10px] text-slate-400">
                     Depósito integral programado para {rpa.financial.payment_forecast_date}
@@ -526,6 +734,16 @@ export default function RPAReceiptModal({
                 </span>
               </div>
             </div>
+          </div>
+
+          {/* Notas Fiscais Explicativas em Destaque */}
+          <div className="bg-slate-900/80 border border-slate-700/60 p-4 rounded-2xl text-center space-y-2 shadow-inner">
+            <p className="text-[11px] font-black text-amber-300 tracking-wide uppercase leading-relaxed">
+              O IMPOSTO DE RENDA MENSAL SERÁ DESCONTADO SOBRE OS VALORES PAGOS DENTRO DO MÊS.
+            </p>
+            <p className="text-[11px] font-black text-indigo-300 tracking-wide uppercase leading-relaxed">
+              O IMPOSTO DE RENDA SOBRE O CASHBACK ANUAL SERÁ DESCONTADO SOMADO JUNTO AOS RECEBIMENTOS SEMANAIS DE NOVEMBRO E AÍ SERÁ DESCONTADO.
+            </p>
           </div>
 
           {/* Tabela de Detalhamento dos Pedidos Vinculados */}

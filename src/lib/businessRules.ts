@@ -191,12 +191,17 @@ export interface RPAReceipt {
     rede_g3?: number;
     vendas_revendedor: number;
     cashback_mensal: number;
+    cashback_semanal_total?: number;
     cashback_anual: number;
     annual_cycle_period?: string; // "01/12/2025 a 30/11/2026"
     annual_cycle_payout_date?: string; // "10/12/2026"
+    weekly_period_label?: string; // "02.11.2026 a 30.11.2026"
+    is_annual_settlement?: boolean; // true se Novembro (fechamento anual)
     bruto_total: number;
-    deducao_inss: number; // INSS 11% Autônomo PF
-    deducao_irrf: number; // IRRF Tabela Progressiva
+    deducao_legal?: number; // Ex: R$ 932,31
+    base_irpf?: number; // Ex: R$ 11.074,41
+    deducao_inss: number; // INSS na fonte (0% intermediação)
+    deducao_irrf: number; // IRRF Tabela Progressiva Oficial
     adiantamento?: number; // Valor de adiantamento descontado
     adiantamento_date?: string; // Data em que o adiantamento foi pago (DD/MM/AAAA)
     adiantamento_status?: 'none' | 'pending' | 'approved' | 'paid' | 'rejected';
@@ -204,6 +209,13 @@ export interface RPAReceipt {
     liquido_total: number;
     payment_forecast_date: string; // "10/MM/AAAA"
   };
+
+  // Discriminação das Terças-Feiras de Pagamento Semanal
+  weeklyPayouts?: Array<{
+    date: string; // "DD.MM.AAAA"
+    amount: number;
+    orderCount?: number;
+  }>;
 
   // Declaração Legal
   legal_disclaimer: string;
@@ -4969,9 +4981,90 @@ export const businessRules = {
 
       cashbackAnual = parseFloat(accumulatedAnnual.toFixed(2));
 
-      // Em meses regulares (Jan a Nov), o valor total do recibo contempla as comissões semanais apuradas no mês
-      // Em Dezembro, o valor total do recibo contempla também a liberação oficial do cashback anual acumulado do ciclo
-      const brutoTotal = isDecember 
+      // Mapeamento das terças-feiras de pagamento do mês
+      const daysInMonth = new Date(year, month, 0).getDate();
+      const weeklyPeriodLabel = `01.${String(month).padStart(2, '0')}.${year} a ${String(daysInMonth).padStart(2, '0')}.${String(month).padStart(2, '0')}.${year}`;
+      
+      const tuesdaysOfMonth: Array<{ date: string; amount: number; orderCount: number }> = [];
+      for (let d = 1; d <= daysInMonth; d++) {
+        const cDate = new Date(year, month - 1, d);
+        if (cDate.getDay() === 2) { // 2 = Terça-feira
+          const dd = String(d).padStart(2, '0');
+          const mm = String(month).padStart(2, '0');
+          tuesdaysOfMonth.push({
+            date: `${dd}.${mm}.${year}`,
+            amount: 0,
+            orderCount: 0
+          });
+        }
+      }
+
+      // Distribuição das comissões semanais pelas terças-feiras do mês
+      const getTuesdayPayoutDateStr = (dateInput: any): string => {
+        let d: Date;
+        if (!dateInput) return '';
+        if (typeof dateInput === 'string' && dateInput.includes('/')) {
+          const parts = dateInput.split('/');
+          if (parts.length === 3) d = new Date(parseInt(parts[2], 10), parseInt(parts[1], 10) - 1, parseInt(parts[0], 10));
+          else d = new Date(dateInput);
+        } else {
+          d = new Date(dateInput);
+        }
+        if (isNaN(d.getTime())) return '';
+        const day = d.getDay(); // 0 = Dom, 1 = Seg ... 6 = Sab
+        const daysToSunday = day === 0 ? 0 : 7 - day;
+        const sunday = new Date(d);
+        sunday.setDate(d.getDate() + daysToSunday);
+        const tuesday = new Date(sunday);
+        tuesday.setDate(sunday.getDate() + 2);
+        const dd = String(tuesday.getDate()).padStart(2, '0');
+        const mm = String(tuesday.getMonth() + 1).padStart(2, '0');
+        const yyyy = tuesday.getFullYear();
+        return `${dd}.${mm}.${yyyy}`;
+      };
+
+      if (ordersBreakdown.length > 0) {
+        ordersBreakdown.forEach((o: any) => {
+          const isAnual = (o.category || '').toUpperCase() === 'ANUAL' || (o.origin || '').toLowerCase().includes('anual');
+          if (isAnual) return;
+          const amt = Number(o.commissionAmount || o.bruto || 0);
+          if (amt <= 0) return;
+          const payoutTuesday = getTuesdayPayoutDateStr(o.date || o.created_at);
+          const tMatch = tuesdaysOfMonth.find(t => t.date === payoutTuesday);
+          if (tMatch) {
+            tMatch.amount = parseFloat((tMatch.amount + amt).toFixed(2));
+            tMatch.orderCount += 1;
+          }
+        });
+      } else {
+        commissions.forEach(c => {
+          const desc = (c.description || '').toLowerCase();
+          if (desc.includes('anual')) return;
+          const amt = Number(c.amount || 0);
+          if (amt <= 0) return;
+          const payoutTuesday = getTuesdayPayoutDateStr(c.created_at);
+          const tMatch = tuesdaysOfMonth.find(t => t.date === payoutTuesday);
+          if (tMatch) {
+            tMatch.amount = parseFloat((tMatch.amount + amt).toFixed(2));
+            tMatch.orderCount += 1;
+          }
+        });
+      }
+
+      // Garante consistência matemática exata entre a soma das terças e o total semanal apurado
+      const totalSemanalApurado = parseFloat((redeAmount + cashbackMensal).toFixed(2));
+      const sumTuesdays = parseFloat(tuesdaysOfMonth.reduce((acc, t) => acc + t.amount, 0).toFixed(2));
+      if (totalSemanalApurado > 0 && Math.abs(sumTuesdays - totalSemanalApurado) > 0.01 && tuesdaysOfMonth.length > 0) {
+        const diff = parseFloat((totalSemanalApurado - sumTuesdays).toFixed(2));
+        const activeTuesday = tuesdaysOfMonth.find(t => t.amount > 0) || tuesdaysOfMonth[0];
+        activeTuesday.amount = parseFloat((activeTuesday.amount + diff).toFixed(2));
+      }
+
+      // O ciclo anual oficial encerra em 30 de Novembro (com pagamento em 10 de Dezembro).
+      // Em Novembro (mês 11), o Cashback Anual Acumulado é somado aos recebimentos semanais para apuração e retenção do IRRF.
+      // Nos meses de Dezembro a Outubro, o IRPF incide EXCLUSIVAMENTE sobre os pagamentos semanais do mês.
+      const isAnnualSettlement = month === 11 || (month === 12 && targetRefMonth.endsWith('-12'));
+      const brutoTotal = isAnnualSettlement 
         ? parseFloat((redeAmount + cashbackMensal + cashbackAnual).toFixed(2))
         : parseFloat((redeAmount + cashbackMensal).toFixed(2));
 
@@ -5077,11 +5170,16 @@ export const businessRules = {
           rede_g3: parseFloat(redeG3.toFixed(2)),
           vendas_revendedor: 0.00,
           cashback_mensal: parseFloat(cashbackMensal.toFixed(2)),
+          cashback_semanal_total: totalSemanalApurado,
           cashback_anual: parseFloat(cashbackAnual.toFixed(2)),
           annual_cycle_period: cyclePeriodLabel,
           annual_cycle_payout_date: cyclePayoutDate,
+          weekly_period_label: weeklyPeriodLabel,
+          is_annual_settlement: isAnnualSettlement,
           bruto_total: parseFloat(brutoTotal.toFixed(2)),
-          deducao_inss: deducaoInss,
+          deducao_legal: tax.deducaoAplicada,
+          base_irpf: tax.irrfBase,
+          deducao_inss: 0,
           deducao_irrf: deducaoIrrf,
           adiantamento: adiantamentoTotal,
           adiantamento_date: adiantamentoDate || undefined,
@@ -5090,8 +5188,13 @@ export const businessRules = {
           liquido_total: liquidoTotal,
           payment_forecast_date: forecastDate
         },
+        weeklyPayouts: tuesdaysOfMonth.map(t => ({
+          date: t.date,
+          amount: t.amount,
+          orderCount: t.orderCount
+        })),
         legal_disclaimer:
-          'Recibo de Pagamento a Autônomo (RPA) emitido com retenção de INSS (11% Contribuinte Individual) e IRPF na Fonte (Tabela Progressiva Oficial / Lei 15.270), conforme regras fiscais vigentes.',
+          'Declaro para os devidos fins que os valores acima decorrem estritamente de intermediação e agenciamento (CNAE 74.90-1-04). Retenção de INSS na fonte 0% (recolhimento individual pelo autônomo). IRPF apurado e retido conforme Tabela Progressiva Oficial da Receita Federal (Tabela 2026 / Lei 15.270). O IRPF mensal incide sobre os valores pagos dentro do mês civil; o IRPF sobre o cashback anual é retido na competência de Novembro (fechamento 30/11).',
         ordersList: ordersList,
         ordersBreakdown: ordersBreakdown
       };

@@ -157,6 +157,10 @@ export default function App() {
               element={<ProtectedRoute allowedRoles={['affiliate', 'owner', 'manager', 'admin', 'regional_reseller']}><AffiliateWallet /></ProtectedRoute>} 
             />
             <Route 
+              path="/afiliado/carteira" 
+              element={<ProtectedRoute allowedRoles={['affiliate', 'owner', 'manager', 'admin', 'regional_reseller']}><AffiliateWallet /></ProtectedRoute>} 
+            />
+            <Route 
               path="/afiliado/financeiro-liquido" 
               element={<ProtectedRoute allowedRoles={['affiliate', 'owner', 'manager', 'admin', 'regional_reseller']}><AffiliateNetLiquido /></ProtectedRoute>} 
             />

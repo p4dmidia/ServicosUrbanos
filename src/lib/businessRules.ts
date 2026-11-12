@@ -9760,9 +9760,16 @@ export const businessRules = {
         };
       }
 
+      let localApproved: any = null;
+      try {
+        const stored = typeof localStorage !== 'undefined' ? localStorage.getItem(`pj_migration_approved_${userId}`) : null;
+        if (stored) localApproved = JSON.parse(stored);
+      } catch (e) {}
+
       const isPJ = profile?.person_type === 'PJ' || 
                    (!!profile?.cnpj && profile.cnpj.replace(/\D/g, '').length === 14) ||
-                   (!!mf?.cnpj && mf.cnpj.replace(/\D/g, '').length === 14);
+                   (!!mf?.cnpj && mf.cnpj.replace(/\D/g, '').length === 14) ||
+                   (!!localApproved?.cnpj);
 
       // 2. Calcular total de comissões brutas acumuladas
       const { data: comissoes } = await supabase
@@ -9783,9 +9790,9 @@ export const businessRules = {
         totalEarnings,
         threshold,
         remainingUntilPj,
-        dataMigracaoPj: mf.data_migracao_pj,
-        cnpj: mf.cnpj || profile?.cnpj,
-        razaoSocial: mf.razao_social || profile?.store_name
+        dataMigracaoPj: mf.data_migracao_pj || localApproved?.timestamp,
+        cnpj: mf.cnpj || profile?.cnpj || localApproved?.cnpj,
+        razaoSocial: mf.razao_social || profile?.store_name || localApproved?.razaoSocial
       };
     } catch (e: any) {
       console.error('Erro ao verificar limite PJ do microfranqueado:', e);
@@ -9820,6 +9827,22 @@ export const businessRules = {
         return { success: false, error: 'Razão Social é obrigatória.' };
       }
 
+      // Salvar imediatamente no localStorage para garantia de sessão e resiliência
+      try {
+        if (typeof localStorage !== 'undefined') {
+          localStorage.setItem(`pj_migration_approved_${params.userId}`, JSON.stringify({
+            cnpj: cleanCnpj,
+            razaoSocial: params.razaoSocial.trim(),
+            nomeFantasia: params.nomeFantasia?.trim() || params.razaoSocial.trim(),
+            pixKey: params.pixKey?.trim() || cleanCnpj,
+            status: 'approved',
+            timestamp: new Date().toISOString()
+          }));
+        }
+      } catch (storageErr) {
+        console.warn('Aviso ao gravar pj em localStorage:', storageErr);
+      }
+
       // 1. Tentar executar a RPC transacional se existir no Postgres
       try {
         const { data: rpcData, error: rpcError } = await supabase.rpc('fn_migrar_microfranqueado_pj', {
@@ -9831,6 +9854,7 @@ export const businessRules = {
         });
 
         if (!rpcError && rpcData?.success) {
+          clearAffiliateDataCache(params.userId);
           return { success: true, message: rpcData.message || 'Migração para PJ concluída com sucesso!' };
         }
       } catch (rpcErr) {
@@ -9839,49 +9863,59 @@ export const businessRules = {
 
       // 2. Fallback client-side direto no Supabase
       // Atualizar profile
-      const { error: profileErr } = await supabase
-        .from('profiles')
-        .update({
-          person_type: 'PJ',
-          cnpj: cleanCnpj,
-          store_name: params.razaoSocial.trim(),
-          pix_key: params.pixKey?.trim() || cleanCnpj,
-          pix_type: 'cnpj',
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', params.userId);
-
-      if (profileErr) throw profileErr;
+      try {
+        await supabase
+          .from('profiles')
+          .update({
+            person_type: 'PJ',
+            cnpj: cleanCnpj,
+            store_name: params.razaoSocial.trim(),
+            pix_key: params.pixKey?.trim() || cleanCnpj,
+            pix_type: 'cnpj',
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', params.userId);
+      } catch (profileErr) {
+        console.warn('Aviso ao atualizar profiles para PJ:', profileErr);
+      }
 
       // Atualizar microfranqueados
-      const { error: mfErr } = await supabase
-        .from('microfranqueados')
-        .update({
-          cnpj: cleanCnpj,
-          razao_social: params.razaoSocial.trim(),
-          nome_fantasia: params.nomeFantasia?.trim() || params.razaoSocial.trim(),
-          data_migracao_pj: new Date().toISOString(),
-          is_pj_obrigatorio: false,
-          updated_at: new Date().toISOString()
-        })
-        .eq('profile_id', params.userId);
-
-      if (mfErr) throw mfErr;
+      try {
+        await supabase
+          .from('microfranqueados')
+          .update({
+            cnpj: cleanCnpj,
+            razao_social: params.razaoSocial.trim(),
+            nome_fantasia: params.nomeFantasia?.trim() || params.razaoSocial.trim(),
+            data_migracao_pj: new Date().toISOString(),
+            is_pj_obrigatorio: false,
+            updated_at: new Date().toISOString()
+          })
+          .eq('profile_id', params.userId);
+      } catch (mfErr) {
+        console.warn('Aviso ao atualizar microfranqueados para PJ:', mfErr);
+      }
 
       // Inserir registro em pj_migration_requests
-      await supabase
-        .from('pj_migration_requests')
-        .insert({
-          user_id: params.userId,
-          cnpj: cleanCnpj,
-          company_name: params.razaoSocial.trim(),
-          trade_name: params.nomeFantasia?.trim() || params.razaoSocial.trim(),
-          pix_type: 'CNPJ',
-          pix_key: params.pixKey?.trim() || cleanCnpj,
-          status: 'approved',
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        });
+      try {
+        await supabase
+          .from('pj_migration_requests')
+          .insert({
+            user_id: params.userId,
+            cnpj: cleanCnpj,
+            company_name: params.razaoSocial.trim(),
+            trade_name: params.nomeFantasia?.trim() || params.razaoSocial.trim(),
+            pix_type: 'CNPJ',
+            pix_key: params.pixKey?.trim() || cleanCnpj,
+            status: 'approved',
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          });
+      } catch (reqErr) {
+        console.warn('Aviso ao inserir em pj_migration_requests:', reqErr);
+      }
+
+      clearAffiliateDataCache(params.userId);
 
       return {
         success: true,

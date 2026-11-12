@@ -22,7 +22,7 @@ import {
   X,
   CheckCircle
 } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import AffiliateLayout from '../components/AffiliateLayout';
 import { businessRules, calculateTaxDeductions } from '../lib/businessRules';
@@ -32,7 +32,8 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
 export default function AffiliateWallet() {
-  const { user, profile } = useAuth();
+  const { user, profile, refreshProfile } = useAuth();
+  const location = useLocation();
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [stats, setStats] = useState<any>(null);
@@ -56,6 +57,14 @@ export default function AffiliateWallet() {
   const [pjNomeFantasia, setPjNomeFantasia] = useState('');
   const [pjPixKey, setPjPixKey] = useState('');
   const [migratingPj, setMigratingPj] = useState(false);
+
+  // Detecta se a tela foi aberta para cadastrar CNPJ / Migrar PJ via link ou query param
+  useEffect(() => {
+    const searchParams = new URLSearchParams(location.search);
+    if (searchParams.get('action') === 'pj' || searchParams.get('modal') === 'pj' || location.hash === '#pj') {
+      setIsPjModalOpen(true);
+    }
+  }, [location.search, location.hash]);
 
   const formatCnpj = (val: string) => {
     const num = val.replace(/\D/g, '').slice(0, 14);
@@ -99,8 +108,10 @@ export default function AffiliateWallet() {
     if (profile?.person_type === 'PJ') return true;
     if (profile?.cnpj && profile.cnpj.replace(/\D/g, '').length === 14) return true;
     if (profile?.description && profile.description.includes('[PJ]')) return true;
+    if (pjRequirement?.isPJ) return true;
+    if (microfranqueadoData?.microfranqueado?.cnpj && microfranqueadoData.microfranqueado.cnpj.replace(/\D/g, '').length === 14) return true;
     return false;
-  }, [profile]);
+  }, [profile, pjRequirement, microfranqueadoData]);
 
   // Cálculo individual de impostos (INSS, IRRF e Líquido - Regra Oficial 2026)
   const calculateItemTaxes = (brutoAmount: number) => {
@@ -577,7 +588,8 @@ export default function AffiliateWallet() {
       if (res?.success) {
         toast.success(res.message || 'Cadastro PJ regularizado com sucesso!');
         setIsPjModalOpen(false);
-        loadWalletData();
+        await refreshProfile();
+        await loadWalletData();
       } else {
         toast.error(res?.error || 'Erro ao realizar migração.');
       }
@@ -727,6 +739,39 @@ export default function AffiliateWallet() {
             >
               <Building2 size={14} /> Já possui MEI/CNPJ? Migrar agora
             </button>
+          </div>
+        )}
+
+        {/* BANNER: CONTA PJ ATIVA */}
+        {isUserPJ && (
+          <div className="bg-gradient-to-r from-purple-900/10 via-indigo-900/10 to-slate-900/5 border border-purple-500/20 p-6 md:p-8 rounded-[2.5rem] flex flex-col md:flex-row items-start md:items-center justify-between gap-6 shadow-sm">
+            <div className="flex items-center gap-5">
+              <div className="size-14 rounded-2xl bg-purple-600 text-white flex items-center justify-center font-black shadow-lg shadow-purple-600/30 shrink-0">
+                <Building2 size={28} />
+              </div>
+              <div>
+                <div className="flex items-center gap-3">
+                  <h3 className="text-xl font-black text-midnight tracking-tight uppercase italic">Conta Pessoa Jurídica (PJ) Ativa</h3>
+                  <span className="px-3 py-1 bg-purple-600 text-white rounded-full text-[9px] font-black uppercase tracking-widest shadow-md shadow-purple-600/20">PJ Isento</span>
+                  <span className="px-3 py-1 bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-full text-[9px] font-black uppercase tracking-widest">Repasses 100% Brutos</span>
+                </div>
+                <p className="text-xs text-slate-700 font-bold mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1">
+                  <span>CNPJ: <strong className="text-midnight font-black font-mono">{formatCnpj(pjRequirement?.cnpj || profile?.cnpj || microfranqueadoData?.microfranqueado?.cnpj || '')}</strong></span>
+                  {(pjRequirement?.razaoSocial || profile?.store_name || microfranqueadoData?.microfranqueado?.razao_social) && (
+                    <span>• Razão Social: <strong className="text-midnight font-black">{pjRequirement?.razaoSocial || profile?.store_name || microfranqueadoData?.microfranqueado?.razao_social}</strong></span>
+                  )}
+                </p>
+                <p className="text-[11px] text-purple-700 font-semibold mt-1">
+                  ✓ Sem retenções de INSS ou IRPF na fonte. Seus repasses semanais e anuais são pagos integralmente mediante emissão mensal de NFS-e.
+                </p>
+              </div>
+            </div>
+            <Link
+              to="/afiliado/perfil"
+              className="shrink-0 px-5 py-3 bg-white border border-purple-200 hover:bg-purple-50 text-purple-700 rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center gap-2 cursor-pointer shadow-xs"
+            >
+              <FileText size={16} /> Ver Dados da Franquia
+            </Link>
           </div>
         )}
 

@@ -648,7 +648,7 @@ export default function AffiliateDashboard() {
               </div>
             </div>
             <Link
-              to="/afiliado/carteira"
+              to="/afiliado/carteira?action=pj"
               className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-black px-6 py-3.5 rounded-xl text-xs uppercase tracking-widest transition-all shadow-md shadow-amber-500/20 whitespace-nowrap active:scale-95 shrink-0 flex items-center gap-2"
             >
               <Building2 size={16} /> Cadastrar CNPJ na Carteira

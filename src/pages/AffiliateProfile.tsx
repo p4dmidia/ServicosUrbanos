@@ -36,11 +36,19 @@ export default function AffiliateProfile() {
   const [uploading, setUploading] = useState(false);
   const [success, setSuccess] = useState(false);
 
-  // Estados do Fluxo de Migração PJ
+  // Estados do Fluxo de Migração PJ e Dados da Empresa
   const [isPjModalOpen, setIsPjModalOpen] = useState(false);
   const [pjRequest, setPjRequest] = useState<any>(null);
   const [loadingPjRequest, setLoadingPjRequest] = useState(false);
   const [submittingPj, setSubmittingPj] = useState(false);
+  const [companyData, setCompanyData] = useState({
+    cnpj: '',
+    razaoSocial: '',
+    nomeFantasia: '',
+    pixKey: '',
+    pixType: 'CNPJ',
+    status: ''
+  });
   const [pjForm, setPjForm] = useState({
     cnpj: '',
     companyName: '',
@@ -51,7 +59,58 @@ export default function AffiliateProfile() {
     notes: ''
   });
 
-  const isPJ = Boolean(profile?.person_type === 'PJ' || (profile?.cnpj && profile.cnpj.replace(/\D/g, '').length === 14));
+  const formatCnpj = (val: string) => {
+    if (!val) return '';
+    const num = val.replace(/\D/g, '').slice(0, 14);
+    if (num.length <= 2) return num;
+    if (num.length <= 5) return `${num.slice(0, 2)}.${num.slice(2)}`;
+    if (num.length <= 8) return `${num.slice(0, 2)}.${num.slice(2, 5)}.${num.slice(5)}`;
+    if (num.length <= 12) return `${num.slice(0, 2)}.${num.slice(2, 5)}.${num.slice(5, 8)}/${num.slice(8)}`;
+    return `${num.slice(0, 2)}.${num.slice(2, 5)}.${num.slice(5, 8)}/${num.slice(8, 12)}-${num.slice(12)}`;
+  };
+
+  const isPJ = Boolean(
+    profile?.person_type === 'PJ' || 
+    (profile?.cnpj && profile.cnpj.replace(/\D/g, '').length === 14) ||
+    (companyData.cnpj && companyData.cnpj.replace(/\D/g, '').length === 14) ||
+    pjRequest?.status === 'approved'
+  );
+
+  const loadCompanyData = async () => {
+    if (!user) return;
+    try {
+      const [reqPj, mfRes] = await Promise.all([
+        businessRules.checkMicrofranqueadoPjRequirement(user.id),
+        businessRules.getMicrofranqueadoData(user.id)
+      ]);
+      const mf = mfRes?.microfranqueado;
+
+      let localApproved: any = null;
+      try {
+        const stored = typeof localStorage !== 'undefined' ? localStorage.getItem(`pj_migration_approved_${user.id}`) : null;
+        if (stored) localApproved = JSON.parse(stored);
+      } catch (e) {}
+
+      const rawCnpj = profile?.cnpj || mf?.cnpj || reqPj?.cnpj || localApproved?.cnpj || pjRequest?.cnpj || '';
+      const cleanCnpj = rawCnpj.replace(/\D/g, '');
+      const razao = profile?.store_name || mf?.razao_social || reqPj?.razaoSocial || localApproved?.razaoSocial || pjRequest?.company_name || '';
+      const fantasia = mf?.nome_fantasia || localApproved?.nomeFantasia || pjRequest?.trade_name || razao;
+      const pix = profile?.pix_key || localApproved?.pixKey || pjRequest?.pix_key || cleanCnpj;
+
+      if (cleanCnpj || reqPj?.isPJ || profile?.person_type === 'PJ' || pjRequest?.status === 'approved' || localApproved) {
+        setCompanyData({
+          cnpj: cleanCnpj,
+          razaoSocial: razao,
+          nomeFantasia: fantasia,
+          pixKey: pix,
+          pixType: 'CNPJ',
+          status: 'approved'
+        });
+      }
+    } catch (e) {
+      console.error('Error loading company data:', e);
+    }
+  };
 
   const loadPjRequest = async () => {
     if (!user) return;
@@ -68,9 +127,17 @@ export default function AffiliateProfile() {
 
   useEffect(() => {
     if (user) {
+      refreshProfile();
       loadPjRequest();
+      loadCompanyData();
     }
   }, [user]);
+
+  useEffect(() => {
+    if (profile || pjRequest) {
+      loadCompanyData();
+    }
+  }, [profile, pjRequest]);
 
   const handleCnpjChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     let v = e.target.value.replace(/\D/g, '');
@@ -83,6 +150,15 @@ export default function AffiliateProfile() {
       ...prev,
       cnpj: v,
       pixKey: prev.pixType === 'CNPJ' ? v : prev.pixKey
+    }));
+  };
+
+  const handleCompanyCnpjChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const v = e.target.value.replace(/\D/g, '').slice(0, 14);
+    setCompanyData(prev => ({
+      ...prev,
+      cnpj: v,
+      pixKey: prev.pixKey === prev.cnpj ? v : prev.pixKey
     }));
   };
 
@@ -384,9 +460,47 @@ export default function AffiliateProfile() {
         pix_type: formData.pix_type,
         pix_key: formData.pix_key.trim(),
         bank_branch: formData.bank_branch.trim(),
-        bank_account: formData.bank_account.trim()
+        bank_account: formData.bank_account.trim(),
+        ...(isPJ ? {
+          person_type: 'PJ',
+          cnpj: companyData.cnpj.replace(/\D/g, '') || undefined,
+          store_name: companyData.razaoSocial.trim() || undefined
+        } : {})
       });
+
+      // Se for PJ, sincronizar dados da empresa na tabela microfranqueados e localStorage
+      if (isPJ && companyData.cnpj) {
+        const cleanCnpj = companyData.cnpj.replace(/\D/g, '');
+        try {
+          await supabase
+            .from('microfranqueados')
+            .update({
+              cnpj: cleanCnpj,
+              razao_social: companyData.razaoSocial.trim(),
+              nome_fantasia: companyData.nomeFantasia.trim() || companyData.razaoSocial.trim(),
+              updated_at: new Date().toISOString()
+            })
+            .eq('profile_id', user.id);
+        } catch (mfErr) {
+          console.warn('Aviso ao sincronizar microfranqueados:', mfErr);
+        }
+
+        try {
+          if (typeof localStorage !== 'undefined') {
+            localStorage.setItem(`pj_migration_approved_${user.id}`, JSON.stringify({
+              cnpj: cleanCnpj,
+              razaoSocial: companyData.razaoSocial.trim(),
+              nomeFantasia: companyData.nomeFantasia.trim() || companyData.razaoSocial.trim(),
+              pixKey: companyData.pixKey.trim() || cleanCnpj,
+              status: 'approved',
+              timestamp: new Date().toISOString()
+            }));
+          }
+        } catch (storageErr) {}
+      }
+
       await refreshProfile();
+      await loadCompanyData();
       setSuccess(true);
       
       if (missing.length > 0) {
@@ -519,7 +633,7 @@ export default function AffiliateProfile() {
 
         {/* Card / Banner de Migração para Pessoa Jurídica (PJ) */}
         {isPJ ? (
-          <div className="bg-gradient-to-r from-purple-900/10 via-indigo-900/10 to-slate-900/5 border border-purple-500/20 p-6 md:p-8 rounded-[2.5rem] flex flex-col md:flex-row items-start md:items-center justify-between gap-6 shadow-sm">
+          <div className="bg-gradient-to-r from-purple-900/10 via-indigo-900/10 to-slate-900/5 border-2 border-purple-500/30 p-6 md:p-8 rounded-[2.5rem] flex flex-col md:flex-row items-start md:items-center justify-between gap-6 shadow-sm">
             <div className="flex items-center gap-5">
               <div className="size-14 rounded-2xl bg-purple-600 text-white flex items-center justify-center font-black shadow-lg shadow-purple-600/30 shrink-0">
                 <Building2 size={28} />
@@ -528,12 +642,21 @@ export default function AffiliateProfile() {
                 <div className="flex items-center gap-3">
                   <h3 className="text-xl font-black text-midnight tracking-tight uppercase italic">Perfil Pessoa Jurídica (PJ) Ativo</h3>
                   <span className="px-3 py-1 bg-purple-600 text-white rounded-full text-[9px] font-black uppercase tracking-widest shadow-md shadow-purple-600/20">PJ Isento</span>
+                  <span className="px-3 py-1 bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-full text-[9px] font-black uppercase tracking-widest flex items-center gap-1">
+                    <CheckCircle2 size={12} /> Regularizado
+                  </span>
                 </div>
-                <p className="text-xs text-slate-600 font-bold mt-1">
-                  CNPJ: <span className="text-midnight font-black">{profile?.cnpj}</span> {profile?.store_name && <>• Razão Social: <span className="text-midnight font-black">{profile?.store_name}</span></>}
+                <p className="text-xs text-slate-700 font-bold mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1">
+                  <span>CNPJ: <strong className="text-midnight font-black font-mono">{formatCnpj(companyData.cnpj || profile?.cnpj || '')}</strong></span>
+                  {(companyData.razaoSocial || profile?.store_name) && (
+                    <span>• Razão Social: <strong className="text-midnight font-black">{companyData.razaoSocial || profile?.store_name}</strong></span>
+                  )}
+                  {companyData.nomeFantasia && companyData.nomeFantasia !== (companyData.razaoSocial || profile?.store_name) && (
+                    <span>• Nome Fantasia: <strong className="text-slate-600 font-bold">{companyData.nomeFantasia}</strong></span>
+                  )}
                 </p>
                 <p className="text-[11px] text-purple-700 font-semibold mt-1">
-                  ✓ Repasses integrais de 100% bruto sem retenção na fonte de INSS ou IRRF, mediante emissão mensal de Nota Fiscal.
+                  ✓ Repasses integrais de 100% bruto sem retenção na fonte de INSS ou IRRF, mediante emissão mensal de Nota Fiscal de Prestação de Serviços (NFS-e).
                 </p>
               </div>
             </div>
@@ -969,6 +1092,141 @@ export default function AffiliateProfile() {
               </div>
             </div>
           </div>
+
+          {/* 4. SEÇÃO: DADOS DA EMPRESA & FATURAMENTO (PJ / MEI) */}
+          {isPJ ? (
+            <div className="bg-white rounded-[2.5rem] p-8 md:p-10 border-2 border-purple-200 shadow-sm space-y-8 relative overflow-hidden">
+              <div className="absolute top-0 right-0 w-64 h-64 bg-purple-500/5 rounded-full blur-3xl -mr-32 -mt-32 pointer-events-none" />
+
+              <div className="flex items-center justify-between border-b border-slate-100 pb-6 relative z-10">
+                <div className="flex items-center gap-4">
+                  <div className="size-12 rounded-2xl bg-purple-500/10 text-purple-600 flex items-center justify-center font-black">
+                    <Building2 size={24} />
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-black tracking-tighter text-midnight italic uppercase">
+                      4. Dados da Empresa (Pessoa Jurídica / MEI)
+                    </h3>
+                    <p className="text-xs text-slate-400 font-medium">
+                      Dados cadastrais da sua empresa para faturamento e emissão de Notas Fiscais (NFS-e)
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest bg-purple-100 text-purple-800 border border-purple-200">
+                    Conta PJ Ativa
+                  </span>
+                  <span className="px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest bg-emerald-100 text-emerald-800 border border-emerald-200 flex items-center gap-1">
+                    <CheckCircle2 size={12} /> Regularizado
+                  </span>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 relative z-10">
+                {/* CNPJ */}
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
+                    CNPJ *
+                  </label>
+                  <div className="relative">
+                    <Hash className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300" size={18} />
+                    <input 
+                      type="text" 
+                      value={formatCnpj(companyData.cnpj)}
+                      onChange={handleCompanyCnpjChange}
+                      className="w-full bg-slate-50/80 border border-slate-200 px-12 py-3.5 rounded-2xl font-bold text-midnight focus:outline-none focus:border-purple-600 focus:ring-4 focus:ring-purple-600/5 text-sm font-mono"
+                      placeholder="00.000.000/0000-00"
+                    />
+                  </div>
+                </div>
+
+                {/* Razão Social */}
+                <div className="space-y-1.5 md:col-span-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
+                    Razão Social da Empresa *
+                  </label>
+                  <div className="relative">
+                    <Building className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300" size={18} />
+                    <input 
+                      type="text" 
+                      value={companyData.razaoSocial}
+                      onChange={(e) => setCompanyData(prev => ({ ...prev, razaoSocial: e.target.value }))}
+                      className="w-full bg-white border border-slate-200 px-12 py-3.5 rounded-2xl font-bold text-midnight focus:outline-none focus:border-purple-600 focus:ring-4 focus:ring-purple-600/5 text-sm"
+                      placeholder="Razão social oficial conforme Receita Federal"
+                    />
+                  </div>
+                </div>
+
+                {/* Nome Fantasia */}
+                <div className="space-y-1.5 md:col-span-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
+                    Nome Fantasia
+                  </label>
+                  <div className="relative">
+                    <Building2 className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300" size={18} />
+                    <input 
+                      type="text" 
+                      value={companyData.nomeFantasia}
+                      onChange={(e) => setCompanyData(prev => ({ ...prev, nomeFantasia: e.target.value }))}
+                      className="w-full bg-white border border-slate-200 px-12 py-3.5 rounded-2xl font-bold text-midnight focus:outline-none focus:border-purple-600 focus:ring-4 focus:ring-purple-600/5 text-sm"
+                      placeholder="Nome fantasia da sua microfranquia"
+                    />
+                  </div>
+                </div>
+
+                {/* Chave PIX PJ */}
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
+                    Chave PIX da Empresa (Repasses)
+                  </label>
+                  <div className="relative">
+                    <CreditCard className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300" size={18} />
+                    <input 
+                      type="text" 
+                      value={companyData.pixKey}
+                      onChange={(e) => setCompanyData(prev => ({ ...prev, pixKey: e.target.value }))}
+                      className="w-full bg-white border border-slate-200 px-12 py-3.5 rounded-2xl font-bold text-midnight focus:outline-none focus:border-purple-600 focus:ring-4 focus:ring-purple-600/5 text-sm font-mono"
+                      placeholder="Chave PIX (geralmente o CNPJ)"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Informação Tributária */}
+              <div className="bg-purple-50/70 border border-purple-200/80 p-5 rounded-2xl flex items-start gap-4 relative z-10">
+                <ShieldCheck size={22} className="text-purple-600 shrink-0 mt-0.5" />
+                <div className="text-xs text-purple-950 leading-relaxed">
+                  <p className="font-bold text-purple-900">Regime Tributário: Emissão de Nota Fiscal de Serviços (NFS-e)</p>
+                  <p className="text-[11px] text-purple-800/90 mt-1">
+                    Como Pessoa Jurídica (PJ/MEI), você recebe 100% do valor bruto das comissões semanais e bônus anuais, sem retenção na fonte de INSS (11%) nem IRPF. Mensalmente você deve emitir a Nota Fiscal de Prestação de Serviços correspondente aos repasses recebidos no período.
+                  </p>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="bg-gradient-to-r from-purple-50 via-indigo-50/60 to-white rounded-[2.5rem] p-8 md:p-10 border border-purple-100 shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+              <div className="flex items-center gap-5">
+                <div className="size-14 rounded-2xl bg-purple-600 text-white flex items-center justify-center font-black shadow-lg shadow-purple-600/20 shrink-0">
+                  <Building2 size={26} />
+                </div>
+                <div>
+                  <h4 className="text-lg font-black text-midnight uppercase tracking-tight italic">
+                    Deseja Cadastrar sua Empresa (PJ / MEI)?
+                  </h4>
+                  <p className="text-xs text-slate-500 font-medium mt-1 max-w-xl">
+                    Cadastre seu CNPJ para receber 100% dos seus repasses comerciais sem descontos fiscais de IRPF/INSS, com faturamento direto via Nota Fiscal.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsPjModalOpen(true)}
+                className="shrink-0 px-6 py-3.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-black uppercase tracking-wider shadow-md shadow-purple-600/20 transition-all flex items-center gap-2 cursor-pointer"
+              >
+                <Building2 size={16} /> Cadastrar CNPJ
+              </button>
+            </div>
+          )}
 
           {/* Action Bar */}
           <div className="bg-white rounded-[2rem] p-6 border border-slate-100 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-4">

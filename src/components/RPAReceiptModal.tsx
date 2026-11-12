@@ -87,22 +87,76 @@ export default function RPAReceiptModal({
     const count = rpa?.ordersBreakdown?.length || rpa?.ordersList?.length || 0;
 
     let tuesdays = rpa?.weeklyPayouts || [];
-    if (!tuesdays || tuesdays.length === 0) {
-      const generated: Array<{ date: string; amount: number; orderCount?: number }> = [];
-      for (let d = 1; d <= daysInMonth; d++) {
-        const cDate = new Date(y, m - 1, d);
-        if (cDate.getDay() === 2) {
-          generated.push({
-            date: `${String(d).padStart(2, '0')}.${String(m).padStart(2, '0')}.${y}`,
-            amount: 0,
-            orderCount: 0
-          });
+    if (!tuesdays || tuesdays.length === 0 || typeof tuesdays[0].irrfNoMes === 'undefined') {
+      let runningBruto = 0;
+      let runningIrrf = 0;
+
+      const baseList = (tuesdays && tuesdays.length > 0) ? [...tuesdays] : [];
+      if (baseList.length === 0) {
+        for (let d = 1; d <= daysInMonth; d++) {
+          const cDate = new Date(y, m - 1, d);
+          if (cDate.getDay() === 2) {
+            const dd = String(d).padStart(2, '0');
+            const mm = String(m).padStart(2, '0');
+            const yy = String(y).slice(-2);
+            baseList.push({
+              date: `${dd}.${mm}.${yy}`,
+              amount: 0,
+              orderCount: 0
+            } as any);
+          }
+        }
+        if (baseList.length > 0 && weekly > 0) {
+          baseList[0].amount = weekly;
         }
       }
-      if (generated.length > 0 && weekly > 0) {
-        generated[0].amount = weekly;
+
+      while (baseList.length < 5) {
+        baseList.push({
+          date: '-',
+          amount: 0,
+          orderCount: 0
+        } as any);
       }
-      tuesdays = generated;
+
+      tuesdays = baseList.map((t: any, idx: number) => {
+        const weekLabel = `${idx + 1}ª`;
+        const brutoSem = Number(t.amount || 0);
+        runningBruto = parseFloat((runningBruto + brutoSem).toFixed(2));
+        const acumulado = runningBruto;
+        const taxC = calculateTaxDeductions(acumulado, false);
+        const irrfNoMes = parseFloat(taxC.irrf.toFixed(2));
+        const irpfAnt = runningIrrf;
+        const irrfDesc = brutoSem > 0 
+          ? Math.max(0, parseFloat((irrfNoMes - irpfAnt).toFixed(2)))
+          : 0;
+        runningIrrf = parseFloat((runningIrrf + irrfDesc).toFixed(2));
+        const aRec = brutoSem > 0 
+          ? Math.max(0, parseFloat((brutoSem - irrfDesc).toFixed(2)))
+          : 0;
+
+        let dateStr = t.date;
+        if (dateStr && dateStr.length > 8 && dateStr.includes('.')) {
+          const parts = dateStr.split('.');
+          if (parts.length === 3 && parts[2].length === 4) {
+            dateStr = `${parts[0]}.${parts[1]}.${parts[2].slice(-2)}`;
+          }
+        }
+
+        return {
+          weekLabel: t.weekLabel || weekLabel,
+          date: dateStr,
+          amount: brutoSem,
+          irrfNoMes: irrfNoMes,
+          irpfSemanaAnterior: irpfAnt,
+          irrfDescontado: irrfDesc,
+          irpfRepassarGov: irrfDesc,
+          aReceber: aRec,
+          acumulado: acumulado,
+          orderCount: t.orderCount,
+          isAnnual: false
+        };
+      });
     }
 
     return {
@@ -231,6 +285,110 @@ export default function RPAReceiptModal({
 
       y += 7.5;
 
+      // Linha Cashback Semanal da Rede
+      doc.setFillColor(255, 255, 255);
+      doc.rect(14, y, 142, 6.5);
+      doc.rect(156, y, 40, 6.5);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(6.5);
+      doc.setTextColor(15, 23, 42);
+      doc.text('Cashback Bruto Mensal da Rede (G0 ao G2)', 16, y + 2.8);
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(5);
+      doc.setTextColor(100, 116, 139);
+      doc.text(`Comissões de rede ativas apuradas no período de: ${rpa.financial.weekly_period_label || `01.${String(mNum).padStart(2, '0')}.${yNum} a ${lastDayStr}`}`, 16, y + 5.5);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(6.5);
+      doc.setTextColor(15, 23, 42);
+      doc.text(`R$ ${weeklyTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, 194, y + 4.2, { align: 'right' });
+      y += 6.5;
+
+      // Tabela de Evolução Semanal com 8 Colunas (Layout Oficial Émerson Antunes)
+      // Largura total: 182mm (x=14 a 196)
+      const colX = [14, 26, 44, 69, 94, 119, 144, 169, 196];
+
+      // Cabeçalho da Tabela
+      doc.setFillColor(241, 245, 249);
+      doc.rect(14, y, 182, 5, 'FD');
+      for (let i = 0; i < colX.length; i++) {
+        doc.line(colX[i], y, colX[i], y + 5);
+      }
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(4.5);
+      doc.setTextColor(30, 41, 59);
+      doc.text('SEMANAS', 20, y + 3.5, { align: 'center' });
+      doc.text('PAGO EM', 35, y + 3.5, { align: 'center' });
+      doc.text('BRUTO SEMANAL', 67, y + 3.5, { align: 'right' });
+      doc.text('IRPF ACUM. MENSAL', 92, y + 3.5, { align: 'right' });
+      doc.text('IRPF RET. SEMANA', 117, y + 3.5, { align: 'right' });
+      doc.text('IRPF REPASS. GOV', 142, y + 3.5, { align: 'right' });
+      doc.setTextColor(220, 38, 38);
+      doc.text('A RECEBER', 167, y + 3.5, { align: 'right' });
+      doc.setTextColor(30, 41, 59);
+      doc.text('BASE DE CÁLCULO', 194, y + 3.5, { align: 'right' });
+      y += 5;
+
+      // Linhas da Tabela
+      tuesdaysList.forEach((row: any) => {
+        const rowH = 4.5;
+        doc.setFillColor(255, 255, 255);
+        doc.rect(14, y, 182, rowH);
+        for (let i = 0; i < colX.length; i++) {
+          doc.line(colX[i], y, colX[i], y + rowH);
+        }
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(5);
+        doc.setTextColor(15, 23, 42);
+        doc.text(String(row.weekLabel || ''), 20, y + 3.2, { align: 'center' });
+
+        doc.setFont('helvetica', 'normal');
+        doc.text(row.date && row.date !== '-' ? String(row.date) : '', 35, y + 3.2, { align: 'center' });
+        
+        doc.setFont('helvetica', 'bold');
+        doc.text(Number(row.amount || 0) > 0 ? `R$ ${Number(row.amount).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : 'R$ -', 67, y + 3.2, { align: 'right' });
+        
+        doc.setFont('helvetica', 'normal');
+        doc.text(Number(row.irrfNoMes || 0) > 0 ? `R$ ${Number(row.irrfNoMes).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : 'R$ -', 92, y + 3.2, { align: 'right' });
+        doc.text(Number(row.irrfDescontado || 0) > 0 ? `R$ ${Number(row.irrfDescontado).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : 'R$ -', 117, y + 3.2, { align: 'right' });
+        doc.text(Number(row.irrfDescontado || 0) > 0 ? `R$ ${Number(row.irrfDescontado).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : 'R$ -', 142, y + 3.2, { align: 'right' });
+
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(220, 38, 38);
+        doc.text(Number(row.aReceber || 0) > 0 ? `R$ ${Number(row.aReceber).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : 'R$ -', 167, y + 3.2, { align: 'right' });
+
+        doc.setTextColor(15, 23, 42);
+        doc.text(Number(row.acumulado || 0) > 0 ? `R$ ${Number(row.acumulado).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '', 194, y + 3.2, { align: 'right' });
+
+        y += rowH;
+      });
+
+      // Linha TOTAL no PDF
+      const pdfTotalBruto = tuesdaysList.reduce((acc: number, r: any) => acc + (r.amount || 0), 0);
+      const pdfTotalRetido = tuesdaysList.reduce((acc: number, r: any) => acc + (r.irrfDescontado || 0), 0);
+      const pdfTotalLiq = tuesdaysList.reduce((acc: number, r: any) => acc + (r.aReceber || 0), 0);
+      const pdfLastRow = tuesdaysList[tuesdaysList.length - 1];
+      const pdfBaseFinal = pdfLastRow?.acumulado || pdfTotalBruto;
+      const pdfIrpfAcumFinal = pdfLastRow?.irrfNoMes || pdfTotalRetido;
+
+      doc.setFillColor(254, 242, 242);
+      doc.rect(14, y, 182, 4.8, 'FD');
+      for (let i = 0; i < colX.length; i++) {
+        doc.line(colX[i], y, colX[i], y + 4.8);
+      }
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(5);
+      doc.setTextColor(220, 38, 38);
+      doc.text('TOTAL', 20, y + 3.2, { align: 'center' });
+      doc.text('-', 35, y + 3.2, { align: 'center' });
+      doc.text(`R$ ${pdfTotalBruto.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, 67, y + 3.2, { align: 'right' });
+      doc.text(`R$ ${pdfIrpfAcumFinal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, 92, y + 3.2, { align: 'right' });
+      doc.text(`R$ ${pdfTotalRetido.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, 117, y + 3.2, { align: 'right' });
+      doc.text(`R$ ${pdfTotalRetido.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, 142, y + 3.2, { align: 'right' });
+      doc.text(`R$ ${pdfTotalLiq.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, 167, y + 3.2, { align: 'right' });
+      doc.text(`R$ ${pdfBaseFinal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, 194, y + 3.2, { align: 'right' });
+
+      y += 6;
+
       const pdfItems: Array<{
         desc: string;
         subDesc?: string;
@@ -242,24 +400,12 @@ export default function RPAReceiptModal({
         isDeduction?: boolean;
       }> = [
         {
-          desc: 'Cashback semanal da Rede de MMN (G0 AO G2) do Microfranqueado',
-          subDesc: `Comissões de rede ativas apuradas no período de: ${rpa.financial.weekly_period_label || `01.${String(mNum).padStart(2, '0')}.${yNum} a ${lastDayStr}`}`,
-          val: weeklyTotal,
-          isBold: true
-        },
-        ...tuesdaysList.map(t => ({
-          desc: 'Cashback semanal da Rede de MMN (G0 AO G2) do Microfranqueado',
-          subDesc: `Comissões de rede pagas em: ${t.date}`,
-          val: t.amount,
-          isRed: true
-        })),
-        {
           desc: `Cashback anual MICROFRANQUEADO período ${rpa.financial.annual_cycle_period || `01.12.${yNum - 1} a 30.11.${yNum}`}`,
-          subDesc: 'Acumulado anual liberado no ciclo de 10 de Dezembro',
+          subDesc: isAnnual ? 'Liberado no total de rendimentos de novembro' : 'Acumulado anual liberado no ciclo de 10 de Dezembro',
           val: rpa.financial.cashback_anual || 0
         },
         {
-          desc: isAnnual ? 'TOTAL BRUTO PAGO SEMANALMENTE + CASH BACK ANUAL ACUMULADO' : 'TOTAL BRUTO PAGO SEMANALMENTE',
+          desc: isAnnual ? 'TOTAL BRUTO (SEMANAL + ANUAL)' : 'TOTAL BRUTO PAGO SEMANALMENTE',
           val: rpa.financial.bruto_total,
           isBold: true
         },
@@ -275,8 +421,8 @@ export default function RPAReceiptModal({
           val: baseIrpf
         },
         {
-          desc: 'IRRF - Retenção na Fonte conforme faixa de rendimentos da RFB (Tabela 2026 / Lei 15.270)',
-          subDesc: 'Retenção na fonte calculada pela tabela progressiva oficial',
+          desc: 'IRRF Retido na Fonte: Tabela 2026',
+          subDesc: 'Retenção na fonte calculada pela tabela progressiva oficial RFB / Lei 15.270',
           val: irrfVal > 0 ? -irrfVal : 0.00,
           valText: irrfVal > 0 ? `- R$ ${irrfVal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : 'R$ 0,00',
           isDeduction: irrfVal > 0
@@ -613,22 +759,114 @@ export default function RPAReceiptModal({
                 </span>
               </div>
 
-              {/* Linhas das Terças-feiras do Mês (Destaque avermelhado como na planilha) */}
-              {tuesdaysList.map((t, idx) => (
-                <div key={idx} className="px-5 py-2 pl-8 flex items-center justify-between bg-rose-500/[0.04] border-l-4 border-rose-500/50">
-                  <div>
-                    <p className="text-rose-400 font-bold text-xs">
-                      Cashback semanal da Rede de MMN (G0 AO G2) do Microfranqueado
-                    </p>
-                    <p className="text-[10px] text-rose-300/70">
-                      Comissões de rede pagas em: <strong className="text-rose-200">{t.date}</strong>
-                    </p>
-                  </div>
-                  <span className="font-mono font-bold text-rose-300">
-                    R$ {t.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                  </span>
+              {/* Tabela de Evolução Semanal com 8 Colunas (Layout Oficial Émerson Antunes) */}
+              <div className="p-3 bg-white/[0.02]">
+                <div className="overflow-x-auto rounded-xl border border-white/10">
+                  <table className="w-full text-left border-collapse min-w-[760px]">
+                    <thead>
+                      <tr className="bg-white/5 text-[9.5px] font-black uppercase tracking-wider text-slate-300 border-b border-white/10">
+                        <th className="py-2.5 px-2.5 text-center border-r border-white/10">SEMANAS</th>
+                        <th className="py-2.5 px-2.5 text-center border-r border-white/10">PAGO EM</th>
+                        <th className="py-2.5 px-2.5 text-right border-r border-white/10 bg-amber-500/10 text-amber-300">BRUTO SEMANAL</th>
+                        <th className="py-2.5 px-2.5 text-right border-r border-white/10">IRPF ACUMULADO MENSAL</th>
+                        <th className="py-2.5 px-2.5 text-right border-r border-white/10">IRPF RETIDO NA SEMANA</th>
+                        <th className="py-2.5 px-2.5 text-right border-r border-white/10">IRPF A REPASSAR AO GOV</th>
+                        <th className="py-2.5 px-2.5 text-right border-r border-white/10 text-rose-400">A RECEBER</th>
+                        <th className="py-2.5 px-2.5 text-right">BASE DE CÁLCULO PARA IRPF MENSAL</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-white/5 font-mono text-xs">
+                      {tuesdaysList.map((row: any, idx: number) => {
+                        const hasAmt = (row.amount || 0) > 0;
+                        const hasAcum = (row.acumulado || 0) > 0;
+                        const hasIrrfAcum = (row.irrfNoMes || 0) > 0;
+                        const hasIrrfDesc = (row.irrfDescontado || 0) > 0;
+                        const hasRec = (row.aReceber || 0) > 0;
+
+                        return (
+                          <tr key={idx} className="hover:bg-white/[0.04] transition-colors">
+                            <td className="py-2.5 px-2.5 text-center font-bold text-slate-300 border-r border-white/5">
+                              {row.weekLabel || `${idx + 1}ª`}
+                            </td>
+                            <td className="py-2.5 px-2.5 text-center text-slate-400 border-r border-white/5">
+                              {row.date && row.date !== '-' ? row.date : ''}
+                            </td>
+                            <td className="py-2.5 px-2.5 text-right font-bold text-amber-300 bg-amber-500/5 border-r border-white/5">
+                              {hasAmt
+                                ? `R$ ${Number(row.amount).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                                : 'R$ -'}
+                            </td>
+                            <td className="py-2.5 px-2.5 text-right text-slate-400 border-r border-white/5">
+                              {hasIrrfAcum
+                                ? `R$ ${Number(row.irrfNoMes).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                                : 'R$ -'}
+                            </td>
+                            <td className="py-2.5 px-2.5 text-right text-slate-300 font-medium border-r border-white/5">
+                              {hasIrrfDesc
+                                ? `R$ ${Number(row.irrfDescontado).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                                : 'R$ -'}
+                            </td>
+                            <td className="py-2.5 px-2.5 text-right text-slate-300 font-medium border-r border-white/5">
+                              {hasIrrfDesc
+                                ? `R$ ${Number(row.irpfRepassarGov ?? row.irrfDescontado).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                                : 'R$ -'}
+                            </td>
+                            <td className="py-2.5 px-2.5 text-right font-bold text-rose-400 border-r border-white/5">
+                              {hasRec
+                                ? `R$ ${Number(row.aReceber).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                                : 'R$ -'}
+                            </td>
+                            <td className="py-2.5 px-2.5 text-right font-bold text-white">
+                              {hasAcum
+                                ? `R$ ${Number(row.acumulado).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                                : ''}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                    <tfoot>
+                      {(() => {
+                        const totalB = tuesdaysList.reduce((acc: number, r: any) => acc + (r.amount || 0), 0);
+                        const totalR = tuesdaysList.reduce((acc: number, r: any) => acc + (r.irrfDescontado || 0), 0);
+                        const totalL = tuesdaysList.reduce((acc: number, r: any) => acc + (r.aReceber || 0), 0);
+                        const lastR = tuesdaysList[tuesdaysList.length - 1];
+                        const baseF = lastR?.acumulado || totalB;
+                        const irpfAcumF = lastR?.irrfNoMes || totalR;
+
+                        return (
+                          <tr className="bg-rose-500/10 font-mono text-xs font-black border-t-2 border-white/20 text-rose-400">
+                            <td className="py-2.5 px-2.5 text-center uppercase tracking-wider border-r border-white/10">
+                              TOTAL
+                            </td>
+                            <td className="py-2.5 px-2.5 text-center border-r border-white/10 text-slate-500">
+                              -
+                            </td>
+                            <td className="py-2.5 px-2.5 text-right border-r border-white/10 bg-amber-500/20 text-amber-300">
+                              R$ {totalB.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </td>
+                            <td className="py-2.5 px-2.5 text-right border-r border-white/10">
+                              R$ {irpfAcumF.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </td>
+                            <td className="py-2.5 px-2.5 text-right border-r border-white/10">
+                              R$ {totalR.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </td>
+                            <td className="py-2.5 px-2.5 text-right border-r border-white/10">
+                              R$ {totalR.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </td>
+                            <td className="py-2.5 px-2.5 text-right border-r border-white/10 text-sm">
+                              R$ {totalL.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </td>
+                            <td className="py-2.5 px-2.5 text-right">
+                              R$ {baseF.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </td>
+                          </tr>
+                        );
+                      })()}
+                    </tfoot>
+                  </table>
                 </div>
-              ))}
+              </div>
 
               {/* Linha Cashback Anual */}
               <div className="px-5 py-3 flex items-center justify-between bg-white/[0.01]">

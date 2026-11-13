@@ -613,7 +613,7 @@ export default function AffiliateDashboard() {
               Bem-vindo, {profile?.full_name?.split(' ')[0] || 'Franqueado'}!
             </h1>
             <p className="text-slate-500 font-medium text-sm">
-              Gerencie sua equipe comercial, comissões semanais (80% na terça-feira) e bônus anual (20% em dezembro).
+              Gerencie sua equipe comercial. E acompanhe seus ganhos em tempo real.
             </p>
           </div>
           

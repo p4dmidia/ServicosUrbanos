@@ -32,6 +32,7 @@ export default function AffiliateRenewals() {
   const [loading, setLoading] = useState(true);
   const [regularizing, setRegularizing] = useState(false);
   const [activatingMf, setActivatingMf] = useState(false);
+  const [mmnLevels, setMmnLevels] = useState<any[]>([]);
   const [stats, setStats] = useState<any>(null);
   const [subscription, setSubscription] = useState<any | null>(null);
   const [seguradoData, setSeguradoData] = useState<any>(null);
@@ -42,7 +43,7 @@ export default function AffiliateRenewals() {
     if (!user) return;
     try {
       setLoading(true);
-      const [statsData, subRes, historyRes, segRes, mfRes] = await Promise.all([
+      const [statsData, subRes, historyRes, segRes, mfRes, levelsRes] = await Promise.all([
         businessRules.getAffiliateStats(user.id),
         supabase
           .from('subscriptions')
@@ -57,12 +58,14 @@ export default function AffiliateRenewals() {
           .eq('profile_id', user.id)
           .order('created_at', { ascending: false }),
         businessRules.getSeguradoData(user.id),
-        businessRules.getMicrofranqueadoData(user.id)
+        businessRules.getMicrofranqueadoData(user.id),
+        businessRules.getMMNLevels()
       ]);
 
       setStats(statsData);
       setSeguradoData(segRes);
       setMicrofranqueadoData(mfRes);
+      if (levelsRes) setMmnLevels(levelsRes);
 
       const activeSub = (historyRes.data || []).find(s => s.status === 'active' && new Date(s.end_date) >= new Date());
       let finalSub = activeSub || (historyRes.data && historyRes.data.length > 0 ? historyRes.data[0] : subRes.data);
@@ -213,6 +216,15 @@ export default function AffiliateRenewals() {
     }
     return null;
   }, [microfranqueadoData]);
+
+  const g0Lvl = useMemo(() => mmnLevels.find(l => l.level === 1) || { cashbackSemanal: 5, cashbackAnual: 2 }, [mmnLevels]);
+  const g1Lvl = useMemo(() => mmnLevels.find(l => l.level === 2) || { cashbackSemanal: 5, cashbackAnual: 2 }, [mmnLevels]);
+  const g2Lvl = useMemo(() => mmnLevels.find(l => l.level === 3) || { cashbackSemanal: 5, cashbackAnual: 2 }, [mmnLevels]);
+  const totalMmnPct = useMemo(() => {
+    const sem = (Number(g0Lvl.cashbackSemanal) || 0) + (Number(g1Lvl.cashbackSemanal) || 0) + (Number(g2Lvl.cashbackSemanal) || 0);
+    const anu = (Number(g0Lvl.cashbackAnual) || 0) + (Number(g1Lvl.cashbackAnual) || 0) + (Number(g2Lvl.cashbackAnual) || 0);
+    return sem + anu;
+  }, [g0Lvl, g1Lvl, g2Lvl]);
 
   return (
     <AffiliateLayout title="Renovações & Licenciamento">
@@ -378,7 +390,7 @@ export default function AffiliateRenewals() {
                   <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6 pt-2">
                     <div className="space-y-2 max-w-xl">
                       <p className="text-xs text-slate-300 leading-relaxed">
-                        Torne-se um <strong>Microfranqueado CaZa dos Sorteios</strong> para construir sua rede e receber <strong>até 33% de comissão</strong> (G0 8%+3%, G1 8%+3%, G2 8%+3%) sobre as vendas de seguros da sua equipe.
+                        Torne-se um <strong>Microfranqueado CaZa dos Sorteios</strong> para construir sua rede e receber <strong>até {totalMmnPct}% de comissão</strong> (G0 {g0Lvl.cashbackSemanal}%+{g0Lvl.cashbackAnual}%, G1 {g1Lvl.cashbackSemanal}%+{g1Lvl.cashbackAnual}%, G2 {g2Lvl.cashbackSemanal}%+{g2Lvl.cashbackAnual}%) sobre as vendas de seguros da sua equipe.
                       </p>
                       <div className="flex flex-wrap items-center gap-2">
                         <span className="text-[11px] font-mono font-bold text-emerald-400 bg-emerald-500/15 border border-emerald-500/30 px-3 py-1 rounded-xl">
@@ -444,7 +456,16 @@ export default function AffiliateRenewals() {
                   const isEcon = plan.plan_type === 'anual';
                   const isPopular = plan.plan_type === 'mensal';
 
-                  return (
+                  const g0Lvl = useMemo(() => mmnLevels.find(l => l.level === 1) || { cashbackSemanal: 5, cashbackAnual: 2 }, [mmnLevels]);
+  const g1Lvl = useMemo(() => mmnLevels.find(l => l.level === 2) || { cashbackSemanal: 5, cashbackAnual: 2 }, [mmnLevels]);
+  const g2Lvl = useMemo(() => mmnLevels.find(l => l.level === 3) || { cashbackSemanal: 5, cashbackAnual: 2 }, [mmnLevels]);
+  const totalMmnPct = useMemo(() => {
+    const sem = (Number(g0Lvl.cashbackSemanal) || 0) + (Number(g1Lvl.cashbackSemanal) || 0) + (Number(g2Lvl.cashbackSemanal) || 0);
+    const anu = (Number(g0Lvl.cashbackAnual) || 0) + (Number(g1Lvl.cashbackAnual) || 0) + (Number(g2Lvl.cashbackAnual) || 0);
+    return sem + anu;
+  }, [g0Lvl, g1Lvl, g2Lvl]);
+
+  return (
                     <div 
                       key={plan.id}
                       className={`bg-white border rounded-[2rem] p-6 flex flex-col justify-between gap-6 hover:shadow-xl transition-all relative overflow-hidden ${

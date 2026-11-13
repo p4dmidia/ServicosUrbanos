@@ -48,7 +48,7 @@ import {
   formatCpf,
   normalizeString
 } from '../lib/mbmPdfParser';
-import { businessRules, calculateTaxDeductions, calculateSubscriptionRepasseCycle } from '../lib/businessRules';
+import { businessRules, calculateTaxDeductions, calculateSubscriptionRepasseCycle, isUserPJ } from '../lib/businessRules';
 import { useAuth } from '../contexts/AuthContext';
 import { toast } from 'react-hot-toast';
 import { Link } from 'react-router-dom';
@@ -560,11 +560,10 @@ export default function AdminFinancials() {
         });
       });
 
-      // 3. Filtro rigoroso conforme regras oficiais da seguradora MBM:
-      // 1. Pessoa Jurídica NÃO entra (apenas pessoas físicas com CPF válido);
-      // 2. Usuário não cadastrado NÃO entra (exige nome preenchido e CPF de 11 dígitos);
-      // 3. Inativos/Bloqueados NÃO entram (se tiver pedido/assinatura paga e não estiver bloqueado, entra);
-      // 4. Ciclo Operacional MBM: vigência válida desde o mês de início até o mês do último repasse contratado.
+      // 3. Filtro de elegibilidade conforme regras oficiais da seguradora MBM:
+      // - Apólice/Assinatura vigente no período de referência;
+      // - Não estar inativo ou bloqueado;
+      // - Titular físico com CPF de 11 dígitos válido (contas PJ mantêm a vida física segurada com anotação da empresa).
       const validActiveSubs = candidateMembers.filter((sub: any) => {
         const p = sub.profiles || {};
 
@@ -579,21 +578,27 @@ export default function AdminFinancials() {
           return false;
         }
 
+        // Extração do titular físico da apólice (inclusive para associados PJ)
+        let insuredCpf = p.cpf || '';
+        let insuredName = (p.full_name || '').trim();
+
+        if (p.description && p.description.includes('[PJ] Titular do Seguro:')) {
+          const matchName = p.description.match(/\[PJ\] Titular do Seguro:\s*([^|]+)/);
+          const matchCpf = p.description.match(/CPF Segurado:\s*([^\s|]+)/);
+          if (matchName && matchName[1]) insuredName = matchName[1].trim();
+          if (matchCpf && matchCpf[1]) insuredCpf = matchCpf[1].trim();
+        }
+
         // Regra 2: Usuário não cadastrado
-        const name = (p.full_name || '').trim();
-        if (!name || name.toUpperCase().includes('NÃO CADASTRADO') || name.toUpperCase().includes('NAO CADASTRADO')) {
+        if (!insuredName || insuredName.toUpperCase().includes('NÃO CADASTRADO') || insuredName.toUpperCase().includes('NAO CADASTRADO')) {
           return false;
         }
 
-        const cleanCpfDigits = (p.cpf || '').replace(/\D/g, '');
+        // Regra 1: Validação de CPF físico (11 dígitos) exigido pela MBM Seguradora
+        const cleanCpfDigits = (insuredCpf || '').replace(/\D/g, '');
         if (cleanCpfDigits.length !== 11) {
           return false;
         }
-
-        // Regra 1: Pessoa Jurídica (CNPJ ou person_type PJ)
-        if (p.cnpj && p.cnpj.replace(/\D/g, '').length > 0) return false;
-        if (isCnpj(p.cpf || '')) return false;
-        if (p.person_type === 'PJ') return false;
 
         return true;
       });
@@ -785,7 +790,7 @@ export default function AdminFinancials() {
           if (matchName && matchName[1]) insuredName = matchName[1].trim();
           if (matchCpf && matchCpf[1]) insuredCpf = matchCpf[1].trim();
           obsPJ = `TITULAR PJ: ${(p.store_name || p.full_name || '').toUpperCase()}`;
-        } else if (p.cnpj) {
+        } else if (p.cnpj || p.person_type === 'PJ' || isCnpj(p.cnpj || p.cpf, p.pix_key)) {
           obsPJ = `TITULAR PJ: ${(p.store_name || p.full_name || '').toUpperCase()}`;
         }
 
@@ -1003,14 +1008,14 @@ export default function AdminFinancials() {
         const key = rpa.id || `${pid}_${refMonth}`;
         const prof = profileMap.get(pid);
         const name = rpa.affiliate?.name || prof?.full_name || 'Afiliado Autônomo';
-        const doc = rpa.affiliate?.cpf || prof?.cpf || prof?.cnpj || 'Sem Documento';
-        const isPJ = isCnpj(doc);
+        const isPJ = isUserPJ(prof) || (prof?.cnpj && prof.cnpj.replace(/\D/g, '').length > 11) || isCnpj(rpa.affiliate?.cpf);
+        const doc = isPJ ? (prof?.cnpj || rpa.affiliate?.cpf || prof?.cpf || 'Sem Documento') : (rpa.affiliate?.cpf || prof?.cpf || prof?.cnpj || 'Sem Documento');
         const bruto = Number(rpa.financial?.bruto_total || 0);
 
         if (bruto > 0) {
-          const inss = Number(rpa.financial?.inss_retido || 0);
-          const irrf = Number(rpa.financial?.irrf_retido || 0);
-          const liquido = Number(rpa.financial?.liquido_total || bruto);
+          const inss = isPJ ? 0 : Number(rpa.financial?.inss_retido || 0);
+          const irrf = isPJ ? 0 : Number(rpa.financial?.irrf_retido || 0);
+          const liquido = isPJ ? bruto : Number(rpa.financial?.liquido_total || bruto);
 
           grouped[key] = {
             id: key,
@@ -1029,7 +1034,7 @@ export default function AdminFinancials() {
             invoice_link: rpa.receipt_url || null,
             status: rpa.status || 'quitado',
             has_invoice: !!rpa.receipt_url,
-            is_rpa: true,
+            is_rpa: !isPJ,
             rpa_data: rpa
           };
         }
@@ -1051,11 +1056,15 @@ export default function AdminFinancials() {
         const key = arch.id || `${pid}_${refMonth}`;
         const prof = profileMap.get(pid);
         const name = arch.userName || prof?.full_name || 'Afiliado';
-        const doc = arch.userCpf || prof?.cpf || prof?.cnpj || 'Sem Documento';
-        const isPJ = arch.isPJ || isCnpj(doc);
+        const isPJ = arch.isPJ || isUserPJ(prof) || (prof?.cnpj && prof.cnpj.replace(/\D/g, '').length > 11) || isCnpj(arch.userCpf);
+        const doc = isPJ ? (prof?.cnpj || arch.userCpf || 'Sem Documento') : (arch.userCpf || prof?.cpf || prof?.cnpj || 'Sem Documento');
         const bruto = Number(arch.totalBruto || 0);
 
         if (bruto > 0 && !grouped[key]) {
+          const inss = isPJ ? 0 : Number(arch.inss || 0);
+          const irrf = isPJ ? 0 : Number(arch.irrf || 0);
+          const liquido = isPJ ? bruto : Number(arch.liquido || bruto);
+
           grouped[key] = {
             id: key,
             profile_id: pid,
@@ -1064,11 +1073,11 @@ export default function AdminFinancials() {
             cpf: doc,
             is_pj: isPJ,
             bruto,
-            inss: Number(arch.inss || 0),
-            irrf: Number(arch.irrf || 0),
+            inss,
+            irrf,
             patronal: 0,
             total_inss_guia: 0,
-            liquido: Number(arch.liquido || bruto),
+            liquido,
             invoice_number: arch.rpaNumber || arch.invoiceNumber || `RPA Nº ${refMonth.replace('-', '')}`,
             invoice_link: arch.receiptUrl || null,
             status: 'quitado',
@@ -1083,8 +1092,8 @@ export default function AdminFinancials() {
         const pid = w.profile_id;
         if (!pid) return;
         const prof = profileMap.get(pid);
-        const doc = prof?.cpf || prof?.cnpj || 'Sem Documento';
-        const isPJ = isCnpj(doc);
+        const isPJ = isUserPJ(prof) || (prof?.cnpj && prof.cnpj.replace(/\D/g, '').length > 11) || isCnpj(prof?.cnpj || prof?.cpf || '');
+        const doc = isPJ ? (prof?.cnpj || prof?.cpf || 'Sem Documento') : (prof?.cpf || prof?.cnpj || 'Sem Documento');
         const name = prof?.full_name || 'Afiliado';
         const amt = Math.abs(Number(w.amount || 0));
         const wDate = (w.created_at || '').substring(0, 7);
@@ -1104,12 +1113,12 @@ export default function AdminFinancials() {
             bruto: amt,
             inss: tax.inss,
             irrf: tax.irrf,
-            patronal: tax.patronal,
-            total_inss_guia: tax.inss + tax.patronal,
+            patronal: 0,
+            total_inss_guia: 0,
             liquido: tax.liquido,
-            invoice_number: null,
+            invoice_number: `SAQUE-${w.id ? String(w.id).substring(0, 6) : 'TX'}`,
             invoice_link: null,
-            status: w.status,
+            status: 'quitado',
             has_invoice: false,
             is_rpa: !isPJ
           };

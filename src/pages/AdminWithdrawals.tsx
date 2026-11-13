@@ -432,7 +432,7 @@ export default function AdminWithdrawals() {
       bruto: numAmount,
       inss: 0,
       irrf: 0,
-      is_pj: false,
+      is_pj: Boolean(adv.isPJ || adv.is_pj || (adv.cnpj && adv.cnpj.length > 0) || adv.pix_type?.toLowerCase() === 'cnpj'),
       payoutType: 'mensal',
       viewCategory: 'advances',
       descLabel: 'Adiantamento Mensal de Rendimentos',
@@ -525,11 +525,17 @@ export default function AdminWithdrawals() {
       splitDetails = {
         monthly: userItem.canPayMonthly && (userItem.monthlyPending || 0) > 0 ? {
           bruto: userItem.monthlyPending,
-          inss: userItem.monthlyInss || 0,
-          irrf: userItem.monthlyIrrf || 0,
-          liquido: userItem.monthlyLiquid || 0
+          inss: userItem.isPJ ? 0 : (userItem.monthlyInss || 0),
+          irrf: userItem.isPJ ? 0 : (userItem.monthlyIrrf || 0),
+          liquido: userItem.isPJ ? userItem.monthlyPending : (userItem.monthlyLiquid || 0)
         } : null
       };
+    }
+
+    if (userItem.isPJ) {
+      inssAmount = 0;
+      irrfAmount = 0;
+      amountToPay = grossAmount;
     }
 
     const record = {
@@ -557,7 +563,12 @@ export default function AdminWithdrawals() {
 
   // Abrir PaymentModal para pagamento individual de item do Relatório de Cashback Anual
   const handleOpenAnnualPaymentModal = (annualItem: any) => {
-    const amountToPay = Number(annualItem.liquidoReceber || annualItem.totalBruto || 0);
+    const isPjUser = Boolean(annualItem.isPJ || annualItem.is_pj);
+    const irrfVal = isPjUser ? 0 : Number(annualItem.descontoIrpf || 0);
+    const amountToPay = isPjUser 
+      ? Number(annualItem.totalBruto || 0) 
+      : Number(annualItem.liquidoReceber || annualItem.totalBruto || 0);
+
     if (amountToPay <= 0) {
       toast.error('Valor líquido de pagamento zerado.');
       return;
@@ -573,8 +584,8 @@ export default function AdminWithdrawals() {
       repasse: amountToPay,
       bruto: Number(annualItem.totalBruto || 0),
       inss: 0,
-      irrf: Number(annualItem.descontoIrpf || 0),
-      is_pj: annualItem.isPJ,
+      irrf: irrfVal,
+      is_pj: isPjUser,
       payoutType: 'anual',
       viewCategory: 'network',
       descLabel: `Cashback Anual (${annualItem.mesReferencia})`,
@@ -582,7 +593,7 @@ export default function AdminWithdrawals() {
         annual: {
           bruto: Number(annualItem.totalBruto || 0),
           inss: 0,
-          irrf: Number(annualItem.descontoIrpf || 0),
+          irrf: irrfVal,
           liquido: amountToPay
         }
       }

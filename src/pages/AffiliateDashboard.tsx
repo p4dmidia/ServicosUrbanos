@@ -122,9 +122,9 @@ export default function AffiliateDashboard() {
     });
   };
 
-  const g0Config = mmnLevels.find(l => l.level === 1) || { cashbackSemanal: 8, cashbackAnual: 3 };
-  const g1Config = mmnLevels.find(l => l.level === 2) || { cashbackSemanal: 8, cashbackAnual: 3 };
-  const g2Config = mmnLevels.find(l => l.level === 3) || { cashbackSemanal: 8, cashbackAnual: 3 };
+  const g0Config = mmnLevels.find(l => l.level === 1) || { cashbackSemanal: 5, cashbackAnual: 2 };
+  const g1Config = mmnLevels.find(l => l.level === 2) || { cashbackSemanal: 5, cashbackAnual: 2 };
+  const g2Config = mmnLevels.find(l => l.level === 3) || { cashbackSemanal: 5, cashbackAnual: 2 };
 
   const totalSemanalPct = (Number(g0Config.cashbackSemanal) || 0) + (Number(g1Config.cashbackSemanal) || 0) + (Number(g2Config.cashbackSemanal) || 0);
   const totalAnualPct = (Number(g0Config.cashbackAnual) || 0) + (Number(g1Config.cashbackAnual) || 0) + (Number(g2Config.cashbackAnual) || 0);
@@ -477,7 +477,7 @@ export default function AffiliateDashboard() {
                   </h3>
                   <p className="text-slate-300 text-xs font-medium mt-3 leading-relaxed">
                     Você sabia que pode montar uma equipe de vendas e ganhar comissões em rede? 
-                    Microfranqueados recebem <strong>{totalMmnPct || 33}% de comissão</strong> (G0 {g0Config.cashbackSemanal}%+{g0Config.cashbackAnual}%, G1 {g1Config.cashbackSemanal}%+{g1Config.cashbackAnual}%, G2 {g2Config.cashbackSemanal}%+{g2Config.cashbackAnual}%) sobre vendas do Seguro Vida Light!
+                    Microfranqueados recebem <strong>{totalMmnPct}% de comissão</strong> (G0 {g0Config.cashbackSemanal}%+{g0Config.cashbackAnual}%, G1 {g1Config.cashbackSemanal}%+{g1Config.cashbackAnual}%, G2 {g2Config.cashbackSemanal}%+{g2Config.cashbackAnual}%) sobre vendas do Seguro Vida Light!
                   </p>
                 </div>
 

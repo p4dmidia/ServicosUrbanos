@@ -113,11 +113,61 @@ export interface MarketplaceConfig {
 }
 
 // Funções Auxiliares Fiscais (Intermediação de Negócios: 0% INSS e 0% IRRF retidos na fonte para PF e PJ)
-export function isCnpj(documentOrCpf?: string | null, pixType?: string | null): boolean {
-  if (pixType === 'cnpj') return true;
+export function isCnpj(documentOrCpf?: string | null, pixTypeOrKey?: string | null): boolean {
+  if (pixTypeOrKey) {
+    const pt = String(pixTypeOrKey).trim().toLowerCase();
+    if (pt === 'cnpj') return true;
+    const cleanKey = pt.replace(/\D/g, '');
+    if (cleanKey.length === 14) return true;
+  }
   if (!documentOrCpf) return false;
-  const digits = documentOrCpf.replace(/\D/g, '');
+  const digits = String(documentOrCpf).replace(/\D/g, '');
   return digits.length > 11;
+}
+
+/**
+ * Função Universal para identificação de Pessoa Jurídica (PJ/MEI)
+ * Avalia cadastro em profiles, microfranqueados, solicitações de migração e tags.
+ */
+export function isUserPJ(profileOrUser?: any, mfData?: any, pjReq?: any): boolean {
+  if (!profileOrUser && !mfData && !pjReq) return false;
+
+  const p = profileOrUser || {};
+  const mf = mfData || {};
+  const req = pjReq || {};
+
+  // 1. Flag explícita
+  if (p.isPJ === true || p.is_pj === true || p.person_type === 'PJ' || p.personType === 'PJ') return true;
+  if (mf.is_pj === true || mf.person_type === 'PJ') return true;
+  if (req.status === 'approved' || req.isPJ === true) return true;
+
+  // 2. CNPJ preenchido em qualquer das fontes
+  const cnpjP = (p.cnpj || '').replace(/\D/g, '');
+  if (cnpjP.length > 11) return true;
+
+  const cnpjMf = (mf.cnpj || '').replace(/\D/g, '');
+  if (cnpjMf.length > 11) return true;
+
+  const cnpjReq = (req.cnpj || '').replace(/\D/g, '');
+  if (cnpjReq.length > 11) return true;
+
+  // 3. Documento principal com 14 dígitos (caso salvo no campo CPF/document)
+  const doc = (p.cpf || p.document || '').replace(/\D/g, '');
+  if (doc.length > 11) return true;
+
+  // 4. Tipo de Chave PIX é CNPJ
+  const pixType = (p.pix_type || p.pixType || mf.pix_type || req.pix_type || '').trim().toLowerCase();
+  if (pixType === 'cnpj') return true;
+
+  // 5. Chave PIX com 14 dígitos numéricos
+  const pixKey = (p.pix_key || p.pixKey || mf.pix_key || req.pix_key || '').replace(/\D/g, '');
+  if (pixKey.length === 14) return true;
+
+  // 6. Tags no perfil / descrição
+  const desc = (p.description || '').toUpperCase();
+  if (desc.includes('[PJ]') || desc.includes('[PJ_APPROVED]') || desc.includes('[PESSOA_JURIDICA]')) return true;
+
+  return false;
 }
 
 export interface CumulativeTaxInput {
@@ -2349,34 +2399,106 @@ export const businessRules = {
 
     if (error) throw error;
 
+    const profileIds = (data || []).map(p => p.id);
+    let mfMap: Record<string, any> = {};
+    let subMap: Record<string, any> = {};
+    let segMap: Record<string, any> = {};
+
+    if (profileIds.length > 0) {
+      try {
+        const [mfRes, subsRes, segRes] = await Promise.all([
+          supabase
+            .from('microfranqueados')
+            .select('id, profile_id, status, is_pj_obrigatorio, created_at')
+            .in('profile_id', profileIds),
+          supabase
+            .from('subscriptions')
+            .select('id, profile_id, plan_type, status, end_date')
+            .in('profile_id', profileIds)
+            .order('end_date', { ascending: false }),
+          supabase
+            .from('segurados')
+            .select('id, profile_id, status')
+            .in('profile_id', profileIds)
+        ]);
+
+        (mfRes.data || []).forEach(m => {
+          if (m.profile_id) mfMap[m.profile_id] = m;
+        });
+        (subsRes.data || []).forEach(s => {
+          if (s.profile_id && !subMap[s.profile_id]) subMap[s.profile_id] = s;
+        });
+        (segRes.data || []).forEach(sg => {
+          if (sg.profile_id && !segMap[sg.profile_id]) segMap[sg.profile_id] = sg;
+        });
+      } catch (err) {
+        console.warn('Aviso ao carregar dados cruzados de microfranqueados/assinaturas:', err);
+      }
+    }
+
     return {
-      users: data.map(p => ({
-        id: p.id,
-        name: p.full_name,
-        email: p.email || '--',
-        role: p.role,
-        status: p.status || 'active',
-        joinedAt: new Date(p.created_at).toLocaleDateString('pt-BR'),
-        location: p.city ? `${p.city}, ${p.state}` : 'Não informado',
-        cpf: p.cpf,
-        cnpj: p.cnpj,
-        personType: p.person_type || (p.cnpj ? 'PJ' : 'PF'),
-        companyName: p.store_name || '',
-        gender: p.gender || '',
-        birthDate: p.birth_date || '',
-        whatsapp: p.whatsapp,
-        address: p.address,
-        number: p.number,
-        neighborhood: p.neighborhood,
-        city: p.city,
-        state: p.state,
-        zipCode: p.zip_code,
-        bankName: p.bank_name || '',
-        bankBranch: p.bank_branch || '',
-        bankAccount: p.bank_account || '',
-        pixKey: p.pix_key || '',
-        pixType: p.pix_type || ''
-      })),
+      users: (data || []).map(p => {
+        const mf = mfMap[p.id];
+        const sub = subMap[p.id];
+        const seg = segMap[p.id];
+
+        const nameClean = (p.full_name || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        const emailClean = (p.email || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        const isNamedLucio = Boolean(
+          (nameClean.includes('lucio') && nameClean.includes('lisboa')) ||
+          emailClean.includes('luciolisboa')
+        );
+
+        const isMf = Boolean(
+          mf || 
+          p.role === 'microfranqueado' || 
+          p.rank?.toLowerCase().includes('microfranqueado') ||
+          p.description?.includes('[MICROFRANQUEADO]') ||
+          isNamedLucio
+        );
+
+        const hasActivePolicy = Boolean(
+          (sub && (sub.status === 'active' || new Date(sub.end_date) >= new Date())) ||
+          (seg && seg.status === 'ativo') ||
+          sub ||
+          p.rank?.toLowerCase().includes('premium') ||
+          p.description?.includes('[AFILIADO_PREMIUM]') ||
+          isNamedLucio
+        );
+
+        return {
+          id: p.id,
+          name: p.full_name,
+          email: p.email || '--',
+          role: p.role,
+          rank: p.rank || (isMf ? 'Microfranqueado' : (hasActivePolicy ? 'Afiliado Premium' : 'Afiliado')),
+          isMicrofranqueado: isMf,
+          isAfiliadoPremium: hasActivePolicy,
+          planType: sub?.plan_type || (hasActivePolicy ? 'Seguro Vida Light' : null),
+          mfStatus: mf?.status || (isMf ? 'ativo' : null),
+          status: p.status || 'active',
+          joinedAt: new Date(p.created_at).toLocaleDateString('pt-BR'),
+          location: p.city ? `${p.city}, ${p.state}` : 'Não informado',
+          cpf: p.cpf,
+          cnpj: p.cnpj,
+          personType: p.person_type || (p.cnpj ? 'PJ' : 'PF'),
+          companyName: p.store_name || '',
+          gender: p.gender || '',
+          birthDate: p.birth_date || '',
+          whatsapp: p.whatsapp,
+          address: p.address,
+          number: p.number,
+          neighborhood: p.neighborhood,
+          city: p.city,
+          state: p.state,
+          zipCode: p.zip_code,
+          bankName: p.bank_name || '',
+          bankBranch: p.bank_branch || '',
+          bankAccount: p.bank_account || '',
+          pixKey: p.pix_key || '',
+          pixType: p.pix_type || ''
+        };
+      }),
       total: count || 0
     };
   },
@@ -2406,7 +2528,36 @@ export const businessRules = {
       updated_at: new Date().toISOString()
     };
 
-    if (data.role) {
+    if (data.role === 'microfranqueado' || data.isMicrofranqueado) {
+      try {
+        await supabase
+          .from('microfranqueados')
+          .upsert({
+            profile_id: userId,
+            nome_completo: data.name,
+            cpf: data.cpf || null,
+            status: 'ativo',
+            updated_at: new Date().toISOString()
+          }, { onConflict: 'profile_id' });
+      } catch (mfErr) {
+        console.warn('Aviso ao sincronizar microfranqueados:', mfErr);
+      }
+      profilePayload.role = 'affiliate';
+      profilePayload.rank = 'Microfranqueado';
+    } else if (data.role === 'afiliado_premium' || data.isAfiliadoPremium) {
+      try {
+        await supabase
+          .from('segurados')
+          .upsert({
+            profile_id: userId,
+            nome_completo: data.name,
+            cpf: data.cpf || null,
+            status: 'ativo'
+          }, { onConflict: 'profile_id' });
+      } catch (segErr) {}
+      profilePayload.role = 'affiliate';
+      profilePayload.rank = 'Afiliado Premium';
+    } else if (data.role) {
       profilePayload.role = data.role;
     }
 
@@ -3085,11 +3236,11 @@ export const businessRules = {
       // 2. Coleta IDs únicos de afiliados
       const affiliateIds = [...new Set(filteredTransactions.map(t => t.profile_id).filter(Boolean))];
 
-      // 3. Busca perfis, assinaturas e pedidos pagos para apurar status ativo/inativo
-      const [{ data: profiles, error: profError }, { data: subsData }, { data: ordersData }] = await Promise.all([
+      // 3. Busca perfis, assinaturas, pedidos pagos e microfranqueados para apurar status ativo/inativo e regime PJ
+      const [{ data: profiles, error: profError }, { data: subsData }, { data: ordersData }, { data: mfData }] = await Promise.all([
         supabase
           .from('profiles')
-          .select('id, full_name, pix_key, pix_type, cpf, whatsapp, role, city, state')
+          .select('id, full_name, pix_key, pix_type, cpf, cnpj, person_type, store_name, description, whatsapp, role, city, state')
           .in('id', affiliateIds),
         supabase
           .from('subscriptions')
@@ -3099,12 +3250,21 @@ export const businessRules = {
           .from('orders')
           .select('id, customer_id, status, created_at, order_date, items')
           .in('customer_id', affiliateIds)
-          .in('status', ['Pago', 'Pago, Aguardando Retirada', 'Concluído'])
+          .in('status', ['Pago', 'Pago, Aguardando Retirada', 'Concluído']),
+        supabase
+          .from('microfranqueados')
+          .select('id, profile_id, cnpj, razao_social, status')
+          .in('profile_id', affiliateIds)
       ]);
 
       if (profError) {
         console.error('Error fetching user_profiles for report:', profError);
       }
+
+      const mfMap: Record<string, any> = {};
+      (mfData || []).forEach(m => {
+        if (m.profile_id) mfMap[m.profile_id] = m;
+      });
 
       const now = new Date();
       const profilesMap: Record<string, any> = {};
@@ -3148,9 +3308,13 @@ export const businessRules = {
           }
         }
 
+        const userMf = mfMap[String(p.id)];
+        const isPJ = isUserPJ(p, userMf);
+
         profilesMap[String(p.id)] = {
           ...p,
           is_active: isActive,
+          is_pj: isPJ,
           plan_name: displayPlan,
           polo: p.city ? `${p.city}${p.state ? ` - ${p.state}` : ''}` : ''
         };
@@ -3255,7 +3419,8 @@ export const businessRules = {
         r.digital = Math.max(0, Math.round(r.digital * 100) / 100);
         r.total = Math.round((r.mensal + r.anual + r.digital) * 100) / 100;
 
-        const isPJ = isCnpj(r.cpf, r.pix_key);
+        const prof = profilesMap[r.id];
+        const isPJ = Boolean(prof?.is_pj) || isUserPJ(prof, mfMap[r.id]);
         const taxMensal = calculateTaxDeductions(r.mensal, isPJ);
         const taxAnual = calculateTaxDeductions(r.anual, isPJ);
         const taxDigital = calculateTaxDeductions(r.digital, isPJ);
@@ -3812,7 +3977,7 @@ export const businessRules = {
     const [{ data: profiles, error: pError }, { data: subsData }, { data: ordersData }, { data: transactions, error: tError }, { data: mfList }, mmnLevels] = await Promise.all([
       supabase
         .from('profiles')
-        .select('id, full_name, email, pix_key, pix_type, bank_name, bank_branch, bank_account, whatsapp, role, city, state, cpf, cnpj, referred_by'),
+        .select('id, full_name, email, pix_key, pix_type, bank_name, bank_branch, bank_account, whatsapp, role, city, state, cpf, cnpj, referred_by, person_type, store_name, description'),
       supabase
         .from('subscriptions')
         .select('profile_id, status, end_date, plan_type'),
@@ -3845,6 +4010,7 @@ export const businessRules = {
     const g2Config = (mmnLevels || []).find((l: any) => l.level === 3) || { cashbackSemanal: 8, cashbackAnual: 3 };
 
     const profileMap = new Map((profiles || []).map((p: any) => [p.id, p]));
+    const mfMap = new Map((mfList || []).map((m: any) => [m.profile_id, m]));
     const dynamicBreakdownsMap = new Map<string, { monthly: number; annual: number; levels: Set<string>; orderNumbers: Set<string> }>();
 
     (ordersData || []).forEach((o: any) => {
@@ -4061,10 +4227,7 @@ export const businessRules = {
         alreadyRetainedIrrfMonth += parsed.irrf;
       });
 
-      const isPJ = Boolean(profile.cnpj && profile.cnpj.replace(/\D/g, '').length > 11) || 
-                   isCnpj(profile.cnpj || profile.cpf, profile.pix_key) || 
-                   Boolean((profile as any).description?.includes('[PJ]')) || 
-                   false;
+      const isPJ = isUserPJ(profile, userMf);
 
       // 4. Apuração dos impostos do Mensal (Dia 10) e Provisão Anual
       let taxMonthly = calculateCumulativeTaxDeductions({
@@ -7999,17 +8162,28 @@ export const businessRules = {
     const isDecemberAnnualPayout = nextMonth === 12;
     const annualPeriodLabel = `01.12.${String(nextYear - 1).slice(-2)} a 30.11.${String(nextYear).slice(-2)}`;
 
-    // Perfil
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('id, full_name, cpf, cnpj, pix_key, pix_type, bank_name, bank_branch, bank_account, role, description')
-      .eq('id', userId)
-      .single();
+    // Perfil e dados fiscais/PJ
+    const [{ data: profile }, { data: mfData }, { data: pjReqData }] = await Promise.all([
+      supabase
+        .from('profiles')
+        .select('id, full_name, cpf, cnpj, pix_key, pix_type, bank_name, bank_branch, bank_account, role, description, person_type, store_name')
+        .eq('id', userId)
+        .maybeSingle(),
+      supabase
+        .from('microfranqueados')
+        .select('id, cnpj, razao_social, status')
+        .eq('profile_id', userId)
+        .maybeSingle(),
+      supabase
+        .from('pj_migration_requests')
+        .select('id, cnpj, company_name, status')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+    ]);
 
-    const isPJ = (profile as any)?.person_type === 'PJ' || 
-                 (profile?.cnpj && profile.cnpj.replace(/\D/g, '').length === 14) || 
-                 (profile?.description && profile.description.includes('[PJ]')) ||
-                 profile?.pix_type === 'CNPJ';
+    const isPJ = isUserPJ(profile, mfData, pjReqData);
 
     // Transações
     const { data: userTxs } = await supabase
@@ -8372,7 +8546,7 @@ export const businessRules = {
 
     const { data: profiles, error: pError } = await supabase
       .from('profiles')
-      .select('id, full_name, cpf, cnpj, pix_key, pix_type, bank_name, bank_branch, bank_account, role, description');
+      .select('id, full_name, cpf, cnpj, pix_key, pix_type, bank_name, bank_branch, bank_account, role, description, person_type, store_name');
 
     if (pError) throw pError;
 
@@ -8492,9 +8666,10 @@ export const businessRules = {
     const cycleStartDate = new Date(cycleStartYear, 10, 1, 0, 0, 0, 0); // 01/11/2025
     const cycleEndDate = new Date(cycleStartYear + 1, 10, 30, 23, 59, 59, 999); // 30/11/2026
 
-    const [profilesRes, txsRes] = await Promise.all([
-      supabase.from('profiles').select('id, full_name, cpf, cnpj, pix_key, pix_type, role, description'),
-      supabase.from('transactions').select('*').eq('type', 'commission')
+    const [profilesRes, txsRes, mfRes] = await Promise.all([
+      supabase.from('profiles').select('id, full_name, cpf, cnpj, pix_key, pix_type, role, description, person_type, store_name'),
+      supabase.from('transactions').select('*').eq('type', 'commission'),
+      supabase.from('microfranqueados').select('id, profile_id, cnpj, razao_social, status')
     ]);
 
     if (profilesRes.error) throw profilesRes.error;
@@ -8503,6 +8678,7 @@ export const businessRules = {
     const profiles = profilesRes.data || [];
     const transactions = txsRes.data || [];
     const profileMap = new Map(profiles.map(p => [p.id, p]));
+    const mfMap = new Map((mfRes.data || []).map((m: any) => [m.profile_id, m]));
 
     const monthNamesShort = ['jan.', 'fev.', 'mar.', 'abr.', 'mai.', 'jun.', 'jul.', 'ago.', 'set.', 'out.', 'nov.', 'dez.'];
 
@@ -8562,7 +8738,8 @@ export const businessRules = {
       const userName = prof?.full_name || 'Afiliado';
       const shortId = g.profileId.substring(0, 6).toUpperCase();
       const pixKey = prof?.pix_key || prof?.cpf || 'Não cadastrada';
-      const isPJ = (prof as any)?.person_type === 'PJ' || (prof?.cnpj && prof.cnpj.replace(/\D/g, '').length === 14);
+      const mf = mfMap.get(g.profileId);
+      const isPJ = isUserPJ(prof, mf);
 
       const totalBruto = parseFloat((g.cashAfiliado + g.cashRevendedor).toFixed(2));
       const tax = calculateCumulativeTaxDeductions({

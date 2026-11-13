@@ -38,6 +38,7 @@ export default function AffiliateWallet() {
   const [submitting, setSubmitting] = useState(false);
   const [stats, setStats] = useState<any>(null);
   const [mmnConfig, setMmnConfig] = useState<any>(null);
+  const [mmnLevels, setMmnLevels] = useState<any[]>([]);
   const [transactions, setTransactions] = useState<any[]>([]);
   const [networkMembers, setNetworkMembers] = useState<any[]>([]);
   const [activeFilter, setActiveFilter] = useState<'all' | 'mensal' | 'anual'>('all');
@@ -103,6 +104,17 @@ export default function AffiliateWallet() {
       return matchesFilter && matchesLevel && matchesSearch;
     });
   }, [transactions, activeFilter, mmnLevelFilter, searchQuery]);
+
+  const walletMmnRates = useMemo(() => {
+    const g0 = mmnLevels.find(l => l.level === 1) || { cashbackSemanal: 5, cashbackAnual: 2 };
+    const g1 = mmnLevels.find(l => l.level === 2) || { cashbackSemanal: 5, cashbackAnual: 2 };
+    const g2 = mmnLevels.find(l => l.level === 3) || { cashbackSemanal: 5, cashbackAnual: 2 };
+
+    const semanal = (Number(g0.cashbackSemanal) || 0) + (Number(g1.cashbackSemanal) || 0) + (Number(g2.cashbackSemanal) || 0);
+    const anual = (Number(g0.cashbackAnual) || 0) + (Number(g1.cashbackAnual) || 0) + (Number(g2.cashbackAnual) || 0);
+    const total = semanal + anual;
+    return { semanal, anual, total };
+  }, [mmnLevels]);
 
   const isUserPJ = useMemo(() => {
     if (profile?.person_type === 'PJ') return true;
@@ -545,13 +557,14 @@ export default function AffiliateWallet() {
     
     try {
       setLoading(true);
-      const [statsData, activityData, configData, mfRes, pjReq, networkData] = await Promise.all([
+      const [statsData, activityData, configData, mfRes, pjReq, networkData, levelsData] = await Promise.all([
         businessRules.getAffiliateStats(user.id),
         businessRules.getEcosystemActivity(user.id),
         businessRules.getMMNConfig(),
         businessRules.getMicrofranqueadoData(user.id),
         businessRules.checkMicrofranqueadoPjRequirement(user.id),
-        businessRules.getAffiliateNetwork(user.id)
+        businessRules.getAffiliateNetwork(user.id),
+        businessRules.getMMNLevels()
       ]);
       
       setStats(statsData);
@@ -560,6 +573,7 @@ export default function AffiliateWallet() {
       setMicrofranqueadoData(mfRes);
       setPjRequirement(pjReq);
       setNetworkMembers(networkData || []);
+      if (levelsData) setMmnLevels(levelsData);
 
       if (mfRes?.microfranqueado?.id) {
         const comRes = await businessRules.getComissoesMicrofranqueado(mfRes.microfranqueado.id);
@@ -670,7 +684,7 @@ export default function AffiliateWallet() {
                   Comissões de Rede são Exclusivas de Microfranqueados
                 </h4>
                 <p className="text-xs text-amber-900 leading-relaxed max-w-2xl font-medium">
-                  Seu cadastro atual é de <strong>Afiliado Premium (Seguro Vida Light)</strong>. O Seguro Vida Light contempla cobertura MBM de R$ 5.000, telemedicina 24h e sorteios da Loteria Federal, sem comissões de rede. Para ativar sua carteira financeira e receber até 33% de comissão (split 24% semanal / 9% anual), ative sua Licença de Microfranqueado.
+                  Seu cadastro atual é de <strong>Afiliado Premium (Seguro Vida Light)</strong>. O Seguro Vida Light contempla cobertura MBM de R$ 5.000, telemedicina 24h e sorteios da Loteria Federal, sem comissões de rede. Para ativar sua carteira financeira e receber até {walletMmnRates.total}% de comissão (split {walletMmnRates.semanal}% semanal / {walletMmnRates.anual}% anual), ative sua Licença de Microfranqueado.
                 </p>
               </div>
             </div>

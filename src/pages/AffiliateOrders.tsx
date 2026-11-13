@@ -61,6 +61,7 @@ export default function AffiliateOrders() {
   const [directClients, setDirectClients] = useState<DirectClient[]>([]);
   const [selectedClient, setSelectedClient] = useState<DirectClient | null>(null);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
+  const [mmnLevels, setMmnLevels] = useState<any[]>([]);
 
   // Navegação e Filtro por Mês (Competência de Renovação)
   const defaultCurrentDate = useMemo(() => {
@@ -97,6 +98,17 @@ export default function AffiliateOrders() {
     setStatusFilter('mes');
   };
 
+  // Nível G0 configurado no Dashboard ADM (Configurações MMN)
+  const g0Config = useMemo(() => {
+    return mmnLevels.find(l => l.level === 1) || { cashbackSemanal: 5, cashbackAnual: 2 };
+  }, [mmnLevels]);
+
+  const g0CommissionLabel = useMemo(() => {
+    const sem = Number(g0Config.cashbackSemanal ?? 5);
+    const anu = Number(g0Config.cashbackAnual ?? 2);
+    return `${sem}% + ${anu}%`;
+  }, [g0Config]);
+
   // Carrega Assinatura do Afiliado e Clientes de Indicação Direta
   useEffect(() => {
     async function loadData() {
@@ -104,8 +116,8 @@ export default function AffiliateOrders() {
       try {
         setLoading(true);
 
-        // 1. Assinatura do próprio afiliado (Mantida conforme solicitado)
-        const [subRes, directProfilesRes] = await Promise.all([
+        // 1. Assinatura do próprio afiliado e Níveis de MMN do Dashboard ADM
+        const [subRes, directProfilesRes, levelsRes] = await Promise.all([
           supabase
             .from('subscriptions')
             .select('*')
@@ -117,8 +129,10 @@ export default function AffiliateOrders() {
             .from('profiles')
             .select('id, full_name, email, whatsapp, role, referral_code, created_at, city, state')
             .eq('referred_by', user.id)
-            .order('created_at', { ascending: false })
+            .order('created_at', { ascending: false }),
+          businessRules.getMMNLevels()
         ]);
+        if (levelsRes) setMmnLevels(levelsRes);
 
         let finalSub = subRes.data;
         if (!finalSub) {
@@ -602,7 +616,7 @@ export default function AffiliateOrders() {
               <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">
                 Sua Comissão G0
               </span>
-              <p className="text-2xl font-black text-midnight font-mono">10% + 2%</p>
+              <p className="text-2xl font-black text-midnight font-mono">{g0CommissionLabel}</p>
               <span className="text-[10px] text-primary-blue font-bold mt-1 block">A cada renovação confirmada</span>
             </div>
           </div>

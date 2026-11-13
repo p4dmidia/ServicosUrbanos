@@ -20,6 +20,8 @@ import {
   User as UserIcon,
   CreditCard,
   Building2,
+  Briefcase,
+  Sparkles,
   Calendar,
   Phone,
   Lock,
@@ -35,7 +37,12 @@ interface User {
   id: string;
   name: string;
   email: string;
-  role: 'admin' | 'merchant' | 'customer' | 'affiliate' | 'regional_reseller' | 'owner' | 'manager' | string;
+  role: 'admin' | 'merchant' | 'customer' | 'affiliate' | 'regional_reseller' | 'owner' | 'manager' | 'microfranqueado' | 'afiliado_premium' | string;
+  rank?: string;
+  isMicrofranqueado?: boolean;
+  isAfiliadoPremium?: boolean;
+  planType?: string | null;
+  mfStatus?: string | null;
   status: 'active' | 'blocked' | 'pending';
   joinedAt: string;
   location: string;
@@ -158,7 +165,10 @@ export default function AdminUsers() {
   const populateUserForm = (user: User) => ({
     name: user.name || '',
     email: user.email === '--' ? '' : user.email,
-    role: user.role || 'customer',
+    role: user.isMicrofranqueado ? 'microfranqueado' : (user.isAfiliadoPremium ? 'afiliado_premium' : (user.role || 'customer')),
+    isMicrofranqueado: !!user.isMicrofranqueado || user.role === 'microfranqueado',
+    isAfiliadoPremium: !!user.isAfiliadoPremium || user.role === 'afiliado_premium',
+    rank: user.rank || (user.isMicrofranqueado ? 'Microfranqueado' : (user.isAfiliadoPremium ? 'Afiliado Premium' : 'Afiliado')),
     status: user.status || 'active',
     gender: user.gender || '',
     birthDate: user.birthDate || '',
@@ -208,6 +218,9 @@ export default function AdminUsers() {
         name: editForm.name,
         email: editForm.email || selectedUser.email,
         role: editForm.role || selectedUser.role,
+        isMicrofranqueado: editForm.role === 'microfranqueado' || !!editForm.isMicrofranqueado,
+        isAfiliadoPremium: editForm.role === 'afiliado_premium' || !!editForm.isAfiliadoPremium,
+        rank: (editForm.role === 'microfranqueado' || editForm.isMicrofranqueado) ? 'Microfranqueado' : ((editForm.role === 'afiliado_premium' || editForm.isAfiliadoPremium) ? 'Afiliado Premium' : editForm.rank),
         status: editForm.status || selectedUser.status,
         gender: editForm.gender,
         birthDate: editForm.birthDate,
@@ -295,7 +308,7 @@ export default function AdminUsers() {
     const rows = users.map(u => [
       u.name,
       u.email,
-      getRoleLabel(u.role),
+      u.isMicrofranqueado ? 'Microfranqueado' : (u.isAfiliadoPremium ? 'Afiliado Premium' : getRoleLabel(u.role)),
       u.status,
       u.joinedAt,
       u.location,
@@ -316,22 +329,56 @@ export default function AdminUsers() {
     document.body.removeChild(link);
   };
 
-  const getRoleBadge = (role: User['role']) => {
-    switch (role) {
-      case 'admin': 
-        return <span className="px-2 py-1 bg-indigo-500/10 text-indigo-400 rounded-lg text-[9px] font-black uppercase tracking-widest border border-indigo-500/20">Admin</span>;
-      case 'merchant': 
-      case 'owner':
-      case 'manager':
-        return <span className="px-2 py-1 bg-emerald-500/10 text-emerald-400 rounded-lg text-[9px] font-black uppercase tracking-widest border border-emerald-500/20">Revendedor</span>;
-      case 'regional_reseller':
-        return <span className="px-2 py-1 bg-purple-500/10 text-purple-400 rounded-lg text-[9px] font-black uppercase tracking-widest border border-purple-500/20">Segurado/Revendedor</span>;
-      case 'affiliate':
-        return <span className="px-2 py-1 bg-pink-500/10 text-pink-400 rounded-lg text-[9px] font-black uppercase tracking-widest border border-pink-500/20">Afiliado</span>;
-      case 'customer':
-      default: 
-        return <span className="px-2 py-1 bg-blue-500/10 text-blue-400 rounded-lg text-[9px] font-black uppercase tracking-widest border border-blue-500/20">Segurado</span>;
+  const getRoleBadge = (userOrRole: User | string, userObj?: User) => {
+    const user: User | undefined = typeof userOrRole === 'object' ? userOrRole : userObj;
+    const role = typeof userOrRole === 'string' ? userOrRole : userOrRole.role;
+
+    if (role === 'admin') {
+      return <span className="px-2 py-1 bg-indigo-500/10 text-indigo-400 rounded-lg text-[9px] font-black uppercase tracking-widest border border-indigo-500/20">Admin</span>;
     }
+    if (role === 'regional_reseller') {
+      return <span className="px-2 py-1 bg-purple-500/10 text-purple-400 rounded-lg text-[9px] font-black uppercase tracking-widest border border-purple-500/20">Revendedor Regional</span>;
+    }
+    if (role === 'merchant' || role === 'owner' || role === 'manager') {
+      return <span className="px-2 py-1 bg-emerald-500/10 text-emerald-400 rounded-lg text-[9px] font-black uppercase tracking-widest border border-emerald-500/20">Lojista</span>;
+    }
+
+    // Se for Microfranqueado
+    const isMf = user?.isMicrofranqueado || role === 'microfranqueado' || user?.rank?.toLowerCase().includes('microfranqueado');
+    const isPremium = user?.isAfiliadoPremium || role === 'afiliado_premium' || user?.rank?.toLowerCase().includes('premium');
+
+    if (isMf) {
+      return (
+        <div className="flex flex-col gap-1 items-start">
+          <span className="px-2.5 py-1 bg-blue-500/15 text-blue-400 rounded-lg text-[9px] font-black uppercase tracking-widest border border-blue-500/30 flex items-center gap-1 shadow-sm">
+            <Briefcase size={10} className="text-blue-400" />
+            Microfranqueado
+          </span>
+          {isPremium && (
+            <span className="px-2 py-0.5 bg-emerald-500/10 text-emerald-400 rounded-md text-[8px] font-bold uppercase tracking-wider border border-emerald-500/20 flex items-center gap-0.5">
+              <Shield size={9} className="text-emerald-400" />
+              Afiliado Premium
+            </span>
+          )}
+        </div>
+      );
+    }
+
+    // Se for Afiliado Premium
+    if (isPremium) {
+      return (
+        <span className="px-2.5 py-1 bg-emerald-500/15 text-emerald-400 rounded-lg text-[9px] font-black uppercase tracking-widest border border-emerald-500/30 flex items-center gap-1 shadow-sm">
+          <Shield size={10} className="text-emerald-400" />
+          Afiliado Premium
+        </span>
+      );
+    }
+
+    if (role === 'affiliate') {
+      return <span className="px-2 py-1 bg-pink-500/10 text-pink-400 rounded-lg text-[9px] font-black uppercase tracking-widest border border-pink-500/20">Afiliado</span>;
+    }
+
+    return <span className="px-2 py-1 bg-slate-500/10 text-slate-400 rounded-lg text-[9px] font-black uppercase tracking-widest border border-slate-500/20">Segurado</span>;
   };
 
   const getStatusBadge = (status: User['status']) => {
@@ -464,7 +511,7 @@ export default function AdminUsers() {
                           </div>
                         </div>
                       </td>
-                      <td className="py-5 px-4">{getRoleBadge(user.role)}</td>
+                      <td className="py-5 px-4">{getRoleBadge(user)}</td>
                       <td className="py-5 px-4">
                         <div className="flex items-center gap-1.5 text-slate-400 text-[10px] font-bold">
                           <MapPin size={12} className="text-slate-600" />
@@ -646,7 +693,7 @@ export default function AdminUsers() {
                     )}
                   </div>
                   <div className="flex items-center gap-3 pt-2">
-                    {getRoleBadge(selectedUser.role)}
+                    {getRoleBadge(selectedUser)}
                     {getStatusBadge(selectedUser.status)}
                   </div>
                 </div>
@@ -733,20 +780,58 @@ export default function AdminUsers() {
                       <div>
                         <label className="text-[8px] text-slate-500 font-bold uppercase tracking-widest block mb-1">Cargo / Função</label>
                         {isEditing ? (
-                          <select
-                            value={editForm.role}
-                            onChange={e => setEditForm({...editForm, role: e.target.value})}
-                            className="w-full bg-black/30 border border-white/10 rounded-xl px-3 py-2 text-white text-xs font-bold focus:outline-none focus:border-indigo-500"
-                          >
-                            <option value="customer" className="bg-[#0a0e17]">Segurado (Padrão)</option>
-                            <option value="affiliate" className="bg-[#0a0e17]">Afiliado</option>
-                            <option value="regional_reseller" className="bg-[#0a0e17]">Segurado / Revendedor</option>
-                            <option value="merchant" className="bg-[#0a0e17]">Lojista</option>
-                            <option value="admin" className="bg-[#0a0e17]">Administrador</option>
-                          </select>
+                          <div className="space-y-3">
+                            <select
+                              value={editForm.role}
+                              onChange={e => {
+                                const newRole = e.target.value;
+                                setEditForm({
+                                  ...editForm,
+                                  role: newRole,
+                                  isMicrofranqueado: newRole === 'microfranqueado' ? true : (newRole === 'customer' || newRole === 'admin' ? false : editForm.isMicrofranqueado),
+                                  isAfiliadoPremium: newRole === 'afiliado_premium' || newRole === 'microfranqueado' ? true : editForm.isAfiliadoPremium
+                                });
+                              }}
+                              className="w-full bg-black/30 border border-white/10 rounded-xl px-3 py-2 text-white text-xs font-bold focus:outline-none focus:border-indigo-500"
+                            >
+                              <option value="customer" className="bg-[#0a0e17]">Segurado (Padrão)</option>
+                              <option value="affiliate" className="bg-[#0a0e17]">Afiliado</option>
+                              <option value="microfranqueado" className="bg-[#0a0e17]">Microfranqueado (MMN)</option>
+                              <option value="afiliado_premium" className="bg-[#0a0e17]">Afiliado Premium (Seguro Vida Light)</option>
+                              <option value="regional_reseller" className="bg-[#0a0e17]">Segurado / Revendedor</option>
+                              <option value="merchant" className="bg-[#0a0e17]">Lojista</option>
+                              <option value="admin" className="bg-[#0a0e17]">Administrador</option>
+                            </select>
+
+                            <div className="space-y-2 pt-1 border-t border-white/5">
+                              <label className="flex items-center gap-2 cursor-pointer text-xs text-slate-300 font-bold">
+                                <input
+                                  type="checkbox"
+                                  checked={!!editForm.isMicrofranqueado}
+                                  onChange={e => setEditForm({ ...editForm, isMicrofranqueado: e.target.checked })}
+                                  className="rounded border-white/20 bg-black/30 text-blue-500 focus:ring-blue-500"
+                                />
+                                <span className="flex items-center gap-1.5 text-blue-400 text-[11px]">
+                                  <Briefcase size={12} /> Habilitar Microfranqueado (Rede MMN)
+                                </span>
+                              </label>
+
+                              <label className="flex items-center gap-2 cursor-pointer text-xs text-slate-300 font-bold">
+                                <input
+                                  type="checkbox"
+                                  checked={!!editForm.isAfiliadoPremium}
+                                  onChange={e => setEditForm({ ...editForm, isAfiliadoPremium: e.target.checked })}
+                                  className="rounded border-white/20 bg-black/30 text-emerald-500 focus:ring-emerald-500"
+                                />
+                                <span className="flex items-center gap-1.5 text-emerald-400 text-[11px]">
+                                  <Shield size={12} /> Habilitar Afiliado Premium (Seguro Ativo)
+                                </span>
+                              </label>
+                            </div>
+                          </div>
                         ) : (
                           <div className="text-xs font-bold text-white pt-1">
-                            {getRoleBadge(selectedUser.role)}
+                            {getRoleBadge(selectedUser)}
                           </div>
                         )}
                       </div>

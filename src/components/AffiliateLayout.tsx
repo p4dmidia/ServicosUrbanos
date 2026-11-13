@@ -77,6 +77,7 @@ export default function AffiliateLayout({ children, title, customBalance, custom
   const { notifications, unreadCount, markAsRead, markAllAsRead } = useNotifications();
 
   const [isTermMenuExpanded, setIsTermMenuExpanded] = useState(location.pathname.startsWith('/afiliado/termo-adesao'));
+  const [mmnLevels, setMmnLevels] = useState<any[]>([]);
 
   useEffect(() => {
     if (location.pathname.startsWith('/afiliado/termo-adesao')) {
@@ -96,11 +97,13 @@ export default function AffiliateLayout({ children, title, customBalance, custom
     async function loadRolesAndStats() {
       if (!user) return;
       try {
-        const [mfData, segData, statsData] = await Promise.all([
+        const [mfData, segData, statsData, levelsData] = await Promise.all([
           businessRules.getMicrofranqueadoData(user.id),
           businessRules.getSeguradoData(user.id),
-          businessRules.getAffiliateStats(user.id)
+          businessRules.getAffiliateStats(user.id),
+          businessRules.getMMNLevels()
         ]);
+        if (levelsData) setMmnLevels(levelsData);
 
         let comissoesData = null;
         if (mfData?.microfranqueado?.id) {
@@ -201,6 +204,14 @@ export default function AffiliateLayout({ children, title, customBalance, custom
   ] : [];
 
   const activeMenuItems = userRoles.isMicrofranqueado ? microfranqueadoMenuItems : afiliadoPremiumMenuItems;
+
+  const g0Lvl = useMemo(() => mmnLevels.find(l => l.level === 1) || { cashbackSemanal: 5, cashbackAnual: 2 }, [mmnLevels]);
+  const g1Lvl = useMemo(() => mmnLevels.find(l => l.level === 2) || { cashbackSemanal: 5, cashbackAnual: 2 }, [mmnLevels]);
+  const g2Lvl = useMemo(() => mmnLevels.find(l => l.level === 3) || { cashbackSemanal: 5, cashbackAnual: 2 }, [mmnLevels]);
+
+  const totalSemanal = useMemo(() => (Number(g0Lvl.cashbackSemanal) || 0) + (Number(g1Lvl.cashbackSemanal) || 0) + (Number(g2Lvl.cashbackSemanal) || 0), [g0Lvl, g1Lvl, g2Lvl]);
+  const totalAnual = useMemo(() => (Number(g0Lvl.cashbackAnual) || 0) + (Number(g1Lvl.cashbackAnual) || 0) + (Number(g2Lvl.cashbackAnual) || 0), [g0Lvl, g1Lvl, g2Lvl]);
+  const totalDistribuicao = useMemo(() => totalSemanal + totalAnual, [totalSemanal, totalAnual]);
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] flex font-sans text-midnight">
@@ -353,7 +364,7 @@ export default function AffiliateLayout({ children, title, customBalance, custom
                 <span>Seja Microfranqueado</span>
               </div>
               <p className="text-[10px] text-amber-900/80 mb-2.5 leading-relaxed font-medium">
-                Monte sua equipe de vendas e receba <strong>33% de comissão</strong> (G0 8%+3%, G1 8%+3%, G2 8%+3%) com repasses 24% semanal e 9% anual.
+                Monte sua equipe de vendas e receba <strong>{totalDistribuicao}% de comissão</strong> (G0 {g0Lvl.cashbackSemanal}%+{g0Lvl.cashbackAnual}%, G1 {g1Lvl.cashbackSemanal}%+{g1Lvl.cashbackAnual}%, G2 {g2Lvl.cashbackSemanal}%+{g2Lvl.cashbackAnual}%) com repasses {totalSemanal}% semanal e {totalAnual}% anual.
               </p>
               <Link 
                 to="/afiliado/renovacoes" 

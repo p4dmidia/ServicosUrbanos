@@ -33,6 +33,7 @@ export default function AffiliateClaims() {
   const [loading, setLoading] = useState(true);
   const [seguradoData, setSeguradoData] = useState<any>(null);
   const [microfranqueadoData, setMicrofranqueadoData] = useState<any>(null);
+  const [mmnTotalPct, setMmnTotalPct] = useState<number>(33);
   const [sinistros, setSinistros] = useState<any[]>([]);
   const [showNewModal, setShowNewModal] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -49,12 +50,17 @@ export default function AffiliateClaims() {
     if (!user) return;
     try {
       setLoading(true);
-      const [segRes, mfRes] = await Promise.all([
+      const [segRes, mfRes, levels] = await Promise.all([
         businessRules.getSeguradoData(user.id),
-        businessRules.getMicrofranqueadoData(user.id)
+        businessRules.getMicrofranqueadoData(user.id),
+        businessRules.getMMNLevels()
       ]);
       setSeguradoData(segRes);
       setMicrofranqueadoData(mfRes);
+      if (levels && levels.length > 0) {
+        const sum = levels.reduce((acc, l) => acc + (Number(l.weekly_rate) || 0) + (Number(l.annual_bonus_rate) || 0), 0);
+        if (sum > 0) setMmnTotalPct(Math.round(sum * 10) / 10);
+      }
 
       if (segRes?.segurado?.id) {
         const claims = await businessRules.getSinistros(segRes.segurado.id);
@@ -249,7 +255,7 @@ export default function AffiliateClaims() {
                   Benefício Exclusivo do Afiliado Premium (Seguro Vida Light)
                 </h4>
                 <p className="text-xs text-amber-900 leading-relaxed max-w-2xl font-medium">
-                  Sua conta atual é de <strong>Microfranqueado (MMN)</strong>, focada na expansão da rede e recebimento de comissões (33% no split 24% semanal / 9% anual). A cobertura securitária de R$ 5.000,00, assistência médica e sorteios são exclusivos dos titulares do plano Seguro Vida Light.
+                  Sua conta atual é de <strong>Microfranqueado (MMN)</strong>, focada na expansão da rede e recebimento de comissões ({mmnTotalPct}% de repasse comercial). A cobertura securitária de R$ 5.000,00, assistência médica e sorteios são exclusivos dos titulares do plano Seguro Vida Light.
                 </p>
               </div>
             </div>

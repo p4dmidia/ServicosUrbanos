@@ -456,16 +456,7 @@ export default function AffiliateRenewals() {
                   const isEcon = plan.plan_type === 'anual';
                   const isPopular = plan.plan_type === 'mensal';
 
-                  const g0Lvl = useMemo(() => mmnLevels.find(l => l.level === 1) || { cashbackSemanal: 5, cashbackAnual: 2 }, [mmnLevels]);
-  const g1Lvl = useMemo(() => mmnLevels.find(l => l.level === 2) || { cashbackSemanal: 5, cashbackAnual: 2 }, [mmnLevels]);
-  const g2Lvl = useMemo(() => mmnLevels.find(l => l.level === 3) || { cashbackSemanal: 5, cashbackAnual: 2 }, [mmnLevels]);
-  const totalMmnPct = useMemo(() => {
-    const sem = (Number(g0Lvl.cashbackSemanal) || 0) + (Number(g1Lvl.cashbackSemanal) || 0) + (Number(g2Lvl.cashbackSemanal) || 0);
-    const anu = (Number(g0Lvl.cashbackAnual) || 0) + (Number(g1Lvl.cashbackAnual) || 0) + (Number(g2Lvl.cashbackAnual) || 0);
-    return sem + anu;
-  }, [g0Lvl, g1Lvl, g2Lvl]);
-
-  return (
+                  return (
                     <div 
                       key={plan.id}
                       className={`bg-white border rounded-[2rem] p-6 flex flex-col justify-between gap-6 hover:shadow-xl transition-all relative overflow-hidden ${
